@@ -1,0 +1,7 @@
+import {
+  "kurisu/lattice" @lib,
+}
+
+options(
+  "is-main": true,
+)
