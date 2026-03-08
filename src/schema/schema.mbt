@@ -10,7 +10,7 @@
 /// schema validation step, which runs before the render pipeline begins.
 
 /// Field type constraint.
-pub enum FieldType {
+pub(all) enum FieldType {
   TString
   TInt
   TBool
@@ -19,20 +19,20 @@ pub enum FieldType {
 }
 
 /// A single field definition in a schema.
-pub struct FieldDef {
+pub(all) struct FieldDef {
   name : String
   field_type : FieldType
   required : Bool
 }
 
 /// A content collection schema.
-pub struct Schema {
+pub(all) struct Schema {
   name : String
   fields : Array[FieldDef]
 }
 
 /// A validation error: the field name and what went wrong.
-pub struct ValidationError {
+pub(all) struct ValidationError {
   field : String
   message : String
 }

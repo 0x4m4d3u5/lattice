@@ -1,5 +1,9 @@
 import {
-  "kurisu/lattice" @lib,
+  "kurisu/lattice/src/frontmatter" @frontmatter,
+  "kurisu/lattice/src/schema" @schema,
+  "kurisu/lattice/src/wikilink" @wikilink,
+  "kurisu/lattice/src/markdown" @markdown,
+  "kurisu/lattice/src/html" @html,
 }
 
 options(
