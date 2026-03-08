@@ -1,9 +1,6 @@
 import {
-  "kurisu/lattice/src/frontmatter" @frontmatter,
-  "kurisu/lattice/src/schema" @schema,
-  "kurisu/lattice/src/wikilink" @wikilink,
-  "kurisu/lattice/src/markdown" @markdown,
-  "kurisu/lattice/src/html" @html,
+  "kurisu/lattice/src/builder" @builder,
+  "moonbitlang/x/sys" @sys,
 }
 
 options(

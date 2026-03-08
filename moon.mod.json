@@ -1,9 +1,16 @@
 {
   "name": "kurisu/lattice",
   "version": "0.1.0",
+  "deps": {
+    "moonbitlang/x": "0.4.40"
+  },
   "readme": "README.mbt.md",
-  "repository": "",
+  "repository": "https://github.com/0x4m4d3u5/lattice",
   "license": "Apache-2.0",
-  "keywords": ["ssg", "static-site-generator", "moonbit"],
+  "keywords": [
+    "ssg",
+    "static-site-generator",
+    "moonbit"
+  ],
   "description": "A static site generator where structural violations are type errors, not runtime surprises."
 }
