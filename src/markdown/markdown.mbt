@@ -550,8 +550,36 @@ fn render_blocks(blocks : Array[Block], wl : Map[String, String]) -> String {
   let buf = StringBuilder::new()
   let mut i = 0
   while i < blocks.length() {
-    buf.write_string(render_block(blocks[i], wl))
-    i = i + 1
+    match blocks[i] {
+      OrderedList(items) => {
+        // Coalesce consecutive ordered-list blocks into one <ol>.
+        let merged : Array[Array[Inline]] = []
+        let mut k = 0
+        while k < items.length() {
+          merged.push(items[k])
+          k = k + 1
+        }
+        i = i + 1
+        while i < blocks.length() {
+          match blocks[i] {
+            OrderedList(next_items) => {
+              let mut j = 0
+              while j < next_items.length() {
+                merged.push(next_items[j])
+                j = j + 1
+              }
+              i = i + 1
+            }
+            _ => break
+          }
+        }
+        buf.write_string(render_block(OrderedList(merged), wl))
+      }
+      _ => {
+        buf.write_string(render_block(blocks[i], wl))
+        i = i + 1
+      }
+    }
   }
   buf.to_string()
 }

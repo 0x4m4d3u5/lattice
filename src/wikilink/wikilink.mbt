@@ -89,8 +89,37 @@ pub fn extract(content : String, source_file : String) -> Array[RawWikilink] {
   let links : Array[RawWikilink] = []
   let n = content.length()
   let mut i = 0
+  let mut in_fence = false
+  let mut in_inline = false
+  let mut line_start = true
   while i + 1 < n {
-    if char_at_wl(content, i) == '[' && char_at_wl(content, i + 1) == '[' {
+    if line_start {
+      let mut probe = i
+      while probe < n &&
+        (char_at_wl(content, probe) == ' ' || char_at_wl(content, probe) == '\t') {
+        probe = probe + 1
+      }
+      if probe + 2 < n &&
+        char_at_wl(content, probe) == '`' &&
+        char_at_wl(content, probe + 1) == '`' &&
+        char_at_wl(content, probe + 2) == '`' {
+        in_fence = not(in_fence)
+      }
+      line_start = false
+    }
+    if char_at_wl(content, i) == '\n' {
+      line_start = true
+      if not(in_fence) {
+        in_inline = false
+      }
+      i = i + 1
+    } else if not(in_fence) && char_at_wl(content, i) == '`' {
+      in_inline = not(in_inline)
+      i = i + 1
+    } else if not(in_fence) &&
+      not(in_inline) &&
+      char_at_wl(content, i) == '[' &&
+      char_at_wl(content, i + 1) == '[' {
       let inner_start = i + 2
       let mut j = inner_start
       let mut found = false
