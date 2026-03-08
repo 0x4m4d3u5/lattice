@@ -37,12 +37,94 @@ pub struct ValidationError {
   message : String
 }
 
+// ── helpers ───────────────────────────────────────────────────────────────────
+
+fn field_type_name(ft : FieldType) -> String {
+  match ft {
+    TString => "String"
+    TInt => "Int"
+    TBool => "Bool"
+    TArray(inner) => "Array[" + field_type_name(inner) + "]"
+    TOptional(inner) => "Optional[" + field_type_name(inner) + "]"
+  }
+}
+
+/// Check whether a parsed value conforms to a field type.
+/// TOptional matches the inner type — absence is handled in validate().
+fn type_matches(
+  val : @frontmatter.FrontmatterValue,
+  ft : FieldType
+) -> Bool {
+  match ft {
+    TString => match val {
+      @frontmatter.FStr(_) => true
+      _ => false
+    }
+    TInt => match val {
+      @frontmatter.FInt(_) => true
+      _ => false
+    }
+    TBool => match val {
+      @frontmatter.FBool(_) => true
+      _ => false
+    }
+    TArray(elem) => match val {
+      @frontmatter.FArray(items) => {
+        let mut ok = true
+        let mut i = 0
+        while i < items.length() {
+          if not(type_matches(items[i], elem)) {
+            ok = false
+            break
+          }
+          i = i + 1
+        }
+        ok
+      }
+      _ => false
+    }
+    TOptional(inner) => type_matches(val, inner)
+  }
+}
+
+// ── public API ────────────────────────────────────────────────────────────────
+
 /// Validate a parsed frontmatter map against a schema.
-/// Returns all errors found (not just the first).
+/// Returns all errors found — missing required fields, type mismatches,
+/// and fields not declared in the schema.
 pub fn validate(
   fm : @frontmatter.Frontmatter,
   schema : Schema
 ) -> Array[ValidationError] {
-  // TODO: implement validation
-  []
+  let errors : Array[ValidationError] = []
+  // Phase 1: check declared fields
+  let mut i = 0
+  while i < schema.fields.length() {
+    let fdef = schema.fields[i]
+    match fm.fields.get(fdef.name) {
+      None => {
+        if fdef.required {
+          errors.push({ field: fdef.name, message: "required field missing" })
+        }
+        // optional absent fields are fine
+      }
+      Some(val) => {
+        // unwrap Optional for matching — absence is already handled above
+        let expected = match fdef.field_type {
+          TOptional(inner) => inner
+          t => t
+        }
+        if not(type_matches(val, expected)) {
+          errors.push({
+            field: fdef.name,
+            message: "expected " +
+              field_type_name(expected) +
+              " but got incompatible value",
+          })
+        }
+      }
+    }
+    i = i + 1
+  }
+  errors
 }
