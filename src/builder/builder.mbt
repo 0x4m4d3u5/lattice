@@ -45,6 +45,11 @@ priv struct BuildTemplates {
   tag_index : @template.Template?
 }
 
+priv struct TemplateLoadResult {
+  templates : BuildTemplates
+  violations : Array[@lint.LintViolation]
+}
+
 priv struct TagCatalog {
   ordered_slugs : Array[String]
   name_by_slug : Map[String, String]
@@ -247,6 +252,155 @@ fn load_templates(config : BuildConfig) -> Result[BuildTemplates, String] {
     Err(msg) => return Err(msg)
   }
   Ok({ page, index, tag_page, tag_index })
+}
+
+fn parse_int_builder(s : String) -> Int? {
+  let n = s.length()
+  if n == 0 {
+    return None
+  }
+  let mut value = 0
+  let mut i = 0
+  while i < n {
+    let c = char_at_builder(s, i)
+    if c < '0' || c > '9' {
+      return None
+    }
+    value = value * 10 + (c.to_int() - '0'.to_int())
+    i = i + 1
+  }
+  Some(value)
+}
+
+fn starts_with_builder(s : String, prefix : String) -> Bool {
+  let n = s.length()
+  let plen = prefix.length()
+  if plen > n {
+    return false
+  }
+  let mut i = 0
+  while i < plen {
+    if char_at_builder(s, i) != char_at_builder(prefix, i) {
+      return false
+    }
+    i = i + 1
+  }
+  true
+}
+
+fn line_col_of_first(source : String, pattern : String) -> (Int?, Int?) {
+  let n = source.length()
+  let plen = pattern.length()
+  if plen == 0 || plen > n {
+    return (None, None)
+  }
+  let mut i = 0
+  while i + plen <= n {
+    let mut matched = true
+    let mut j = 0
+    while j < plen {
+      if char_at_builder(source, i + j) != char_at_builder(pattern, j) {
+        matched = false
+        break
+      }
+      j = j + 1
+    }
+    if matched {
+      let mut line = 1
+      let mut col = 1
+      let mut k = 0
+      while k < i {
+        if char_at_builder(source, k) == '\n' {
+          line = line + 1
+          col = 1
+        } else {
+          col = col + 1
+        }
+        k = k + 1
+      }
+      return (Some(line), Some(col))
+    }
+    i = i + 1
+  }
+  (None, None)
+}
+
+fn frontmatter_field_line(source : String, field : String) -> Int? {
+  let header = field + " ="
+  let (line, _) = line_col_of_first(source, header)
+  line
+}
+
+fn frontmatter_line_from_error(msg : String) -> Int? {
+  if not(starts_with_builder(msg, "line ")) {
+    return None
+  }
+  let n = msg.length()
+  let mut i = 5
+  let mut end = i
+  while end < n && char_at_builder(msg, end) >= '0' && char_at_builder(msg, end) <= '9' {
+    end = end + 1
+  }
+  if end == i {
+    return None
+  }
+  let buf = StringBuilder::new()
+  while i < end {
+    buf.write_char(char_at_builder(msg, i))
+    i = i + 1
+  }
+  parse_int_builder(buf.to_string())
+}
+
+fn template_violation(path : String, message : String) -> @lint.LintViolation {
+  {
+    path,
+    line: None,
+    column: None,
+    kind: @lint.TemplateSlotError,
+    message,
+  }
+}
+
+fn load_templates_for_lint(config : BuildConfig) -> TemplateLoadResult {
+  let violations : Array[@lint.LintViolation] = []
+  let base = templates_dir_for_build(config)
+  if not(@fs.path_exists(base)) {
+    return {
+      templates: { page: None, index: None, tag_page: None, tag_index: None },
+      violations,
+    }
+  }
+
+  let mut page : @template.Template? = None
+  let mut index : @template.Template? = None
+  let mut tag_page : @template.Template? = None
+  let mut tag_index : @template.Template? = None
+
+  let page_path = base + "/page.html"
+  match load_template_file(page_path) {
+    Ok(t) => page = t
+    Err(msg) => violations.push(template_violation(page_path, msg))
+  }
+  let index_path = base + "/index.html"
+  match load_template_file(index_path) {
+    Ok(t) => index = t
+    Err(msg) => violations.push(template_violation(index_path, msg))
+  }
+  let tag_path = base + "/tag.html"
+  match load_template_file(tag_path) {
+    Ok(t) => tag_page = t
+    Err(msg) => violations.push(template_violation(tag_path, msg))
+  }
+  let tags_path = base + "/tags.html"
+  match load_template_file(tags_path) {
+    Ok(t) => tag_index = t
+    Err(msg) => violations.push(template_violation(tags_path, msg))
+  }
+  {
+    templates: { page, index, tag_page, tag_index },
+    violations,
+  }
 }
 
 fn build_template_slots(
@@ -733,6 +887,182 @@ fn process_document(
   })
 }
 
+priv struct LintDocOutcome {
+  document : ProcessedDocument?
+  violations : Array[@lint.LintViolation]
+}
+
+fn process_document_for_lint(
+  source : String,
+  source_path : String,
+  slug : String,
+  url : String,
+  page_index : Map[String, String],
+  known_tags : Map[String, String],
+  tags_field : String,
+  schema : @schema.Schema,
+  site : @config.SiteConfig,
+  page_template : @template.Template?,
+  nav_links_html : String,
+  custom_css : String
+) -> LintDocOutcome {
+  let violations : Array[@lint.LintViolation] = []
+  let fm = match @frontmatter.parse(source) {
+    Err(msg) => {
+      let line = frontmatter_line_from_error(msg)
+      violations.push({
+        path: source_path,
+        line,
+        column: None,
+        kind: @lint.FrontmatterError,
+        message: msg,
+      })
+      return { document: None, violations }
+    }
+    Ok(parsed) => parsed
+  }
+
+  let schema_errors = @schema.validate(fm, schema)
+  let mut i = 0
+  while i < schema_errors.length() {
+    let err = schema_errors[i]
+    let kind = if err.message == "required field missing" {
+      @lint.MissingRequiredFrontmatter
+    } else {
+      @lint.SchemaError
+    }
+    violations.push({
+      path: source_path,
+      line: frontmatter_field_line(source, err.field),
+      column: None,
+      kind,
+      message: err.field + ": " + err.message,
+    })
+    i = i + 1
+  }
+
+  let page_tags = match @tags.extract(fm, tags_field) {
+    Ok(values) => values
+    Err(msg) => {
+      violations.push({
+        path: source_path,
+        line: frontmatter_field_line(source, tags_field),
+        column: None,
+        kind: @lint.SchemaError,
+        message: "tags field '" + tags_field + "': " + msg,
+      })
+      []
+    }
+  }
+
+  i = 0
+  while i < page_tags.length() {
+    let tag = page_tags[i]
+    if not(known_tags.contains(tag.slug)) {
+      let (line, col) = line_col_of_first(source, tag.value)
+      violations.push({
+        path: source_path,
+        line,
+        column: col,
+        kind: @lint.DanglingTagReference,
+        message:
+          "dangling tag reference '" +
+          tag.value +
+          "' (" +
+          tag.slug +
+          ") missing from tag index",
+      })
+    }
+    i = i + 1
+  }
+
+  let raw_links = @wikilink.extract(fm.body, slug)
+  let (resolved, link_errors) = @wikilink.resolve(raw_links, page_index)
+  i = 0
+  while i < link_errors.length() {
+    let marker = "[[" + link_errors[i].link.target + "]]"
+    let (line, col) = line_col_of_first(source, marker)
+    violations.push({
+      path: source_path,
+      line,
+      column: col,
+      kind: @lint.BrokenWikilink,
+      message: "[[" + link_errors[i].link.target + "]]: " + link_errors[i].message,
+    })
+    i = i + 1
+  }
+
+  if violations.length() > 0 {
+    return { document: None, violations }
+  }
+
+  let wl_map = build_wikilink_map(resolved)
+  let body_html = @markdown.render(fm.body, wl_map) + @tags.render_page_tags(page_tags)
+  let title = extract_title(fm)
+  let full_title = page_title_builder(title, site.title)
+  let description_value = extract_description(fm)
+  let date_value = extract_date(fm)
+  let description_text = match description_value {
+    Some(v) => v
+    None => ""
+  }
+  let date_text = match date_value {
+    Some(v) => v
+    None => ""
+  }
+
+  let page_html = match page_template {
+    Some(tpl) => {
+      let slots = build_template_slots(
+        full_title,
+        body_html,
+        date_text,
+        description_text,
+        url,
+        site.title,
+        nav_links_html,
+        custom_css,
+        "",
+        "",
+      )
+      match @template.render_template(tpl, slots) {
+        Ok(html) => html
+        Err(e) => {
+          violations.push({
+            path: source_path,
+            line: None,
+            column: None,
+            kind: @lint.TemplateSlotError,
+            message: "page template: " + template_error_text(e),
+          })
+          return { document: None, violations }
+        }
+      }
+    }
+    None => {
+      let meta : @html.PageMeta = {
+        title: full_title,
+        description: description_value,
+        lang: "en",
+        stylesheet: Some(absolute_url_builder(site.base_url, "/style.css")),
+      }
+      @html.render_page(meta, body_html)
+    }
+  }
+  {
+    document: Some({
+      html: page_html,
+      title,
+      url,
+      description: description_value,
+      date: date_value,
+      resolved_links: resolved,
+      tags: page_tags,
+    }),
+    violations,
+  }
+}
+
 // ── file I/O layer ────────────────────────────────────────────────────────────
 
 ///|
@@ -1212,6 +1542,263 @@ pub fn build(config : BuildConfig) -> Int {
     " errors",
   )
   error_count
+}
+
+///|
+/// Check structural integrity without writing output files.
+///
+/// Runs the full two-pass validation pipeline and returns every violation found.
+pub fn check(config : BuildConfig) -> @lint.LintResult {
+  println("[lattice] checking " + config.content_dir)
+  let violations : Array[@lint.LintViolation] = []
+
+  let collections = match load_collections(config) {
+    Ok(defs) => defs
+    Err(msg) => {
+      violations.push({
+        path: match config.collections_path {
+          Some(path) => path
+          None => config.content_dir + "/lattice.conf"
+        },
+        line: None,
+        column: None,
+        kind: @lint.CollectionsError,
+        message: msg,
+      })
+      return { violations, }
+    }
+  }
+  println("[lattice] using " + collections.length().to_string() + " collections")
+
+  let templates_result = load_templates_for_lint(config)
+  let mut i = 0
+  while i < templates_result.violations.length() {
+    violations.push(templates_result.violations[i])
+    i = i + 1
+  }
+  let templates = templates_result.templates
+
+  let nav_links_html = build_nav_links_html(collections)
+  let custom_css = default_css()
+
+  let collection_sources : Array[CollectionSources] = []
+  let mut source_count = 0
+  i = 0
+  while i < collections.length() {
+    let collection_def = collections[i]
+    let sources = try {
+      collect_sources(collection_def.content_dir)
+    } catch {
+      @fs.IOError(msg) => {
+        violations.push({
+          path: collection_def.content_dir,
+          line: None,
+          column: None,
+          kind: @lint.IOError,
+          message: "cannot read collection directory " + collection_def.name + ": " + msg,
+        })
+        []
+      }
+    }
+    source_count = source_count + sources.length()
+    collection_sources.push({ definition: collection_def, sources })
+    i = i + 1
+  }
+  println("[lattice] found " + source_count.to_string() + " source files")
+
+  let page_index : Map[String, String] = Map::new()
+  let slug_owner : Map[String, String] = Map::new()
+  i = 0
+  while i < collection_sources.length() {
+    let coll = collection_sources[i]
+    let mut j = 0
+    while j < coll.sources.length() {
+      let source = coll.sources[j]
+      match slug_owner.get(source.slug) {
+        Some(owner) => {
+          violations.push({
+            path: source.path,
+            line: None,
+            column: None,
+            kind: @lint.DuplicateSlug,
+            message:
+              "duplicate slug '" +
+              source.slug +
+              "' in collections '" +
+              owner +
+              "' and '" +
+              coll.definition.name +
+              "'",
+          })
+        }
+        None => {
+          slug_owner.set(source.slug, coll.definition.name)
+          page_index.set(source.slug, collection_page_url(coll.definition.name, source.slug))
+        }
+      }
+      j = j + 1
+    }
+    i = i + 1
+  }
+
+  let tags_field = tags_field_name(config.site)
+  let tag_catalog = collect_tag_catalog(collection_sources, tags_field)
+  let known_tags = tag_catalog.name_by_slug
+
+  let graph_pages : Array[@graph.GraphPage] = []
+  let tag_pages_by_slug : Map[String, Array[@tags.TaggedPage]] = Map::new()
+  let rendered_collections : Array[CollectionRenderResult] = []
+  i = 0
+  while i < collection_sources.length() {
+    let coll = collection_sources[i]
+    let coll_pages : Array[@graph.GraphPage] = []
+    let mut j = 0
+    while j < coll.sources.length() {
+      let src = coll.sources[j]
+      let page_url = collection_page_url(coll.definition.name, src.slug)
+      let lint_outcome = process_document_for_lint(
+        src.content,
+        src.path,
+        src.slug,
+        page_url,
+        page_index,
+        known_tags,
+        tags_field,
+        coll.definition.schema,
+        config.site,
+        templates.page,
+        nav_links_html,
+        custom_css,
+      )
+      let mut k = 0
+      while k < lint_outcome.violations.length() {
+        violations.push(lint_outcome.violations[k])
+        k = k + 1
+      }
+      match lint_outcome.document {
+        Some(doc) => {
+          let page : @graph.GraphPage = {
+            slug: src.slug,
+            title: doc.title,
+            url: doc.url,
+            description: doc.description,
+            date: doc.date,
+            outgoing: doc.resolved_links,
+          }
+          coll_pages.push(page)
+          graph_pages.push(page)
+          k = 0
+          while k < doc.tags.length() {
+            let tag = doc.tags[k]
+            match tag_pages_by_slug.get(tag.slug) {
+              Some(existing) => {
+                existing.push({ title: doc.title, url: doc.url, slug: src.slug })
+                tag_pages_by_slug.set(tag.slug, existing)
+              }
+              None => {
+                tag_pages_by_slug.set(
+                  tag.slug,
+                  [{ title: doc.title, url: doc.url, slug: src.slug }],
+                )
+              }
+            }
+            k = k + 1
+          }
+        }
+        None => ()
+      }
+      j = j + 1
+    }
+    rendered_collections.push({ name: coll.definition.name, pages: coll_pages })
+    i = i + 1
+  }
+
+  i = 0
+  while i < rendered_collections.length() {
+    let coll = rendered_collections[i]
+    let feed_title = config.site.title + " (" + coll.name + ")"
+    let _feed_xml = @rss.render_feed(feed_title, config.site.base_url, coll.pages)
+    match render_collection_index(
+      coll.name,
+      coll.pages,
+      config.site,
+      templates.index,
+      nav_links_html,
+      custom_css,
+    ) {
+      Ok(_) => ()
+      Err(msg) => {
+        violations.push({
+          path: templates_dir_for_build(config) + "/index.html",
+          line: None,
+          column: None,
+          kind: @lint.TemplateSlotError,
+          message: coll.name + " index: " + msg,
+        })
+      }
+    }
+    i = i + 1
+  }
+
+  let tag_summaries : Array[@tags.TagSummary] = []
+  i = 0
+  while i < tag_catalog.ordered_slugs.length() {
+    let tag_slug = tag_catalog.ordered_slugs[i]
+    let tag_name = match tag_catalog.name_by_slug.get(tag_slug) {
+      Some(name) => name
+      None => tag_slug
+    }
+    let pages = match tag_pages_by_slug.get(tag_slug) {
+      Some(items) => items
+      None => []
+    }
+    let tag_page : @tags.TagPage = { tag: tag_name, slug: tag_slug, pages }
+    match render_tag_page_html(
+      tag_page,
+      config.site,
+      templates.tag_page,
+      templates.index,
+      nav_links_html,
+      custom_css,
+    ) {
+      Ok(_) => ()
+      Err(msg) => {
+        violations.push({
+          path: templates_dir_for_build(config) + "/tag.html",
+          line: None,
+          column: None,
+          kind: @lint.TemplateSlotError,
+          message: "tags/" + tag_slug + ": " + msg,
+        })
+      }
+    }
+    tag_summaries.push({ tag: tag_name, slug: tag_slug, count: pages.length() })
+    i = i + 1
+  }
+
+  let tags_index : @tags.TagIndex = { tags: tag_summaries }
+  match render_tags_index_html(
+    tags_index,
+    config.site,
+    templates.tag_index,
+    templates.index,
+    nav_links_html,
+    custom_css,
+  ) {
+    Ok(_) => ()
+    Err(msg) => {
+      violations.push({
+        path: templates_dir_for_build(config) + "/tags.html",
+        line: None,
+        column: None,
+        kind: @lint.TemplateSlotError,
+        message: "tags index: " + msg,
+      })
+    }
+  }
+
+  let _sitemap_xml = @sitemap.render_sitemap(config.site.base_url, graph_pages)
+  { violations, }
 }
 
 // ── default CSS ───────────────────────────────────────────────────────────────

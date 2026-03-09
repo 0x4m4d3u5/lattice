@@ -1,6 +1,7 @@
 import {
   "kurisu/lattice/src/builder" @builder,
   "kurisu/lattice/src/config" @config,
+  "kurisu/lattice/src/lint" @lint,
   "moonbitlang/x/fs" @fs,
   "moonbitlang/x/sys" @sys,
 }
