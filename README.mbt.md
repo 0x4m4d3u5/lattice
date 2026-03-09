@@ -59,6 +59,8 @@ moon run cmd/main -- ./content ./dist
 A successful build emits:
 
 - `dist/<slug>/index.html` for each content page.
+- `dist/tags/index.html` listing all tags with counts.
+- `dist/tags/<tag>/index.html` for each extracted tag.
 - `dist/site-index/index.html` containing:
   - all pages with titles and slugs,
   - wikilink relationships grouped by source page.
@@ -75,6 +77,8 @@ Supported files:
 
 - `templates/page.html` for individual content pages.
 - `templates/index.html` for collection index pages.
+- `templates/tag.html` for per-tag pages (`/tags/<tag>/`).
+- `templates/tags.html` for tags index (`/tags/`).
 
 If a template file is missing, lattice falls back to the built-in hardcoded renderer for that page type.
 
@@ -88,6 +92,8 @@ Template placeholders use `{{slot_name}}` syntax. Available typed slots:
 - `{{site_name}}` site title from config
 - `{{nav_links}}` generated collection navigation HTML
 - `{{custom_css}}` default lattice CSS string
+- `{{tag_name}}` tag name (tag pages)
+- `{{tag_count}}` page count (tag pages / tags index)
 
 ## Notes for SCC explainability
 
