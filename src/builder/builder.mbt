@@ -524,6 +524,22 @@ pub fn build(config : BuildConfig) -> Int {
       error_count = error_count + 1
     }
 
+    let sitemap_write_ok = try {
+      let sitemap_xml = @sitemap.render_sitemap(config.site.base_url, graph_pages)
+      let out_path = config.output_dir + "/sitemap.xml"
+      @fs.write_string_to_file(out_path, sitemap_xml)
+      println("[lattice] wrote " + out_path)
+      true
+    } catch {
+      @fs.IOError(msg) => {
+        println("[error] sitemap: write failed: " + msg)
+        false
+      }
+    }
+    if not(sitemap_write_ok) {
+      error_count = error_count + 1
+    }
+
     let index_dir = config.output_dir + "/site-index"
     let index_write_ok = try {
       ensure_dir(index_dir)
