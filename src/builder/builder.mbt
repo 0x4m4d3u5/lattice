@@ -55,6 +55,11 @@ priv struct TagCatalog {
   name_by_slug : Map[String, String]
 }
 
+priv struct ProjectLayout {
+  collections : Array[@collections.CollectionDef]
+  data_schemas : Map[String, @data.DataSchema]
+}
+
 // ── pipeline helpers ──────────────────────────────────────────────────────────
 
 ///|
@@ -215,6 +220,7 @@ fn template_error_text(e : @template.TemplateError) -> String {
   match e {
     @template.UnknownSlot(name) => "unknown slot '" + name + "'"
     @template.MissingRequiredSlot(slot) => "missing required slot '" + slot.to_string() + "'"
+    @template.MissingDataSlot(path) => "missing data slot '" + path + "'"
     @template.ParseError(msg) => msg
   }
 }
@@ -448,6 +454,27 @@ fn collection_index_url(collection_name : String) -> String {
   "/" + collection_name + "/"
 }
 
+fn collection_index_page_url(collection_name : String, page_number : Int) -> String {
+  if page_number <= 1 {
+    return collection_index_url(collection_name)
+  }
+  "/" + collection_name + "/page/" + page_number.to_string() + "/"
+}
+
+fn tags_index_page_url(page_number : Int) -> String {
+  if page_number <= 1 {
+    return "/tags/"
+  }
+  "/tags/page/" + page_number.to_string() + "/"
+}
+
+fn tag_page_url(slug : String, page_number : Int) -> String {
+  if page_number <= 1 {
+    return @tags.tag_url(slug)
+  }
+  "/tags/" + slug + "/page/" + page_number.to_string() + "/"
+}
+
 fn build_nav_links_html(collections : Array[@collections.CollectionDef]) -> String {
   let links : Array[(String, String)] = []
   links.push(("/tags/", "tags"))
@@ -472,6 +499,75 @@ fn search_index_file_name(site : @config.SiteConfig) -> String {
     Some(path) => path
     None => "search-index.json"
   }
+}
+
+fn static_dir_name(site : @config.SiteConfig) -> String {
+  match site.static_dir {
+    Some(path) => path
+    None => "static"
+  }
+}
+
+fn data_dir_for_build(config : BuildConfig) -> String {
+  match config.site.data_dir {
+    Some(path) => path
+    None => config.content_dir + "/data"
+  }
+}
+
+fn data_error_text(err : @data.DataError) -> String {
+  @data.format_error(err)
+}
+
+fn page_size_for_site(site : @config.SiteConfig) -> Int {
+  match site.page_size {
+    Some(size) => size
+    None => 10
+  }
+}
+
+fn asset_error_text(err : @assets.AssetCopyError) -> String {
+  @assets.format_error(err)
+}
+
+fn render_pagination_nav(
+  page_number : Int,
+  total_pages : Int,
+  prev_url : String?,
+  next_url : String?
+) -> String {
+  if total_pages <= 1 {
+    return ""
+  }
+  let nav = StringBuilder::new()
+  nav.write_string("<nav class=\"pagination\" aria-label=\"Pagination\">\n")
+  nav.write_string("<p>Page ")
+  nav.write_string(page_number.to_string())
+  nav.write_string(" of ")
+  nav.write_string(total_pages.to_string())
+  nav.write_string("</p>\n<ul>\n")
+  match prev_url {
+    Some(url) => nav.write_string("<li>" + @html.anchor(url, "Previous") + "</li>\n")
+    None => nav.write_string("<li><span>Previous</span></li>\n")
+  }
+  match next_url {
+    Some(url) => nav.write_string("<li>" + @html.anchor(url, "Next") + "</li>\n")
+    None => nav.write_string("<li><span>Next</span></li>\n")
+  }
+  nav.write_string("</ul>\n</nav>\n")
+  nav.to_string()
+}
+
+fn inject_nav_before_main_close(body : String, nav : String) -> String {
+  if nav.length() == 0 {
+    return body
+  }
+  let close_tag = "</main>\n"
+  if body.has_suffix(close_tag) {
+    let without_close = substr_builder(body, 0, body.length() - close_tag.length())
+    return without_close + nav + close_tag
+  }
+  body + nav
 }
 
 fn split_lines_builder(s : String) -> Array[String] {
@@ -618,6 +714,7 @@ fn inline_text_builder(inline : @markdown.Inline) -> String {
       Some(text) => text
       None => target
     }
+    @markdown.Shortcode(call) => call.name
     @markdown.HardBreak => " "
   }
 }
@@ -746,16 +843,29 @@ fn collect_tag_catalog(collection_sources : Array[CollectionSources], tags_field
 
 fn render_tag_page_html(
   page : @tags.TagPage,
+  pagination : @pagination.PaginatedIndex[@tags.TaggedPage],
   site : @config.SiteConfig,
   tag_template : @template.Template?,
   fallback_template : @template.Template?,
   nav_links_html : String,
-  custom_css : String
+  custom_css : String,
+  data_store : @data.DataStore
 ) -> Result[String, String] {
-  let body = @tags.render_tag_page(page)
-  let full_title = page_title_builder("tag: " + page.tag, site.title)
+  let nav = render_pagination_nav(
+    pagination.page_number,
+    pagination.total_pages,
+    pagination.prev_url,
+    pagination.next_url,
+  )
+  let body = inject_nav_before_main_close(@tags.render_tag_page(page), nav)
+  let title_suffix = if pagination.total_pages > 1 {
+    " (page " + pagination.page_number.to_string() + ")"
+  } else {
+    ""
+  }
+  let full_title = page_title_builder("tag: " + page.tag + title_suffix, site.title)
   let description = "Pages tagged with '" + page.tag + "' in " + site.title + "."
-  let url = @tags.tag_url(page.slug)
+  let url = tag_page_url(page.slug, pagination.page_number)
   let effective_template = match tag_template {
     Some(t) => Some(t)
     None => fallback_template
@@ -774,7 +884,7 @@ fn render_tag_page_html(
         page.tag,
         page.pages.length().to_string(),
       )
-      match @template.render_template(tpl, slots) {
+      match @template.render_template_with_data(tpl, slots, data_store) {
         Ok(html) => Ok(html)
         Err(e) => Err("tag page template: " + template_error_text(e))
       }
@@ -793,14 +903,27 @@ fn render_tag_page_html(
 
 fn render_tags_index_html(
   index : @tags.TagIndex,
+  pagination : @pagination.PaginatedIndex[@tags.TagSummary],
   site : @config.SiteConfig,
   index_template : @template.Template?,
   fallback_template : @template.Template?,
   nav_links_html : String,
-  custom_css : String
+  custom_css : String,
+  data_store : @data.DataStore
 ) -> Result[String, String] {
-  let body = @tags.render_tag_index(index)
-  let full_title = page_title_builder("tags", site.title)
+  let nav = render_pagination_nav(
+    pagination.page_number,
+    pagination.total_pages,
+    pagination.prev_url,
+    pagination.next_url,
+  )
+  let body = inject_nav_before_main_close(@tags.render_tag_index(index), nav)
+  let title_suffix = if pagination.total_pages > 1 {
+    " (page " + pagination.page_number.to_string() + ")"
+  } else {
+    ""
+  }
+  let full_title = page_title_builder("tags" + title_suffix, site.title)
   let description = "All tags in " + site.title + "."
   let effective_template = match index_template {
     Some(t) => Some(t)
@@ -813,14 +936,14 @@ fn render_tags_index_html(
         body,
         "",
         description,
-        "/tags/",
+        tags_index_page_url(pagination.page_number),
         site.title,
         nav_links_html,
         custom_css,
         "",
         index.tags.length().to_string(),
       )
-      match @template.render_template(tpl, slots) {
+      match @template.render_template_with_data(tpl, slots, data_store) {
         Ok(html) => Ok(html)
         Err(e) => Err("tags index template: " + template_error_text(e))
       }
@@ -841,12 +964,14 @@ fn render_tags_index_html(
 /// Render a per-collection index page from successful pages + wikilinks.
 fn render_collection_index(
   collection_name : String,
-  pages : Array[@graph.GraphPage],
+  pagination : @pagination.PaginatedIndex[@graph.GraphPage],
   site : @config.SiteConfig,
   index_template : @template.Template?,
   nav_links_html : String,
-  custom_css : String
+  custom_css : String,
+  data_store : @data.DataStore
 ) -> Result[String, String] {
+  let pages = pagination.documents
   let title_by_slug : Map[String, String] = Map::new()
   let mut i = 0
   while i < pages.length() {
@@ -860,6 +985,13 @@ fn render_collection_index(
   body.write_string("<h1>")
   body.write_string(escape_html_builder(collection_name))
   body.write_string(" Index</h1>\n")
+  if pagination.total_pages > 1 {
+    body.write_string("<p>Page ")
+    body.write_string(pagination.page_number.to_string())
+    body.write_string(" of ")
+    body.write_string(pagination.total_pages.to_string())
+    body.write_string("</p>\n")
+  }
   body.write_string(
     "<p>Generated from parsed pages and the validated wikilink graph for this collection.</p>\n",
   )
@@ -916,12 +1048,25 @@ fn render_collection_index(
     body.write_string("</section>\n")
     i = i + 1
   }
+  body.write_string(
+    render_pagination_nav(
+      pagination.page_number,
+      pagination.total_pages,
+      pagination.prev_url,
+      pagination.next_url,
+    ),
+  )
   body.write_string("</main>\n")
 
-  let full_title = page_title_builder(collection_name + " index", site.title)
+  let title_suffix = if pagination.total_pages > 1 {
+    " (page " + pagination.page_number.to_string() + ")"
+  } else {
+    ""
+  }
+  let full_title = page_title_builder(collection_name + " index" + title_suffix, site.title)
   let description =
     "Generated page graph for collection " + collection_name + " in " + site.title + "."
-  let page_url = collection_index_url(collection_name)
+  let page_url = collection_index_page_url(collection_name, pagination.page_number)
 
   match index_template {
     Some(tpl) => {
@@ -937,7 +1082,7 @@ fn render_collection_index(
         "",
         "",
       )
-      match @template.render_template(tpl, slots) {
+      match @template.render_template_with_data(tpl, slots, data_store) {
         Ok(html) => return Ok(html)
         Err(e) => return Err("collection index template: " + template_error_text(e))
       }
@@ -954,10 +1099,26 @@ fn render_collection_index(
   Ok(@html.render_page(meta, body.to_string()))
 }
 
-fn load_collections(config : BuildConfig) -> Result[Array[@collections.CollectionDef], String] {
+fn build_data_schema_map(
+  schema_defs : Array[@collections.DataSchemaDef]
+) -> Map[String, @data.DataSchema] {
+  let data_schemas : Map[String, @data.DataSchema] = Map::new()
+  let mut i = 0
+  while i < schema_defs.length() {
+    let schema = schema_defs[i]
+    data_schemas.set(schema.name, @data.new_schema(schema.name, schema.required_keys))
+    i = i + 1
+  }
+  data_schemas
+}
+
+fn load_project_layout(config : BuildConfig) -> Result[ProjectLayout, String] {
   match config.collections_path {
     None => {
-      Ok([@collections.default_posts_collection(config.content_dir)])
+      Ok({
+        collections: [@collections.default_posts_collection(config.content_dir)],
+        data_schemas: Map::new(),
+      })
     }
     Some(path) => {
       let source = try {
@@ -966,7 +1127,12 @@ fn load_collections(config : BuildConfig) -> Result[Array[@collections.Collectio
         @fs.IOError(msg) => return Err("cannot read collections file " + path + ": " + msg)
       }
       match @collections.parse(source) {
-        Ok(parsed) => Ok(parsed.definitions)
+        Ok(parsed) => {
+          Ok({
+            collections: parsed.definitions,
+            data_schemas: build_data_schema_map(parsed.data_schema_list),
+          })
+        }
         Err(@collections.InvalidLine(line, msg)) => {
           Err(path + ":" + line.to_string() + ": " + msg)
         }
@@ -983,12 +1149,23 @@ fn load_collections(config : BuildConfig) -> Result[Array[@collections.Collectio
         Err(@collections.DuplicateCollection(name)) => {
           Err(path + ": duplicate collection '" + name + "'")
         }
+        Err(@collections.DuplicateDataSchema(name)) => {
+          Err(path + ": duplicate data schema '" + name + "'")
+        }
         Err(@collections.InvalidSchema(name, msg)) => {
           Err(path + ": invalid schema for collection '" + name + "': " + msg)
         }
         Err(@collections.EmptyConfig) => Err(path + ": no collections defined")
       }
     }
+  }
+}
+
+fn load_data_store(config : BuildConfig, data_schemas : Map[String, @data.DataSchema]) -> Result[@data.DataStore, String] {
+  let data_dir = data_dir_for_build(config)
+  match @data.load_from_dir(data_dir, data_schemas) {
+    Ok(store) => Ok(store)
+    Err(err) => Err(data_error_text(err))
   }
 }
 
@@ -1007,6 +1184,7 @@ fn process_document(
   tags_field : String,
   schema : @schema.Schema,
   site : @config.SiteConfig,
+  data_store : @data.DataStore,
   page_template : @template.Template?,
   nav_links_html : String,
   custom_css : String
@@ -1079,7 +1257,21 @@ fn process_document(
   // Step 4: build wikilink map for the renderer
   let wl_map = build_wikilink_map(resolved)
   // Step 5: render markdown body to HTML fragment
-  let body_html = @markdown.render(fm.body, wl_map) + @tags.render_page_tags(page_tags)
+  let markdown_result = @markdown.render_with_diagnostics(fm.body, wl_map)
+  if markdown_result.shortcode_errors.length() > 0 {
+    let mut si = 0
+    while si < markdown_result.shortcode_errors.length() {
+      println(
+        "[error] " +
+        context +
+        ": shortcode: " +
+        @shortcode.error_text(markdown_result.shortcode_errors[si].error),
+      )
+      si = si + 1
+    }
+    return None
+  }
+  let body_html = markdown_result.html + @tags.render_page_tags(page_tags)
   let excerpt = extract_excerpt_builder(fm.body)
   // Step 6: emit the complete HTML5 page
   let title = extract_title(fm)
@@ -1109,7 +1301,7 @@ fn process_document(
         "",
         "",
       )
-      match @template.render_template(tpl, slots) {
+      match @template.render_template_with_data(tpl, slots, data_store) {
         Ok(html) => html
         Err(e) => {
           println("[error] " + context + ": page template: " + template_error_text(e))
@@ -1154,6 +1346,7 @@ fn process_document_for_lint(
   tags_field : String,
   schema : @schema.Schema,
   site : @config.SiteConfig,
+  data_store : @data.DataStore,
   page_template : @template.Template?,
   nav_links_html : String,
   custom_css : String
@@ -1249,7 +1442,24 @@ fn process_document_for_lint(
   }
 
   let wl_map = build_wikilink_map(resolved)
-  let body_html = @markdown.render(fm.body, wl_map) + @tags.render_page_tags(page_tags)
+  let markdown_result = @markdown.render_with_diagnostics(fm.body, wl_map)
+  i = 0
+  while i < markdown_result.shortcode_errors.length() {
+    violations.push({
+      path: source_path,
+      line: None,
+      column: None,
+      kind: @lint.ShortcodeError,
+      message: @shortcode.error_text(markdown_result.shortcode_errors[i].error),
+    })
+    i = i + 1
+  }
+
+  if violations.length() > 0 {
+    return { document: None, violations }
+  }
+
+  let body_html = markdown_result.html + @tags.render_page_tags(page_tags)
   let excerpt = extract_excerpt_builder(fm.body)
   let title = extract_title(fm)
   let full_title = page_title_builder(title, site.title)
@@ -1278,7 +1488,7 @@ fn process_document_for_lint(
         "",
         "",
       )
-      match @template.render_template(tpl, slots) {
+      match @template.render_template_with_data(tpl, slots, data_store) {
         Ok(html) => html
         Err(e) => {
           violations.push({
@@ -1375,13 +1585,14 @@ fn ensure_parent_dirs_for_file(path : String) -> Unit raise @fs.IOError {
 pub fn build(config : BuildConfig) -> Int {
   println("[lattice] building " + config.content_dir + " → " + config.output_dir)
 
-  let collections = match load_collections(config) {
-    Ok(defs) => defs
+  let layout = match load_project_layout(config) {
+    Ok(parsed) => parsed
     Err(msg) => {
       println("[error] collections: " + msg)
       return 1
     }
   }
+  let collections = layout.collections
   println("[lattice] using " + collections.length().to_string() + " collections")
   let templates = match load_templates(config) {
     Ok(t) => t
@@ -1392,6 +1603,14 @@ pub fn build(config : BuildConfig) -> Int {
   }
   let nav_links_html = build_nav_links_html(collections)
   let custom_css = default_css()
+  let data_store = match load_data_store(config, layout.data_schemas) {
+    Ok(store) => store
+    Err(msg) => {
+      println("[error] data: " + msg)
+      return 1
+    }
+  }
+  println("[lattice] loaded data files from " + data_dir_for_build(config))
 
   // Pass 1: collect sources for each collection
   let collection_sources : Array[CollectionSources] = []
@@ -1458,6 +1677,7 @@ pub fn build(config : BuildConfig) -> Int {
   let tags_field = tags_field_name(config.site)
   let tag_catalog = collect_tag_catalog(collection_sources, tags_field)
   let known_tags = tag_catalog.name_by_slug
+  let page_size = page_size_for_site(config.site)
 
   // Ensure output directory exists
   let dir_ok = try {
@@ -1538,6 +1758,7 @@ pub fn build(config : BuildConfig) -> Int {
         tags_field,
         coll.definition.schema,
         config.site,
+        data_store,
         templates.page,
         nav_links_html,
         custom_css,
@@ -1646,38 +1867,61 @@ pub fn build(config : BuildConfig) -> Int {
         error_count = error_count + 1
       }
 
-      let index_html = match render_collection_index(
-        coll.name,
+      let paginated_index_pages = @pagination.paginate(
         coll.pages,
-        config.site,
-        templates.index,
-        nav_links_html,
-        custom_css,
-      ) {
-        Ok(html) => Some(html)
-        Err(msg) => {
-          println("[error] " + coll.name + " index: " + msg)
-          None
-        }
-      }
-      let index_write_ok = match index_html {
-        Some(html) => {
-          try {
-            let out_path = coll_dir + "/index.html"
-            @fs.write_string_to_file(out_path, html)
-            println("[lattice] wrote " + out_path)
-            true
-          } catch {
-            @fs.IOError(msg) => {
-              println("[error] " + coll.name + " index: write failed: " + msg)
-              false
-            }
+        page_size,
+        fn(page_number) { collection_index_page_url(coll.name, page_number) },
+      )
+      let mut page_idx = 0
+      while page_idx < paginated_index_pages.length() {
+        let pagination = paginated_index_pages[page_idx]
+        let index_html = match render_collection_index(
+          coll.name,
+          pagination,
+          config.site,
+          templates.index,
+          nav_links_html,
+          custom_css,
+          data_store,
+        ) {
+          Ok(html) => Some(html)
+          Err(msg) => {
+            println("[error] " + coll.name + " index page " + pagination.page_number.to_string() + ": " + msg)
+            None
           }
         }
-        None => false
-      }
-      if not(index_write_ok) {
-        error_count = error_count + 1
+        let index_write_ok = match index_html {
+          Some(html) => {
+            try {
+              let out_path = if pagination.page_number == 1 {
+                coll_dir + "/index.html"
+              } else {
+                coll_dir + "/page/" + pagination.page_number.to_string() + "/index.html"
+              }
+              ensure_parent_dirs_for_file(out_path)
+              @fs.write_string_to_file(out_path, html)
+              println("[lattice] wrote " + out_path)
+              true
+            } catch {
+              @fs.IOError(msg) => {
+                println(
+                  "[error] " +
+                  coll.name +
+                  " index page " +
+                  pagination.page_number.to_string() +
+                  ": write failed: " +
+                  msg,
+                )
+                false
+              }
+            }
+          }
+          None => false
+        }
+        if not(index_write_ok) {
+          error_count = error_count + 1
+        }
+        page_idx = page_idx + 1
       }
 
       i = i + 1
@@ -1718,41 +1962,76 @@ pub fn build(config : BuildConfig) -> Int {
             }
           }
           if tag_dir_ok {
-            let tag_page : @tags.TagPage = { tag: tag_name, slug: tag_slug, pages }
-            let tag_html = match render_tag_page_html(
-              tag_page,
-              config.site,
-              templates.tag_page,
-              templates.index,
-              nav_links_html,
-              custom_css,
-            ) {
-              Ok(html) => Some(html)
-              Err(msg) => {
-                println("[error] tags/" + tag_slug + ": " + msg)
-                None
+            let paginated_tag_pages = @pagination.paginate(
+              pages,
+              page_size,
+              fn(page_number) { tag_page_url(tag_slug, page_number) },
+            )
+            let mut page_idx = 0
+            while page_idx < paginated_tag_pages.length() {
+              let pagination = paginated_tag_pages[page_idx]
+              let tag_page : @tags.TagPage = {
+                tag: tag_name,
+                slug: tag_slug,
+                pages: pagination.documents,
               }
-            }
-            match tag_html {
-              Some(html) => {
-                let tag_write_ok = try {
-                  let out_path = tag_dir + "/index.html"
-                  @fs.write_string_to_file(out_path, html)
-                  println("[lattice] wrote " + out_path)
-                  true
-                } catch {
-                  @fs.IOError(msg) => {
-                    println("[error] tags/" + tag_slug + ": write failed: " + msg)
-                    false
+              let tag_html = match render_tag_page_html(
+                tag_page,
+                pagination,
+                config.site,
+                templates.tag_page,
+                templates.index,
+                nav_links_html,
+                custom_css,
+                data_store,
+              ) {
+                Ok(html) => Some(html)
+                Err(msg) => {
+                  println(
+                    "[error] tags/" +
+                    tag_slug +
+                    " page " +
+                    pagination.page_number.to_string() +
+                    ": " +
+                    msg,
+                  )
+                  None
+                }
+              }
+              match tag_html {
+                Some(html) => {
+                  let tag_write_ok = try {
+                    let out_path = if pagination.page_number == 1 {
+                      tag_dir + "/index.html"
+                    } else {
+                      tag_dir + "/page/" + pagination.page_number.to_string() + "/index.html"
+                    }
+                    ensure_parent_dirs_for_file(out_path)
+                    @fs.write_string_to_file(out_path, html)
+                    println("[lattice] wrote " + out_path)
+                    true
+                  } catch {
+                    @fs.IOError(msg) => {
+                      println(
+                        "[error] tags/" +
+                        tag_slug +
+                        " page " +
+                        pagination.page_number.to_string() +
+                        ": write failed: " +
+                        msg,
+                      )
+                      false
+                    }
+                  }
+                  if not(tag_write_ok) {
+                    error_count = error_count + 1
                   }
                 }
-                if not(tag_write_ok) {
+                None => {
                   error_count = error_count + 1
                 }
               }
-              None => {
-                error_count = error_count + 1
-              }
+              page_idx = page_idx + 1
             }
           } else {
             error_count = error_count + 1
@@ -1762,39 +2041,63 @@ pub fn build(config : BuildConfig) -> Int {
         }
 
         if error_count == 0 {
-          let tags_index : @tags.TagIndex = { tags: tag_summaries }
-          let tags_index_html = match render_tags_index_html(
-            tags_index,
-            config.site,
-            templates.tag_index,
-            templates.index,
-            nav_links_html,
-            custom_css,
-          ) {
-            Ok(html) => Some(html)
-            Err(msg) => {
-              println("[error] tags index: " + msg)
-              None
-            }
-          }
-          let tags_index_ok = match tags_index_html {
-            Some(html) => {
-              try {
-                let out_path = tags_root + "/index.html"
-                @fs.write_string_to_file(out_path, html)
-                println("[lattice] wrote " + out_path)
-                true
-              } catch {
-                @fs.IOError(msg) => {
-                  println("[error] tags index: write failed: " + msg)
-                  false
-                }
+          let paginated_tags_index = @pagination.paginate(
+            tag_summaries,
+            page_size,
+            fn(page_number) { tags_index_page_url(page_number) },
+          )
+          let mut page_idx = 0
+          while page_idx < paginated_tags_index.length() {
+            let pagination = paginated_tags_index[page_idx]
+            let tags_index : @tags.TagIndex = { tags: pagination.documents }
+            let tags_index_html = match render_tags_index_html(
+              tags_index,
+              pagination,
+              config.site,
+              templates.tag_index,
+              templates.index,
+              nav_links_html,
+              custom_css,
+              data_store,
+            ) {
+              Ok(html) => Some(html)
+              Err(msg) => {
+                println(
+                  "[error] tags index page " + pagination.page_number.to_string() + ": " + msg,
+                )
+                None
               }
             }
-            None => false
-          }
-          if not(tags_index_ok) {
-            error_count = error_count + 1
+            let tags_index_ok = match tags_index_html {
+              Some(html) => {
+                try {
+                  let out_path = if pagination.page_number == 1 {
+                    tags_root + "/index.html"
+                  } else {
+                    tags_root + "/page/" + pagination.page_number.to_string() + "/index.html"
+                  }
+                  ensure_parent_dirs_for_file(out_path)
+                  @fs.write_string_to_file(out_path, html)
+                  println("[lattice] wrote " + out_path)
+                  true
+                } catch {
+                  @fs.IOError(msg) => {
+                    println(
+                      "[error] tags index page " +
+                      pagination.page_number.to_string() +
+                      ": write failed: " +
+                      msg,
+                    )
+                    false
+                  }
+                }
+              }
+              None => false
+            }
+            if not(tags_index_ok) {
+              error_count = error_count + 1
+            }
+            page_idx = page_idx + 1
           }
         }
       } else {
@@ -1837,6 +2140,23 @@ pub fn build(config : BuildConfig) -> Int {
         error_count = error_count + 1
       }
     }
+    if error_count == 0 {
+      match @assets.copy_static(
+        config.content_dir,
+        config.output_dir,
+        static_dir_name(config.site),
+      ) {
+        Ok(copied) => {
+          if copied > 0 {
+            println("[lattice] copied " + copied.to_string() + " static asset files")
+          }
+        }
+        Err(e) => {
+          println("[error] static assets: " + asset_error_text(e))
+          error_count = error_count + 1
+        }
+      }
+    }
   } else {
     println(
       "[warn] skipped collection feeds/indexes, tags, sitemap, and search index generation due to prior build errors",
@@ -1861,8 +2181,8 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
   println("[lattice] checking " + config.content_dir)
   let violations : Array[@lint.LintViolation] = []
 
-  let collections = match load_collections(config) {
-    Ok(defs) => defs
+  let layout = match load_project_layout(config) {
+    Ok(parsed) => parsed
     Err(msg) => {
       violations.push({
         path: match config.collections_path {
@@ -1877,6 +2197,7 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
       return { violations, }
     }
   }
+  let collections = layout.collections
   println("[lattice] using " + collections.length().to_string() + " collections")
 
   let templates_result = load_templates_for_lint(config)
@@ -1889,6 +2210,19 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
 
   let nav_links_html = build_nav_links_html(collections)
   let custom_css = default_css()
+  let data_store = match load_data_store(config, layout.data_schemas) {
+    Ok(store) => store
+    Err(msg) => {
+      violations.push({
+        path: data_dir_for_build(config),
+        line: None,
+        column: None,
+        kind: @lint.DataError,
+        message: msg,
+      })
+      @data.empty_store()
+    }
+  }
 
   let collection_sources : Array[CollectionSources] = []
   let mut source_count = 0
@@ -1953,6 +2287,7 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
   let tags_field = tags_field_name(config.site)
   let tag_catalog = collect_tag_catalog(collection_sources, tags_field)
   let known_tags = tag_catalog.name_by_slug
+  let page_size = page_size_for_site(config.site)
 
   let graph_pages : Array[@graph.GraphPage] = []
   let tag_pages_by_slug : Map[String, Array[@tags.TaggedPage]] = Map::new()
@@ -1975,6 +2310,7 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
         tags_field,
         coll.definition.schema,
         config.site,
+        data_store,
         templates.page,
         nav_links_html,
         custom_css,
@@ -2027,24 +2363,35 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
     let coll = rendered_collections[i]
     let feed_title = config.site.title + " (" + coll.name + ")"
     let _feed_xml = @rss.render_feed(feed_title, config.site.base_url, coll.pages)
-    match render_collection_index(
-      coll.name,
+    let paginated_index_pages = @pagination.paginate(
       coll.pages,
-      config.site,
-      templates.index,
-      nav_links_html,
-      custom_css,
-    ) {
-      Ok(_) => ()
-      Err(msg) => {
-        violations.push({
-          path: templates_dir_for_build(config) + "/index.html",
-          line: None,
-          column: None,
-          kind: @lint.TemplateSlotError,
-          message: coll.name + " index: " + msg,
-        })
+      page_size,
+      fn(page_number) { collection_index_page_url(coll.name, page_number) },
+    )
+    let mut page_idx = 0
+    while page_idx < paginated_index_pages.length() {
+      let pagination = paginated_index_pages[page_idx]
+      match render_collection_index(
+        coll.name,
+        pagination,
+        config.site,
+        templates.index,
+        nav_links_html,
+        custom_css,
+        data_store,
+      ) {
+        Ok(_) => ()
+        Err(msg) => {
+          violations.push({
+            path: templates_dir_for_build(config) + "/index.html",
+            line: None,
+            column: None,
+            kind: @lint.TemplateSlotError,
+            message: coll.name + " index page " + pagination.page_number.to_string() + ": " + msg,
+          })
+        }
       }
+      page_idx = page_idx + 1
     }
     i = i + 1
   }
@@ -2061,52 +2408,99 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
       Some(items) => items
       None => []
     }
-    let tag_page : @tags.TagPage = { tag: tag_name, slug: tag_slug, pages }
-    match render_tag_page_html(
-      tag_page,
-      config.site,
-      templates.tag_page,
-      templates.index,
-      nav_links_html,
-      custom_css,
-    ) {
-      Ok(_) => ()
-      Err(msg) => {
-        violations.push({
-          path: templates_dir_for_build(config) + "/tag.html",
-          line: None,
-          column: None,
-          kind: @lint.TemplateSlotError,
-          message: "tags/" + tag_slug + ": " + msg,
-        })
+    let paginated_tag_pages = @pagination.paginate(
+      pages,
+      page_size,
+      fn(page_number) { tag_page_url(tag_slug, page_number) },
+    )
+    let mut page_idx = 0
+    while page_idx < paginated_tag_pages.length() {
+      let pagination = paginated_tag_pages[page_idx]
+      let tag_page : @tags.TagPage = {
+        tag: tag_name,
+        slug: tag_slug,
+        pages: pagination.documents,
       }
+      match render_tag_page_html(
+        tag_page,
+        pagination,
+        config.site,
+        templates.tag_page,
+        templates.index,
+        nav_links_html,
+        custom_css,
+        data_store,
+      ) {
+        Ok(_) => ()
+        Err(msg) => {
+          violations.push({
+            path: templates_dir_for_build(config) + "/tag.html",
+            line: None,
+            column: None,
+            kind: @lint.TemplateSlotError,
+            message:
+              "tags/" +
+              tag_slug +
+              " page " +
+              pagination.page_number.to_string() +
+              ": " +
+              msg,
+          })
+        }
+      }
+      page_idx = page_idx + 1
     }
     tag_summaries.push({ tag: tag_name, slug: tag_slug, count: pages.length() })
     i = i + 1
   }
 
-  let tags_index : @tags.TagIndex = { tags: tag_summaries }
-  match render_tags_index_html(
-    tags_index,
-    config.site,
-    templates.tag_index,
-    templates.index,
-    nav_links_html,
-    custom_css,
-  ) {
-    Ok(_) => ()
-    Err(msg) => {
-      violations.push({
-        path: templates_dir_for_build(config) + "/tags.html",
-        line: None,
-        column: None,
-        kind: @lint.TemplateSlotError,
-        message: "tags index: " + msg,
-      })
+  let paginated_tags_index = @pagination.paginate(
+    tag_summaries,
+    page_size,
+    fn(page_number) { tags_index_page_url(page_number) },
+  )
+  i = 0
+  while i < paginated_tags_index.length() {
+    let pagination = paginated_tags_index[i]
+    let tags_index : @tags.TagIndex = { tags: pagination.documents }
+    match render_tags_index_html(
+      tags_index,
+      pagination,
+      config.site,
+      templates.tag_index,
+      templates.index,
+      nav_links_html,
+      custom_css,
+      data_store,
+    ) {
+      Ok(_) => ()
+      Err(msg) => {
+        violations.push({
+          path: templates_dir_for_build(config) + "/tags.html",
+          line: None,
+          column: None,
+          kind: @lint.TemplateSlotError,
+          message: "tags index page " + pagination.page_number.to_string() + ": " + msg,
+        })
+      }
     }
+    i = i + 1
   }
 
   let _sitemap_xml = @sitemap.render_sitemap(config.site.base_url, graph_pages)
+  let static_validation = @assets.check_static(config.content_dir, static_dir_name(config.site))
+  i = 0
+  while i < static_validation.errors.length() {
+    let asset_err = static_validation.errors[i]
+    violations.push({
+      path: @assets.error_path(asset_err),
+      line: None,
+      column: None,
+      kind: @lint.IOError,
+      message: @assets.format_error(asset_err),
+    })
+    i = i + 1
+  }
   { violations, }
 }
 
@@ -2146,5 +2540,7 @@ fn default_css() -> String {
   "}\n" +
   "nav { margin-bottom: 2.5rem; padding-bottom: 1rem; border-bottom: 1px solid #e2e8f0; }\n" +
   "nav a { margin-right: 1.25rem; font-weight: 500; text-decoration: none; }\n" +
-  "nav a:hover { text-decoration: underline; }\n"
+  "nav a:hover { text-decoration: underline; }\n" +
+  "\n" +
+  @highlight.css_classes()
 }

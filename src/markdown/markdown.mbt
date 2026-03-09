@@ -23,6 +23,7 @@ pub enum Inline {
   InlineCode(String)
   Link(String, String)      // display text, url
   WikiRef(String, String?)  // target slug, optional display text
+  Shortcode(@shortcode.ShortcodeCall)
   HardBreak
 }
 
@@ -35,6 +36,16 @@ pub enum Block {
   UnorderedList(Array[Array[Inline]])    // each item is inline content
   OrderedList(Array[Array[Inline]])      // each item is inline content
   HRule
+}
+
+pub struct ShortcodeIssue {
+  call : @shortcode.ShortcodeCall?
+  error : @shortcode.ShortcodeError
+}
+
+pub struct RenderResult {
+  html : String
+  shortcode_errors : Array[ShortcodeIssue]
 }
 
 // ── character helpers ─────────────────────────────────────────────────────────
@@ -203,6 +214,54 @@ fn find_char_in_str(s : String, c : Char) -> Int {
   find_char(s, 0, c, s.length())
 }
 
+fn split_shortcode_params_raw(raw : String) -> String {
+  trim(raw)
+}
+
+fn is_full_shortcode_line(line : String) -> Bool {
+  let t = trim(line)
+  t.length() >= 7 &&
+  starts_with_at(t, 0, "{{<") &&
+  starts_with_at(t, t.length() - 3, ">}}")
+}
+
+fn shortcode_inner_text_from_line(line : String) -> String {
+  let t = trim(line)
+  trim(substr(t, 3, t.length() - 3))
+}
+
+fn preprocess_callout_next_line(body : String) -> String {
+  let ls = lines_of(body)
+  let out : Array[String] = []
+  let mut i = 0
+  while i < ls.length() {
+    let line = ls[i]
+    if is_full_shortcode_line(line) {
+      let raw = shortcode_inner_text_from_line(line)
+      match @shortcode.parse(raw) {
+        Ok(call) => {
+          if call.name == "callout" &&
+            i + 1 < ls.length() &&
+            not(is_blank(ls[i + 1])) {
+            let merged =
+              trim(line) +
+              " " +
+              trim(ls[i + 1]) +
+              " {{< /callout >}}"
+            out.push(merged)
+            i = i + 2
+            continue
+          }
+        }
+        Err(_) => ()
+      }
+    }
+    out.push(line)
+    i = i + 1
+  }
+  join_lines(out)
+}
+
 // ── inline parsing ────────────────────────────────────────────────────────────
 
 /// Parse inline elements from s[from..to]. Handles bold, italic, inline code,
@@ -268,6 +327,58 @@ pub fn parse_inlines(s : String, from : Int, to : Int) -> Array[Inline] {
         // no matching close — treat stars as literal text
         i = i + 1
       }
+    } else if c == '{' && i + 2 < to &&
+      char_at(s, i + 1) == '{' &&
+      char_at(s, i + 2) == '<' {
+      if text_start < i {
+        result.push(Text(substr(s, text_start, i)))
+      }
+      let close = find_str(s, i + 3, ">}}", to)
+      if close >= 0 {
+        let raw = split_shortcode_params_raw(substr(s, i + 3, close))
+        match @shortcode.parse(raw) {
+          Ok(call) => {
+            if call.name == "callout" {
+              let closing_tag = "{{< /callout >}}"
+              let body_start = close + 3
+              let end_callout = find_str(s, body_start, closing_tag, to)
+              if end_callout >= 0 {
+                let copied : Map[String, @shortcode.ShortcodeParam] = Map::new()
+                let param_keys = ["type", "title", "src", "alt", "caption", "width", "poster", "link", "body"]
+                let mut j = 0
+                while j < param_keys.length() {
+                  let key = param_keys[j]
+                  match call.params.get(key) {
+                    Some(value) => copied.set(key, value)
+                    None => ()
+                  }
+                  j = j + 1
+                }
+                let body_text = trim(substr(s, body_start, end_callout))
+                if body_text.length() > 0 {
+                  copied.set("body", @shortcode.StringParam(body_text))
+                }
+                result.push(Shortcode({ name: call.name, params: copied }))
+                i = end_callout + closing_tag.length()
+              } else {
+                result.push(Shortcode(call))
+                i = close + 3
+              }
+            } else {
+              result.push(Shortcode(call))
+              i = close + 3
+            }
+          }
+          Err(_) => {
+            result.push(Text(substr(s, i, close + 3)))
+            i = close + 3
+          }
+        }
+      } else {
+        result.push(Text("{{<"))
+        i = i + 3
+      }
+      text_start = i
     } else if c == '[' && i + 1 < to && char_at(s, i + 1) == '[' {
       // wikilink: [[target]] or [[target|display]]
       if text_start < i {
@@ -546,6 +657,33 @@ fn render_inlines(inlines : Array[Inline], wl : Map[String, String]) -> String {
   buf.to_string()
 }
 
+fn merge_shortcode_errors(
+  target : Array[ShortcodeIssue],
+  from : Array[ShortcodeIssue]
+) -> Unit {
+  let mut i = 0
+  while i < from.length() {
+    target.push(from[i])
+    i = i + 1
+  }
+}
+
+fn render_inlines_with_issues(
+  inlines : Array[Inline],
+  wl : Map[String, String]
+) -> RenderResult {
+  let buf = StringBuilder::new()
+  let issues : Array[ShortcodeIssue] = []
+  let mut i = 0
+  while i < inlines.length() {
+    let rendered = render_inline_with_issues(inlines[i], wl)
+    buf.write_string(rendered.html)
+    merge_shortcode_errors(issues, rendered.shortcode_errors)
+    i = i + 1
+  }
+  { html: buf.to_string(), shortcode_errors: issues }
+}
+
 fn render_blocks(blocks : Array[Block], wl : Map[String, String]) -> String {
   let buf = StringBuilder::new()
   let mut i = 0
@@ -584,6 +722,78 @@ fn render_blocks(blocks : Array[Block], wl : Map[String, String]) -> String {
   buf.to_string()
 }
 
+fn shortcode_is_block(call : @shortcode.ShortcodeCall) -> Bool {
+  call.name == "image" || call.name == "figure" || call.name == "callout" || call.name == "video"
+}
+
+fn render_blocks_with_issues(
+  blocks : Array[Block],
+  wl : Map[String, String]
+) -> RenderResult {
+  let buf = StringBuilder::new()
+  let issues : Array[ShortcodeIssue] = []
+  let mut i = 0
+  while i < blocks.length() {
+    match blocks[i] {
+      OrderedList(items) => {
+        let merged : Array[Array[Inline]] = []
+        let mut k = 0
+        while k < items.length() {
+          merged.push(items[k])
+          k = k + 1
+        }
+        i = i + 1
+        while i < blocks.length() {
+          match blocks[i] {
+            OrderedList(next_items) => {
+              let mut j = 0
+              while j < next_items.length() {
+                merged.push(next_items[j])
+                j = j + 1
+              }
+              i = i + 1
+            }
+            _ => break
+          }
+        }
+        let rendered = render_block_with_issues(OrderedList(merged), wl)
+        buf.write_string(rendered.html)
+        merge_shortcode_errors(issues, rendered.shortcode_errors)
+      }
+      _ => {
+        let rendered = render_block_with_issues(blocks[i], wl)
+        buf.write_string(rendered.html)
+        merge_shortcode_errors(issues, rendered.shortcode_errors)
+        i = i + 1
+      }
+    }
+  }
+  { html: buf.to_string(), shortcode_errors: issues }
+}
+
+fn render_fenced_code(lang : String?, code : String) -> String {
+  match lang {
+    Some(l) => {
+      if @highlight.language_supported(l) {
+        let tokens = @highlight.highlight(l, code)
+        let highlighted = @highlight.render_highlighted(tokens)
+        "<pre class=\"highlight language-" +
+        escape_html(l) +
+        "\"><code>" +
+        highlighted +
+        "</code></pre>\n"
+      } else {
+        "<pre><code class=\"language-" +
+        escape_html(l) +
+        "\">" +
+        escape_html(code) +
+        "</code></pre>\n"
+      }
+    }
+    None => "<pre><code>" + escape_html(code) + "</code></pre>\n"
+  }
+}
+
 /// Render a single inline element to an HTML string.
 ///
 /// Wikilinks are resolved against `wl` (target slug → url). A wikilink whose
@@ -614,7 +824,60 @@ pub fn render_inline(inline : Inline, wl : Map[String, String]) -> String {
           "<a class=\"wl-broken\" href=\"#\">" + escape_html(text) + "</a>"
       }
     }
+    Shortcode(call) => match @shortcode.render(call) {
+      Ok(html) => html
+      Err(_) => ""
+    }
     HardBreak => "<br />\n"
+  }
+}
+
+fn render_inline_with_issues(inline : Inline, wl : Map[String, String]) -> RenderResult {
+  match inline {
+    Text(t) => { html: escape_html(t), shortcode_errors: [] }
+    Bold(inner) => {
+      let rendered = render_inlines_with_issues(inner, wl)
+      {
+        html: "<strong>" + rendered.html + "</strong>",
+        shortcode_errors: rendered.shortcode_errors,
+      }
+    }
+    Italic(inner) => {
+      let rendered = render_inlines_with_issues(inner, wl)
+      { html: "<em>" + rendered.html + "</em>", shortcode_errors: rendered.shortcode_errors }
+    }
+    BoldItalic(inner) => {
+      let rendered = render_inlines_with_issues(inner, wl)
+      {
+        html: "<strong><em>" + rendered.html + "</em></strong>",
+        shortcode_errors: rendered.shortcode_errors,
+      }
+    }
+    InlineCode(code) => { html: "<code>" + escape_html(code) + "</code>", shortcode_errors: [] }
+    Link(text, url) => {
+      { html: "<a href=\"" + escape_html(url) + "\">" + escape_html(text) + "</a>", shortcode_errors: [] }
+    }
+    WikiRef(target, display) => {
+      let text = match display {
+        Some(d) => d
+        None => target
+      }
+      match wl.get(target) {
+        Some(url) => {
+          { html: "<a href=\"" + escape_html(url) + "\">" + escape_html(text) + "</a>", shortcode_errors: [] }
+        }
+        None => {
+          { html: "<a class=\"wl-broken\" href=\"#\">" + escape_html(text) + "</a>", shortcode_errors: [] }
+        }
+      }
+    }
+    Shortcode(call) => {
+      match @shortcode.render(call) {
+        Ok(html) => { html, shortcode_errors: [] }
+        Err(err) => { html: "", shortcode_errors: [{ call: Some(call), error: err }] }
+      }
+    }
+    HardBreak => { html: "<br />\n", shortcode_errors: [] }
   }
 }
 
@@ -625,13 +888,21 @@ pub fn render_block(block : Block, wl : Map[String, String]) -> String {
       let tag = "h" + level.to_string()
       "<" + tag + ">" + render_inlines(inlines, wl) + "</" + tag + ">\n"
     }
-    Paragraph(inlines) => "<p>" + render_inlines(inlines, wl) + "</p>\n"
-    FencedCode(lang, code) => {
-      let class_attr = match lang {
-        Some(l) => " class=\"language-" + escape_html(l) + "\""
-        None => ""
+    Paragraph(inlines) => {
+      if inlines.length() == 1 {
+        match inlines[0] {
+          Shortcode(call) => {
+            if shortcode_is_block(call) {
+              return render_inline(inlines[0], wl) + "\n"
+            }
+          }
+          _ => ()
+        }
       }
-      "<pre><code" + class_attr + ">" + escape_html(code) + "</code></pre>\n"
+      "<p>" + render_inlines(inlines, wl) + "</p>\n"
+    }
+    FencedCode(lang, code) => {
+      render_fenced_code(lang, code)
     }
     BlockQuote(inner_blocks) => {
       "<blockquote>\n" + render_blocks(inner_blocks, wl) + "</blockquote>\n"
@@ -666,13 +937,83 @@ pub fn render_block(block : Block, wl : Map[String, String]) -> String {
   }
 }
 
+fn render_block_with_issues(block : Block, wl : Map[String, String]) -> RenderResult {
+  match block {
+    Heading(level, inlines) => {
+      let rendered = render_inlines_with_issues(inlines, wl)
+      let tag = "h" + level.to_string()
+      { html: "<" + tag + ">" + rendered.html + "</" + tag + ">\n", shortcode_errors: rendered.shortcode_errors }
+    }
+    Paragraph(inlines) => {
+      if inlines.length() == 1 {
+        match inlines[0] {
+          Shortcode(call) => {
+            if shortcode_is_block(call) {
+              let rendered_inline = render_inline_with_issues(inlines[0], wl)
+              return { html: rendered_inline.html + "\n", shortcode_errors: rendered_inline.shortcode_errors }
+            }
+          }
+          _ => ()
+        }
+      }
+      let rendered = render_inlines_with_issues(inlines, wl)
+      { html: "<p>" + rendered.html + "</p>\n", shortcode_errors: rendered.shortcode_errors }
+    }
+    FencedCode(lang, code) => {
+      { html: render_fenced_code(lang, code), shortcode_errors: [] }
+    }
+    BlockQuote(inner_blocks) => {
+      let rendered = render_blocks_with_issues(inner_blocks, wl)
+      { html: "<blockquote>\n" + rendered.html + "</blockquote>\n", shortcode_errors: rendered.shortcode_errors }
+    }
+    UnorderedList(items) => {
+      let buf = StringBuilder::new()
+      let issues : Array[ShortcodeIssue] = []
+      buf.write_string("<ul>\n")
+      let mut i = 0
+      while i < items.length() {
+        let rendered_item = render_inlines_with_issues(items[i], wl)
+        merge_shortcode_errors(issues, rendered_item.shortcode_errors)
+        buf.write_string("<li>")
+        buf.write_string(rendered_item.html)
+        buf.write_string("</li>\n")
+        i = i + 1
+      }
+      buf.write_string("</ul>\n")
+      { html: buf.to_string(), shortcode_errors: issues }
+    }
+    OrderedList(items) => {
+      let buf = StringBuilder::new()
+      let issues : Array[ShortcodeIssue] = []
+      buf.write_string("<ol>\n")
+      let mut i = 0
+      while i < items.length() {
+        let rendered_item = render_inlines_with_issues(items[i], wl)
+        merge_shortcode_errors(issues, rendered_item.shortcode_errors)
+        buf.write_string("<li>")
+        buf.write_string(rendered_item.html)
+        buf.write_string("</li>\n")
+        i = i + 1
+      }
+      buf.write_string("</ol>\n")
+      { html: buf.to_string(), shortcode_errors: issues }
+    }
+    HRule => { html: "<hr />\n", shortcode_errors: [] }
+  }
+}
+
+pub fn render_with_diagnostics(body : String, wikilinks : Map[String, String]) -> RenderResult {
+  let preprocessed = preprocess_callout_next_line(body)
+  let ls = lines_of(preprocessed)
+  let blocks = parse_blocks(ls)
+  render_blocks_with_issues(blocks, wikilinks)
+}
+
 /// Parse and render a markdown body to an HTML fragment.
 ///
 /// `wikilinks` maps wikilink target slugs to their resolved page URLs.
 /// This map should be built from the resolved wikilinks returned by
 /// `@wikilink.resolve` before calling this function.
 pub fn render(body : String, wikilinks : Map[String, String]) -> String {
-  let ls = lines_of(body)
-  let blocks = parse_blocks(ls)
-  render_blocks(blocks, wikilinks)
+  render_with_diagnostics(body, wikilinks).html
 }

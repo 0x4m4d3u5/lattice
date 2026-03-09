@@ -1,5 +1,6 @@
 import {
   "kurisu/lattice/src/config" @config,
+  "kurisu/lattice/src/assets" @assets,
   "kurisu/lattice/src/collections" @collections,
   "kurisu/lattice/src/frontmatter" @frontmatter,
   "kurisu/lattice/src/schema" @schema,
@@ -11,8 +12,12 @@ import {
   "kurisu/lattice/src/sitemap" @sitemap,
   "kurisu/lattice/src/search" @search,
   "kurisu/lattice/src/tags" @tags,
+  "kurisu/lattice/src/pagination" @pagination,
   "kurisu/lattice/src/lint" @lint,
   "kurisu/lattice/src/slug" @slug,
   "kurisu/lattice/src/template" @template,
+  "kurisu/lattice/src/data" @data,
+  "kurisu/lattice/src/shortcode" @shortcode,
+  "kurisu/lattice/src/highlight" @highlight,
   "moonbitlang/x/fs" @fs,
 }

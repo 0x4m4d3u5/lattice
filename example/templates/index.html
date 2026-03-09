@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{{title}} | {{site_name}}</title>
+  <meta name="description" content="{{description}}" />
+  <link rel="icon" href="/static/favicon.ico" />
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <header>
+    <h1>{{data.nav.title}}</h1>
+    <p>{{data.nav.subtitle}}</p>
+    <nav>{{nav_links}}</nav>
+  </header>
+  <main>
+    <section>
+      <h2>{{title}}</h2>
+      {{content}}
+    </section>
+  </main>
+  <footer>
+    <p>{{data.site.owner}} · {{data.site.footer}}</p>
+  </footer>
+</body>
+</html>

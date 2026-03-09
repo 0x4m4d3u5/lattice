@@ -10,11 +10,14 @@ pub struct SiteConfig {
   title : String
   base_url : String
   output_dir : String?
+  page_size : Int?
   description : String?
   collections_file : String?
   templates_dir : String?
   tags_field : String?
   search_index_file : String?
+  static_dir : String?
+  data_dir : String?
 }
 
 pub enum ConfigError {
@@ -105,6 +108,27 @@ fn parse_assignment(line : String, line_no : Int) -> Result[(String, String), Co
   Ok((key, value))
 }
 
+fn parse_positive_int_config(value : String) -> Int? {
+  let n = value.length()
+  if n == 0 {
+    return None
+  }
+  let mut parsed = 0
+  let mut i = 0
+  while i < n {
+    let c = char_at_config(value, i)
+    if c < '0' || c > '9' {
+      return None
+    }
+    parsed = parsed * 10 + (c.to_int() - '0'.to_int())
+    i = i + 1
+  }
+  if parsed <= 0 {
+    return None
+  }
+  Some(parsed)
+}
+
 ///|
 /// Parse config text into a typed `SiteConfig`.
 ///
@@ -114,20 +138,26 @@ fn parse_assignment(line : String, line_no : Int) -> Result[(String, String), Co
 ///
 /// Optional keys:
 /// - `output_dir`
+/// - `page_size`
 /// - `description`
 /// - `collections_file`
 /// - `templates_dir`
 /// - `tags_field`
 /// - `search_index_file`
+/// - `static_dir`
+/// - `data_dir`
 pub fn parse(input : String) -> Result[SiteConfig, ConfigError] {
   let mut title : String? = None
   let mut base_url : String? = None
   let mut output_dir : String? = None
+  let mut page_size : Int? = None
   let mut description : String? = None
   let mut collections_file : String? = None
   let mut templates_dir : String? = None
   let mut tags_field : String? = None
   let mut search_index_file : String? = None
+  let mut static_dir : String? = None
+  let mut data_dir : String? = None
 
   let lines = split_lines_config(input)
   let mut i = 0
@@ -157,6 +187,11 @@ pub fn parse(input : String) -> Result[SiteConfig, ConfigError] {
             return Err(InvalidValue("output_dir", "must not be empty"))
           }
           output_dir = Some(value)
+        } else if key == "page_size" {
+          match parse_positive_int_config(value) {
+            Some(parsed) => page_size = Some(parsed)
+            None => return Err(InvalidValue("page_size", "must be a positive integer"))
+          }
         } else if key == "description" {
           if value.length() == 0 {
             description = None
@@ -187,6 +222,18 @@ pub fn parse(input : String) -> Result[SiteConfig, ConfigError] {
           } else {
             search_index_file = Some(value)
           }
+        } else if key == "static_dir" {
+          if value.length() == 0 {
+            static_dir = None
+          } else {
+            static_dir = Some(value)
+          }
+        } else if key == "data_dir" {
+          if value.length() == 0 {
+            data_dir = None
+          } else {
+            data_dir = Some(value)
+          }
         } else {
           // Unknown keys are ignored.
           ()
@@ -209,10 +256,13 @@ pub fn parse(input : String) -> Result[SiteConfig, ConfigError] {
     title: title_value,
     base_url: base_url_value,
     output_dir,
+    page_size,
     description,
     collections_file,
     templates_dir,
     tags_field,
     search_index_file,
+    static_dir,
+    data_dir,
   })
 }

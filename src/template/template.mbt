@@ -14,6 +14,7 @@ pub(all) enum TemplateSlot {
 pub(all) enum TemplatePart {
   Text(String)
   Slot(TemplateSlot)
+  DataSlot(String, Array[String]) // file name, key path
 }
 
 pub(all) struct Template {
@@ -24,6 +25,7 @@ pub(all) struct Template {
 pub enum TemplateError {
   UnknownSlot(String)
   MissingRequiredSlot(TemplateSlot)
+  MissingDataSlot(String)
   ParseError(String)
 }
 
@@ -31,10 +33,10 @@ fn char_at_template(s : String, i : Int) -> Char {
   s[i].to_int().unsafe_to_char()
 }
 
-fn substr_template(s : String, start : Int, end : Int) -> String {
+fn substr_template(s : String, start : Int, end_pos : Int) -> String {
   let buf = StringBuilder::new()
   let mut i = start
-  while i < end {
+  while i < end_pos {
     buf.write_char(char_at_template(s, i))
     i = i + 1
   }
@@ -59,6 +61,37 @@ fn trim_template(s : String) -> String {
     hi = hi - 1
   }
   substr_template(s, lo, hi)
+}
+
+fn starts_with_template(s : String, prefix : String) -> Bool {
+  if prefix.length() > s.length() {
+    return false
+  }
+  let mut i = 0
+  while i < prefix.length() {
+    if char_at_template(s, i) != char_at_template(prefix, i) {
+      return false
+    }
+    i = i + 1
+  }
+  true
+}
+
+fn split_dot_template(s : String) -> Array[String] {
+  let parts : Array[String] = []
+  let mut start = 0
+  let mut i = 0
+  while i <= s.length() {
+    if i == s.length() || char_at_template(s, i) == '.' {
+      let part = trim_template(substr_template(s, start, i))
+      if part.length() > 0 {
+        parts.push(part)
+      }
+      start = i + 1
+    }
+    i = i + 1
+  }
+  parts
 }
 
 fn slot_from_name(name : String) -> Result[TemplateSlot, TemplateError] {
@@ -95,6 +128,24 @@ fn slot_from_name(name : String) -> Result[TemplateSlot, TemplateError] {
   Err(UnknownSlot(name))
 }
 
+fn parse_data_slot_name(name : String) -> Result[(String, Array[String]), TemplateError] {
+  let parts = split_dot_template(name)
+  if parts.length() < 3 || parts[0] != "data" {
+    return Err(ParseError("invalid data slot '" + name + "'"))
+  }
+  let file = parts[1]
+  let keys : Array[String] = []
+  let mut i = 2
+  while i < parts.length() {
+    keys.push(parts[i])
+    i = i + 1
+  }
+  if file.length() == 0 || keys.length() == 0 {
+    return Err(ParseError("invalid data slot '" + name + "'"))
+  }
+  Ok((file, keys))
+}
+
 ///|
 /// Parse an HTML template with `{{slot_name}}` placeholders.
 pub fn parse_template(input : String) -> Result[Template, TemplateError] {
@@ -127,13 +178,20 @@ pub fn parse_template(input : String) -> Result[Template, TemplateError] {
       if slot_name.length() == 0 {
         return Err(ParseError("empty template slot"))
       }
-      let slot = match slot_from_name(slot_name) {
-        Ok(s) => s
-        Err(e) => return Err(e)
-      }
-      parts.push(Slot(slot))
-      if not(required_slots.contains(slot)) {
-        required_slots.push(slot)
+      if starts_with_template(slot_name, "data.") {
+        match parse_data_slot_name(slot_name) {
+          Ok((file, key_path)) => parts.push(DataSlot(file, key_path))
+          Err(e) => return Err(e)
+        }
+      } else {
+        let slot = match slot_from_name(slot_name) {
+          Ok(s) => s
+          Err(e) => return Err(e)
+        }
+        parts.push(Slot(slot))
+        if not(required_slots.contains(slot)) {
+          required_slots.push(slot)
+        }
       }
       i = close + 2
       text_start = i
@@ -150,11 +208,10 @@ pub fn parse_template(input : String) -> Result[Template, TemplateError] {
   Ok({ parts, required_slots })
 }
 
-///|
-/// Render a parsed template by substituting all required slots.
-pub fn render_template(
+fn render_parts(
   template : Template,
-  slots : Map[TemplateSlot, String]
+  slots : Map[TemplateSlot, String],
+  data_store : @data.DataStore?
 ) -> Result[String, TemplateError] {
   let mut i = 0
   while i < template.required_slots.length() {
@@ -175,8 +232,60 @@ pub fn render_template(
         Some(value) => out.write_string(value)
         None => return Err(MissingRequiredSlot(slot))
       }
+      DataSlot(file, key_path) => {
+        match data_store {
+          Some(store) => {
+            match @data.resolve_string(store, file, key_path) {
+              Ok(value) => out.write_string(value)
+              Err(_) => {
+                let path = StringBuilder::new()
+                path.write_string("data.")
+                path.write_string(file)
+                let mut j = 0
+                while j < key_path.length() {
+                  path.write_char('.')
+                  path.write_string(key_path[j])
+                  j = j + 1
+                }
+                return Err(MissingDataSlot(path.to_string()))
+              }
+            }
+          }
+          None => {
+            let path = StringBuilder::new()
+            path.write_string("data.")
+            path.write_string(file)
+            let mut j = 0
+            while j < key_path.length() {
+              path.write_char('.')
+              path.write_string(key_path[j])
+              j = j + 1
+            }
+            return Err(MissingDataSlot(path.to_string()))
+          }
+        }
+      }
     }
     i = i + 1
   }
   Ok(out.to_string())
+}
+
+///|
+/// Render a parsed template by substituting non-data slots.
+pub fn render_template(
+  template : Template,
+  slots : Map[TemplateSlot, String]
+) -> Result[String, TemplateError] {
+  render_parts(template, slots, None)
+}
+
+///|
+/// Render a parsed template with both standard slots and data slots.
+pub fn render_template_with_data(
+  template : Template,
+  slots : Map[TemplateSlot, String],
+  data_store : @data.DataStore
+) -> Result[String, TemplateError] {
+  render_parts(template, slots, Some(data_store))
 }

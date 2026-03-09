@@ -1,1 +1,3 @@
-
+import {
+  "kurisu/lattice/src/data" @data,
+}

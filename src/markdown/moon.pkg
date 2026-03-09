@@ -1,1 +1,4 @@
-
+import {
+  "kurisu/lattice/src/shortcode" @shortcode,
+  "kurisu/lattice/src/highlight" @highlight,
+}

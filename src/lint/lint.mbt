@@ -4,6 +4,8 @@ pub(all) enum ViolationType {
   BrokenWikilink
   DanglingTagReference
   TemplateSlotError
+  DataError
+  ShortcodeError
   FrontmatterError
   CollectionsError
   DuplicateSlug
@@ -37,6 +39,8 @@ pub fn violation_type_name(kind : ViolationType) -> String {
     BrokenWikilink => "broken_wikilink"
     DanglingTagReference => "dangling_tag"
     TemplateSlotError => "template_slot"
+    DataError => "data"
+    ShortcodeError => "shortcode"
     FrontmatterError => "frontmatter"
     CollectionsError => "collections"
     DuplicateSlug => "duplicate_slug"

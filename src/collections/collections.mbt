@@ -1,10 +1,17 @@
 ///|
 /// Typed collections configuration for lattice.
 ///
-/// Format (toml-lite):
+/// Supported sections:
+/// - `[collection_name]` for content collections
+/// - `[data.file_name]` for data-file schemas
+///
+/// Example:
 /// [posts]
-/// schema = "title:String,date:String,description:Optional[String],tags:Optional[Array[String]],draft:Optional[Bool]"
-/// dir = "./content"
+/// schema = "title:String,date:String"
+/// dir = "./content/posts"
+///
+/// [data.nav]
+/// required = "title,links"
 
 pub(all) struct CollectionDef {
   name : String
@@ -12,26 +19,39 @@ pub(all) struct CollectionDef {
   content_dir : String
 }
 
+pub(all) struct DataSchemaDef {
+  name : String
+  required_keys : Array[String]
+}
+
 pub struct CollectionsConfig {
   definitions : Array[CollectionDef]
+  data_schemas : Map[String, DataSchemaDef]
+  data_schema_list : Array[DataSchemaDef]
 }
 
 pub enum CollectionsError {
   InvalidLine(Int, String)
   MissingRequiredField(String, String)
   DuplicateCollection(String)
+  DuplicateDataSchema(String)
   InvalidSchema(String, String)
   EmptyConfig
+}
+
+priv enum SectionKind {
+  CollectionSection(String)
+  DataSection(String)
 }
 
 fn char_at_collections(s : String, i : Int) -> Char {
   s[i].to_int().unsafe_to_char()
 }
 
-fn substr_collections(s : String, start : Int, end : Int) -> String {
+fn substr_collections(s : String, start : Int, end_pos : Int) -> String {
   let buf = StringBuilder::new()
   let mut i = start
-  while i < end {
+  while i < end_pos {
     buf.write_char(char_at_collections(s, i))
     i = i + 1
   }
@@ -84,6 +104,20 @@ fn split_lines_collections(s : String) -> Array[String] {
   lines
 }
 
+fn starts_with_collections(s : String, prefix : String) -> Bool {
+  if prefix.length() > s.length() {
+    return false
+  }
+  let mut i = 0
+  while i < prefix.length() {
+    if char_at_collections(s, i) != char_at_collections(prefix, i) {
+      return false
+    }
+    i = i + 1
+  }
+  true
+}
+
 fn is_field_name_start(c : Char) -> Bool {
   (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_'
 }
@@ -107,6 +141,28 @@ fn is_valid_field_name(name : String) -> Bool {
     i = i + 1
   }
   true
+}
+
+fn parse_section_header(raw : String, line_no : Int) -> Result[SectionKind, CollectionsError] {
+  if raw.length() < 3 || char_at_collections(raw, 0) != '[' ||
+    char_at_collections(raw, raw.length() - 1) != ']' {
+    return Err(InvalidLine(line_no, "invalid section header"))
+  }
+  let section = trim_collections(substr_collections(raw, 1, raw.length() - 1))
+  if section.length() == 0 {
+    return Err(InvalidLine(line_no, "empty section header"))
+  }
+  if starts_with_collections(section, "data.") {
+    let name = trim_collections(substr_collections(section, 5, section.length()))
+    if not(is_valid_field_name(name)) {
+      return Err(InvalidLine(line_no, "invalid data schema name"))
+    }
+    return Ok(DataSection(name))
+  }
+  if not(is_valid_field_name(section)) {
+    return Err(InvalidLine(line_no, "invalid collection name"))
+  }
+  Ok(CollectionSection(section))
 }
 
 fn skip_ws_type(s : String, pos : Int) -> Int {
@@ -267,6 +323,23 @@ fn parse_value_literal(line_no : Int, raw : String) -> Result[String, Collection
   }
 }
 
+fn parse_required_keys_data(s : String) -> Array[String] {
+  let keys : Array[String] = []
+  let mut start = 0
+  let mut i = 0
+  while i <= s.length() {
+    if i == s.length() || char_at_collections(s, i) == ',' {
+      let key = trim_collections(substr_collections(s, start, i))
+      if key.length() > 0 {
+        keys.push(key)
+      }
+      start = i + 1
+    }
+    i = i + 1
+  }
+  keys
+}
+
 fn finalize_collection(
   defs : Array[CollectionDef],
   seen : Map[String, Bool],
@@ -295,16 +368,42 @@ fn finalize_collection(
   Ok(())
 }
 
+fn finalize_data_schema(
+  schemas : Map[String, DataSchemaDef],
+  schema_list : Array[DataSchemaDef],
+  seen : Map[String, Bool],
+  name : String,
+  required : String?
+) -> Result[Unit, CollectionsError] {
+  if seen.get(name) != None {
+    return Err(DuplicateDataSchema(name))
+  }
+  let required_text = match required {
+    Some(v) => v
+    None => return Err(MissingRequiredField("data." + name, "required"))
+  }
+  let required_keys = parse_required_keys_data(required_text)
+  let schema = { name, required_keys }
+  schemas.set(name, schema)
+  schema_list.push(schema)
+  seen.set(name, true)
+  Ok(())
+}
+
 ///|
-/// Parse collections config text into typed collection definitions.
+/// Parse collections config text into typed collection + data definitions.
 pub fn parse(input : String) -> Result[CollectionsConfig, CollectionsError] {
   let lines = split_lines_collections(input)
   let defs : Array[CollectionDef] = []
-  let seen : Map[String, Bool] = Map::new()
+  let seen_collections : Map[String, Bool] = Map::new()
+  let data_schemas : Map[String, DataSchemaDef] = Map::new()
+  let data_schema_list : Array[DataSchemaDef] = []
+  let seen_data : Map[String, Bool] = Map::new()
 
-  let mut current_name : String? = None
+  let mut current_section : SectionKind? = None
   let mut current_schema : String? = None
   let mut current_dir : String? = None
+  let mut current_required : String? = None
 
   let mut i = 0
   while i < lines.length() {
@@ -316,34 +415,33 @@ pub fn parse(input : String) -> Result[CollectionsConfig, CollectionsError] {
     }
 
     if char_at_collections(raw, 0) == '[' {
-      if raw.length() < 3 || char_at_collections(raw, raw.length() - 1) != ']' {
-        return Err(InvalidLine(line_no, "invalid section header"))
-      }
-      if char_at_collections(raw, 1) == '[' {
-        return Err(InvalidLine(line_no, "invalid section header"))
-      }
-      let section_name = trim_collections(substr_collections(raw, 1, raw.length() - 1))
-      if not(is_valid_field_name(section_name)) {
-        return Err(InvalidLine(line_no, "invalid collection name"))
-      }
-
-      match current_name {
-        Some(name) => {
-          match finalize_collection(defs, seen, name, current_schema, current_dir) {
+      match current_section {
+        Some(CollectionSection(name)) => {
+          match finalize_collection(defs, seen_collections, name, current_schema, current_dir) {
             Err(e) => return Err(e)
             Ok(_) => ()
           }
-          current_schema = None
-          current_dir = None
+        }
+        Some(DataSection(name)) => {
+          match finalize_data_schema(data_schemas, data_schema_list, seen_data, name, current_required) {
+            Err(e) => return Err(e)
+            Ok(_) => ()
+          }
         }
         None => ()
       }
-      current_name = Some(section_name)
+      current_schema = None
+      current_dir = None
+      current_required = None
+      match parse_section_header(raw, line_no) {
+        Ok(section) => current_section = Some(section)
+        Err(e) => return Err(e)
+      }
       i = i + 1
       continue
     }
 
-    let section = match current_name {
+    let section = match current_section {
       Some(v) => v
       None => return Err(InvalidLine(line_no, "assignment outside section"))
     }
@@ -368,20 +466,37 @@ pub fn parse(input : String) -> Result[CollectionsConfig, CollectionsError] {
       Err(e) => return Err(e)
     }
 
-    if key == "schema" {
-      current_schema = Some(value)
-    } else if key == "dir" {
-      current_dir = Some(value)
-    } else {
-      return Err(InvalidLine(line_no, "unknown key in section '" + section + "': " + key))
+    match section {
+      CollectionSection(name) => {
+        if key == "schema" {
+          current_schema = Some(value)
+        } else if key == "dir" {
+          current_dir = Some(value)
+        } else {
+          return Err(InvalidLine(line_no, "unknown key in section '" + name + "': " + key))
+        }
+      }
+      DataSection(name) => {
+        if key == "required" {
+          current_required = Some(value)
+        } else {
+          return Err(InvalidLine(line_no, "unknown key in section 'data." + name + "': " + key))
+        }
+      }
     }
 
     i = i + 1
   }
 
-  match current_name {
-    Some(name) => {
-      match finalize_collection(defs, seen, name, current_schema, current_dir) {
+  match current_section {
+    Some(CollectionSection(name)) => {
+      match finalize_collection(defs, seen_collections, name, current_schema, current_dir) {
+        Err(e) => return Err(e)
+        Ok(_) => ()
+      }
+    }
+    Some(DataSection(name)) => {
+      match finalize_data_schema(data_schemas, data_schema_list, seen_data, name, current_required) {
         Err(e) => return Err(e)
         Ok(_) => ()
       }
@@ -393,7 +508,7 @@ pub fn parse(input : String) -> Result[CollectionsConfig, CollectionsError] {
     return Err(EmptyConfig)
   }
 
-  Ok({ definitions: defs })
+  Ok({ definitions: defs, data_schemas, data_schema_list })
 }
 
 ///|

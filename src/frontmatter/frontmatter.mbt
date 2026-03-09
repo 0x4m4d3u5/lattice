@@ -7,7 +7,7 @@
 /// errors caught at build time, not render time.
 
 /// A raw frontmatter value parsed from TOML-style key-value pairs.
-pub enum FrontmatterValue {
+pub(all) enum FrontmatterValue {
   FStr(String)
   FInt(Int)
   FBool(Bool)
