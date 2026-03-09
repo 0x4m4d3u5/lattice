@@ -2,7 +2,7 @@
 /// Lattice — command-line entry point.
 ///
 /// Usage:
-///   lattice [content-dir] [output-dir] [--config path]
+///   lattice [content-dir] [output-dir] [--config path] [--collections path]
 ///
 /// Defaults:
 ///   content-dir → ./content
@@ -51,6 +51,7 @@ fn main {
   // args[0] is the program name
   let positionals : Array[String] = []
   let mut config_path : String? = None
+  let mut collections_path : String? = None
   let mut i = 1
   while i < args.length() {
     let arg = args[i]
@@ -68,6 +69,21 @@ fn main {
         @sys.exit(1)
       }
       config_path = Some(value)
+      i = i + 1
+    } else if arg == "--collections" {
+      if i + 1 >= args.length() {
+        println("[error] missing value for --collections")
+        @sys.exit(1)
+      }
+      collections_path = Some(args[i + 1])
+      i = i + 2
+    } else if starts_with_main(arg, "--collections=") {
+      let value = substr_main(arg, 14, arg.length())
+      if value.length() == 0 {
+        println("[error] missing value for --collections")
+        @sys.exit(1)
+      }
+      collections_path = Some(value)
       i = i + 1
     } else {
       positionals.push(arg)
@@ -134,6 +150,10 @@ fn main {
     content_dir,
     output_dir,
     site,
+    collections_path: match collections_path {
+      Some(path) => Some(path)
+      None => site.collections_file
+    },
   }
   let error_count = @builder.build(build_config)
   if error_count > 0 {

@@ -1,5 +1,6 @@
 import {
   "kurisu/lattice/src/config" @config,
+  "kurisu/lattice/src/collections" @collections,
   "kurisu/lattice/src/frontmatter" @frontmatter,
   "kurisu/lattice/src/schema" @schema,
   "kurisu/lattice/src/wikilink" @wikilink,

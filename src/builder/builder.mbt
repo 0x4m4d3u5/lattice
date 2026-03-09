@@ -16,6 +16,7 @@ pub(all) struct BuildConfig {
   content_dir : String
   output_dir : String
   site : @config.SiteConfig
+  collections_path : String?
 }
 
 ///|
@@ -27,40 +28,14 @@ pub(all) struct SourceFile {
   content : String
 }
 
-// ── schema ────────────────────────────────────────────────────────────────────
+priv struct CollectionSources {
+  definition : @collections.CollectionDef
+  sources : Array[SourceFile]
+}
 
-///|
-/// The schema for the default "post" content collection.
-///
-/// Required: title (String), date (String).
-/// Optional: description (String), tags (Array[String]), draft (Bool).
-///
-/// Structural design note: the schema is declared in MoonBit code, not in a
-/// config file. Schema changes are tracked in version control and violations
-/// are caught at build time, not at deploy time.
-fn post_schema() -> @schema.Schema {
-  {
-    name: "post",
-    fields: [
-      { name: "title", field_type: @schema.TString, required: true },
-      { name: "date", field_type: @schema.TString, required: true },
-      {
-        name: "description",
-        field_type: @schema.TOptional(@schema.TString),
-        required: false,
-      },
-      {
-        name: "tags",
-        field_type: @schema.TOptional(@schema.TArray(@schema.TString)),
-        required: false,
-      },
-      {
-        name: "draft",
-        field_type: @schema.TOptional(@schema.TBool),
-        required: false,
-      },
-    ],
-  }
+priv struct CollectionRenderResult {
+  name : String
+  pages : Array[@graph.GraphPage]
 }
 
 // ── pipeline helpers ──────────────────────────────────────────────────────────
@@ -207,9 +182,14 @@ fn page_title_builder(page_title : String, site_title : String) -> String {
   }
 }
 
+fn collection_page_url(collection_name : String, slug : String) -> String {
+  "/" + collection_name + "/" + slug + "/"
+}
+
 ///|
-/// Render the site index page from the graph of successful pages + wikilinks.
-fn render_site_index(
+/// Render a per-collection index page from successful pages + wikilinks.
+fn render_collection_index(
+  collection_name : String,
   pages : Array[@graph.GraphPage],
   site : @config.SiteConfig
 ) -> String {
@@ -223,8 +203,12 @@ fn render_site_index(
 
   let body = StringBuilder::new()
   body.write_string("<main>\n")
-  body.write_string("<h1>Site Index</h1>\n")
-  body.write_string("<p>Generated from parsed pages and the validated wikilink graph.</p>\n")
+  body.write_string("<h1>")
+  body.write_string(escape_html_builder(collection_name))
+  body.write_string(" Index</h1>\n")
+  body.write_string(
+    "<p>Generated from parsed pages and the validated wikilink graph for this collection.</p>\n",
+  )
 
   body.write_string("<h2>Pages</h2>\n<ul>\n")
   i = 0
@@ -281,14 +265,52 @@ fn render_site_index(
   body.write_string("</main>\n")
 
   let meta : @html.PageMeta = {
-    title: page_title_builder("Site Index", site.title),
+    title: page_title_builder(collection_name + " index", site.title),
     description: Some(
-      "Generated page graph for " + site.title + " with validated wikilink edges.",
+      "Generated page graph for collection " + collection_name + " in " + site.title + ".",
     ),
     lang: "en",
     stylesheet: Some(absolute_url_builder(site.base_url, "/style.css")),
   }
   @html.render_page(meta, body.to_string())
+}
+
+fn load_collections(config : BuildConfig) -> Result[Array[@collections.CollectionDef], String] {
+  match config.collections_path {
+    None => {
+      Ok([@collections.default_posts_collection(config.content_dir)])
+    }
+    Some(path) => {
+      let source = try {
+        @fs.read_file_to_string(path)
+      } catch {
+        @fs.IOError(msg) => return Err("cannot read collections file " + path + ": " + msg)
+      }
+      match @collections.parse(source) {
+        Ok(parsed) => Ok(parsed.definitions)
+        Err(@collections.InvalidLine(line, msg)) => {
+          Err(path + ":" + line.to_string() + ": " + msg)
+        }
+        Err(@collections.MissingRequiredField(collection_name, field)) => {
+          Err(
+            path +
+            ": missing required field '" +
+            field +
+            "' in collection '" +
+            collection_name +
+            "'",
+          )
+        }
+        Err(@collections.DuplicateCollection(name)) => {
+          Err(path + ": duplicate collection '" + name + "'")
+        }
+        Err(@collections.InvalidSchema(name, msg)) => {
+          Err(path + ": invalid schema for collection '" + name + "': " + msg)
+        }
+        Err(@collections.EmptyConfig) => Err(path + ": no collections defined")
+      }
+    }
+  }
 }
 
 ///|
@@ -299,6 +321,8 @@ fn render_site_index(
 fn process_document(
   source : String,
   slug : String,
+  url : String,
+  context : String,
   page_index : Map[String, String],
   schema : @schema.Schema,
   site : @config.SiteConfig
@@ -306,7 +330,7 @@ fn process_document(
   // Step 1: parse frontmatter
   let fm = match @frontmatter.parse(source) {
     Err(e) => {
-      println("[error] " + slug + ": frontmatter: " + e)
+      println("[error] " + context + ": frontmatter: " + e)
       return None
     }
     Ok(fm) => fm
@@ -317,7 +341,7 @@ fn process_document(
     let mut i = 0
     while i < schema_errors.length() {
       println(
-        "[error] " + slug + ": schema: " + schema_errors[i].field + ": " + schema_errors[i].message,
+        "[error] " + context + ": schema: " + schema_errors[i].field + ": " + schema_errors[i].message,
       )
       i = i + 1
     }
@@ -331,7 +355,7 @@ fn process_document(
     while i < link_errors.length() {
       println(
         "[error] " +
-        slug +
+        context +
         ": broken wikilink [[" +
         link_errors[i].link.target +
         "]]: " +
@@ -356,7 +380,7 @@ fn process_document(
   Some({
     html: @html.render_page(meta, body_html),
     title,
-    url: @slug.slug_to_url(slug),
+    url,
     description: extract_description(fm),
     date: extract_date(fm),
     resolved_links: resolved,
@@ -408,23 +432,74 @@ fn ensure_dir(path : String) -> Unit raise @fs.IOError {
 pub fn build(config : BuildConfig) -> Int {
   println("[lattice] building " + config.content_dir + " → " + config.output_dir)
 
-  // Pass 1: collect sources
-  let sources = try {
-    collect_sources(config.content_dir)
-  } catch {
-    @fs.IOError(msg) => {
-      println("[error] cannot read content directory: " + msg)
+  let collections = match load_collections(config) {
+    Ok(defs) => defs
+    Err(msg) => {
+      println("[error] collections: " + msg)
       return 1
     }
   }
-  println("[lattice] found " + sources.length().to_string() + " source files")
+  println("[lattice] using " + collections.length().to_string() + " collections")
 
-  // Build complete page index before any rendering begins
-  let page_index : Map[String, String] = Map::new()
+  // Pass 1: collect sources for each collection
+  let collection_sources : Array[CollectionSources] = []
+  let mut source_count = 0
   let mut i = 0
-  while i < sources.length() {
-    let url = @slug.slug_to_url(sources[i].slug)
-    page_index.set(sources[i].slug, url)
+  while i < collections.length() {
+    let collection_def = collections[i]
+    let sources = try {
+      collect_sources(collection_def.content_dir)
+    } catch {
+      @fs.IOError(msg) => {
+        println(
+          "[error] cannot read collection directory " +
+          collection_def.content_dir +
+          " (" +
+          collection_def.name +
+          "): " +
+          msg,
+        )
+        return 1
+      }
+    }
+    source_count = source_count + sources.length()
+    collection_sources.push({ definition: collection_def, sources })
+    i = i + 1
+  }
+  println("[lattice] found " + source_count.to_string() + " source files")
+
+  // Build complete page index before any rendering begins.
+  let page_index : Map[String, String] = Map::new()
+  let slug_owner : Map[String, String] = Map::new()
+  i = 0
+  while i < collection_sources.length() {
+    let coll = collection_sources[i]
+    let mut j = 0
+    while j < coll.sources.length() {
+      let source = coll.sources[j]
+      match slug_owner.get(source.slug) {
+        Some(owner) => {
+          println(
+            "[error] duplicate slug '" +
+            source.slug +
+            "' in collections '" +
+            owner +
+            "' and '" +
+            coll.definition.name +
+            "'",
+          )
+          return 1
+        }
+        None => {
+          slug_owner.set(source.slug, coll.definition.name)
+          page_index.set(
+            source.slug,
+            collection_page_url(coll.definition.name, source.slug),
+          )
+        }
+      }
+      j = j + 1
+    }
     i = i + 1
   }
 
@@ -460,105 +535,154 @@ pub fn build(config : BuildConfig) -> Int {
   }
 
   // Pass 2: render and write each page
-  let schema = post_schema()
   let mut error_count = 0
   let mut written = 0
   let graph_pages : Array[@graph.GraphPage] = []
+  let rendered_collections : Array[CollectionRenderResult] = []
   i = 0
-  while i < sources.length() {
-    let src = sources[i]
-    match process_document(src.content, src.slug, page_index, schema, config.site) {
-      None => {
-        error_count = error_count + 1
-      }
-      Some(doc) => {
-        // Clean URL: /slug/index.html
-        let page_dir = config.output_dir + "/" + src.slug
-        let write_result = try {
-          ensure_dir(page_dir)
-          let out_path = page_dir + "/index.html"
-          @fs.write_string_to_file(out_path, doc.html)
-          Some(out_path)
-        } catch {
-          @fs.IOError(msg) => {
-            println("[error] " + src.slug + ": write failed: " + msg)
-            None
-          }
-        }
-        match write_result {
-          Some(out_path) => {
-            println("[lattice] wrote " + out_path)
-            written = written + 1
-            graph_pages.push({
-              slug: src.slug,
-              title: doc.title,
-              url: doc.url,
-              description: doc.description,
-              date: doc.date,
-              outgoing: doc.resolved_links,
-            })
-          }
-          None => {
-            error_count = error_count + 1
-          }
-        }
+  while i < collection_sources.length() {
+    let coll = collection_sources[i]
+    let coll_pages : Array[@graph.GraphPage] = []
+    let collection_root = config.output_dir + "/" + coll.definition.name
+    let collection_dir_ok = try {
+      ensure_dir(collection_root)
+      true
+    } catch {
+      @fs.IOError(msg) => {
+        println(
+          "[error] cannot create collection output directory " +
+          collection_root +
+          ": " +
+          msg,
+        )
+        false
       }
     }
+    if not(collection_dir_ok) {
+      error_count = error_count + coll.sources.length()
+      rendered_collections.push({ name: coll.definition.name, pages: coll_pages })
+      i = i + 1
+      continue
+    }
+
+    let mut j = 0
+    while j < coll.sources.length() {
+      let src = coll.sources[j]
+      let page_url = collection_page_url(coll.definition.name, src.slug)
+      let page_context = coll.definition.name + "/" + src.slug
+      match process_document(
+        src.content,
+        src.slug,
+        page_url,
+        page_context,
+        page_index,
+        coll.definition.schema,
+        config.site,
+      ) {
+        None => {
+          error_count = error_count + 1
+        }
+        Some(doc) => {
+          let page_dir = collection_root + "/" + src.slug
+          let write_result = try {
+            ensure_dir(page_dir)
+            let out_path = page_dir + "/index.html"
+            @fs.write_string_to_file(out_path, doc.html)
+            Some(out_path)
+          } catch {
+            @fs.IOError(msg) => {
+              println("[error] " + page_context + ": write failed: " + msg)
+              None
+            }
+          }
+          match write_result {
+            Some(out_path) => {
+              println("[lattice] wrote " + out_path)
+              written = written + 1
+              let page : @graph.GraphPage = {
+                slug: src.slug,
+                title: doc.title,
+                url: doc.url,
+                description: doc.description,
+                date: doc.date,
+                outgoing: doc.resolved_links,
+              }
+              coll_pages.push(page)
+              graph_pages.push(page)
+            }
+            None => {
+              error_count = error_count + 1
+            }
+          }
+        }
+      }
+      j = j + 1
+    }
+    rendered_collections.push({ name: coll.definition.name, pages: coll_pages })
     i = i + 1
   }
 
   if error_count == 0 {
-    let feed_write_ok = try {
-      let feed_xml = @rss.render_feed(config.site.title, config.site.base_url, graph_pages)
-      let out_path = config.output_dir + "/feed.xml"
-      @fs.write_string_to_file(out_path, feed_xml)
-      println("[lattice] wrote " + out_path)
-      true
-    } catch {
-      @fs.IOError(msg) => {
-        println("[error] feed: write failed: " + msg)
-        false
+    i = 0
+    while i < rendered_collections.length() {
+      let coll = rendered_collections[i]
+      let coll_dir = config.output_dir + "/" + coll.name
+
+      let feed_write_ok = try {
+        let feed_title = config.site.title + " (" + coll.name + ")"
+        let feed_xml = @rss.render_feed(feed_title, config.site.base_url, coll.pages)
+        let out_path = coll_dir + "/feed.xml"
+        @fs.write_string_to_file(out_path, feed_xml)
+        println("[lattice] wrote " + out_path)
+        true
+      } catch {
+        @fs.IOError(msg) => {
+          println("[error] " + coll.name + " feed: write failed: " + msg)
+          false
+        }
       }
-    }
-    if not(feed_write_ok) {
-      error_count = error_count + 1
+      if not(feed_write_ok) {
+        error_count = error_count + 1
+      }
+
+      let index_write_ok = try {
+        let index_html = render_collection_index(coll.name, coll.pages, config.site)
+        let out_path = coll_dir + "/index.html"
+        @fs.write_string_to_file(out_path, index_html)
+        println("[lattice] wrote " + out_path)
+        true
+      } catch {
+        @fs.IOError(msg) => {
+          println("[error] " + coll.name + " index: write failed: " + msg)
+          false
+        }
+      }
+      if not(index_write_ok) {
+        error_count = error_count + 1
+      }
+
+      i = i + 1
     }
 
-    let sitemap_write_ok = try {
-      let sitemap_xml = @sitemap.render_sitemap(config.site.base_url, graph_pages)
-      let out_path = config.output_dir + "/sitemap.xml"
-      @fs.write_string_to_file(out_path, sitemap_xml)
-      println("[lattice] wrote " + out_path)
-      true
-    } catch {
-      @fs.IOError(msg) => {
-        println("[error] sitemap: write failed: " + msg)
-        false
+    if error_count == 0 {
+      let sitemap_write_ok = try {
+        let sitemap_xml = @sitemap.render_sitemap(config.site.base_url, graph_pages)
+        let out_path = config.output_dir + "/sitemap.xml"
+        @fs.write_string_to_file(out_path, sitemap_xml)
+        println("[lattice] wrote " + out_path)
+        true
+      } catch {
+        @fs.IOError(msg) => {
+          println("[error] sitemap: write failed: " + msg)
+          false
+        }
       }
-    }
-    if not(sitemap_write_ok) {
-      error_count = error_count + 1
-    }
-
-    let index_dir = config.output_dir + "/site-index"
-    let index_write_ok = try {
-      ensure_dir(index_dir)
-      let index_html = render_site_index(graph_pages, config.site)
-      let out_path = index_dir + "/index.html"
-      @fs.write_string_to_file(out_path, index_html)
-      println("[lattice] wrote " + out_path)
-      true
-    } catch {
-      @fs.IOError(msg) => {
-        println("[error] site-index: write failed: " + msg)
-        false
+      if not(sitemap_write_ok) {
+        error_count = error_count + 1
       }
-    }
-    if not(index_write_ok) {
-      error_count = error_count + 1
     }
   } else {
-    println("[warn] skipped feed and site-index generation due to prior build errors")
+    println("[warn] skipped collection feeds/indexes and sitemap generation due to prior build errors")
   }
 
   println(
