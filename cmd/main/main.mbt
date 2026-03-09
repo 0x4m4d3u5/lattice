@@ -2,7 +2,7 @@
 /// Lattice — command-line entry point.
 ///
 /// Usage:
-///   lattice [content-dir] [output-dir] [--config path] [--collections path]
+///   lattice [content-dir] [output-dir] [--config path] [--collections path] [--check]
 ///
 /// Defaults:
 ///   content-dir → ./content
@@ -52,6 +52,7 @@ fn main {
   let positionals : Array[String] = []
   let mut config_path : String? = None
   let mut collections_path : String? = None
+  let mut check_mode = false
   let mut i = 1
   while i < args.length() {
     let arg = args[i]
@@ -84,6 +85,9 @@ fn main {
         @sys.exit(1)
       }
       collections_path = Some(value)
+      i = i + 1
+    } else if arg == "--check" {
+      check_mode = true
       i = i + 1
     } else {
       positionals.push(arg)
@@ -155,8 +159,26 @@ fn main {
       None => site.collections_file
     },
   }
-  let error_count = @builder.build(build_config)
-  if error_count > 0 {
-    @sys.exit(1)
+  if check_mode {
+    let lint_result = @builder.check(build_config)
+    let mut i = 0
+    while i < lint_result.violations.length() {
+      println(@lint.format_violation(lint_result.violations[i]))
+      i = i + 1
+    }
+    if @lint.has_violations(lint_result) {
+      println(
+        "[lattice] check failed: " +
+        lint_result.violations.length().to_string() +
+        " violation(s)",
+      )
+      @sys.exit(1)
+    }
+    println("[lattice] check passed: no violations")
+  } else {
+    let error_count = @builder.build(build_config)
+    if error_count > 0 {
+      @sys.exit(1)
+    }
   }
 }
