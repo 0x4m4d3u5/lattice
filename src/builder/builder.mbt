@@ -41,6 +41,13 @@ priv struct CollectionRenderResult {
 priv struct BuildTemplates {
   page : @template.Template?
   index : @template.Template?
+  tag_page : @template.Template?
+  tag_index : @template.Template?
+}
+
+priv struct TagCatalog {
+  ordered_slugs : Array[String]
+  name_by_slug : Map[String, String]
 }
 
 // ── pipeline helpers ──────────────────────────────────────────────────────────
@@ -91,6 +98,7 @@ priv struct ProcessedDocument {
   description : String?
   date : String?
   resolved_links : Array[@wikilink.ResolvedWikilink]
+  tags : Array[@tags.TagRef]
 }
 
 ///|
@@ -220,7 +228,7 @@ fn load_template_file(path : String) -> Result[@template.Template?, String] {
 fn load_templates(config : BuildConfig) -> Result[BuildTemplates, String] {
   let base = templates_dir_for_build(config)
   if not(@fs.path_exists(base)) {
-    return Ok({ page: None, index: None })
+    return Ok({ page: None, index: None, tag_page: None, tag_index: None })
   }
   let page = match load_template_file(base + "/page.html") {
     Ok(t) => t
@@ -230,7 +238,15 @@ fn load_templates(config : BuildConfig) -> Result[BuildTemplates, String] {
     Ok(t) => t
     Err(msg) => return Err(msg)
   }
-  Ok({ page, index })
+  let tag_page = match load_template_file(base + "/tag.html") {
+    Ok(t) => t
+    Err(msg) => return Err(msg)
+  }
+  let tag_index = match load_template_file(base + "/tags.html") {
+    Ok(t) => t
+    Err(msg) => return Err(msg)
+  }
+  Ok({ page, index, tag_page, tag_index })
 }
 
 fn build_template_slots(
@@ -241,7 +257,9 @@ fn build_template_slots(
   url : String,
   site_name : String,
   nav_links : String,
-  custom_css : String
+  custom_css : String,
+  tag_name : String,
+  tag_count : String
 ) -> Map[@template.TemplateSlot, String] {
   let slots : Map[@template.TemplateSlot, String] = Map::new()
   slots.set(@template.Title, title)
@@ -252,6 +270,8 @@ fn build_template_slots(
   slots.set(@template.SiteName, site_name)
   slots.set(@template.NavLinks, nav_links)
   slots.set(@template.CustomCss, custom_css)
+  slots.set(@template.TagName, tag_name)
+  slots.set(@template.TagCount, tag_count)
   slots
 }
 
@@ -265,6 +285,7 @@ fn collection_index_url(collection_name : String) -> String {
 
 fn build_nav_links_html(collections : Array[@collections.CollectionDef]) -> String {
   let links : Array[(String, String)] = []
+  links.push(("/tags/", "tags"))
   let mut i = 0
   while i < collections.length() {
     let coll = collections[i]
@@ -272,6 +293,144 @@ fn build_nav_links_html(collections : Array[@collections.CollectionDef]) -> Stri
     i = i + 1
   }
   @html.nav_links(links)
+}
+
+fn tags_field_name(site : @config.SiteConfig) -> String {
+  match site.tags_field {
+    Some(name) => name
+    None => "tags"
+  }
+}
+
+fn collect_tag_catalog(collection_sources : Array[CollectionSources], tags_field : String) -> TagCatalog {
+  let ordered_slugs : Array[String] = []
+  let name_by_slug : Map[String, String] = Map::new()
+  let mut i = 0
+  while i < collection_sources.length() {
+    let coll = collection_sources[i]
+    let mut j = 0
+    while j < coll.sources.length() {
+      let src = coll.sources[j]
+      match @frontmatter.parse(src.content) {
+        Ok(fm) => {
+          let schema_errors = @schema.validate(fm, coll.definition.schema)
+          if schema_errors.length() == 0 {
+            match @tags.extract(fm, tags_field) {
+              Ok(tag_refs) => {
+                let mut k = 0
+                while k < tag_refs.length() {
+                  let tag = tag_refs[k]
+                  if not(name_by_slug.contains(tag.slug)) {
+                    name_by_slug.set(tag.slug, tag.value)
+                    ordered_slugs.push(tag.slug)
+                  }
+                  k = k + 1
+                }
+              }
+              Err(_) => ()
+            }
+          }
+        }
+        Err(_) => ()
+      }
+      j = j + 1
+    }
+    i = i + 1
+  }
+  { ordered_slugs, name_by_slug }
+}
+
+fn render_tag_page_html(
+  page : @tags.TagPage,
+  site : @config.SiteConfig,
+  tag_template : @template.Template?,
+  fallback_template : @template.Template?,
+  nav_links_html : String,
+  custom_css : String
+) -> Result[String, String] {
+  let body = @tags.render_tag_page(page)
+  let full_title = page_title_builder("tag: " + page.tag, site.title)
+  let description = "Pages tagged with '" + page.tag + "' in " + site.title + "."
+  let url = @tags.tag_url(page.slug)
+  let effective_template = match tag_template {
+    Some(t) => Some(t)
+    None => fallback_template
+  }
+  match effective_template {
+    Some(tpl) => {
+      let slots = build_template_slots(
+        full_title,
+        body,
+        "",
+        description,
+        url,
+        site.title,
+        nav_links_html,
+        custom_css,
+        page.tag,
+        page.pages.length().to_string(),
+      )
+      match @template.render_template(tpl, slots) {
+        Ok(html) => Ok(html)
+        Err(e) => Err("tag page template: " + template_error_text(e))
+      }
+    }
+    None => {
+      let meta : @html.PageMeta = {
+        title: full_title,
+        description: Some(description),
+        lang: "en",
+        stylesheet: Some(absolute_url_builder(site.base_url, "/style.css")),
+      }
+      Ok(@html.render_page(meta, body))
+    }
+  }
+}
+
+fn render_tags_index_html(
+  index : @tags.TagIndex,
+  site : @config.SiteConfig,
+  index_template : @template.Template?,
+  fallback_template : @template.Template?,
+  nav_links_html : String,
+  custom_css : String
+) -> Result[String, String] {
+  let body = @tags.render_tag_index(index)
+  let full_title = page_title_builder("tags", site.title)
+  let description = "All tags in " + site.title + "."
+  let effective_template = match index_template {
+    Some(t) => Some(t)
+    None => fallback_template
+  }
+  match effective_template {
+    Some(tpl) => {
+      let slots = build_template_slots(
+        full_title,
+        body,
+        "",
+        description,
+        "/tags/",
+        site.title,
+        nav_links_html,
+        custom_css,
+        "",
+        index.tags.length().to_string(),
+      )
+      match @template.render_template(tpl, slots) {
+        Ok(html) => Ok(html)
+        Err(e) => Err("tags index template: " + template_error_text(e))
+      }
+    }
+    None => {
+      let meta : @html.PageMeta = {
+        title: full_title,
+        description: Some(description),
+        lang: "en",
+        stylesheet: Some(absolute_url_builder(site.base_url, "/style.css")),
+      }
+      Ok(@html.render_page(meta, body))
+    }
+  }
 }
 
 ///|
@@ -371,6 +530,8 @@ fn render_collection_index(
         site.title,
         nav_links_html,
         custom_css,
+        "",
+        "",
       )
       match @template.render_template(tpl, slots) {
         Ok(html) => return Ok(html)
@@ -438,6 +599,8 @@ fn process_document(
   url : String,
   context : String,
   page_index : Map[String, String],
+  known_tags : Map[String, String],
+  tags_field : String,
   schema : @schema.Schema,
   site : @config.SiteConfig,
   page_template : @template.Template?,
@@ -464,6 +627,33 @@ fn process_document(
     }
     return None
   }
+  // Step 2b: extract validated tags from typed frontmatter.
+  let page_tags = match @tags.extract(fm, tags_field) {
+    Ok(values) => values
+    Err(msg) => {
+      println(
+        "[error] " + context + ": tags field '" + tags_field + "': " + msg,
+      )
+      return None
+    }
+  }
+  let mut i = 0
+  while i < page_tags.length() {
+    let tag = page_tags[i]
+    if not(known_tags.contains(tag.slug)) {
+      println(
+        "[error] " +
+        context +
+        ": dangling tag reference '" +
+        tag.value +
+        "' (" +
+        tag.slug +
+        ") missing from tag index",
+      )
+      return None
+    }
+    i = i + 1
+  }
   // Step 3: extract wikilinks; resolve against page index
   let raw_links = @wikilink.extract(fm.body, slug)
   let (resolved, link_errors) = @wikilink.resolve(raw_links, page_index)
@@ -485,7 +675,7 @@ fn process_document(
   // Step 4: build wikilink map for the renderer
   let wl_map = build_wikilink_map(resolved)
   // Step 5: render markdown body to HTML fragment
-  let body_html = @markdown.render(fm.body, wl_map)
+  let body_html = @markdown.render(fm.body, wl_map) + @tags.render_page_tags(page_tags)
   // Step 6: emit the complete HTML5 page
   let title = extract_title(fm)
   let full_title = page_title_builder(title, site.title)
@@ -511,6 +701,8 @@ fn process_document(
         site.title,
         nav_links_html,
         custom_css,
+        "",
+        "",
       )
       match @template.render_template(tpl, slots) {
         Ok(html) => html
@@ -537,6 +729,7 @@ fn process_document(
     description: description_value,
     date: date_value,
     resolved_links: resolved,
+    tags: page_tags,
   })
 }
 
@@ -665,6 +858,10 @@ pub fn build(config : BuildConfig) -> Int {
     i = i + 1
   }
 
+  let tags_field = tags_field_name(config.site)
+  let tag_catalog = collect_tag_catalog(collection_sources, tags_field)
+  let known_tags = tag_catalog.name_by_slug
+
   // Ensure output directory exists
   let dir_ok = try {
     ensure_dir(config.output_dir)
@@ -700,6 +897,7 @@ pub fn build(config : BuildConfig) -> Int {
   let mut error_count = 0
   let mut written = 0
   let graph_pages : Array[@graph.GraphPage] = []
+  let tag_pages_by_slug : Map[String, Array[@tags.TaggedPage]] = Map::new()
   let rendered_collections : Array[CollectionRenderResult] = []
   i = 0
   while i < collection_sources.length() {
@@ -738,6 +936,8 @@ pub fn build(config : BuildConfig) -> Int {
         page_url,
         page_context,
         page_index,
+        known_tags,
+        tags_field,
         coll.definition.schema,
         config.site,
         templates.page,
@@ -774,6 +974,23 @@ pub fn build(config : BuildConfig) -> Int {
               }
               coll_pages.push(page)
               graph_pages.push(page)
+              let mut k = 0
+              while k < doc.tags.length() {
+                let tag = doc.tags[k]
+                match tag_pages_by_slug.get(tag.slug) {
+                  Some(existing) => {
+                    existing.push({ title: doc.title, url: doc.url, slug: src.slug })
+                    tag_pages_by_slug.set(tag.slug, existing)
+                  }
+                  None => {
+                    tag_pages_by_slug.set(
+                      tag.slug,
+                      [{ title: doc.title, url: doc.url, slug: src.slug }],
+                    )
+                  }
+                }
+                k = k + 1
+              }
             }
             None => {
               error_count = error_count + 1
@@ -848,6 +1065,125 @@ pub fn build(config : BuildConfig) -> Int {
     }
 
     if error_count == 0 {
+      let tags_root = config.output_dir + "/tags"
+      let tags_dir_ok = try {
+        ensure_dir(tags_root)
+        true
+      } catch {
+        @fs.IOError(msg) => {
+          println("[error] tags: cannot create output directory " + tags_root + ": " + msg)
+          false
+        }
+      }
+      if tags_dir_ok {
+        let tag_summaries : Array[@tags.TagSummary] = []
+        i = 0
+        while i < tag_catalog.ordered_slugs.length() {
+          let tag_slug = tag_catalog.ordered_slugs[i]
+          let tag_name = match tag_catalog.name_by_slug.get(tag_slug) {
+            Some(name) => name
+            None => tag_slug
+          }
+          let pages = match tag_pages_by_slug.get(tag_slug) {
+            Some(items) => items
+            None => []
+          }
+          let tag_dir = tags_root + "/" + tag_slug
+          let tag_dir_ok = try {
+            ensure_dir(tag_dir)
+            true
+          } catch {
+            @fs.IOError(msg) => {
+              println("[error] tags/" + tag_slug + ": cannot create directory: " + msg)
+              false
+            }
+          }
+          if tag_dir_ok {
+            let tag_page : @tags.TagPage = { tag: tag_name, slug: tag_slug, pages }
+            let tag_html = match render_tag_page_html(
+              tag_page,
+              config.site,
+              templates.tag_page,
+              templates.index,
+              nav_links_html,
+              custom_css,
+            ) {
+              Ok(html) => Some(html)
+              Err(msg) => {
+                println("[error] tags/" + tag_slug + ": " + msg)
+                None
+              }
+            }
+            match tag_html {
+              Some(html) => {
+                let tag_write_ok = try {
+                  let out_path = tag_dir + "/index.html"
+                  @fs.write_string_to_file(out_path, html)
+                  println("[lattice] wrote " + out_path)
+                  true
+                } catch {
+                  @fs.IOError(msg) => {
+                    println("[error] tags/" + tag_slug + ": write failed: " + msg)
+                    false
+                  }
+                }
+                if not(tag_write_ok) {
+                  error_count = error_count + 1
+                }
+              }
+              None => {
+                error_count = error_count + 1
+              }
+            }
+          } else {
+            error_count = error_count + 1
+          }
+          tag_summaries.push({ tag: tag_name, slug: tag_slug, count: pages.length() })
+          i = i + 1
+        }
+
+        if error_count == 0 {
+          let tags_index : @tags.TagIndex = { tags: tag_summaries }
+          let tags_index_html = match render_tags_index_html(
+            tags_index,
+            config.site,
+            templates.tag_index,
+            templates.index,
+            nav_links_html,
+            custom_css,
+          ) {
+            Ok(html) => Some(html)
+            Err(msg) => {
+              println("[error] tags index: " + msg)
+              None
+            }
+          }
+          let tags_index_ok = match tags_index_html {
+            Some(html) => {
+              try {
+                let out_path = tags_root + "/index.html"
+                @fs.write_string_to_file(out_path, html)
+                println("[lattice] wrote " + out_path)
+                true
+              } catch {
+                @fs.IOError(msg) => {
+                  println("[error] tags index: write failed: " + msg)
+                  false
+                }
+              }
+            }
+            None => false
+          }
+          if not(tags_index_ok) {
+            error_count = error_count + 1
+          }
+        }
+      } else {
+        error_count = error_count + 1
+      }
+    }
+
+    if error_count == 0 {
       let sitemap_write_ok = try {
         let sitemap_xml = @sitemap.render_sitemap(config.site.base_url, graph_pages)
         let out_path = config.output_dir + "/sitemap.xml"
@@ -865,7 +1201,7 @@ pub fn build(config : BuildConfig) -> Int {
       }
     }
   } else {
-    println("[warn] skipped collection feeds/indexes and sitemap generation due to prior build errors")
+    println("[warn] skipped collection feeds/indexes, tags, and sitemap generation due to prior build errors")
   }
 
   println(

@@ -9,6 +9,7 @@ import {
   "kurisu/lattice/src/graph" @graph,
   "kurisu/lattice/src/rss" @rss,
   "kurisu/lattice/src/sitemap" @sitemap,
+  "kurisu/lattice/src/tags" @tags,
   "kurisu/lattice/src/slug" @slug,
   "kurisu/lattice/src/template" @template,
   "moonbitlang/x/fs" @fs,
