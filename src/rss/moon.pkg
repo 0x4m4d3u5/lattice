@@ -1,0 +1,3 @@
+import {
+  "kurisu/lattice/src/graph" @graph,
+}
