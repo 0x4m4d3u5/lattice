@@ -33,6 +33,15 @@ Not "another SSG." The pitch is that content integrity is a structural property 
 - ~/code/ametrine: direct domain context, pain points to solve
 - Reference projects from challenge page: fastcc (C compiler), wasmoon (WebAssembly runtime with JIT)
 
+## Development discipline
+
+The explainability rubric (25%) scores the retrospective on architectural decisions and AI tool usage — this means the commit history and decision log are first-class deliverables, not afterthoughts.
+
+- **Document decisions at the time they're made.** A commit message saying "add parser" is useless. "Parse frontmatter as typed struct rather than raw map — catches schema violations at ingest, not at render" is what the retrospective is built from.
+- **Atomic commits.** Each commit should reflect one coherent decision or change. Reviewers (and the retrospective) need to trace *why* the architecture looks the way it does.
+- **Push frequently.** The project must be open-sourced on GitHub — work that lives only locally doesn't count toward the submission. Push after each meaningful unit of work.
+- **Annotate AI usage honestly.** The rubric explicitly scores AI tool retrospective. Where a type signature came from a suggestion, where a design was revised after feedback, where the agent spotted a footgun — note it. Sanitized retrospectives read as sanitized.
+
 ## Reference sources
 
 - Challenge page: https://www.moonbitlang.com/2026-scc
