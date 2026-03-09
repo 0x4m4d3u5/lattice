@@ -38,6 +38,11 @@ priv struct CollectionRenderResult {
   pages : Array[@graph.GraphPage]
 }
 
+priv struct BuildTemplates {
+  page : @template.Template?
+  index : @template.Template?
+}
+
 // ── pipeline helpers ──────────────────────────────────────────────────────────
 
 ///|
@@ -182,8 +187,91 @@ fn page_title_builder(page_title : String, site_title : String) -> String {
   }
 }
 
+fn template_error_text(e : @template.TemplateError) -> String {
+  match e {
+    @template.UnknownSlot(name) => "unknown slot '" + name + "'"
+    @template.MissingRequiredSlot(slot) => "missing required slot '" + slot.to_string() + "'"
+    @template.ParseError(msg) => msg
+  }
+}
+
+fn templates_dir_for_build(config : BuildConfig) -> String {
+  match config.site.templates_dir {
+    Some(path) => path
+    None => config.content_dir + "/templates"
+  }
+}
+
+fn load_template_file(path : String) -> Result[@template.Template?, String] {
+  if not(@fs.path_exists(path)) {
+    return Ok(None)
+  }
+  let source = try {
+    @fs.read_file_to_string(path)
+  } catch {
+    @fs.IOError(msg) => return Err("cannot read template " + path + ": " + msg)
+  }
+  match @template.parse_template(source) {
+    Ok(parsed) => Ok(Some(parsed))
+    Err(e) => Err("invalid template " + path + ": " + template_error_text(e))
+  }
+}
+
+fn load_templates(config : BuildConfig) -> Result[BuildTemplates, String] {
+  let base = templates_dir_for_build(config)
+  if not(@fs.path_exists(base)) {
+    return Ok({ page: None, index: None })
+  }
+  let page = match load_template_file(base + "/page.html") {
+    Ok(t) => t
+    Err(msg) => return Err(msg)
+  }
+  let index = match load_template_file(base + "/index.html") {
+    Ok(t) => t
+    Err(msg) => return Err(msg)
+  }
+  Ok({ page, index })
+}
+
+fn build_template_slots(
+  title : String,
+  content : String,
+  date : String,
+  description : String,
+  url : String,
+  site_name : String,
+  nav_links : String,
+  custom_css : String
+) -> Map[@template.TemplateSlot, String] {
+  let slots : Map[@template.TemplateSlot, String] = Map::new()
+  slots.set(@template.Title, title)
+  slots.set(@template.Content, content)
+  slots.set(@template.Date, date)
+  slots.set(@template.Description, description)
+  slots.set(@template.Url, url)
+  slots.set(@template.SiteName, site_name)
+  slots.set(@template.NavLinks, nav_links)
+  slots.set(@template.CustomCss, custom_css)
+  slots
+}
+
 fn collection_page_url(collection_name : String, slug : String) -> String {
   "/" + collection_name + "/" + slug + "/"
+}
+
+fn collection_index_url(collection_name : String) -> String {
+  "/" + collection_name + "/"
+}
+
+fn build_nav_links_html(collections : Array[@collections.CollectionDef]) -> String {
+  let links : Array[(String, String)] = []
+  let mut i = 0
+  while i < collections.length() {
+    let coll = collections[i]
+    links.push((collection_index_url(coll.name), coll.name))
+    i = i + 1
+  }
+  @html.nav_links(links)
 }
 
 ///|
@@ -191,8 +279,11 @@ fn collection_page_url(collection_name : String, slug : String) -> String {
 fn render_collection_index(
   collection_name : String,
   pages : Array[@graph.GraphPage],
-  site : @config.SiteConfig
-) -> String {
+  site : @config.SiteConfig,
+  index_template : @template.Template?,
+  nav_links_html : String,
+  custom_css : String
+) -> Result[String, String] {
   let title_by_slug : Map[String, String] = Map::new()
   let mut i = 0
   while i < pages.length() {
@@ -264,15 +355,38 @@ fn render_collection_index(
   }
   body.write_string("</main>\n")
 
+  let full_title = page_title_builder(collection_name + " index", site.title)
+  let description =
+    "Generated page graph for collection " + collection_name + " in " + site.title + "."
+  let page_url = collection_index_url(collection_name)
+
+  match index_template {
+    Some(tpl) => {
+      let slots = build_template_slots(
+        full_title,
+        body.to_string(),
+        "",
+        description,
+        page_url,
+        site.title,
+        nav_links_html,
+        custom_css,
+      )
+      match @template.render_template(tpl, slots) {
+        Ok(html) => return Ok(html)
+        Err(e) => return Err("collection index template: " + template_error_text(e))
+      }
+    }
+    None => ()
+  }
+
   let meta : @html.PageMeta = {
-    title: page_title_builder(collection_name + " index", site.title),
-    description: Some(
-      "Generated page graph for collection " + collection_name + " in " + site.title + ".",
-    ),
+    title: full_title,
+    description: Some(description),
     lang: "en",
     stylesheet: Some(absolute_url_builder(site.base_url, "/style.css")),
   }
-  @html.render_page(meta, body.to_string())
+  Ok(@html.render_page(meta, body.to_string()))
 }
 
 fn load_collections(config : BuildConfig) -> Result[Array[@collections.CollectionDef], String] {
@@ -325,7 +439,10 @@ fn process_document(
   context : String,
   page_index : Map[String, String],
   schema : @schema.Schema,
-  site : @config.SiteConfig
+  site : @config.SiteConfig,
+  page_template : @template.Template?,
+  nav_links_html : String,
+  custom_css : String
 ) -> ProcessedDocument? {
   // Step 1: parse frontmatter
   let fm = match @frontmatter.parse(source) {
@@ -371,18 +488,54 @@ fn process_document(
   let body_html = @markdown.render(fm.body, wl_map)
   // Step 6: emit the complete HTML5 page
   let title = extract_title(fm)
-  let meta : @html.PageMeta = {
-    title: page_title_builder(title, site.title),
-    description: extract_description(fm),
-    lang: "en",
-    stylesheet: Some(absolute_url_builder(site.base_url, "/style.css")),
+  let full_title = page_title_builder(title, site.title)
+  let description_value = extract_description(fm)
+  let date_value = extract_date(fm)
+  let description_text = match description_value {
+    Some(v) => v
+    None => ""
+  }
+  let date_text = match date_value {
+    Some(v) => v
+    None => ""
+  }
+
+  let page_html = match page_template {
+    Some(tpl) => {
+      let slots = build_template_slots(
+        full_title,
+        body_html,
+        date_text,
+        description_text,
+        url,
+        site.title,
+        nav_links_html,
+        custom_css,
+      )
+      match @template.render_template(tpl, slots) {
+        Ok(html) => html
+        Err(e) => {
+          println("[error] " + context + ": page template: " + template_error_text(e))
+          return None
+        }
+      }
+    }
+    None => {
+      let meta : @html.PageMeta = {
+        title: full_title,
+        description: description_value,
+        lang: "en",
+        stylesheet: Some(absolute_url_builder(site.base_url, "/style.css")),
+      }
+      @html.render_page(meta, body_html)
+    }
   }
   Some({
-    html: @html.render_page(meta, body_html),
+    html: page_html,
     title,
     url,
-    description: extract_description(fm),
-    date: extract_date(fm),
+    description: description_value,
+    date: date_value,
     resolved_links: resolved,
   })
 }
@@ -440,6 +593,15 @@ pub fn build(config : BuildConfig) -> Int {
     }
   }
   println("[lattice] using " + collections.length().to_string() + " collections")
+  let templates = match load_templates(config) {
+    Ok(t) => t
+    Err(msg) => {
+      println("[error] templates: " + msg)
+      return 1
+    }
+  }
+  let nav_links_html = build_nav_links_html(collections)
+  let custom_css = default_css()
 
   // Pass 1: collect sources for each collection
   let collection_sources : Array[CollectionSources] = []
@@ -521,7 +683,7 @@ pub fn build(config : BuildConfig) -> Int {
   let css_path = config.output_dir + "/style.css"
   if not(@fs.path_exists(css_path)) {
     let write_ok = try {
-      @fs.write_string_to_file(css_path, default_css())
+      @fs.write_string_to_file(css_path, custom_css)
       true
     } catch {
       @fs.IOError(msg) => {
@@ -578,6 +740,9 @@ pub fn build(config : BuildConfig) -> Int {
         page_index,
         coll.definition.schema,
         config.site,
+        templates.page,
+        nav_links_html,
+        custom_css,
       ) {
         None => {
           error_count = error_count + 1
@@ -645,17 +810,35 @@ pub fn build(config : BuildConfig) -> Int {
         error_count = error_count + 1
       }
 
-      let index_write_ok = try {
-        let index_html = render_collection_index(coll.name, coll.pages, config.site)
-        let out_path = coll_dir + "/index.html"
-        @fs.write_string_to_file(out_path, index_html)
-        println("[lattice] wrote " + out_path)
-        true
-      } catch {
-        @fs.IOError(msg) => {
-          println("[error] " + coll.name + " index: write failed: " + msg)
-          false
+      let index_html = match render_collection_index(
+        coll.name,
+        coll.pages,
+        config.site,
+        templates.index,
+        nav_links_html,
+        custom_css,
+      ) {
+        Ok(html) => Some(html)
+        Err(msg) => {
+          println("[error] " + coll.name + " index: " + msg)
+          None
         }
+      }
+      let index_write_ok = match index_html {
+        Some(html) => {
+          try {
+            let out_path = coll_dir + "/index.html"
+            @fs.write_string_to_file(out_path, html)
+            println("[lattice] wrote " + out_path)
+            true
+          } catch {
+            @fs.IOError(msg) => {
+              println("[error] " + coll.name + " index: write failed: " + msg)
+              false
+            }
+          }
+        }
+        None => false
       }
       if not(index_write_ok) {
         error_count = error_count + 1

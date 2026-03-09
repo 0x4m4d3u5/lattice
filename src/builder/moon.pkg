@@ -10,5 +10,6 @@ import {
   "kurisu/lattice/src/rss" @rss,
   "kurisu/lattice/src/sitemap" @sitemap,
   "kurisu/lattice/src/slug" @slug,
+  "kurisu/lattice/src/template" @template,
   "moonbitlang/x/fs" @fs,
 }
