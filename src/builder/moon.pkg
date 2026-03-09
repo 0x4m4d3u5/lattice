@@ -4,6 +4,8 @@ import {
   "kurisu/lattice/src/wikilink" @wikilink,
   "kurisu/lattice/src/markdown" @markdown,
   "kurisu/lattice/src/html" @html,
+  "kurisu/lattice/src/graph" @graph,
+  "kurisu/lattice/src/rss" @rss,
   "kurisu/lattice/src/slug" @slug,
   "moonbitlang/x/fs" @fs,
 }

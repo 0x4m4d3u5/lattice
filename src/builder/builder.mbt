@@ -83,6 +83,14 @@ fn extract_description(fm : @frontmatter.Frontmatter) -> String? {
 }
 
 ///|
+fn extract_date(fm : @frontmatter.Frontmatter) -> String? {
+  match fm.fields.get("date") {
+    Some(@frontmatter.FStr(d)) => Some(d)
+    _ => None
+  }
+}
+
+///|
 fn build_wikilink_map(
   resolved : Array[@wikilink.ResolvedWikilink]
 ) -> Map[String, String] {
@@ -96,6 +104,124 @@ fn build_wikilink_map(
 }
 
 ///|
+/// A document that passed frontmatter/schema/wikilink validation.
+priv struct ProcessedDocument {
+  html : String
+  title : String
+  url : String
+  description : String?
+  date : String?
+  resolved_links : Array[@wikilink.ResolvedWikilink]
+}
+
+///|
+fn char_at_builder(s : String, i : Int) -> Char {
+  s[i].to_int().unsafe_to_char()
+}
+
+///|
+fn escape_html_builder(s : String) -> String {
+  let buf = StringBuilder::new()
+  let n = s.length()
+  let mut i = 0
+  while i < n {
+    let c = char_at_builder(s, i)
+    if c == '&' {
+      buf.write_string("&amp;")
+    } else if c == '<' {
+      buf.write_string("&lt;")
+    } else if c == '>' {
+      buf.write_string("&gt;")
+    } else if c == '"' {
+      buf.write_string("&quot;")
+    } else {
+      buf.write_char(c)
+    }
+    i = i + 1
+  }
+  buf.to_string()
+}
+
+///|
+/// Render the site index page from the graph of successful pages + wikilinks.
+fn render_site_index(pages : Array[@graph.GraphPage]) -> String {
+  let title_by_slug : Map[String, String] = Map::new()
+  let mut i = 0
+  while i < pages.length() {
+    let p = pages[i]
+    title_by_slug.set(p.slug, p.title)
+    i = i + 1
+  }
+
+  let body = StringBuilder::new()
+  body.write_string("<main>\n")
+  body.write_string("<h1>Site Index</h1>\n")
+  body.write_string("<p>Generated from parsed pages and the validated wikilink graph.</p>\n")
+
+  body.write_string("<h2>Pages</h2>\n<ul>\n")
+  i = 0
+  while i < pages.length() {
+    let p = pages[i]
+    body.write_string("<li>")
+    body.write_string(@html.anchor(p.url, p.title))
+    body.write_string(" <code>")
+    body.write_string(escape_html_builder(p.slug))
+    body.write_string("</code></li>\n")
+    i = i + 1
+  }
+  body.write_string("</ul>\n")
+
+  body.write_string("<h2>Wikilink Graph</h2>\n")
+  i = 0
+  while i < pages.length() {
+    let p = pages[i]
+    body.write_string("<section>\n<h3>")
+    body.write_string(@html.anchor(p.url, p.title))
+    body.write_string("</h3>\n")
+    body.write_string("<p>Source slug: <code>")
+    body.write_string(escape_html_builder(p.slug))
+    body.write_string("</code></p>\n")
+    if p.outgoing.length() == 0 {
+      body.write_string("<p>No outgoing wikilinks.</p>\n")
+    } else {
+      body.write_string("<ul>\n")
+      let mut j = 0
+      while j < p.outgoing.length() {
+        let edge = p.outgoing[j]
+        let target_title = match title_by_slug.get(edge.raw.target) {
+          Some(t) => t
+          None => edge.title
+        }
+        let display_note = match edge.raw.display {
+          Some(d) => " (display: <code>" + escape_html_builder(d) + "</code>)"
+          None => ""
+        }
+        body.write_string("<li>")
+        body.write_string(@html.anchor(edge.url, target_title))
+        body.write_string(" <code>")
+        body.write_string(escape_html_builder(edge.raw.target))
+        body.write_string("</code>")
+        body.write_string(display_note)
+        body.write_string("</li>\n")
+        j = j + 1
+      }
+      body.write_string("</ul>\n")
+    }
+    body.write_string("</section>\n")
+    i = i + 1
+  }
+  body.write_string("</main>\n")
+
+  let meta : @html.PageMeta = {
+    title: "Site Index",
+    description: Some("Generated page graph with titles and wikilink edges."),
+    lang: "en",
+    stylesheet: Some("/style.css"),
+  }
+  @html.render_page(meta, body.to_string())
+}
+
+///|
 /// Process one markdown document through the full lattice pipeline.
 ///
 /// Returns the rendered HTML5 page on success, or None if validation fails.
@@ -105,7 +231,7 @@ fn process_document(
   slug : String,
   page_index : Map[String, String],
   schema : @schema.Schema
-) -> String? {
+) -> ProcessedDocument? {
   // Step 1: parse frontmatter
   let fm = match @frontmatter.parse(source) {
     Err(e) => {
@@ -155,7 +281,15 @@ fn process_document(
     lang: "en",
     stylesheet: Some("/style.css"),
   }
-  Some(@html.render_page(meta, body_html))
+  let title = extract_title(fm)
+  Some({
+    html: @html.render_page(meta, body_html),
+    title,
+    url: @slug.slug_to_url(slug),
+    description: extract_description(fm),
+    date: extract_date(fm),
+    resolved_links: resolved,
+  })
 }
 
 // ── file I/O layer ────────────────────────────────────────────────────────────
@@ -258,6 +392,7 @@ pub fn build(config : BuildConfig) -> Int {
   let schema = post_schema()
   let mut error_count = 0
   let mut written = 0
+  let graph_pages : Array[@graph.GraphPage] = []
   i = 0
   while i < sources.length() {
     let src = sources[i]
@@ -265,13 +400,13 @@ pub fn build(config : BuildConfig) -> Int {
       None => {
         error_count = error_count + 1
       }
-      Some(html) => {
+      Some(doc) => {
         // Clean URL: /slug/index.html
         let page_dir = config.output_dir + "/" + src.slug
         let write_result = try {
           ensure_dir(page_dir)
           let out_path = page_dir + "/index.html"
-          @fs.write_string_to_file(out_path, html)
+          @fs.write_string_to_file(out_path, doc.html)
           Some(out_path)
         } catch {
           @fs.IOError(msg) => {
@@ -283,6 +418,14 @@ pub fn build(config : BuildConfig) -> Int {
           Some(out_path) => {
             println("[lattice] wrote " + out_path)
             written = written + 1
+            graph_pages.push({
+              slug: src.slug,
+              title: doc.title,
+              url: doc.url,
+              description: doc.description,
+              date: doc.date,
+              outgoing: doc.resolved_links,
+            })
           }
           None => {
             error_count = error_count + 1
@@ -291,6 +434,44 @@ pub fn build(config : BuildConfig) -> Int {
       }
     }
     i = i + 1
+  }
+
+  if error_count == 0 {
+    let feed_write_ok = try {
+      let feed_xml = @rss.render_feed(config.site_title, config.base_url, graph_pages)
+      let out_path = config.output_dir + "/feed.xml"
+      @fs.write_string_to_file(out_path, feed_xml)
+      println("[lattice] wrote " + out_path)
+      true
+    } catch {
+      @fs.IOError(msg) => {
+        println("[error] feed: write failed: " + msg)
+        false
+      }
+    }
+    if not(feed_write_ok) {
+      error_count = error_count + 1
+    }
+
+    let index_dir = config.output_dir + "/site-index"
+    let index_write_ok = try {
+      ensure_dir(index_dir)
+      let index_html = render_site_index(graph_pages)
+      let out_path = index_dir + "/index.html"
+      @fs.write_string_to_file(out_path, index_html)
+      println("[lattice] wrote " + out_path)
+      true
+    } catch {
+      @fs.IOError(msg) => {
+        println("[error] site-index: write failed: " + msg)
+        false
+      }
+    }
+    if not(index_write_ok) {
+      error_count = error_count + 1
+    }
+  } else {
+    println("[warn] skipped feed and site-index generation due to prior build errors")
   }
 
   println(
