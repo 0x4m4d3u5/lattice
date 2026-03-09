@@ -14,6 +14,7 @@ pub struct SiteConfig {
   collections_file : String?
   templates_dir : String?
   tags_field : String?
+  search_index_file : String?
 }
 
 pub enum ConfigError {
@@ -117,6 +118,7 @@ fn parse_assignment(line : String, line_no : Int) -> Result[(String, String), Co
 /// - `collections_file`
 /// - `templates_dir`
 /// - `tags_field`
+/// - `search_index_file`
 pub fn parse(input : String) -> Result[SiteConfig, ConfigError] {
   let mut title : String? = None
   let mut base_url : String? = None
@@ -125,6 +127,7 @@ pub fn parse(input : String) -> Result[SiteConfig, ConfigError] {
   let mut collections_file : String? = None
   let mut templates_dir : String? = None
   let mut tags_field : String? = None
+  let mut search_index_file : String? = None
 
   let lines = split_lines_config(input)
   let mut i = 0
@@ -178,6 +181,12 @@ pub fn parse(input : String) -> Result[SiteConfig, ConfigError] {
           } else {
             tags_field = Some(value)
           }
+        } else if key == "search_index_file" {
+          if value.length() == 0 {
+            search_index_file = None
+          } else {
+            search_index_file = Some(value)
+          }
         } else {
           // Unknown keys are ignored.
           ()
@@ -204,5 +213,6 @@ pub fn parse(input : String) -> Result[SiteConfig, ConfigError] {
     collections_file,
     templates_dir,
     tags_field,
+    search_index_file,
   })
 }
