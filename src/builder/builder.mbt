@@ -102,6 +102,7 @@ priv struct ProcessedDocument {
   url : String
   description : String?
   date : String?
+  excerpt : String
   resolved_links : Array[@wikilink.ResolvedWikilink]
   tags : Array[@tags.TagRef]
 }
@@ -109,6 +110,16 @@ priv struct ProcessedDocument {
 ///|
 fn char_at_builder(s : String, i : Int) -> Char {
   s[i].to_int().unsafe_to_char()
+}
+
+fn substr_builder(s : String, start : Int, end_pos : Int) -> String {
+  let buf = StringBuilder::new()
+  let mut i = start
+  while i < end_pos {
+    buf.write_char(char_at_builder(s, i))
+    i = i + 1
+  }
+  buf.to_string()
 }
 
 ///|
@@ -454,6 +465,245 @@ fn tags_field_name(site : @config.SiteConfig) -> String {
     Some(name) => name
     None => "tags"
   }
+}
+
+fn search_index_file_name(site : @config.SiteConfig) -> String {
+  match site.search_index_file {
+    Some(path) => path
+    None => "search-index.json"
+  }
+}
+
+fn split_lines_builder(s : String) -> Array[String] {
+  let lines : Array[String] = []
+  let n = s.length()
+  let mut i = 0
+  while i <= n {
+    let mut end = i
+    while end < n && char_at_builder(s, end) != '\n' {
+      end = end + 1
+    }
+    let line = StringBuilder::new()
+    let mut j = i
+    while j < end {
+      line.write_char(char_at_builder(s, j))
+      j = j + 1
+    }
+    lines.push(line.to_string())
+    if end >= n {
+      break
+    }
+    i = end + 1
+  }
+  lines
+}
+
+fn join_lines_builder(lines : Array[String]) -> String {
+  let buf = StringBuilder::new()
+  let mut i = 0
+  while i < lines.length() {
+    if i > 0 {
+      buf.write_char('\n')
+    }
+    buf.write_string(lines[i])
+    i = i + 1
+  }
+  buf.to_string()
+}
+
+fn is_blank_builder(s : String) -> Bool {
+  trim_builder(s).length() == 0
+}
+
+fn starts_with_at_builder(s : String, pos : Int, prefix : String) -> Bool {
+  let plen = prefix.length()
+  if pos + plen > s.length() {
+    return false
+  }
+  let mut i = 0
+  while i < plen {
+    if char_at_builder(s, pos + i) != char_at_builder(prefix, i) {
+      return false
+    }
+    i = i + 1
+  }
+  true
+}
+
+fn count_leading_hashes_builder(line : String) -> Int {
+  let n = line.length()
+  let mut count = 0
+  while count < n && char_at_builder(line, count) == '#' {
+    count = count + 1
+  }
+  count
+}
+
+fn is_heading_line_builder(line : String) -> Bool {
+  let hashes = count_leading_hashes_builder(line)
+  if hashes == 0 || hashes > 6 {
+    return false
+  }
+  hashes < line.length() && char_at_builder(line, hashes) == ' '
+}
+
+fn is_hrule_builder(line : String) -> Bool {
+  let t = trim_builder(line)
+  t == "---" || t == "***" || t == "___"
+}
+
+fn is_fence_start_builder(line : String) -> Bool {
+  starts_with_at_builder(line, 0, "```") || starts_with_at_builder(line, 0, "~~~")
+}
+
+fn fence_char_builder(line : String) -> Char {
+  if line.length() == 0 {
+    '`'
+  } else {
+    char_at_builder(line, 0)
+  }
+}
+
+fn is_fence_end_builder(line : String, fence_char : Char) -> Bool {
+  line.length() >= 3 &&
+  char_at_builder(line, 0) == fence_char &&
+  char_at_builder(line, 1) == fence_char &&
+  char_at_builder(line, 2) == fence_char
+}
+
+fn is_unordered_item_builder(line : String) -> Bool {
+  line.length() >= 2 &&
+  (char_at_builder(line, 0) == '-' || char_at_builder(line, 0) == '*') &&
+  char_at_builder(line, 1) == ' '
+}
+
+fn is_digit_builder(c : Char) -> Bool {
+  c >= '0' && c <= '9'
+}
+
+fn is_ordered_item_builder(line : String) -> Bool {
+  let n = line.length()
+  if n < 3 {
+    return false
+  }
+  let mut i = 0
+  while i < n && is_digit_builder(char_at_builder(line, i)) {
+    i = i + 1
+  }
+  i > 0 && i + 1 < n && char_at_builder(line, i) == '.' && char_at_builder(line, i + 1) == ' '
+}
+
+fn is_blockquote_line_builder(line : String) -> Bool {
+  line.length() > 0 && char_at_builder(line, 0) == '>'
+}
+
+fn is_block_starter_builder(line : String) -> Bool {
+  is_heading_line_builder(line) ||
+  is_hrule_builder(line) ||
+  is_fence_start_builder(line) ||
+  is_unordered_item_builder(line) ||
+  is_ordered_item_builder(line) ||
+  is_blockquote_line_builder(line)
+}
+
+fn inline_text_builder(inline : @markdown.Inline) -> String {
+  match inline {
+    @markdown.Text(t) => t
+    @markdown.Bold(inlines) => inlines_text_builder(inlines)
+    @markdown.Italic(inlines) => inlines_text_builder(inlines)
+    @markdown.BoldItalic(inlines) => inlines_text_builder(inlines)
+    @markdown.InlineCode(text) => text
+    @markdown.Link(text, _) => text
+    @markdown.WikiRef(target, display) => match display {
+      Some(text) => text
+      None => target
+    }
+    @markdown.HardBreak => " "
+  }
+}
+
+fn inlines_text_builder(inlines : Array[@markdown.Inline]) -> String {
+  let buf = StringBuilder::new()
+  let mut i = 0
+  while i < inlines.length() {
+    buf.write_string(inline_text_builder(inlines[i]))
+    i = i + 1
+  }
+  buf.to_string()
+}
+
+fn collapse_whitespace_builder(s : String) -> String {
+  let buf = StringBuilder::new()
+  let mut wrote_non_space = false
+  let mut prev_space = false
+  let mut i = 0
+  while i < s.length() {
+    let c = char_at_builder(s, i)
+    let is_space = c == ' ' || c == '\t' || c == '\n' || c == '\r'
+    if is_space {
+      if wrote_non_space && not(prev_space) {
+        buf.write_char(' ')
+        prev_space = true
+      }
+    } else {
+      wrote_non_space = true
+      prev_space = false
+      buf.write_char(c)
+    }
+    i = i + 1
+  }
+  trim_builder(buf.to_string())
+}
+
+fn extract_excerpt_builder(markdown_body : String) -> String {
+  let lines = split_lines_builder(markdown_body)
+  let mut i = 0
+  while i < lines.length() {
+    let line = lines[i]
+    if is_blank_builder(line) {
+      i = i + 1
+    } else if is_block_starter_builder(line) {
+      if is_fence_start_builder(line) {
+        let fence_char = fence_char_builder(line)
+        i = i + 1
+        while i < lines.length() && not(is_fence_end_builder(lines[i], fence_char)) {
+          i = i + 1
+        }
+        if i < lines.length() {
+          i = i + 1
+        }
+      } else if is_blockquote_line_builder(line) {
+        while i < lines.length() && is_blockquote_line_builder(lines[i]) {
+          i = i + 1
+        }
+      } else if is_unordered_item_builder(line) {
+        while i < lines.length() && is_unordered_item_builder(lines[i]) {
+          i = i + 1
+        }
+      } else if is_ordered_item_builder(line) {
+        while i < lines.length() && is_ordered_item_builder(lines[i]) {
+          i = i + 1
+        }
+      } else {
+        i = i + 1
+      }
+    } else {
+      let paragraph_lines : Array[String] = []
+      while i < lines.length() &&
+        not(is_blank_builder(lines[i])) &&
+        not(is_block_starter_builder(lines[i])) {
+        paragraph_lines.push(lines[i])
+        i = i + 1
+      }
+      let paragraph_text = join_lines_builder(paragraph_lines)
+      let inlines = @markdown.parse_inlines(paragraph_text, 0, paragraph_text.length())
+      let plain_text = collapse_whitespace_builder(inlines_text_builder(inlines))
+      if plain_text.length() > 0 {
+        return plain_text
+      }
+    }
+  }
+  ""
 }
 
 fn collect_tag_catalog(collection_sources : Array[CollectionSources], tags_field : String) -> TagCatalog {
@@ -830,6 +1080,7 @@ fn process_document(
   let wl_map = build_wikilink_map(resolved)
   // Step 5: render markdown body to HTML fragment
   let body_html = @markdown.render(fm.body, wl_map) + @tags.render_page_tags(page_tags)
+  let excerpt = extract_excerpt_builder(fm.body)
   // Step 6: emit the complete HTML5 page
   let title = extract_title(fm)
   let full_title = page_title_builder(title, site.title)
@@ -882,6 +1133,7 @@ fn process_document(
     url,
     description: description_value,
     date: date_value,
+    excerpt,
     resolved_links: resolved,
     tags: page_tags,
   })
@@ -998,6 +1250,7 @@ fn process_document_for_lint(
 
   let wl_map = build_wikilink_map(resolved)
   let body_html = @markdown.render(fm.body, wl_map) + @tags.render_page_tags(page_tags)
+  let excerpt = extract_excerpt_builder(fm.body)
   let title = extract_title(fm)
   let full_title = page_title_builder(title, site.title)
   let description_value = extract_description(fm)
@@ -1056,6 +1309,7 @@ fn process_document_for_lint(
       url,
       description: description_value,
       date: date_value,
+      excerpt,
       resolved_links: resolved,
       tags: page_tags,
     }),
@@ -1093,6 +1347,19 @@ pub fn collect_sources(content_dir : String) -> Array[SourceFile] raise @fs.IOEr
 fn ensure_dir(path : String) -> Unit raise @fs.IOError {
   if not(@fs.path_exists(path)) {
     @fs.create_dir(path)
+  }
+}
+
+fn ensure_parent_dirs_for_file(path : String) -> Unit raise @fs.IOError {
+  let mut i = 0
+  while i < path.length() {
+    if char_at_builder(path, i) == '/' && i > 0 {
+      let dir = substr_builder(path, 0, i)
+      if not(@fs.path_exists(dir)) {
+        @fs.create_dir(dir)
+      }
+    }
+    i = i + 1
   }
 }
 
@@ -1227,6 +1494,7 @@ pub fn build(config : BuildConfig) -> Int {
   let mut error_count = 0
   let mut written = 0
   let graph_pages : Array[@graph.GraphPage] = []
+  let search_entries : Array[@search.SearchEntry] = []
   let tag_pages_by_slug : Map[String, Array[@tags.TaggedPage]] = Map::new()
   let rendered_collections : Array[CollectionRenderResult] = []
   i = 0
@@ -1321,6 +1589,27 @@ pub fn build(config : BuildConfig) -> Int {
                 }
                 k = k + 1
               }
+              let search_tags : Array[String] = []
+              k = 0
+              while k < doc.tags.length() {
+                search_tags.push(doc.tags[k].value)
+                k = k + 1
+              }
+              let collection_name = if coll.definition.name.length() == 0 {
+                "default"
+              } else {
+                coll.definition.name
+              }
+              search_entries.push(
+                @search.new_entry(
+                  doc.title,
+                  src.slug,
+                  doc.url,
+                  search_tags,
+                  collection_name,
+                  doc.excerpt,
+                ),
+              )
             }
             None => {
               error_count = error_count + 1
@@ -1530,8 +1819,28 @@ pub fn build(config : BuildConfig) -> Int {
         error_count = error_count + 1
       }
     }
+    if error_count == 0 {
+      let search_write_ok = try {
+        let search_json = @search.render_search_index(search_entries)
+        let out_path = config.output_dir + "/" + search_index_file_name(config.site)
+        ensure_parent_dirs_for_file(out_path)
+        @fs.write_string_to_file(out_path, search_json)
+        println("[lattice] wrote " + out_path)
+        true
+      } catch {
+        @fs.IOError(msg) => {
+          println("[error] search index: write failed: " + msg)
+          false
+        }
+      }
+      if not(search_write_ok) {
+        error_count = error_count + 1
+      }
+    }
   } else {
-    println("[warn] skipped collection feeds/indexes, tags, and sitemap generation due to prior build errors")
+    println(
+      "[warn] skipped collection feeds/indexes, tags, sitemap, and search index generation due to prior build errors",
+    )
   }
 
   println(
