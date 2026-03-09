@@ -15,8 +15,7 @@
 pub(all) struct BuildConfig {
   content_dir : String
   output_dir : String
-  site_title : String
-  base_url : String
+  site : @config.SiteConfig
 }
 
 ///|
@@ -142,9 +141,78 @@ fn escape_html_builder(s : String) -> String {
   buf.to_string()
 }
 
+fn trim_builder(s : String) -> String {
+  let n = s.length()
+  let mut lo = 0
+  while lo < n &&
+    (char_at_builder(s, lo) == ' ' ||
+      char_at_builder(s, lo) == '\t' ||
+      char_at_builder(s, lo) == '\r') {
+    lo = lo + 1
+  }
+  let mut hi = n
+  while hi > lo &&
+    (char_at_builder(s, hi - 1) == ' ' ||
+      char_at_builder(s, hi - 1) == '\t' ||
+      char_at_builder(s, hi - 1) == '\r') {
+    hi = hi - 1
+  }
+  let buf = StringBuilder::new()
+  let mut i = lo
+  while i < hi {
+    buf.write_char(char_at_builder(s, i))
+    i = i + 1
+  }
+  buf.to_string()
+}
+
+fn normalize_base_url_builder(base_url : String) -> String {
+  let trimmed = trim_builder(base_url)
+  if trimmed == "/" {
+    return ""
+  }
+  if trimmed.has_suffix("/") {
+    let buf = StringBuilder::new()
+    let mut i = 0
+    let end_pos = trimmed.length() - 1
+    while i < end_pos {
+      buf.write_char(char_at_builder(trimmed, i))
+      i = i + 1
+    }
+    return buf.to_string()
+  }
+  trimmed
+}
+
+fn absolute_url_builder(base_url : String, path : String) -> String {
+  let base = normalize_base_url_builder(base_url)
+  if base.length() == 0 {
+    return path
+  }
+  if path.length() == 0 {
+    return base
+  }
+  if char_at_builder(path, 0) == '/' {
+    base + path
+  } else {
+    base + "/" + path
+  }
+}
+
+fn page_title_builder(page_title : String, site_title : String) -> String {
+  if page_title == site_title {
+    page_title
+  } else {
+    page_title + " | " + site_title
+  }
+}
+
 ///|
 /// Render the site index page from the graph of successful pages + wikilinks.
-fn render_site_index(pages : Array[@graph.GraphPage]) -> String {
+fn render_site_index(
+  pages : Array[@graph.GraphPage],
+  site : @config.SiteConfig
+) -> String {
   let title_by_slug : Map[String, String] = Map::new()
   let mut i = 0
   while i < pages.length() {
@@ -213,10 +281,12 @@ fn render_site_index(pages : Array[@graph.GraphPage]) -> String {
   body.write_string("</main>\n")
 
   let meta : @html.PageMeta = {
-    title: "Site Index",
-    description: Some("Generated page graph with titles and wikilink edges."),
+    title: page_title_builder("Site Index", site.title),
+    description: Some(
+      "Generated page graph for " + site.title + " with validated wikilink edges.",
+    ),
     lang: "en",
-    stylesheet: Some("/style.css"),
+    stylesheet: Some(absolute_url_builder(site.base_url, "/style.css")),
   }
   @html.render_page(meta, body.to_string())
 }
@@ -230,7 +300,8 @@ fn process_document(
   source : String,
   slug : String,
   page_index : Map[String, String],
-  schema : @schema.Schema
+  schema : @schema.Schema,
+  site : @config.SiteConfig
 ) -> ProcessedDocument? {
   // Step 1: parse frontmatter
   let fm = match @frontmatter.parse(source) {
@@ -275,13 +346,13 @@ fn process_document(
   // Step 5: render markdown body to HTML fragment
   let body_html = @markdown.render(fm.body, wl_map)
   // Step 6: emit the complete HTML5 page
+  let title = extract_title(fm)
   let meta : @html.PageMeta = {
-    title: extract_title(fm),
+    title: page_title_builder(title, site.title),
     description: extract_description(fm),
     lang: "en",
-    stylesheet: Some("/style.css"),
+    stylesheet: Some(absolute_url_builder(site.base_url, "/style.css")),
   }
-  let title = extract_title(fm)
   Some({
     html: @html.render_page(meta, body_html),
     title,
@@ -396,7 +467,7 @@ pub fn build(config : BuildConfig) -> Int {
   i = 0
   while i < sources.length() {
     let src = sources[i]
-    match process_document(src.content, src.slug, page_index, schema) {
+    match process_document(src.content, src.slug, page_index, schema, config.site) {
       None => {
         error_count = error_count + 1
       }
@@ -438,7 +509,7 @@ pub fn build(config : BuildConfig) -> Int {
 
   if error_count == 0 {
     let feed_write_ok = try {
-      let feed_xml = @rss.render_feed(config.site_title, config.base_url, graph_pages)
+      let feed_xml = @rss.render_feed(config.site.title, config.site.base_url, graph_pages)
       let out_path = config.output_dir + "/feed.xml"
       @fs.write_string_to_file(out_path, feed_xml)
       println("[lattice] wrote " + out_path)
@@ -456,7 +527,7 @@ pub fn build(config : BuildConfig) -> Int {
     let index_dir = config.output_dir + "/site-index"
     let index_write_ok = try {
       ensure_dir(index_dir)
-      let index_html = render_site_index(graph_pages)
+      let index_html = render_site_index(graph_pages, config.site)
       let out_path = index_dir + "/index.html"
       @fs.write_string_to_file(out_path, index_html)
       println("[lattice] wrote " + out_path)
