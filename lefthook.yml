@@ -1,0 +1,12 @@
+pre-push:
+  commands:
+    check-dirty:
+      run: |
+        if ! git diff --quiet || ! git diff --cached --quiet; then
+          echo "ERROR: dirty working tree — commit or stash changes before pushing"
+          exit 1
+        fi
+        if [ -n "$(git ls-files --others --exclude-standard)" ]; then
+          echo "ERROR: untracked files present — add to .gitignore or commit before pushing"
+          exit 1
+        fi
