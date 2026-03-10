@@ -9,6 +9,7 @@ pub(all) enum TemplateSlot {
   CustomCss
   TagName
   TagCount
+  Backlinks
 } derive(Eq, Hash, Show)
 
 pub(all) enum TemplatePart {
@@ -124,6 +125,9 @@ fn slot_from_name(name : String) -> Result[TemplateSlot, TemplateError] {
   }
   if name == "tag_count" {
     return Ok(TagCount)
+  }
+  if name == "backlinks" {
+    return Ok(Backlinks)
   }
   Err(UnknownSlot(name))
 }
