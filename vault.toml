@@ -7,3 +7,4 @@ templates_dir = /home/kurisu/code/lattice/example/templates
 data_dir = /home/kurisu/code/lattice/example/data
 static_dir = ../example/static
 search_index_file = search-index.json
+root_page = "home"

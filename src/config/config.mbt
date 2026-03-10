@@ -18,6 +18,7 @@ pub struct SiteConfig {
   search_index_file : String?
   static_dir : String?
   data_dir : String?
+  root_page : String?
 }
 
 pub enum ConfigError {
@@ -129,6 +130,14 @@ fn parse_positive_int_config(value : String) -> Int? {
   Some(parsed)
 }
 
+fn parse_string_value_config(value : String) -> String {
+  let n = value.length()
+  if n >= 2 && char_at_config(value, 0) == '"' && char_at_config(value, n - 1) == '"' {
+    return substr_config(value, 1, n - 1)
+  }
+  value
+}
+
 ///|
 /// Parse config text into a typed `SiteConfig`.
 ///
@@ -146,6 +155,7 @@ fn parse_positive_int_config(value : String) -> Int? {
 /// - `search_index_file`
 /// - `static_dir`
 /// - `data_dir`
+/// - `root_page`
 pub fn parse(input : String) -> Result[SiteConfig, ConfigError] {
   let mut title : String? = None
   let mut base_url : String? = None
@@ -158,6 +168,7 @@ pub fn parse(input : String) -> Result[SiteConfig, ConfigError] {
   let mut search_index_file : String? = None
   let mut static_dir : String? = None
   let mut data_dir : String? = None
+  let mut root_page : String? = None
 
   let lines = split_lines_config(input)
   let mut i = 0
@@ -172,67 +183,74 @@ pub fn parse(input : String) -> Result[SiteConfig, ConfigError] {
     match parse_assignment(raw, line_no) {
       Err(e) => return Err(e)
       Ok((key, value)) => {
+        let string_value = parse_string_value_config(value)
         if key == "title" {
-          if value.length() == 0 {
+          if string_value.length() == 0 {
             return Err(InvalidValue("title", "must not be empty"))
           }
-          title = Some(value)
+          title = Some(string_value)
         } else if key == "base_url" {
-          if value.length() == 0 {
+          if string_value.length() == 0 {
             return Err(InvalidValue("base_url", "must not be empty"))
           }
-          base_url = Some(value)
+          base_url = Some(string_value)
         } else if key == "output_dir" {
-          if value.length() == 0 {
+          if string_value.length() == 0 {
             return Err(InvalidValue("output_dir", "must not be empty"))
           }
-          output_dir = Some(value)
+          output_dir = Some(string_value)
         } else if key == "page_size" {
           match parse_positive_int_config(value) {
             Some(parsed) => page_size = Some(parsed)
             None => return Err(InvalidValue("page_size", "must be a positive integer"))
           }
         } else if key == "description" {
-          if value.length() == 0 {
+          if string_value.length() == 0 {
             description = None
           } else {
-            description = Some(value)
+            description = Some(string_value)
           }
         } else if key == "collections_file" {
-          if value.length() == 0 {
+          if string_value.length() == 0 {
             collections_file = None
           } else {
-            collections_file = Some(value)
+            collections_file = Some(string_value)
           }
         } else if key == "templates_dir" {
-          if value.length() == 0 {
+          if string_value.length() == 0 {
             templates_dir = None
           } else {
-            templates_dir = Some(value)
+            templates_dir = Some(string_value)
           }
         } else if key == "tags_field" {
-          if value.length() == 0 {
+          if string_value.length() == 0 {
             tags_field = None
           } else {
-            tags_field = Some(value)
+            tags_field = Some(string_value)
           }
         } else if key == "search_index_file" {
-          if value.length() == 0 {
+          if string_value.length() == 0 {
             search_index_file = None
           } else {
-            search_index_file = Some(value)
+            search_index_file = Some(string_value)
           }
         } else if key == "static_dir" {
-          if value.length() == 0 {
+          if string_value.length() == 0 {
             static_dir = None
           } else {
-            static_dir = Some(value)
+            static_dir = Some(string_value)
           }
         } else if key == "data_dir" {
-          if value.length() == 0 {
+          if string_value.length() == 0 {
             data_dir = None
           } else {
-            data_dir = Some(value)
+            data_dir = Some(string_value)
+          }
+        } else if key == "root_page" {
+          if string_value.length() == 0 {
+            root_page = None
+          } else {
+            root_page = Some(string_value)
           }
         } else {
           // Unknown keys are ignored.
@@ -264,5 +282,6 @@ pub fn parse(input : String) -> Result[SiteConfig, ConfigError] {
     search_index_file,
     static_dir,
     data_dir,
+    root_page,
   })
 }
