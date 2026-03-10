@@ -32,6 +32,33 @@ fn char_at_wl(s : String, i : Int) -> Char {
   s[i].to_int().unsafe_to_char()
 }
 
+fn slugify_lookup_key_wl(s : String, end : Int) -> String {
+  let buf = StringBuilder::new()
+  let mut i = 0
+  while i < end {
+    let c = char_at_wl(s, i)
+    if c == ' ' || c == '_' {
+      buf.write_char('-')
+    } else if c >= 'A' && c <= 'Z' {
+      buf.write_char((c.to_int() + 32).unsafe_to_char())
+    } else {
+      buf.write_char(c)
+    }
+    i = i + 1
+  }
+  buf.to_string()
+}
+
+/// Canonical lookup key for wikilink targets.
+pub fn lookup_key(target : String) -> String {
+  let end = if target.has_suffix(".md") {
+    target.length() - 3
+  } else {
+    target.length()
+  }
+  slugify_lookup_key_wl(target, end)
+}
+
 fn substr_wl(s : String, start : Int, end : Int) -> String {
   let buf = StringBuilder::new()
   let mut i = start
@@ -161,7 +188,7 @@ pub fn resolve(
   let mut i = 0
   while i < links.length() {
     let link = links[i]
-    match index.get(link.target) {
+    match index.get(lookup_key(link.target)) {
       Some(url) => {
         let title = match link.display {
           Some(d) => d

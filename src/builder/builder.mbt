@@ -133,7 +133,7 @@ fn extract_link_targets(source : String, slug : String) -> Array[String] {
   let raw_links = @wikilink.extract(body, slug)
   let mut i = 0
   while i < raw_links.length() {
-    let target = raw_links[i].target
+    let target = @wikilink.lookup_key(raw_links[i].target)
     if not(unique.contains(target)) {
       unique.set(target, true)
       targets.push(target)
@@ -171,7 +171,7 @@ fn build_backlink_index(
       let raw_links = @wikilink.extract(body, src.slug)
       let mut k = 0
       while k < raw_links.length() {
-        let target = raw_links[k].target
+        let target = @wikilink.lookup_key(raw_links[k].target)
         if page_index.contains(target) {
           let ref_entry : BacklinkRef = {
             url: source_url,
@@ -584,10 +584,11 @@ fn collection_index_url(collection_name : String) -> String {
 
 pub fn collection_index_lookup_alias(collection : @collections.CollectionDef) -> String? {
   let dir_name = path_basename_builder(collection.content_dir)
-  if dir_name.length() == 0 || dir_name == collection.name {
+  let lookup_key = @wikilink.lookup_key(dir_name)
+  if dir_name.length() == 0 || lookup_key == collection.name {
     return None
   }
-  Some(dir_name)
+  Some(lookup_key)
 }
 
 fn collection_index_page_url(collection_name : String, page_number : Int) -> String {

@@ -60,3 +60,16 @@ test "wikilink resolve prefers explicit display text" {
   assert_eq(resolved.length(), 1)
   assert_eq(resolved[0].title, "Read this first")
 }
+
+///|
+test "wikilink resolve normalizes title-like targets" {
+  let links = extract("[[My Post]] [[10 - Projects]]", "content/index.md")
+  let index : Map[String, String] = Map::new()
+  index.set("my-post", "/my-post/")
+  index.set("10---projects", "/projects/")
+  let (resolved, errors) = resolve(links, index)
+  assert_eq(errors.length(), 0)
+  assert_eq(resolved.length(), 2)
+  assert_eq(resolved[0].url, "/my-post/")
+  assert_eq(resolved[1].url, "/projects/")
+}
