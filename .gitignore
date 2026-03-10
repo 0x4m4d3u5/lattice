@@ -4,3 +4,5 @@ _build/
 .moonagent/
 dist/
 _tmp_*/
+_vault_dist/
+content/data/
