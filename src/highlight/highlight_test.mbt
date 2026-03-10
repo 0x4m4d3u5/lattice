@@ -53,6 +53,22 @@ fn token_kind_is(tokens : Array[Token], idx : Int, kind : TokenKind) -> Bool {
   }
 }
 
+fn find_token_index(tokens : Array[Token], text : String) -> Int {
+  let mut i = 0
+  while i < tokens.length() {
+    if tokens[i].text == text {
+      return i
+    }
+    i = i + 1
+  }
+  -1
+}
+
+fn has_token(tokens : Array[Token], text : String, kind : TokenKind) -> Bool {
+  let idx = find_token_index(tokens, text)
+  idx >= 0 && token_kind_is(tokens, idx, kind)
+}
+
 ///|
 test "highlight moonbit tokenization basics" {
   let src =
@@ -140,6 +156,90 @@ test "highlight bash supports variables and builtins" {
 }
 
 ///|
+test "highlight go tokenization covers comments raw strings and numbers" {
+  let src =
+    "package main\n" +
+    "func demo() {\n" +
+    "  var msg = `hi`\n" +
+    "  var r = 'x'\n" +
+    "  var n = 0x2A\n" +
+    "  // note\n" +
+  "}\n"
+  let tokens = tokenize_go(src)
+  assert_eq(flatten_text(tokens), src)
+  assert_true(has_token(tokens, "package", Keyword))
+  assert_true(has_token(tokens, "func", Keyword))
+  assert_true(has_token(tokens, "`hi`", StringLit))
+  assert_true(has_token(tokens, "'x'", CharLit))
+  assert_true(has_token(tokens, "0x2A", Number))
+  assert_true(has_token(tokens, "// note", Comment))
+}
+
+///|
+test "highlight c tokenization covers preprocessor chars and floats" {
+  let src =
+    "#include <stdio.h>\n" +
+    "static int main() {\n" +
+    "  char c = 'x';\n" +
+    "  double n = 3.14;\n" +
+    "  return 0;\n" +
+  "}\n"
+  let tokens = tokenize_c(src)
+  assert_eq(flatten_text(tokens), src)
+  assert_true(has_token(tokens, "#include <stdio.h>", Comment))
+  assert_true(has_token(tokens, "static", Keyword))
+  assert_true(has_token(tokens, "char", Keyword))
+  assert_true(has_token(tokens, "'x'", CharLit))
+  assert_true(has_token(tokens, "3.14", Number))
+}
+
+///|
+test "highlight html tokenization covers tags attributes and comments" {
+  let src =
+    "<!DOCTYPE html>\n" +
+    "<div class=\"hero\">Hello<span>!</span><!-- note --></div>\n"
+  let tokens = tokenize_html(src)
+  assert_eq(flatten_text(tokens), src)
+  assert_true(has_token(tokens, "<!DOCTYPE html>", Comment))
+  assert_true(has_token(tokens, "div", Keyword))
+  assert_true(has_token(tokens, "class", Identifier))
+  assert_true(has_token(tokens, "\"hero\"", StringLit))
+  assert_true(has_token(tokens, "Hello", Unknown))
+  assert_true(has_token(tokens, "<!-- note -->", Comment))
+}
+
+///|
+test "highlight css tokenization covers selectors properties and values" {
+  let src =
+    "@media screen {\n" +
+    "  .card {\n" +
+    "    color: #abc123;\n" +
+    "    margin: 12px;\n" +
+    "  }\n" +
+    "}\n"
+  let tokens = tokenize_css(src)
+  assert_eq(flatten_text(tokens), src)
+  assert_true(has_token(tokens, "@media", Keyword))
+  assert_true(has_token(tokens, "screen", Identifier))
+  assert_true(has_token(tokens, "color", Keyword))
+  assert_true(has_token(tokens, "#abc123", Number))
+  assert_true(has_token(tokens, "12px", Number))
+}
+
+///|
+test "highlight json tokenization covers strings literals and punctuation" {
+  let src = "{\n  \"ok\": true,\n  \"n\": -1.2e3,\n  \"none\": null\n}\n"
+  let tokens = tokenize_json(src)
+  assert_eq(flatten_text(tokens), src)
+  assert_true(has_token(tokens, "{", Punct))
+  assert_true(has_token(tokens, "\"ok\"", StringLit))
+  assert_true(has_token(tokens, ":", Punct))
+  assert_true(has_token(tokens, "true", Keyword))
+  assert_true(has_token(tokens, "-1.2e3", Number))
+  assert_true(has_token(tokens, "null", Keyword))
+}
+
+///|
 test "highlight plain emits unknown tokens" {
   let src = "a b\n"
   let tokens = tokenize_plain(src)
@@ -153,9 +253,19 @@ test "highlight dispatch aliases" {
   let ts = highlight("ts", "const x = 1")
   let py = highlight("py", "def x():\n    return 1")
   let sh = highlight("sh", "echo hi")
+  let go = highlight("go", "package main")
+  let c = highlight("c", "int main() { return 0; }")
+  let html = highlight("html", "<div></div>")
+  let css = highlight("css", ".x { color: red; }")
+  let json = highlight("json", "{\"ok\": true}")
   assert_true(has_kind(ts, Keyword))
   assert_true(has_kind(py, Keyword))
   assert_true(has_kind(sh, Keyword))
+  assert_true(has_kind(go, Keyword))
+  assert_true(has_kind(c, Keyword))
+  assert_true(has_kind(html, Keyword))
+  assert_true(has_kind(css, Keyword))
+  assert_true(has_kind(json, Keyword))
 }
 
 ///|
