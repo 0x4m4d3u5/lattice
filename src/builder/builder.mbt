@@ -240,6 +240,21 @@ fn substr_builder(s : String, start : Int, end_pos : Int) -> String {
   buf.to_string()
 }
 
+fn path_basename_builder(path : String) -> String {
+  let mut end_pos = path.length()
+  while end_pos > 0 && char_at_builder(path, end_pos - 1) == '/' {
+    end_pos = end_pos - 1
+  }
+  if end_pos == 0 {
+    return ""
+  }
+  let mut start = end_pos
+  while start > 0 && char_at_builder(path, start - 1) != '/' {
+    start = start - 1
+  }
+  substr_builder(path, start, end_pos)
+}
+
 ///|
 fn escape_html_builder(s : String) -> String {
   let buf = StringBuilder::new()
@@ -565,6 +580,14 @@ fn collection_page_url(collection_name : String, slug : String) -> String {
 
 fn collection_index_url(collection_name : String) -> String {
   "/" + collection_name + "/"
+}
+
+pub fn collection_index_lookup_alias(collection : @collections.CollectionDef) -> String? {
+  let dir_name = path_basename_builder(collection.content_dir)
+  if dir_name.length() == 0 || dir_name == collection.name {
+    return None
+  }
+  Some(dir_name)
 }
 
 fn collection_index_page_url(collection_name : String, page_number : Int) -> String {
@@ -1731,6 +1754,23 @@ fn root_page_output_path(config : BuildConfig) -> String {
   config.output_dir + "/index.html"
 }
 
+fn register_collection_index_aliases(
+  collection_sources : Array[CollectionSources],
+  page_index : Map[String, String]
+) -> Unit {
+  let mut i = 0
+  while i < collection_sources.length() {
+    let coll = collection_sources[i]
+    match collection_index_lookup_alias(coll.definition) {
+      Some(lookup_key) => {
+        page_index.set(lookup_key, collection_index_url(coll.definition.name))
+      }
+      None => ()
+    }
+    i = i + 1
+  }
+}
+
 fn is_root_page_for_site(site : @config.SiteConfig, slug : String) -> Bool {
   match site.root_page {
     Some(root_slug) => root_slug == slug
@@ -2076,6 +2116,7 @@ pub fn build(config : BuildConfig, cache_store : @cache.CacheStore) -> BuildResu
     }
     i = i + 1
   }
+  register_collection_index_aliases(collection_sources, page_index)
 
   let tags_field = tags_field_name(config.site)
   let tag_catalog = collect_tag_catalog(collection_sources, tags_field)
@@ -2761,6 +2802,7 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
     }
     i = i + 1
   }
+  register_collection_index_aliases(collection_sources, page_index)
 
   let tags_field = tags_field_name(config.site)
   let tag_catalog = collect_tag_catalog(collection_sources, tags_field)
