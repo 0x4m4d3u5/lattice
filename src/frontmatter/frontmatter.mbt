@@ -74,6 +74,17 @@ fn starts_with_at(s : String, pos : Int, prefix : String) -> Bool {
   true
 }
 
+fn contains_char(s : String, needle : Char) -> Bool {
+  let mut i = 0
+  while i < s.length() {
+    if char_at(s, i) == needle {
+      return true
+    }
+    i = i + 1
+  }
+  false
+}
+
 fn next_newline(s : String, from : Int) -> Int {
   let n = s.length()
   let mut i = from
@@ -248,6 +259,23 @@ fn parse_array_at(s : String, pos : Int) -> Result[(FrontmatterValue, Int), Stri
   Err("unterminated array literal")
 }
 
+fn parse_value_strict(s : String) -> Result[FrontmatterValue, String] {
+  match parse_value_at(s, 0) {
+    Err(e) => Err(e)
+    Ok((value, next)) => {
+      let mut i = next
+      while i < s.length() && (char_at(s, i) == ' ' || char_at(s, i) == '\t') {
+        i = i + 1
+      }
+      if i != s.length() {
+        Err("unexpected trailing input")
+      } else {
+        Ok(value)
+      }
+    }
+  }
+}
+
 /// Parse one `key = value` assignment line. Caller must ensure non-empty, non-comment.
 fn parse_assignment(line : String) -> Result[(String, FrontmatterValue), String] {
   let n = line.length()
@@ -268,9 +296,73 @@ fn parse_assignment(line : String) -> Result[(String, FrontmatterValue), String]
     return Err("empty key")
   }
   let val_str = trim_ws(substr(line, eq + 1, n))
-  match parse_value_at(val_str, 0) {
-    Ok((val, _)) => Ok((key, val))
+  match parse_value_strict(val_str) {
+    Ok(val) => Ok((key, val))
     Err(e) => Err("value error for '" + key + "': " + e)
+  }
+}
+
+fn parse_yaml_value(raw : String) -> FrontmatterValue {
+  let value = trim_ws(raw)
+  if value.length() >= 2 &&
+    char_at(value, 0) == '\'' &&
+    char_at(value, value.length() - 1) == '\'' {
+    return FStr(substr(value, 1, value.length() - 1))
+  }
+  match parse_value_strict(value) {
+    Ok(parsed) => parsed
+    Err(_) => FStr(value)
+  }
+}
+
+fn parse_yaml_assignment(
+  lines : Array[String],
+  line_index : Int
+) -> Result[(String, FrontmatterValue, Int), String] {
+  let line = trim_ws(lines[line_index])
+  let mut colon = -1
+  let mut i = 0
+  while i < line.length() {
+    if char_at(line, i) == ':' {
+      colon = i
+      break
+    }
+    i = i + 1
+  }
+  if colon < 0 {
+    return Err("no '=' or ':' found in line")
+  }
+  let key = trim_ws(substr(line, 0, colon))
+  if key.length() == 0 {
+    return Err("empty key")
+  }
+  let value = trim_ws(substr(line, colon + 1, line.length()))
+  if value.length() > 0 {
+    return Ok((key, parse_yaml_value(value), line_index + 1))
+  }
+
+  let items : Array[FrontmatterValue] = []
+  let mut j = line_index + 1
+  while j < lines.length() {
+    let raw = trim_ws(lines[j])
+    if raw.length() == 0 || char_at(raw, 0) == '#' {
+      j = j + 1
+      continue
+    }
+    if char_at(raw, 0) == '-' &&
+      (raw.length() == 1 || char_at(raw, 1) == ' ' || char_at(raw, 1) == '\t') {
+      let item_raw = trim_ws(substr(raw, 1, raw.length()))
+      items.push(parse_yaml_value(item_raw))
+      j = j + 1
+      continue
+    }
+    break
+  }
+
+  if items.length() > 0 {
+    Ok((key, FArray(items), j))
+  } else {
+    Ok((key, FStr(""), line_index + 1))
   }
 }
 
@@ -311,12 +403,24 @@ pub fn parse(content : String) -> Result[Frontmatter, String] {
       while j < lines.length() {
         let l = trim_ws(lines[j])
         if l.length() > 0 && char_at(l, 0) != '#' {
-          match parse_assignment(l) {
-            Ok((key, val)) => fields.set(key, val)
-            Err(msg) => return Err("line " + (j + 1).to_string() + ": " + msg)
+          if contains_char(l, '=') {
+            match parse_assignment(l) {
+              Ok((key, val)) => fields.set(key, val)
+              Err(msg) => return Err("line " + (j + 1).to_string() + ": " + msg)
+            }
+            j = j + 1
+          } else {
+            match parse_yaml_assignment(lines, j) {
+              Ok((key, val, next_j)) => {
+                fields.set(key, val)
+                j = next_j
+              }
+              Err(msg) => return Err("line " + (j + 1).to_string() + ": " + msg)
+            }
           }
+        } else {
+          j = j + 1
         }
-        j = j + 1
       }
       return Ok({ fields, body: substr(content, body_start, n) })
     }

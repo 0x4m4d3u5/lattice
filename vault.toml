@@ -1,0 +1,6 @@
+title = Research Vault
+base_url = https://research.local
+output_dir = /home/kurisu/code/lattice/_vault_dist
+description = Rendered Obsidian research vault
+collections_file = /home/kurisu/code/lattice/vault.collections.cfg
+search_index_file = search-index.json

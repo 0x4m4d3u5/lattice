@@ -1358,16 +1358,14 @@ fn process_document(
     let mut i = 0
     while i < link_errors.length() {
       println(
-        "[error] " +
+        "[warn] " +
         context +
-        ": broken wikilink [[" +
+        ": unresolved wikilink [[" +
         link_errors[i].link.target +
-        "]]: " +
-        link_errors[i].message,
+        "]] rendered as plain text",
       )
       i = i + 1
     }
-    return None
   }
   // Step 4: build wikilink map for the renderer
   let excerpt = extract_excerpt_builder(fm.body)
