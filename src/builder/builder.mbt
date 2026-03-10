@@ -15,8 +15,10 @@
 pub(all) struct BuildConfig {
   content_dir : String
   output_dir : String
+  config_path : String
   site : @config.SiteConfig
   collections_path : String?
+  force_rebuild : Bool
 }
 
 ///|
@@ -26,6 +28,15 @@ pub(all) struct SourceFile {
   filename : String
   slug : String
   content : String
+  fingerprint : String
+  stamp : Int64
+  link_targets : Array[String]
+}
+
+pub(all) struct BuildResult {
+  errors : Int
+  rebuilt_pages : Int
+  unchanged_pages : Int
 }
 
 priv struct CollectionSources {
@@ -58,6 +69,19 @@ priv struct TagCatalog {
 priv struct ProjectLayout {
   collections : Array[@collections.CollectionDef]
   data_schemas : Map[String, @data.DataSchema]
+}
+
+priv struct IncrementalState {
+  force_full_rebuild : Bool
+  previous_entries : Map[String, @manifest.ManifestEntry]
+  changed_sources : Map[String, Bool]
+}
+
+///|
+/// A page that links to another page — used to build the backlinks index.
+priv struct BacklinkRef {
+  url : String
+  title : String
 }
 
 // ── pipeline helpers ──────────────────────────────────────────────────────────
@@ -97,6 +121,95 @@ fn build_wikilink_map(
     i = i + 1
   }
   m
+}
+
+fn extract_link_targets(source : String, slug : String) -> Array[String] {
+  let unique : Map[String, Bool] = Map::new()
+  let targets : Array[String] = []
+  let body = match @frontmatter.parse(source) {
+    Ok(fm) => fm.body
+    Err(_) => source
+  }
+  let raw_links = @wikilink.extract(body, slug)
+  let mut i = 0
+  while i < raw_links.length() {
+    let target = raw_links[i].target
+    if not(unique.contains(target)) {
+      unique.set(target, true)
+      targets.push(target)
+    }
+    i = i + 1
+  }
+  targets
+}
+
+///|
+/// Pre-extract wikilink targets from every source to build an inverted index:
+///   target_slug → list of pages that link to it.
+///
+/// This runs after the page_index is complete so target existence can be
+/// checked, and before pass 2 so each page render has backlinks available.
+fn build_backlink_index(
+  collection_sources : Array[CollectionSources],
+  page_index : Map[String, String]
+) -> Map[String, Array[BacklinkRef]] {
+  let index : Map[String, Array[BacklinkRef]] = Map::new()
+  let mut i = 0
+  while i < collection_sources.length() {
+    let coll = collection_sources[i]
+    let mut j = 0
+    while j < coll.sources.length() {
+      let src = coll.sources[j]
+      let source_url = match page_index.get(src.slug) {
+        Some(url) => url
+        None => ""
+      }
+      let (source_title, body) = match @frontmatter.parse(src.content) {
+        Ok(fm) => (extract_title(fm), fm.body)
+        Err(_) => (src.slug, src.content)
+      }
+      let raw_links = @wikilink.extract(body, src.slug)
+      let mut k = 0
+      while k < raw_links.length() {
+        let target = raw_links[k].target
+        if page_index.contains(target) {
+          let ref_entry : BacklinkRef = {
+            url: source_url,
+            title: source_title,
+          }
+          match index.get(target) {
+            Some(existing) => existing.push(ref_entry)
+            None => index.set(target, [ref_entry])
+          }
+        }
+        k = k + 1
+      }
+      j = j + 1
+    }
+    i = i + 1
+  }
+  index
+}
+
+///|
+/// Render an HTML backlinks section from a list of referring pages.
+/// Returns an empty string when there are no backlinks.
+fn render_backlinks_html(backlinks : Array[BacklinkRef]) -> String {
+  if backlinks.length() == 0 {
+    return ""
+  }
+  let buf = StringBuilder::new()
+  buf.write_string("<section class=\"backlinks\">\n<h2>Backlinks</h2>\n<ul>\n")
+  let mut i = 0
+  while i < backlinks.length() {
+    let bl = backlinks[i]
+    buf.write_string("<li>")
+    buf.write_string(@html.anchor(bl.url, bl.title))
+    buf.write_string("</li>\n")
+    i = i + 1
+  }
+  buf.write_string("</ul>\n</section>\n")
+  buf.to_string()
 }
 
 ///|
@@ -1187,7 +1300,9 @@ fn process_document(
   data_store : @data.DataStore,
   page_template : @template.Template?,
   nav_links_html : String,
-  custom_css : String
+  custom_css : String,
+  backlinks_html : String,
+  render_page_html : Bool
 ) -> ProcessedDocument? {
   // Step 1: parse frontmatter
   let fm = match @frontmatter.parse(source) {
@@ -1255,6 +1370,22 @@ fn process_document(
     return None
   }
   // Step 4: build wikilink map for the renderer
+  let excerpt = extract_excerpt_builder(fm.body)
+  let title = extract_title(fm)
+  let description_value = extract_description(fm)
+  let date_value = extract_date(fm)
+  if not(render_page_html) {
+    return Some({
+      html: "",
+      title,
+      url,
+      description: description_value,
+      date: date_value,
+      excerpt,
+      resolved_links: resolved,
+      tags: page_tags,
+    })
+  }
   let wl_map = build_wikilink_map(resolved)
   // Step 5: render markdown body to HTML fragment
   let markdown_result = @markdown.render_with_diagnostics(fm.body, wl_map)
@@ -1272,12 +1403,8 @@ fn process_document(
     return None
   }
   let body_html = markdown_result.html + @tags.render_page_tags(page_tags)
-  let excerpt = extract_excerpt_builder(fm.body)
   // Step 6: emit the complete HTML5 page
-  let title = extract_title(fm)
   let full_title = page_title_builder(title, site.title)
-  let description_value = extract_description(fm)
-  let date_value = extract_date(fm)
   let description_text = match description_value {
     Some(v) => v
     None => ""
@@ -1301,6 +1428,7 @@ fn process_document(
         "",
         "",
       )
+      slots.set(@template.Backlinks, backlinks_html)
       match @template.render_template_with_data(tpl, slots, data_store) {
         Ok(html) => html
         Err(e) => {
@@ -1316,7 +1444,12 @@ fn process_document(
         lang: "en",
         stylesheet: Some(absolute_url_builder(site.base_url, "/style.css")),
       }
-      @html.render_page(meta, body_html)
+      let page_body = if backlinks_html.length() > 0 {
+        body_html + backlinks_html
+      } else {
+        body_html
+      }
+      @html.render_page(meta, page_body)
     }
   }
   Some({
@@ -1349,7 +1482,8 @@ fn process_document_for_lint(
   data_store : @data.DataStore,
   page_template : @template.Template?,
   nav_links_html : String,
-  custom_css : String
+  custom_css : String,
+  backlinks_html : String
 ) -> LintDocOutcome {
   let violations : Array[@lint.LintViolation] = []
   let fm = match @frontmatter.parse(source) {
@@ -1488,6 +1622,7 @@ fn process_document_for_lint(
         "",
         "",
       )
+      slots.set(@template.Backlinks, backlinks_html)
       match @template.render_template_with_data(tpl, slots, data_store) {
         Ok(html) => html
         Err(e) => {
@@ -1509,7 +1644,12 @@ fn process_document_for_lint(
         lang: "en",
         stylesheet: Some(absolute_url_builder(site.base_url, "/style.css")),
       }
-      @html.render_page(meta, body_html)
+      let page_body = if backlinks_html.length() > 0 {
+        body_html + backlinks_html
+      } else {
+        body_html
+      }
+      @html.render_page(meta, page_body)
     }
   }
   {
@@ -1545,7 +1685,15 @@ pub fn collect_sources(content_dir : String) -> Array[SourceFile] raise @fs.IOEr
       let path = content_dir + "/" + filename
       let content = @fs.read_file_to_string(path)
       let file_slug = @slug.filename_to_slug(filename)
-      sources.push({ path, filename, slug: file_slug, content })
+      sources.push({
+        path,
+        filename,
+        slug: file_slug,
+        content,
+        fingerprint: @cache.fingerprint_for_source(path, content),
+        stamp: @watch.file_stamp(path),
+        link_targets: extract_link_targets(content, file_slug),
+      })
     }
     i = i + 1
   }
@@ -1573,23 +1721,263 @@ fn ensure_parent_dirs_for_file(path : String) -> Unit raise @fs.IOError {
   }
 }
 
+fn manifest_path_for_build(config : BuildConfig) -> String {
+  config.output_dir + "/.lattice-manifest.json"
+}
+
+fn page_output_path(config : BuildConfig, collection_name : String, slug : String) -> String {
+  config.output_dir + "/" + collection_name + "/" + slug + "/index.html"
+}
+
+fn dependency_roots_for_build(config : BuildConfig) -> Array[String] {
+  let roots : Array[String] = [config.config_path]
+  match config.collections_path {
+    Some(path) => roots.push(path)
+    None => ()
+  }
+  roots.push(templates_dir_for_build(config))
+  roots.push(data_dir_for_build(config))
+  roots
+}
+
+fn load_manifest(config : BuildConfig) -> @manifest.ManifestFile? {
+  let path = manifest_path_for_build(config)
+  if not(@fs.path_exists(path)) {
+    return None
+  }
+  let source = try {
+    @fs.read_file_to_string(path)
+  } catch {
+    @fs.IOError(msg) => {
+      println("[warn] incremental manifest read failed: " + msg)
+      return None
+    }
+  }
+  try {
+    Some(@manifest.parse(source))
+  } catch {
+    @manifest.ParseError(msg) => {
+      println("[warn] incremental manifest parse failed: " + msg)
+      None
+    }
+  }
+}
+
+fn dependency_manifest_entries(
+  config : BuildConfig
+) -> Result[Array[@manifest.ManifestEntry], String] {
+  let snapshot = try {
+    @watch.take_snapshot(dependency_roots_for_build(config))
+  } catch {
+    @watch.IOError(msg) => return Err(msg)
+  }
+  let entries : Array[@manifest.ManifestEntry] = []
+  let mut i = 0
+  while i < snapshot.length() {
+    entries.push({
+      src: snapshot[i].path,
+      mtime: snapshot[i].stamp,
+      out: "",
+      targets: [],
+    })
+    i = i + 1
+  }
+  Ok(entries)
+}
+
+fn build_incremental_state(
+  config : BuildConfig,
+  collection_sources : Array[CollectionSources]
+) -> IncrementalState {
+  let previous_entries : Map[String, @manifest.ManifestEntry] = Map::new()
+  let changed_sources : Map[String, Bool] = Map::new()
+  if config.force_rebuild {
+    return { force_full_rebuild: true, previous_entries, changed_sources }
+  }
+
+  let manifest = match load_manifest(config) {
+    Some(file) => file
+    None => return { force_full_rebuild: true, previous_entries, changed_sources }
+  }
+
+  let mut i = 0
+  while i < manifest.entries.length() {
+    previous_entries.set(manifest.entries[i].src, manifest.entries[i])
+    i = i + 1
+  }
+
+  let dependency_entries = match dependency_manifest_entries(config) {
+    Ok(entries) => entries
+    Err(msg) => {
+      println("[warn] incremental dependency snapshot failed: " + msg)
+      return { force_full_rebuild: true, previous_entries, changed_sources }
+    }
+  }
+
+  let current_dependencies : Map[String, Bool] = Map::new()
+  i = 0
+  while i < dependency_entries.length() {
+    let entry = dependency_entries[i]
+    current_dependencies.set(entry.src, true)
+    match previous_entries.get(entry.src) {
+      Some(previous) => {
+        if previous.mtime != entry.mtime || previous.out != "" {
+          return { force_full_rebuild: true, previous_entries, changed_sources }
+        }
+      }
+      None => return { force_full_rebuild: true, previous_entries, changed_sources }
+    }
+    i = i + 1
+  }
+
+  let mut found_previous_dependency = false
+  i = 0
+  while i < manifest.entries.length() {
+    let entry = manifest.entries[i]
+    if entry.out == "" {
+      found_previous_dependency = true
+      if not(current_dependencies.contains(entry.src)) {
+        return { force_full_rebuild: true, previous_entries, changed_sources }
+      }
+    }
+    i = i + 1
+  }
+  if not(found_previous_dependency) {
+    return { force_full_rebuild: true, previous_entries, changed_sources }
+  }
+
+  i = 0
+  while i < collection_sources.length() {
+    let coll = collection_sources[i]
+    let mut j = 0
+    while j < coll.sources.length() {
+      let src = coll.sources[j]
+      let out = page_output_path(config, coll.definition.name, src.slug)
+      let changed = match previous_entries.get(src.path) {
+        Some(previous) => previous.mtime != src.stamp || previous.out != out || not(@fs.path_exists(out))
+        None => true
+      }
+      if changed {
+        changed_sources.set(src.path, true)
+      }
+      j = j + 1
+    }
+    i = i + 1
+  }
+
+  { force_full_rebuild: false, previous_entries, changed_sources }
+}
+
+fn source_manifest_entries(
+  config : BuildConfig,
+  collection_sources : Array[CollectionSources]
+) -> Array[@manifest.ManifestEntry] {
+  let entries : Array[@manifest.ManifestEntry] = []
+  let mut i = 0
+  while i < collection_sources.length() {
+    let coll = collection_sources[i]
+    let mut j = 0
+    while j < coll.sources.length() {
+      let src = coll.sources[j]
+      entries.push({
+        src: src.path,
+        mtime: src.stamp,
+        out: page_output_path(config, coll.definition.name, src.slug),
+        targets: src.link_targets,
+      })
+      j = j + 1
+    }
+    i = i + 1
+  }
+  entries
+}
+
+fn write_manifest(
+  config : BuildConfig,
+  collection_sources : Array[CollectionSources]
+) -> Result[Unit, String] {
+  let dependency_entries = match dependency_manifest_entries(config) {
+    Ok(entries) => entries
+    Err(msg) => return Err(msg)
+  }
+  let entries = source_manifest_entries(config, collection_sources)
+  let merged : Array[@manifest.ManifestEntry] = []
+  let mut i = 0
+  while i < dependency_entries.length() {
+    merged.push(dependency_entries[i])
+    i = i + 1
+  }
+  i = 0
+  while i < entries.length() {
+    merged.push(entries[i])
+    i = i + 1
+  }
+  let manifest_path = manifest_path_for_build(config)
+  try {
+    ensure_parent_dirs_for_file(manifest_path)
+    @fs.write_string_to_file(
+      manifest_path,
+      @manifest.render({ version: 1, entries: merged }),
+    )
+    Ok(())
+  } catch {
+    @fs.IOError(msg) => Err(msg)
+  }
+}
+
+fn mark_backlink_targets_changed(
+  incremental : IncrementalState,
+  collection_sources : Array[CollectionSources]
+) -> Map[String, Bool] {
+  let affected : Map[String, Bool] = Map::new()
+  let mut i = 0
+  while i < collection_sources.length() {
+    let coll = collection_sources[i]
+    let mut j = 0
+    while j < coll.sources.length() {
+      let src = coll.sources[j]
+      if incremental.changed_sources.contains(src.path) {
+        affected.set(src.slug, true)
+        let mut k = 0
+        while k < src.link_targets.length() {
+          affected.set(src.link_targets[k], true)
+          k = k + 1
+        }
+        match incremental.previous_entries.get(src.path) {
+          Some(previous) => {
+            k = 0
+            while k < previous.targets.length() {
+              affected.set(previous.targets[k], true)
+              k = k + 1
+            }
+          }
+          None => ()
+        }
+      }
+      j = j + 1
+    }
+    i = i + 1
+  }
+  affected
+}
+
 ///|
 /// Build the full site.
 ///
-/// Returns the number of pages that failed to render (0 = clean build).
+/// Returns the build summary (0 errors = clean build).
 ///
 /// Pass 1: read the content directory, compute slugs, build the page index.
 /// Pass 2: run each source through the pipeline, write HTML to output_dir.
 ///
 /// Each page is written to `output_dir/<slug>/index.html` for clean URLs.
-pub fn build(config : BuildConfig) -> Int {
+pub fn build(config : BuildConfig, cache_store : @cache.CacheStore) -> BuildResult {
   println("[lattice] building " + config.content_dir + " → " + config.output_dir)
 
   let layout = match load_project_layout(config) {
     Ok(parsed) => parsed
     Err(msg) => {
       println("[error] collections: " + msg)
-      return 1
+      return { errors: 1, rebuilt_pages: 0, unchanged_pages: 0 }
     }
   }
   let collections = layout.collections
@@ -1598,7 +1986,7 @@ pub fn build(config : BuildConfig) -> Int {
     Ok(t) => t
     Err(msg) => {
       println("[error] templates: " + msg)
-      return 1
+      return { errors: 1, rebuilt_pages: 0, unchanged_pages: 0 }
     }
   }
   let nav_links_html = build_nav_links_html(collections)
@@ -1607,7 +1995,7 @@ pub fn build(config : BuildConfig) -> Int {
     Ok(store) => store
     Err(msg) => {
       println("[error] data: " + msg)
-      return 1
+      return { errors: 1, rebuilt_pages: 0, unchanged_pages: 0 }
     }
   }
   println("[lattice] loaded data files from " + data_dir_for_build(config))
@@ -1630,7 +2018,7 @@ pub fn build(config : BuildConfig) -> Int {
           "): " +
           msg,
         )
-        return 1
+        return { errors: 1, rebuilt_pages: 0, unchanged_pages: 0 }
       }
     }
     source_count = source_count + sources.length()
@@ -1659,7 +2047,7 @@ pub fn build(config : BuildConfig) -> Int {
             coll.definition.name +
             "'",
           )
-          return 1
+          return { errors: 1, rebuilt_pages: 0, unchanged_pages: 0 }
         }
         None => {
           slug_owner.set(source.slug, coll.definition.name)
@@ -1678,6 +2066,10 @@ pub fn build(config : BuildConfig) -> Int {
   let tag_catalog = collect_tag_catalog(collection_sources, tags_field)
   let known_tags = tag_catalog.name_by_slug
   let page_size = page_size_for_site(config.site)
+  let backlink_index = build_backlink_index(collection_sources, page_index)
+  let incremental = build_incremental_state(config, collection_sources)
+  let backlink_affected = mark_backlink_targets_changed(incremental, collection_sources)
+  let next_cache_store = @cache.empty(config.output_dir)
 
   // Ensure output directory exists
   let dir_ok = try {
@@ -1690,7 +2082,7 @@ pub fn build(config : BuildConfig) -> Int {
     }
   }
   if not(dir_ok) {
-    return 1
+    return { errors: 1, rebuilt_pages: 0, unchanged_pages: 0 }
   }
 
   // Write default CSS (once, if not already present)
@@ -1712,7 +2104,8 @@ pub fn build(config : BuildConfig) -> Int {
 
   // Pass 2: render and write each page
   let mut error_count = 0
-  let mut written = 0
+  let mut rebuilt = 0
+  let mut unchanged = 0
   let graph_pages : Array[@graph.GraphPage] = []
   let search_entries : Array[@search.SearchEntry] = []
   let tag_pages_by_slug : Map[String, Array[@tags.TaggedPage]] = Map::new()
@@ -1748,6 +2141,23 @@ pub fn build(config : BuildConfig) -> Int {
       let src = coll.sources[j]
       let page_url = collection_page_url(coll.definition.name, src.slug)
       let page_context = coll.definition.name + "/" + src.slug
+      let out_path = page_output_path(config, coll.definition.name, src.slug)
+      let cache_hit = @cache.should_skip(
+        cache_store,
+        src.slug,
+        src.fingerprint,
+        out_path,
+        config.force_rebuild,
+      )
+      let should_rebuild =
+        incremental.force_full_rebuild ||
+        incremental.changed_sources.contains(src.path) ||
+        backlink_affected.contains(src.slug) ||
+        not(cache_hit)
+      let page_backlinks_html = match backlink_index.get(src.slug) {
+        Some(refs) => render_backlinks_html(refs)
+        None => ""
+      }
       match process_document(
         src.content,
         src.slug,
@@ -1762,27 +2172,38 @@ pub fn build(config : BuildConfig) -> Int {
         templates.page,
         nav_links_html,
         custom_css,
+        page_backlinks_html,
+        should_rebuild,
       ) {
         None => {
           error_count = error_count + 1
         }
         Some(doc) => {
-          let page_dir = collection_root + "/" + src.slug
-          let write_result = try {
-            ensure_dir(page_dir)
-            let out_path = page_dir + "/index.html"
-            @fs.write_string_to_file(out_path, doc.html)
-            Some(out_path)
-          } catch {
-            @fs.IOError(msg) => {
-              println("[error] " + page_context + ": write failed: " + msg)
-              None
+          let write_result = if should_rebuild {
+            let page_dir = collection_root + "/" + src.slug
+            try {
+              ensure_dir(page_dir)
+              @fs.write_string_to_file(out_path, doc.html)
+              Some(out_path)
+            } catch {
+              @fs.IOError(msg) => {
+                println("[error] " + page_context + ": write failed: " + msg)
+                None
+              }
             }
+          } else {
+            Some(out_path)
           }
           match write_result {
-            Some(out_path) => {
-              println("[lattice] wrote " + out_path)
-              written = written + 1
+            Some(_) => {
+              if should_rebuild {
+                println("[build] " + page_context)
+                rebuilt = rebuilt + 1
+              } else {
+                println("[skip] " + page_context)
+                unchanged = unchanged + 1
+              }
+              @cache.remember(next_cache_store, src.slug, src.fingerprint)
               let page : @graph.GraphPage = {
                 slug: src.slug,
                 title: doc.title,
@@ -2141,6 +2562,23 @@ pub fn build(config : BuildConfig) -> Int {
       }
     }
     if error_count == 0 {
+      let graph_write_ok = try {
+        let graph_json = @graph.render_graph_json(graph_pages)
+        let out_path = config.output_dir + "/graph.json"
+        @fs.write_string_to_file(out_path, graph_json)
+        println("[lattice] wrote " + out_path)
+        true
+      } catch {
+        @fs.IOError(msg) => {
+          println("[error] graph.json: write failed: " + msg)
+          false
+        }
+      }
+      if not(graph_write_ok) {
+        error_count = error_count + 1
+      }
+    }
+    if error_count == 0 {
       match @assets.copy_static(
         config.content_dir,
         config.output_dir,
@@ -2157,6 +2595,24 @@ pub fn build(config : BuildConfig) -> Int {
         }
       }
     }
+    if error_count == 0 {
+      match write_manifest(config, collection_sources) {
+        Ok(_) => ()
+        Err(msg) => {
+          println("[error] manifest: write failed: " + msg)
+          error_count = error_count + 1
+        }
+      }
+    }
+    if error_count == 0 {
+      match @cache.save(next_cache_store) {
+        Ok(_) => ()
+        Err(err) => {
+          println("[error] cache: " + @cache.error_text(err))
+          error_count = error_count + 1
+        }
+      }
+    }
   } else {
     println(
       "[warn] skipped collection feeds/indexes, tags, sitemap, and search index generation due to prior build errors",
@@ -2165,12 +2621,15 @@ pub fn build(config : BuildConfig) -> Int {
 
   println(
     "[lattice] " +
-    written.to_string() +
-    " pages written, " +
+    "rebuilt " +
+    rebuilt.to_string() +
+    " pages (" +
+    unchanged.to_string() +
+    " unchanged), " +
     error_count.to_string() +
     " errors",
   )
-  error_count
+  { errors: error_count, rebuilt_pages: rebuilt, unchanged_pages: unchanged }
 }
 
 ///|
@@ -2288,6 +2747,7 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
   let tag_catalog = collect_tag_catalog(collection_sources, tags_field)
   let known_tags = tag_catalog.name_by_slug
   let page_size = page_size_for_site(config.site)
+  let backlink_index = build_backlink_index(collection_sources, page_index)
 
   let graph_pages : Array[@graph.GraphPage] = []
   let tag_pages_by_slug : Map[String, Array[@tags.TaggedPage]] = Map::new()
@@ -2300,6 +2760,10 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
     while j < coll.sources.length() {
       let src = coll.sources[j]
       let page_url = collection_page_url(coll.definition.name, src.slug)
+      let lint_backlinks_html = match backlink_index.get(src.slug) {
+        Some(refs) => render_backlinks_html(refs)
+        None => ""
+      }
       let lint_outcome = process_document_for_lint(
         src.content,
         src.path,
@@ -2314,6 +2778,7 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
         templates.page,
         nav_links_html,
         custom_css,
+        lint_backlinks_html,
       )
       let mut k = 0
       while k < lint_outcome.violations.length() {

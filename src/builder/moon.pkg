@@ -19,5 +19,8 @@ import {
   "kurisu/lattice/src/data" @data,
   "kurisu/lattice/src/shortcode" @shortcode,
   "kurisu/lattice/src/highlight" @highlight,
+  "kurisu/lattice/src/cache" @cache,
+  "kurisu/lattice/src/manifest" @manifest,
+  "kurisu/lattice/src/watch" @watch,
   "moonbitlang/x/fs" @fs,
 }

@@ -3,6 +3,7 @@
 ///
 /// Usage:
 ///   lattice [content-dir] [output-dir] [--config path] [--collections path] [--check]
+///           [--force] [--watch] [--watch-interval ms] [--help]
 ///
 /// Defaults:
 ///   content-dir → ./content
@@ -14,6 +15,22 @@
 ///   2. Render each page through the full pipeline; write HTML to output-dir.
 ///
 /// Exit codes: 0 = clean build, 1 = one or more errors.
+
+pub(all) struct CliOptions {
+  content_dir : String
+  output_dir : String?
+  config_path : String?
+  collections_path : String?
+  check_mode : Bool
+  force_rebuild : Bool
+  watch_mode : Bool
+  watch_interval_ms : Int
+}
+
+priv struct CliState {
+  build_config : @builder.BuildConfig
+  watch_roots : Array[String]
+}
 
 fn char_at_main(s : String, i : Int) -> Char {
   s[i].to_int().unsafe_to_char()
@@ -45,18 +62,78 @@ fn substr_main(s : String, start : Int, end : Int) -> String {
   buf.to_string()
 }
 
-fn main {
-  let args = @sys.get_cli_args()
+fn parse_positive_int_main(value : String) -> Int? {
+  if value.length() == 0 {
+    return None
+  }
+  let mut parsed = 0
+  let mut i = 0
+  while i < value.length() {
+    let c = char_at_main(value, i)
+    if c < '0' || c > '9' {
+      return None
+    }
+    parsed = parsed * 10 + (c.to_int() - '0'.to_int())
+    i = i + 1
+  }
+  if parsed <= 0 {
+    return None
+  }
+  Some(parsed)
+}
+
+fn print_help() -> Unit {
+  println("Usage:")
+  println(
+    "  lattice [content-dir] [output-dir] [--config path] [--collections path] [--check]",
+  )
+  println("          [--force] [--watch] [--watch-interval ms] [--help]")
+  println("")
+  println("Defaults:")
+  println("  content-dir         ./content")
+  println("  config file         <content-dir>/lattice.conf")
+  println("  output-dir          config.output_dir or ./dist")
+  println("")
+  println("Flags:")
+  println("  --config <path>         Override site config file")
+  println("  --collections <path>    Override collections config file")
+  println("  --check                 Run validation/lint pipeline only")
+  println("  --force                 Ignore the incremental cache and rebuild everything")
+  println("  --watch                 Rebuild on file changes with polling")
+  println("  --watch-interval <ms>   Polling interval in milliseconds (default: 500)")
+  println("  --help                  Show this help text")
+  println("")
+  println("Local dev:")
+  println("  Pair --watch with a static file server such as simple-http-server.")
+}
+
+fn parse_cli_options(args : Array[String]) -> CliOptions {
 
   // args[0] is the program name
   let positionals : Array[String] = []
   let mut config_path : String? = None
   let mut collections_path : String? = None
   let mut check_mode = false
+  let mut force_rebuild = false
+  let mut watch_mode = false
+  let mut watch_interval_ms = 500
   let mut i = 1
   while i < args.length() {
     let arg = args[i]
-    if arg == "--config" {
+    if arg == "--help" || arg == "-h" {
+      print_help()
+      @sys.exit(0)
+      return {
+        content_dir: "./content",
+        output_dir: None,
+        config_path: None,
+        collections_path: None,
+        check_mode: false,
+        force_rebuild: false,
+        watch_mode: false,
+        watch_interval_ms: 500,
+      }
+    } else if arg == "--config" {
       if i + 1 >= args.length() {
         println("[error] missing value for --config")
         @sys.exit(1)
@@ -89,20 +166,105 @@ fn main {
     } else if arg == "--check" {
       check_mode = true
       i = i + 1
+    } else if arg == "--force" {
+      force_rebuild = true
+      i = i + 1
+    } else if arg == "--watch" {
+      watch_mode = true
+      i = i + 1
+    } else if arg == "--watch-interval" {
+      if i + 1 >= args.length() {
+        println("[error] missing value for --watch-interval")
+        @sys.exit(1)
+      }
+      match parse_positive_int_main(args[i + 1]) {
+        Some(parsed) => watch_interval_ms = parsed
+        None => {
+          println("[error] invalid value for --watch-interval: must be a positive integer")
+          @sys.exit(1)
+        }
+      }
+      i = i + 2
+    } else if starts_with_main(arg, "--watch-interval=") {
+      let value = substr_main(arg, 17, arg.length())
+      match parse_positive_int_main(value) {
+        Some(parsed) => watch_interval_ms = parsed
+        None => {
+          println("[error] invalid value for --watch-interval: must be a positive integer")
+          @sys.exit(1)
+        }
+      }
+      i = i + 1
+    } else if starts_with_main(arg, "--") {
+      println("[error] unknown option: " + arg)
+      println("[hint] run with --help to see supported flags")
+      @sys.exit(1)
     } else {
       positionals.push(arg)
       i = i + 1
     }
   }
 
-  let content_dir = if positionals.length() > 0 {
-    positionals[0]
-  } else {
-    "./content"
+  {
+    content_dir: if positionals.length() > 0 {
+      positionals[0]
+    } else {
+      "./content"
+    },
+    output_dir: if positionals.length() > 1 { Some(positionals[1]) } else { None },
+    config_path,
+    collections_path,
+    check_mode,
+    force_rebuild,
+    watch_mode,
+    watch_interval_ms,
   }
-  let effective_config_path = match config_path {
+}
+
+fn load_collections_for_watch(
+  content_dir : String,
+  collections_path : String?
+) -> Result[Array[@collections.CollectionDef], String] {
+  match collections_path {
+    None => Ok([@collections.default_posts_collection(content_dir)])
+    Some(path) => {
+      let source = try {
+        @fs.read_file_to_string(path)
+      } catch {
+        @fs.IOError(msg) => return Err("cannot read collections file " + path + ": " + msg)
+      }
+      match @collections.parse(source) {
+        Ok(parsed) => Ok(parsed.definitions)
+        Err(@collections.InvalidLine(line, msg)) => Err(path + ":" + line.to_string() + ": " + msg)
+        Err(@collections.MissingRequiredField(collection_name, field)) => {
+          Err(
+            path +
+            ": missing required field '" +
+            field +
+            "' in collection '" +
+            collection_name +
+            "'",
+          )
+        }
+        Err(@collections.DuplicateCollection(name)) => {
+          Err(path + ": duplicate collection '" + name + "'")
+        }
+        Err(@collections.DuplicateDataSchema(name)) => {
+          Err(path + ": duplicate data schema '" + name + "'")
+        }
+        Err(@collections.InvalidSchema(name, msg)) => {
+          Err(path + ": invalid schema for collection '" + name + "': " + msg)
+        }
+        Err(@collections.EmptyConfig) => Err(path + ": no collections defined")
+      }
+    }
+  }
+}
+
+fn load_cli_state(options : CliOptions) -> Result[CliState, Int] {
+  let effective_config_path = match options.config_path {
     Some(path) => path
-    None => content_dir + "/lattice.conf"
+    None => options.content_dir + "/lattice.conf"
   }
 
   let config_source = try {
@@ -110,8 +272,7 @@ fn main {
   } catch {
     @fs.IOError(msg) => {
       println("[error] cannot read config file " + effective_config_path + ": " + msg)
-      @sys.exit(1)
-      return
+      return Err(1)
     }
   }
 
@@ -126,39 +287,72 @@ fn main {
         ": " +
         msg,
       )
-      @sys.exit(1)
-      return
+      return Err(1)
     }
     Err(@config.MissingRequiredField(field)) => {
       println("[error] config missing required field: " + field)
-      @sys.exit(1)
-      return
+      return Err(1)
     }
     Err(@config.InvalidValue(field, msg)) => {
       println("[error] invalid config value for " + field + ": " + msg)
-      @sys.exit(1)
-      return
+      return Err(1)
     }
   }
 
-  let output_dir = if positionals.length() > 1 {
-    positionals[1]
-  } else {
-    match site.output_dir {
-      Some(path) => path
-      None => "./dist"
-    }
+  let output_dir = match options.output_dir {
+    Some(path) => path
+    None =>
+      match site.output_dir {
+        Some(path) => path
+        None => "./dist"
+      }
   }
 
   let build_config : @builder.BuildConfig = {
-    content_dir,
+    content_dir: options.content_dir,
     output_dir,
+    config_path: effective_config_path,
     site,
-    collections_path: match collections_path {
+    collections_path: match options.collections_path {
       Some(path) => Some(path)
       None => site.collections_file
     },
+    force_rebuild: options.force_rebuild,
   }
+  let collections = match load_collections_for_watch(options.content_dir, build_config.collections_path) {
+    Ok(defs) => defs
+    Err(msg) => {
+      println("[error] collections: " + msg)
+      return Err(1)
+    }
+  }
+  let watch_roots : Array[String] = []
+  watch_roots.push(effective_config_path)
+  match build_config.collections_path {
+    Some(path) => watch_roots.push(path)
+    None => ()
+  }
+  match site.templates_dir {
+    Some(path) => watch_roots.push(path)
+    None => watch_roots.push(options.content_dir + "/templates")
+  }
+  match site.static_dir {
+    Some(path) => watch_roots.push(options.content_dir + "/" + path)
+    None => watch_roots.push(options.content_dir + "/static")
+  }
+  match site.data_dir {
+    Some(path) => watch_roots.push(path)
+    None => watch_roots.push(options.content_dir + "/data")
+  }
+  let mut i = 0
+  while i < collections.length() {
+    watch_roots.push(collections[i].content_dir)
+    i = i + 1
+  }
+  Ok({ build_config, watch_roots })
+}
+
+fn run_once(build_config : @builder.BuildConfig, check_mode : Bool) -> Int {
   if check_mode {
     let lint_result = @builder.check(build_config)
     let mut i = 0
@@ -172,13 +366,120 @@ fn main {
         lint_result.violations.length().to_string() +
         " violation(s)",
       )
-      @sys.exit(1)
+      return 1
     }
     println("[lattice] check passed: no violations")
+    0
   } else {
-    let error_count = @builder.build(build_config)
-    if error_count > 0 {
-      @sys.exit(1)
+    let cache_store = match @cache.load(build_config.output_dir) {
+      Ok(store) => store
+      Err(err) => {
+        println("[warn] cache: " + @cache.error_text(err))
+        @cache.empty(build_config.output_dir)
+      }
     }
+    @builder.build(build_config, cache_store).errors
+  }
+}
+
+fn watch_timestamp() -> String {
+  try {
+    let dt = @time.PlainDateTime::from_unix_second(
+      @watch.current_unix_second(),
+      0,
+      @time.utc_offset,
+    )
+    "[" + dt.to_string() + "Z]"
+  } catch {
+    _ => "[watch]"
+  } noraise {
+    value => value
+  }
+}
+
+fn run_watch(options : CliOptions, initial_state : CliState) -> Unit {
+  @watch.clear_interrupt()
+  @watch.install_sigint_handler()
+
+  let initial_result = run_once(initial_state.build_config, options.check_mode)
+  if initial_result > 0 {
+    println("[lattice] initial build finished with errors; watching for changes")
+  }
+
+  let mut current_roots = initial_state.watch_roots
+  let mut snapshot = try {
+    @watch.take_snapshot(current_roots)
+  } catch {
+    @watch.IOError(msg) => {
+      println("[error] watch snapshot failed: " + msg)
+      @sys.exit(1)
+      return
+    }
+  }
+
+  while true {
+    @watch.sleep_ms(options.watch_interval_ms)
+    if @watch.interrupted() {
+      println("[lattice] watch stopped")
+      return
+    }
+    let next_snapshot = try {
+      @watch.take_snapshot(current_roots)
+    } catch {
+      @watch.IOError(msg) => {
+        println("[warn] watch snapshot failed: " + msg)
+        continue
+      }
+    }
+    let changed_paths = @watch.diff_paths(snapshot, next_snapshot)
+    if changed_paths.length() == 0 {
+      snapshot = next_snapshot
+      continue
+    }
+    println(
+      "[lattice] " +
+      watch_timestamp() +
+      " change detected in " +
+      changed_paths.length().to_string() +
+      " path(s); rebuilding",
+    )
+    match load_cli_state(options) {
+      Ok(state) => {
+        let _ = run_once(state.build_config, options.check_mode)
+        current_roots = state.watch_roots
+      }
+      Err(_) => ()
+    }
+    snapshot = try {
+      @watch.take_snapshot(current_roots)
+    } catch {
+      @watch.IOError(msg) => {
+        println("[warn] watch snapshot failed after rebuild: " + msg)
+        next_snapshot
+      }
+    }
+    if @watch.interrupted() {
+      println("[lattice] watch stopped")
+      return
+    }
+  }
+}
+
+fn main {
+  let options = parse_cli_options(@sys.get_cli_args())
+  let state = match load_cli_state(options) {
+    Ok(state) => state
+    Err(code) => {
+      @sys.exit(code)
+      return
+    }
+  }
+  if options.watch_mode {
+    run_watch(options, state)
+    return
+  }
+  let exit_code = run_once(state.build_config, options.check_mode)
+  if exit_code > 0 {
+    @sys.exit(1)
   }
 }

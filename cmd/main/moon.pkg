@@ -1,9 +1,13 @@
 import {
   "kurisu/lattice/src/builder" @builder,
+  "kurisu/lattice/src/cache" @cache,
+  "kurisu/lattice/src/collections" @collections,
   "kurisu/lattice/src/config" @config,
   "kurisu/lattice/src/lint" @lint,
+  "kurisu/lattice/src/watch" @watch,
   "moonbitlang/x/fs" @fs,
   "moonbitlang/x/sys" @sys,
+  "moonbitlang/x/time" @time,
 }
 
 options(
