@@ -52,11 +52,26 @@ Run structural checks only (no output writes):
 moon run cmd/main -- ./content ./dist --check
 ```
 
+Run in polling watch mode for local development:
+
+```bash
+moon run cmd/main -- ./content ./dist --watch
+```
+
+Adjust the polling interval if needed:
+
+```bash
+moon run cmd/main -- ./content ./dist --watch --watch-interval 1000
+```
+
 ### CLI flags
 
 - `--config <path>`: override site config file (also supports `--config=<path>`)
 - `--collections <path>`: override collections config file (also supports `--collections=<path>`)
 - `--check`: run validation/lint pipeline only
+- `--watch`: do an initial build, then poll source/config/template/data/static inputs and rebuild on change
+- `--watch-interval <ms>`: override the polling interval in milliseconds (also supports `--watch-interval=<ms>`, default `500`)
+- `--help`: print CLI usage
 
 ## Module Overview (`src/`)
 
@@ -97,6 +112,12 @@ Run it with:
 
 ```bash
 moon run cmd/main -- ./example/content ./dist --config ./example/site.cfg --collections ./example/collections.cfg
+```
+
+For local preview, pair `--watch` with a static file server such as `simple-http-server`:
+
+```bash
+simple-http-server ./dist
 ```
 
 ## Build Instructions

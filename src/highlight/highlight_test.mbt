@@ -31,6 +31,28 @@ fn has_kind(tokens : Array[Token], kind : TokenKind) -> Bool {
   false
 }
 
+fn token_text(tokens : Array[Token], idx : Int) -> String {
+  tokens[idx].text
+}
+
+fn token_kind_is(tokens : Array[Token], idx : Int, kind : TokenKind) -> Bool {
+  match (tokens[idx].kind, kind) {
+    (Keyword, Keyword) => true
+    (Type, Type) => true
+    (StringLit, StringLit) => true
+    (CharLit, CharLit) => true
+    (Number, Number) => true
+    (Comment, Comment) => true
+    (Operator, Operator) => true
+    (Punct, Punct) => true
+    (Identifier, Identifier) => true
+    (Builtin, Builtin) => true
+    (Whitespace, Whitespace) => true
+    (Unknown, Unknown) => true
+    _ => false
+  }
+}
+
 ///|
 test "highlight moonbit tokenization basics" {
   let src =
@@ -61,6 +83,36 @@ test "highlight typescript supports decorators and template strings" {
   assert_true(has_kind(tokens, Builtin))
   assert_true(has_kind(tokens, Keyword))
   assert_true(has_kind(tokens, StringLit))
+}
+
+///|
+test "highlight moonbit keeps token boundaries around chars and numbers" {
+  let src = "let c = 'x'\nlet hex = 0x2A\n"
+  let tokens = tokenize_moonbit(src)
+  assert_eq(flatten_text(tokens), src)
+  assert_eq(token_text(tokens, 0), "let")
+  assert_true(token_kind_is(tokens, 0, Keyword))
+  assert_eq(token_text(tokens, 6), "'x'")
+  assert_true(token_kind_is(tokens, 6, CharLit))
+  assert_eq(token_text(tokens, 14), "0x2A")
+  assert_true(token_kind_is(tokens, 14, Number))
+}
+
+///|
+test "highlight typescript keeps decorators and dotted names separate" {
+  let src = "@sealed\nconst value = user.name\n"
+  let tokens = tokenize_typescript(src)
+  assert_eq(flatten_text(tokens), src)
+  assert_eq(token_text(tokens, 0), "@sealed")
+  assert_true(token_kind_is(tokens, 0, Builtin))
+  assert_eq(token_text(tokens, 2), "const")
+  assert_true(token_kind_is(tokens, 2, Keyword))
+  assert_eq(token_text(tokens, 8), "user")
+  assert_true(token_kind_is(tokens, 8, Identifier))
+  assert_eq(token_text(tokens, 9), ".")
+  assert_true(token_kind_is(tokens, 9, Punct))
+  assert_eq(token_text(tokens, 10), "name")
+  assert_true(token_kind_is(tokens, 10, Identifier))
 }
 
 ///|
