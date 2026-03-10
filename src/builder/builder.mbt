@@ -1727,6 +1727,17 @@ fn page_output_path(config : BuildConfig, collection_name : String, slug : Strin
   config.output_dir + "/" + collection_name + "/" + slug + "/index.html"
 }
 
+fn root_page_output_path(config : BuildConfig) -> String {
+  config.output_dir + "/index.html"
+}
+
+fn is_root_page_for_site(site : @config.SiteConfig, slug : String) -> Bool {
+  match site.root_page {
+    Some(root_slug) => root_slug == slug
+    None => false
+  }
+}
+
 fn dependency_roots_for_build(config : BuildConfig) -> Array[String] {
   let roots : Array[String] = [config.config_path]
   match config.collections_path {
@@ -1851,8 +1862,14 @@ fn build_incremental_state(
     while j < coll.sources.length() {
       let src = coll.sources[j]
       let out = page_output_path(config, coll.definition.name, src.slug)
+      let root_out_missing =
+        is_root_page_for_site(config.site, src.slug) && not(@fs.path_exists(root_page_output_path(config)))
       let changed = match previous_entries.get(src.path) {
-        Some(previous) => previous.mtime != src.stamp || previous.out != out || not(@fs.path_exists(out))
+        Some(previous) =>
+          previous.mtime != src.stamp ||
+          previous.out != out ||
+          not(@fs.path_exists(out)) ||
+          root_out_missing
         None => true
       }
       if changed {
@@ -2140,6 +2157,7 @@ pub fn build(config : BuildConfig, cache_store : @cache.CacheStore) -> BuildResu
       let page_url = collection_page_url(coll.definition.name, src.slug)
       let page_context = coll.definition.name + "/" + src.slug
       let out_path = page_output_path(config, coll.definition.name, src.slug)
+      let root_out_path = root_page_output_path(config)
       let cache_hit = @cache.should_skip(
         cache_store,
         src.slug,
@@ -2182,6 +2200,9 @@ pub fn build(config : BuildConfig, cache_store : @cache.CacheStore) -> BuildResu
             try {
               ensure_dir(page_dir)
               @fs.write_string_to_file(out_path, doc.html)
+              if is_root_page_for_site(config.site, src.slug) {
+                @fs.write_string_to_file(root_out_path, doc.html)
+              }
               Some(out_path)
             } catch {
               @fs.IOError(msg) => {
