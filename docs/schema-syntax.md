@@ -8,7 +8,7 @@ Schemas are defined inline in `collections.cfg`:
 
 ```cfg
 [posts]
-schema = title:String, date:String, tags:Optional[Array[String]], draft:Optional[Bool]
+schema = title:String, date:Date, tags:Optional[Array[String]], draft:Optional[Bool]
 dir = example/content/posts
 ```
 
@@ -19,6 +19,7 @@ Each `name:Type` pair becomes one field in the collection schema.
 The current implementation supports:
 
 - `String`
+- `Date`
 - `Int`
 - `Bool`
 - `Array[Type]`
@@ -28,20 +29,9 @@ Examples:
 
 ```cfg
 schema = title:String, count:Int, published:Bool
+schema = title:String, published_at:Date
 schema = tags:Array[String]
-schema = draft:Optional[Bool], description:Optional[String]
-```
-
-There is no dedicated `Date` type in this branch. Dates are currently modeled as `String`, which is why the example site uses:
-
-```cfg
-schema = title:String, date:String, tags:Optional[Array[String]], draft:Optional[Bool]
-```
-
-and frontmatter like:
-
-```md
-date = "2024-01-15"
+schema = draft:Optional[Bool], published_at:Optional[Date], description:Optional[String]
 ```
 
 ## Required vs optional
@@ -74,7 +64,7 @@ Content files start with a `---` block. In the example site:
 ```md
 ---
 title = Welcome to the Example Site
-date = "2024-01-15"
+date = 2024-01-15
 tags = [intro, lattice, demo]
 ---
 # Welcome
@@ -96,7 +86,7 @@ A valid `posts` frontmatter block for the example schema:
 ```md
 ---
 title = Typed Frontmatter
-date = "2024-02-02"
+date = 2024-02-02
 tags = [schemas, moonbit]
 draft = false
 ---
@@ -125,14 +115,14 @@ tags = [intro]
 
 Why it fails:
 
-- the `posts` schema requires `date:String`
+- the `posts` schema requires `date:Date`
 
 Wrong type:
 
 ```md
 ---
 title = Wrong Tags
-date = "2024-03-01"
+date = 2024-03-01
 tags = intro
 ---
 ```
@@ -147,7 +137,7 @@ Wrong scalar type:
 ```md
 ---
 title = Wrong Draft
-date = "2024-03-01"
+date = 2024-03-01
 draft = "false"
 ---
 ```
@@ -164,6 +154,7 @@ Schema validation happens during the build pipeline, after frontmatter parsing a
 In practice, that means you get build-time diagnostics tied to the content file instead of a broken HTML page later. Typical failures include:
 
 - required field missing
+- expected `Date` but got incompatible value
 - expected `String` but got incompatible value
 - expected `Array[String]` but got incompatible value
 

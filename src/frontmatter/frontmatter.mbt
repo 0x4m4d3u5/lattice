@@ -9,6 +9,7 @@
 /// A raw frontmatter value parsed from TOML-style key-value pairs.
 pub(all) enum FrontmatterValue {
   FStr(String)
+  FDate(String)
   FInt(Int)
   FBool(Bool)
   FArray(Array[FrontmatterValue])
@@ -113,6 +114,25 @@ fn is_digit(c : Char) -> Bool {
   c >= '0' && c <= '9'
 }
 
+fn is_iso8601_date(s : String) -> Bool {
+  if s.length() != 10 {
+    return false
+  }
+  let mut i = 0
+  while i < s.length() {
+    let c = char_at(s, i)
+    if i == 4 || i == 7 {
+      if c != '-' {
+        return false
+      }
+    } else if not(is_digit(c)) {
+      return false
+    }
+    i = i + 1
+  }
+  true
+}
+
 fn parse_int_str(s : String) -> Result[Int, String] {
   let n = s.length()
   if n == 0 {
@@ -190,7 +210,13 @@ fn parse_value_at(s : String, pos : Int) -> Result[(FrontmatterValue, Int), Stri
   let c = char_at(s, i)
   if c == '"' {
     match parse_quoted(s, i) {
-      Ok((v, next)) => Ok((FStr(v), next))
+      Ok((v, next)) => {
+        if is_iso8601_date(v) {
+          Ok((FDate(v), next))
+        } else {
+          Ok((FStr(v), next))
+        }
+      }
       Err(e) => Err(e)
     }
   } else if c == '[' {
@@ -201,15 +227,21 @@ fn parse_value_at(s : String, pos : Int) -> Result[(FrontmatterValue, Int), Stri
     Ok((FBool(false), i + 5))
   } else if is_digit(c) || c == '-' {
     let mut j = i
-    if char_at(s, j) == '-' {
+    while j < n &&
+      char_at(s, j) != ' ' &&
+      char_at(s, j) != '\t' &&
+      char_at(s, j) != ',' &&
+      char_at(s, j) != ']' {
       j = j + 1
     }
-    while j < n && is_digit(char_at(s, j)) {
-      j = j + 1
-    }
-    match parse_int_str(substr(s, i, j)) {
-      Ok(v) => Ok((FInt(v), j))
-      Err(e) => Err(e)
+    let raw = trim_ws(substr(s, i, j))
+    if is_iso8601_date(raw) {
+      Ok((FDate(raw), j))
+    } else {
+      match parse_int_str(raw) {
+        Ok(v) => Ok((FInt(v), j))
+        Err(_) => Ok((FStr(raw), j))
+      }
     }
   } else {
     // bare string: read until comma, closing bracket, or end
@@ -307,7 +339,11 @@ fn parse_yaml_value(raw : String) -> FrontmatterValue {
   if value.length() >= 2 &&
     char_at(value, 0) == '\'' &&
     char_at(value, value.length() - 1) == '\'' {
-    return FStr(substr(value, 1, value.length() - 1))
+    let unquoted = substr(value, 1, value.length() - 1)
+    if is_iso8601_date(unquoted) {
+      return FDate(unquoted)
+    }
+    return FStr(unquoted)
   }
   match parse_value_strict(value) {
     Ok(parsed) => parsed

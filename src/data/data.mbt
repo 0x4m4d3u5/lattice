@@ -525,6 +525,7 @@ pub fn resolve(
 fn value_to_string_inner(v : @frontmatter.FrontmatterValue) -> String {
   match v {
     @frontmatter.FStr(s) => s
+    @frontmatter.FDate(s) => s
     @frontmatter.FInt(i) => i.to_string()
     @frontmatter.FBool(b) => if b { "true" } else { "false" }
     @frontmatter.FArray(items) => {
