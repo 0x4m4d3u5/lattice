@@ -1,97 +1,105 @@
-# lattice SCC 2026 Retrospective
+# lattice retrospective
 
-## Central Design Decision
+## What lattice is
 
-The core architectural choice was to represent pipeline contracts with ADTs and typed error variants, not ad-hoc string checks.
+`lattice` is a static site generator written in MoonBit for the 2026 MoonBit Software Synthesis Challenge. The project goal is narrow and explicit: treat content integrity as a structural property of the build, not a runtime convention.
 
-Examples:
+In practice that means frontmatter, collection schemas, template slots, data-file keys, and wikilinks are all checked before HTML is emitted. A page is not considered valid because the renderer happened to produce output. It is valid because it satisfied the typed contracts the builder expects.
 
-- Frontmatter values are an ADT (`src/frontmatter/frontmatter.mbt`): `FStr | FInt | FBool | FArray | FMap`.
-- Schema constraints are an ADT (`src/schema/schema.mbt`): `TString | TInt | TBool | TArray | TOptional`.
-- Pipeline violations are typed (`src/lint/lint.mbt`): `SchemaError | BrokenWikilink | TemplateSlotError | DataError | ...`.
+## Why MoonBit
 
-This made each stage explicit about accepted inputs and failure modes. The builder then composes those typed outcomes into one lint/build result rather than propagating ambiguous strings.
+The reason for building this in MoonBit was not that MoonBit is already the obvious language for static site generation. It is a new language with a still-forming ecosystem, native WebAssembly support, and a type system that looked strong enough to make the "structural guarantees" story real instead of rhetorical.
 
-## Concrete Type-System Wins
+I wanted a real project to test the edges of the ecosystem: file I/O, parsing, string-heavy code, WASI builds, package boundaries, test ergonomics, and whether the language stays workable once the code stops being toy-sized. An SSG is a good stress case because it mixes parsing, validation, graph construction, templating, and output generation in one pipeline.
 
-These are cases where dynamic SSG behavior typically degrades into silent or late failures, but lattice fails structurally during check/build.
+## Architecture decisions
 
-1. Frontmatter shape/type mismatches fail before rendering.
-- Evidence: `@schema.validate` checks declared fields against `FieldType` in `src/schema/schema.mbt`.
-- Outcome: if a field declared as `Array[String]` is provided as scalar or mixed array, it is emitted as `ValidationError` before HTML generation.
-- Dynamic failure avoided: malformed metadata leaking into templates/search pages as empty or coerced strings.
+The core pipeline in `src/builder/builder.mbt` is organized as a sequence of explicit stages.
 
-2. Broken wikilinks are resolved against a complete index, not rendered optimistically.
-- Evidence: `src/wikilink/wikilink.mbt` returns `(Array[ResolvedWikilink], Array[ResolutionError])`; unresolved targets are explicit errors.
-- Builder integration: check mode maps these to `ViolationType::BrokenWikilink` (`src/builder/builder.mbt`).
-- Dynamic failure avoided: shipping dead anchors/404s discovered only after deployment.
+### Frontmatter parsing
 
-3. Template slot contracts are enumerated, not free-form.
-- Evidence: `TemplateSlot` and `TemplateError` in `src/template/template.mbt`.
-- Unknown placeholders fail as `UnknownSlot`; missing required slots fail as `MissingRequiredSlot`; missing data paths fail as `MissingDataSlot`.
-- Test evidence: `src/template/template_test.mbt` asserts `MissingDataSlot("data.nav.title")`.
-- Dynamic failure avoided: typoed placeholders rendering empty output with no hard failure.
+The first layer is `src/frontmatter/frontmatter.mbt`. It parses the `---` block into a typed `FrontmatterValue` tree instead of a loose string map. That gives the rest of the build something better than "maybe metadata, maybe not." Dates, ints, bools, arrays, and strings are distinguished before schema validation starts.
 
-4. Data-file schema requirements are enforced at load time.
-- Evidence: `DataError::ValidationError` in `src/data/data.mbt`; schema-required keys are validated in `load_from_dir`.
-- Test evidence: `src/data/data_test.mbt` catches missing `links` key as `ValidationError(file="nav", key="links", ...)`.
-- Dynamic failure avoided: partial nav/footer/template data causing nil/empty output at render time.
+This layer exists because schema validation is only useful if the raw metadata has already been normalized into something typed. If frontmatter stayed untyped, every later stage would have to repeat coercion logic or silently accept bad values.
 
-5. Collection configuration is typed and rejects invalid schema declarations.
-- Evidence: `CollectionsError` in `src/collections/collections.mbt` (`InvalidSchema`, `MissingRequiredField`, `DuplicateCollection`, etc.).
-- Outcome: malformed collection definitions fail during config ingestion, not mid-build.
-- Dynamic failure avoided: pages silently excluded or routed under unintended collections.
+### Schema validation
 
-6. Error composition remains structured through lint output.
-- Evidence: `ViolationType` ADT in `src/lint/lint.mbt` and staged mapping in `src/builder/builder.mbt`.
-- Outcome: check mode can aggregate heterogeneous failures deterministically with path/line metadata.
-- Dynamic failure avoided: mixed plain-text errors that cannot be categorized or automated.
+The second layer is `src/schema/schema.mbt`. Collections declare field contracts such as `title:String`, `date:Date`, or `tags:Optional[Array[String]]`, and the builder validates parsed frontmatter against those contracts before rendering.
 
-## Tradeoffs
+This layer exists to make content models explicit. A page in `posts` is not just "a markdown file under a folder"; it is an instance of a declared schema. Missing required fields and incompatible types are surfaced as build diagnostics instead of becoming empty template output, broken feeds, or malformed search metadata later.
 
-1. Sync-first pipeline.
-- Current implementation is fully synchronous (single-process, sequential passes in `src/builder/builder.mbt`).
-- Rationale: stability and deterministic diagnostics over early concurrency complexity.
-- Constraint: MoonBit async integration is deferred; `moon.mod.json` currently depends only on `moonbitlang/x`.
+### Template rendering
 
-2. No watch mode.
-- Current CLI supports build and check (`cmd/main/main.mbt`) but no incremental/watch process.
-- Rationale: SCC scope prioritized structural correctness and complete pipeline behavior before UX iteration tooling.
+After metadata is valid, the builder resolves wikilinks against a complete site index, renders markdown to HTML, and then renders the page through the template engine. The template system is deliberately strict: built-in slots are enumerated, `data.*` paths are validated, and missing values fail the build instead of collapsing to empty strings.
 
-3. Syntax highlight coverage limited to five language families.
-- `src/highlight/highlight.mbt` supports: `moonbit`/`mbt`, `typescript` (incl. `js`/`ts` aliases), `python` (`py`), and `bash` (`sh`/`shell`/`zsh`), plus plain fallback.
-- Rationale: explicit tokenizers with predictable behavior; avoid broad but weak heuristics.
+This layer exists because template bugs are content bugs. If `{{data.nav.title}}` is wrong or a slot name is misspelled, the build should stop at the contract boundary where the mistake happened.
 
-## MoonBit-Specific Learnings
+### Incremental build manifest
 
-1. `s[i]` returns `UInt16`, not `Char`.
-- This required explicit helpers (`to_int().unsafe_to_char()`) across parsers (`frontmatter`, `markdown`, `template`, `wikilink`, etc.) for character logic to type-check.
+The builder keeps a manifest in `dist/.lattice-manifest.json` and uses file snapshots plus link-target tracking to decide what actually needs to be rebuilt. Source fingerprints still flow through the page cache, but the manifest adds a dependency view over templates, config, collections, data, and backlink targets.
 
-2. `StringBuilder` is the practical text assembly primitive.
-- Most parsing/rendering code uses `StringBuilder` for deterministic append-heavy flows; this kept parsers straightforward without intermediate string churn.
+This layer exists because a site generator should not force full rebuilds for every edit once the project grows. The important detail is that incremental behavior still preserves structural checks: the page index is built before wikilinks are resolved, and backlink changes can force dependent pages to rebuild even if the page itself did not change.
 
-3. `pub` vs `pub(all)` needs deliberate API boundaries.
-- Internal/shared ADTs are often `pub(all)` while externally consumed surfaces are `pub`; this reduced accidental cross-module coupling.
+## What worked well
 
-4. Struct literals are a major readability lever.
-- Explicit field literals in pipeline records (`BuildConfig`, `GraphPage`, lint violations) made refactors safer and constructor call sites self-describing.
+MoonBit's type system carried a lot of the project. The frontmatter ADT, schema ADT, template slot enum, and typed error surfaces made the pipeline easier to reason about than a stringly implementation would have been. The "structural vs behavioral" idea held up in code, not just in docs.
 
-## AI Collaboration Pattern
+The schema validation approach worked particularly well. It is small, readable, and strict enough to matter. Required fields, `Optional[...]`, `Array[...]`, and `Date` cover a surprising amount of real content modeling without turning the syntax into its own language.
 
-Work was broken into bounded work items (parser, schema validation, template contracts, link validation, check-mode diagnostics). The agent (Codex) was directed to complete each item with typed boundaries, then verify with focused tests.
+Test coverage also paid off. The repo currently has 74 tests across frontmatter parsing, schema validation, collections config parsing, templates, markdown, highlighting, wikilinks, pagination, manifest parsing, cache behavior, and builder integration. That mattered because a lot of the code is parser and renderer code where off-by-one and edge-case regressions are easy to introduce.
 
-Because module contracts were ADT-based, prompts and implementation steps stayed predictable: each task specified exact input/output types and explicit error variants. That reduced back-and-forth over edge cases compared with stringly-typed flows.
+## What was hard
 
-## What Structural Enforcement Bought
+MoonBit string handling was the hardest consistent friction point. There is no general-purpose buffer type in the prelude for this kind of work, so `StringBuilder` becomes the default tool for slicing, token assembly, escaping, and emitting. That is workable, but it means writing and maintaining a lot of helper code.
 
-Each core module defines an ADT (or typed struct) for its failure space:
+Character handling is also sharper than expected. `s[i]` returns `UInt16`, not `Char`, so nearly every parser ended up with a `char_at` helper to convert code units before doing comparisons. String slicing is similarly manual because the obvious operations are either missing or easier to misuse, and invalid slice boundaries raise errors. None of this is fatal, but it increases the amount of defensive plumbing in parser-heavy code.
 
-- config: `ConfigError`
-- collections: `CollectionsError`
-- data: `DataError`
-- template: `TemplateError`
-- shortcode: `ShortcodeError`
-- lint aggregation: `ViolationType`
-- link resolution: `ResolutionError`
+The ecosystem is still thin. That showed up in configuration parsing, frontmatter parsing, and templating: many pieces that would normally come from a library were implemented directly in the repo. That was good for control and explainability, but it also meant spending time on infrastructure rather than only on site features.
 
-As a result, pipeline composition in builder/check is mostly type-directed translation between error domains, not text parsing of error strings. That improves reliability, debuggability, and explainability for SCC engineering-quality evaluation.
+The WASI component pipeline was also more complex than I wanted. MoonBit's WASM-native story is part of the reason to use it, but taking a nontrivial CLI project through native and WASI-shaped toolchains is still more involved than in a mature ecosystem. For this project, native development stayed the practical path and WASI remained more of an ecosystem-learning exercise than the default target.
+
+## Features shipped
+
+The current repo ships these major features:
+
+- frontmatter parsing with typed values
+- schema validation with `String`, `Date`, `Int`, `Bool`, `Array[...]`, and `Optional[...]`
+- strict template parsing and rendering
+- multiple typed content collections
+- wikilink resolution against a complete site index plus `graph.json` output
+- backlinks generation
+- incremental builds backed by a manifest and dependency snapshots
+- per-collection page template overrides
+- `Date` as a first-class schema type
+- syntax highlighting for fenced code blocks
+
+Around those core pieces, the builder also emits collection indexes, paginated tag pages, feeds, sitemap output, a search index, static assets, and watch-mode rebuilds.
+
+## Test coverage
+
+There are 74 tests in the repo today.
+
+They cover the main failure-prone areas:
+
+- frontmatter parsing, including malformed assignments and date handling
+- schema validation for required, optional, array, and date fields
+- collection parsing, including optional template overrides
+- template rendering and missing data paths
+- markdown rendering, shortcodes, and syntax highlighting
+- wikilink extraction and resolution
+- pagination behavior
+- manifest render/parse roundtrips
+- cache behavior
+- builder integration for collection template overrides
+
+That is not exhaustive end-to-end coverage, but it does cover the structural contracts that the project depends on most heavily.
+
+## What comes next
+
+Three next steps are clear from the current state of the code.
+
+- vault note rendering: the wikilink and graph pieces are in place, but the site still wants a stronger "notes vault" workflow instead of only collection-oriented content
+- full TOML config: the current config format is intentionally simple and narrower than real TOML
+- richer template slots: the current slot model is strict and useful, but it is still shallow compared with the layout composition people expect from mature SSGs
+
+The main lesson from building `lattice` is that MoonBit is already capable of supporting a serious small-to-medium systems-style application, but the friction is still mostly in libraries and tooling, not in the language core. That is exactly the kind of thing I wanted this project to test.

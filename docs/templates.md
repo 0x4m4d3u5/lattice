@@ -165,12 +165,32 @@ This matters because template bugs are otherwise easy to miss. In lattice, they 
 
 ## Template overrides
 
-The current implementation does not support per-collection template overrides. There is one site-wide `page.html` and one site-wide `index.html`, plus optional `tag.html` and `tags.html`.
+Collections can optionally override the site-wide page template with a `template` key in `collections.cfg`.
 
-So today the override story is:
+Example:
+
+```cfg
+[posts]
+schema = title:String, date:Date, tags:Optional[Array[String]]
+dir = example/content/posts
+
+[projects]
+schema = title:String, status:String, description:Optional[String]
+dir = example/content/projects
+template = example/templates/project-page.html
+```
+
+In this setup:
+
+- pages in `posts` use the site-level `page.html`
+- pages in `projects` use `example/templates/project-page.html`
+
+The `template` value is used as-is by the builder. It is not resolved relative to `templates_dir`; point it at the exact file you want to load.
+
+If `template` is not set for a collection, lattice falls back to the site-level `page.html` under `templates_dir` (or `content_dir/templates/page.html` when `templates_dir` is not configured).
+
+The rest of the override story is still site-wide:
 
 - `tag.html` overrides tag-page rendering if present
 - `tags.html` overrides tags-index rendering if present
-- there is no collection-specific `posts.html` or `projects.html` override mechanism yet
-
-If you need different presentation across collections right now, you have to branch inside the shared templates or extend the builder.
+- collection index pages still use the shared site-level `index.html`
