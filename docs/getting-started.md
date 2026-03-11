@@ -70,7 +70,7 @@ Collections are declared in a separate config file. The example repo has two col
 
 ```cfg
 [posts]
-schema = title:String, date:String, tags:Optional[Array[String]], draft:Optional[Bool]
+schema = title:String, date:Date, tags:Optional[Array[String]], draft:Optional[Bool]
 dir = example/content/posts
 
 [projects]
@@ -88,7 +88,7 @@ For the minimal walkthrough, one collection is enough:
 
 ```cfg
 [posts]
-schema = title:String, date:String, tags:Optional[Array[String]]
+schema = title:String, date:Date, tags:Optional[Array[String]]
 dir = ./content/posts
 
 [data.nav]
