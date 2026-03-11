@@ -35,6 +35,7 @@ pub(all) struct SourceFile {
 
 pub(all) struct BuildResult {
   errors : Int
+  diagnostics : Array[@diagnostic.Diagnostic]
   rebuilt_pages : Int
   unchanged_pages : Int
 }
@@ -497,6 +498,65 @@ fn frontmatter_line_from_error(msg : String) -> Int? {
   parse_int_builder(buf.to_string())
 }
 
+fn build_error(
+  path : String?,
+  line : Int?,
+  column : Int?,
+  message : String
+) -> @diagnostic.Diagnostic {
+  {
+    severity: @diagnostic.Error,
+    code: None,
+    path,
+    line,
+    column,
+    message,
+    note: None,
+  }
+}
+
+fn build_warning(
+  path : String?,
+  line : Int?,
+  column : Int?,
+  message : String
+) -> @diagnostic.Diagnostic {
+  {
+    severity: @diagnostic.Warning,
+    code: None,
+    path,
+    line,
+    column,
+    message,
+    note: None,
+  }
+}
+
+fn missing_required_fields_note(schema : @schema.Schema) -> String? {
+  let required : Array[String] = []
+  let mut i = 0
+  while i < schema.fields.length() {
+    let field = schema.fields[i]
+    if field.required {
+      required.push(field.name)
+    }
+    i = i + 1
+  }
+  if required.length() == 0 {
+    return None
+  }
+  let buf = StringBuilder::new()
+  i = 0
+  while i < required.length() {
+    if i > 0 {
+      buf.write_string(", ")
+    }
+    buf.write_string(required[i])
+    i = i + 1
+  }
+  Some("required fields: " + buf.to_string())
+}
+
 fn template_violation(path : String, message : String) -> @lint.LintViolation {
   {
     path,
@@ -652,10 +712,6 @@ fn data_dir_for_build(config : BuildConfig) -> String {
   }
 }
 
-fn data_error_text(err : @data.DataError) -> String {
-  @data.format_error(err)
-}
-
 fn page_size_for_site(site : @config.SiteConfig) -> Int {
   match site.page_size {
     Some(size) => size
@@ -665,6 +721,26 @@ fn page_size_for_site(site : @config.SiteConfig) -> Int {
 
 fn asset_error_text(err : @assets.AssetCopyError) -> String {
   @assets.format_error(err)
+}
+
+fn data_error_diagnostic(err : @data.DataError) -> @diagnostic.Diagnostic {
+  match err {
+    @data.FileNotFound(path) => build_error(Some(path), None, None, "data directory not found")
+    @data.ParseError(path, line, msg) => build_error(Some(path), Some(line), None, msg)
+    @data.ValidationError(file, key, msg) => {
+      let key_message = if key.length() == 0 {
+        "data." + file
+      } else {
+        "data." + file + "." + key
+      }
+      build_error(None, None, None, key_message + ": " + msg)
+    }
+    @data.IOError(path, msg) => build_error(Some(path), None, None, msg)
+  }
+}
+
+fn asset_error_diagnostic(err : @assets.AssetCopyError) -> @diagnostic.Diagnostic {
+  build_error(Some(@assets.error_path(err)), None, None, asset_error_text(err))
 }
 
 fn render_pagination_nav(
@@ -1298,11 +1374,14 @@ fn load_project_layout(config : BuildConfig) -> Result[ProjectLayout, String] {
   }
 }
 
-fn load_data_store(config : BuildConfig, data_schemas : Map[String, @data.DataSchema]) -> Result[@data.DataStore, String] {
+fn load_data_store(
+  config : BuildConfig,
+  data_schemas : Map[String, @data.DataSchema]
+) -> Result[@data.DataStore, @data.DataError] {
   let data_dir = data_dir_for_build(config)
   match @data.load_from_dir(data_dir, data_schemas) {
     Ok(store) => Ok(store)
-    Err(err) => Err(data_error_text(err))
+    Err(err) => Err(err)
   }
 }
 
@@ -1313,9 +1392,9 @@ fn load_data_store(config : BuildConfig, data_schemas : Map[String, @data.DataSc
 /// All errors are printed to stdout with the slug as context.
 fn process_document(
   source : String,
+  source_path : String,
   slug : String,
   url : String,
-  context : String,
   page_index : Map[String, String],
   known_tags : Map[String, String],
   tags_field : String,
@@ -1327,12 +1406,15 @@ fn process_document(
   custom_css : String,
   backlinks_html : String,
   render_page_html : Bool
-) -> ProcessedDocument? {
+) -> BuildDocOutcome {
+  let diagnostics : Array[@diagnostic.Diagnostic] = []
   // Step 1: parse frontmatter
   let fm = match @frontmatter.parse(source) {
     Err(e) => {
-      println("[error] " + context + ": frontmatter: " + e)
-      return None
+      diagnostics.push(
+        build_error(Some(source_path), frontmatter_line_from_error(e), None, "frontmatter: " + e),
+      )
+      return { document: None, diagnostics }
     }
     Ok(fm) => fm
   }
@@ -1340,38 +1422,59 @@ fn process_document(
   let schema_errors = @schema.validate(fm, schema)
   if schema_errors.length() > 0 {
     let mut i = 0
+    let note = missing_required_fields_note(schema)
     while i < schema_errors.length() {
-      println(
-        "[error] " + context + ": schema: " + schema_errors[i].field + ": " + schema_errors[i].message,
-      )
+      let err = schema_errors[i]
+      diagnostics.push({
+        severity: @diagnostic.Error,
+        code: None,
+        path: Some(source_path),
+        line: frontmatter_field_line(source, err.field),
+        column: None,
+        message: if err.message == "required field missing" {
+          "missing required field '" + err.field + "'"
+        } else {
+          "schema: " + err.field + ": " + err.message
+        },
+        note: if err.message == "required field missing" { note } else { None },
+      })
       i = i + 1
     }
-    return None
+    return { document: None, diagnostics }
   }
   // Step 2b: extract validated tags from typed frontmatter.
   let page_tags = match @tags.extract(fm, tags_field) {
     Ok(values) => values
     Err(msg) => {
-      println(
-        "[error] " + context + ": tags field '" + tags_field + "': " + msg,
+      diagnostics.push(
+        build_error(
+          Some(source_path),
+          frontmatter_field_line(source, tags_field),
+          None,
+          "tags field '" + tags_field + "': " + msg,
+        ),
       )
-      return None
+      return { document: None, diagnostics }
     }
   }
   let mut i = 0
   while i < page_tags.length() {
     let tag = page_tags[i]
     if not(known_tags.contains(tag.slug)) {
-      println(
-        "[error] " +
-        context +
-        ": dangling tag reference '" +
-        tag.value +
-        "' (" +
-        tag.slug +
-        ") missing from tag index",
+      let (line, col) = line_col_of_first(source, tag.value)
+      diagnostics.push(
+        build_error(
+          Some(source_path),
+          line,
+          col,
+          "dangling tag reference '" +
+          tag.value +
+          "' (" +
+          tag.slug +
+          ") missing from tag index",
+        ),
       )
-      return None
+      return { document: None, diagnostics }
     }
     i = i + 1
   }
@@ -1381,12 +1484,17 @@ fn process_document(
   if link_errors.length() > 0 {
     let mut i = 0
     while i < link_errors.length() {
-      println(
-        "[warn] " +
-        context +
-        ": unresolved wikilink [[" +
-        link_errors[i].link.target +
-        "]] rendered as plain text",
+      let marker = "[[" + link_errors[i].link.target + "]]"
+      let (line, col) = line_col_of_first(source, marker)
+      diagnostics.push(
+        build_warning(
+          Some(source_path),
+          line,
+          col,
+          "unresolved wikilink [[" +
+          link_errors[i].link.target +
+          "]] rendered as plain text",
+        ),
       )
       i = i + 1
     }
@@ -1397,16 +1505,19 @@ fn process_document(
   let description_value = extract_description(fm)
   let date_value = extract_date(fm)
   if not(render_page_html) {
-    return Some({
-      html: "",
-      title,
-      url,
-      description: description_value,
-      date: date_value,
-      excerpt,
-      resolved_links: resolved,
-      tags: page_tags,
-    })
+    return {
+      document: Some({
+        html: "",
+        title,
+        url,
+        description: description_value,
+        date: date_value,
+        excerpt,
+        resolved_links: resolved,
+        tags: page_tags,
+      }),
+      diagnostics,
+    }
   }
   let wl_map = build_wikilink_map(resolved)
   // Step 5: render markdown body to HTML fragment
@@ -1414,15 +1525,17 @@ fn process_document(
   if markdown_result.shortcode_errors.length() > 0 {
     let mut si = 0
     while si < markdown_result.shortcode_errors.length() {
-      println(
-        "[error] " +
-        context +
-        ": shortcode: " +
-        @shortcode.error_text(markdown_result.shortcode_errors[si].error),
+      diagnostics.push(
+        build_error(
+          Some(source_path),
+          None,
+          None,
+          "shortcode: " + @shortcode.error_text(markdown_result.shortcode_errors[si].error),
+        ),
       )
       si = si + 1
     }
-    return None
+    return { document: None, diagnostics }
   }
   let body_html = markdown_result.html + @tags.render_page_tags(page_tags)
   // Step 6: emit the complete HTML5 page
@@ -1454,8 +1567,10 @@ fn process_document(
       match @template.render_template_with_data(tpl, slots, data_store) {
         Ok(html) => html
         Err(e) => {
-          println("[error] " + context + ": page template: " + template_error_text(e))
-          return None
+          diagnostics.push(
+            build_error(Some(source_path), None, None, "page template: " + template_error_text(e)),
+          )
+          return { document: None, diagnostics }
         }
       }
     }
@@ -1474,21 +1589,29 @@ fn process_document(
       @html.render_page(meta, page_body)
     }
   }
-  Some({
-    html: page_html,
-    title,
-    url,
-    description: description_value,
-    date: date_value,
-    excerpt,
-    resolved_links: resolved,
-    tags: page_tags,
-  })
+  {
+    document: Some({
+      html: page_html,
+      title,
+      url,
+      description: description_value,
+      date: date_value,
+      excerpt,
+      resolved_links: resolved,
+      tags: page_tags,
+    }),
+    diagnostics,
+  }
 }
 
 priv struct LintDocOutcome {
   document : ProcessedDocument?
   violations : Array[@lint.LintViolation]
+}
+
+priv struct BuildDocOutcome {
+  document : ProcessedDocument?
+  diagnostics : Array[@diagnostic.Diagnostic]
 }
 
 fn process_document_for_lint(
@@ -2028,12 +2151,13 @@ fn mark_backlink_targets_changed(
 /// Each page is written to `output_dir/<slug>/index.html` for clean URLs.
 pub fn build(config : BuildConfig, cache_store : @cache.CacheStore) -> BuildResult {
   println("[lattice] building " + config.content_dir + " → " + config.output_dir)
+  let diagnostics : Array[@diagnostic.Diagnostic] = []
 
   let layout = match load_project_layout(config) {
     Ok(parsed) => parsed
     Err(msg) => {
-      println("[error] collections: " + msg)
-      return { errors: 1, rebuilt_pages: 0, unchanged_pages: 0 }
+      diagnostics.push(build_error(config.collections_path, None, None, "collections: " + msg))
+      return { errors: 1, diagnostics, rebuilt_pages: 0, unchanged_pages: 0 }
     }
   }
   let collections = layout.collections
@@ -2041,17 +2165,26 @@ pub fn build(config : BuildConfig, cache_store : @cache.CacheStore) -> BuildResu
   let templates = match load_templates(config) {
     Ok(t) => t
     Err(msg) => {
-      println("[error] templates: " + msg)
-      return { errors: 1, rebuilt_pages: 0, unchanged_pages: 0 }
+      diagnostics.push(build_error(None, None, None, "templates: " + msg))
+      return { errors: 1, diagnostics, rebuilt_pages: 0, unchanged_pages: 0 }
     }
   }
   let nav_links_html = build_nav_links_html(collections)
   let custom_css = default_css()
   let data_store = match load_data_store(config, layout.data_schemas) {
     Ok(store) => store
-    Err(msg) => {
-      println("[error] data: " + msg)
-      return { errors: 1, rebuilt_pages: 0, unchanged_pages: 0 }
+    Err(err) => {
+      let diag = data_error_diagnostic(err)
+      diagnostics.push({
+        severity: diag.severity,
+        code: diag.code,
+        path: diag.path,
+        line: diag.line,
+        column: diag.column,
+        message: "data: " + diag.message,
+        note: diag.note,
+      })
+      return { errors: 1, diagnostics, rebuilt_pages: 0, unchanged_pages: 0 }
     }
   }
   println("[lattice] loaded data files from " + data_dir_for_build(config))
@@ -2066,15 +2199,15 @@ pub fn build(config : BuildConfig, cache_store : @cache.CacheStore) -> BuildResu
       collect_sources(collection_def.content_dir)
     } catch {
       @fs.IOError(msg) => {
-        println(
-          "[error] cannot read collection directory " +
-          collection_def.content_dir +
-          " (" +
-          collection_def.name +
-          "): " +
-          msg,
+        diagnostics.push(
+          build_error(
+            Some(collection_def.content_dir),
+            None,
+            None,
+            "cannot read collection directory (" + collection_def.name + "): " + msg,
+          ),
         )
-        return { errors: 1, rebuilt_pages: 0, unchanged_pages: 0 }
+        return { errors: 1, diagnostics, rebuilt_pages: 0, unchanged_pages: 0 }
       }
     }
     source_count = source_count + sources.length()
@@ -2094,16 +2227,21 @@ pub fn build(config : BuildConfig, cache_store : @cache.CacheStore) -> BuildResu
       let source = coll.sources[j]
       match slug_owner.get(source.slug) {
         Some(owner) => {
-          println(
-            "[error] duplicate slug '" +
-            source.slug +
-            "' in collections '" +
-            owner +
-            "' and '" +
-            coll.definition.name +
-            "'",
+          diagnostics.push(
+            build_error(
+              Some(source.path),
+              None,
+              None,
+              "duplicate slug '" +
+              source.slug +
+              "' in collections '" +
+              owner +
+              "' and '" +
+              coll.definition.name +
+              "'",
+            ),
           )
-          return { errors: 1, rebuilt_pages: 0, unchanged_pages: 0 }
+          return { errors: 1, diagnostics, rebuilt_pages: 0, unchanged_pages: 0 }
         }
         None => {
           slug_owner.set(source.slug, coll.definition.name)
@@ -2134,12 +2272,12 @@ pub fn build(config : BuildConfig, cache_store : @cache.CacheStore) -> BuildResu
     true
   } catch {
     @fs.IOError(msg) => {
-      println("[error] cannot create output directory: " + msg)
+      diagnostics.push(build_error(Some(config.output_dir), None, None, "cannot create output directory: " + msg))
       false
     }
   }
   if not(dir_ok) {
-    return { errors: 1, rebuilt_pages: 0, unchanged_pages: 0 }
+    return { errors: 1, diagnostics, rebuilt_pages: 0, unchanged_pages: 0 }
   }
 
   // Write default CSS (once, if not already present)
@@ -2150,7 +2288,7 @@ pub fn build(config : BuildConfig, cache_store : @cache.CacheStore) -> BuildResu
       true
     } catch {
       @fs.IOError(msg) => {
-        println("[warn] could not write style.css: " + msg)
+        diagnostics.push(build_warning(Some(css_path), None, None, "could not write style.css: " + msg))
         false
       }
     }
@@ -2177,16 +2315,19 @@ pub fn build(config : BuildConfig, cache_store : @cache.CacheStore) -> BuildResu
       true
     } catch {
       @fs.IOError(msg) => {
-        println(
-          "[error] cannot create collection output directory " +
-          collection_root +
-          ": " +
-          msg,
+        diagnostics.push(
+          build_error(
+            Some(collection_root),
+            None,
+            None,
+            "cannot create collection output directory: " + msg,
+          ),
         )
         false
       }
     }
     if not(collection_dir_ok) {
+      diagnostics.push(build_error(Some(collection_root), None, None, "skipping collection build due to output directory error"))
       error_count = error_count + coll.sources.length()
       rendered_collections.push({ name: coll.definition.name, pages: coll_pages })
       i = i + 1
@@ -2216,11 +2357,11 @@ pub fn build(config : BuildConfig, cache_store : @cache.CacheStore) -> BuildResu
         Some(refs) => render_backlinks_html(refs)
         None => ""
       }
-      match process_document(
+      let doc_outcome = process_document(
         src.content,
+        src.path,
         src.slug,
         page_url,
-        page_context,
         page_index,
         known_tags,
         tags_field,
@@ -2232,10 +2373,14 @@ pub fn build(config : BuildConfig, cache_store : @cache.CacheStore) -> BuildResu
         custom_css,
         page_backlinks_html,
         should_rebuild,
-      ) {
-        None => {
-          error_count = error_count + 1
-        }
+      )
+      let mut diag_idx = 0
+      while diag_idx < doc_outcome.diagnostics.length() {
+        diagnostics.push(doc_outcome.diagnostics[diag_idx])
+        diag_idx = diag_idx + 1
+      }
+      match doc_outcome.document {
+        None => error_count = error_count + 1
         Some(doc) => {
           let write_result = if should_rebuild {
             let page_dir = collection_root + "/" + src.slug
@@ -2248,7 +2393,9 @@ pub fn build(config : BuildConfig, cache_store : @cache.CacheStore) -> BuildResu
               Some(out_path)
             } catch {
               @fs.IOError(msg) => {
-                println("[error] " + page_context + ": write failed: " + msg)
+                diagnostics.push(
+                  build_error(Some(out_path), None, None, page_context + ": write failed: " + msg),
+                )
                 None
               }
             }
@@ -2341,7 +2488,9 @@ pub fn build(config : BuildConfig, cache_store : @cache.CacheStore) -> BuildResu
         true
       } catch {
         @fs.IOError(msg) => {
-          println("[error] " + coll.name + " feed: write failed: " + msg)
+          diagnostics.push(
+            build_error(Some(coll_dir + "/feed.xml"), None, None, coll.name + " feed: write failed: " + msg),
+          )
           false
         }
       }
@@ -2368,7 +2517,14 @@ pub fn build(config : BuildConfig, cache_store : @cache.CacheStore) -> BuildResu
         ) {
           Ok(html) => Some(html)
           Err(msg) => {
-            println("[error] " + coll.name + " index page " + pagination.page_number.to_string() + ": " + msg)
+            diagnostics.push(
+              build_error(
+                Some(coll_dir + "/index.html"),
+                None,
+                None,
+                coll.name + " index page " + pagination.page_number.to_string() + ": " + msg,
+              ),
+            )
             None
           }
         }
@@ -2386,13 +2542,19 @@ pub fn build(config : BuildConfig, cache_store : @cache.CacheStore) -> BuildResu
               true
             } catch {
               @fs.IOError(msg) => {
-                println(
-                  "[error] " +
-                  coll.name +
-                  " index page " +
-                  pagination.page_number.to_string() +
-                  ": write failed: " +
-                  msg,
+                diagnostics.push(
+                  build_error(
+                    Some(
+                      if pagination.page_number == 1 {
+                        coll_dir + "/index.html"
+                      } else {
+                        coll_dir + "/page/" + pagination.page_number.to_string() + "/index.html"
+                      },
+                    ),
+                    None,
+                    None,
+                    coll.name + " index page " + pagination.page_number.to_string() + ": write failed: " + msg,
+                  ),
                 )
                 false
               }
@@ -2416,7 +2578,9 @@ pub fn build(config : BuildConfig, cache_store : @cache.CacheStore) -> BuildResu
         true
       } catch {
         @fs.IOError(msg) => {
-          println("[error] tags: cannot create output directory " + tags_root + ": " + msg)
+          diagnostics.push(
+            build_error(Some(tags_root), None, None, "tags: cannot create output directory: " + msg),
+          )
           false
         }
       }
@@ -2439,7 +2603,9 @@ pub fn build(config : BuildConfig, cache_store : @cache.CacheStore) -> BuildResu
             true
           } catch {
             @fs.IOError(msg) => {
-              println("[error] tags/" + tag_slug + ": cannot create directory: " + msg)
+              diagnostics.push(
+                build_error(Some(tag_dir), None, None, "tags/" + tag_slug + ": cannot create directory: " + msg),
+              )
               false
             }
           }
@@ -2469,13 +2635,18 @@ pub fn build(config : BuildConfig, cache_store : @cache.CacheStore) -> BuildResu
               ) {
                 Ok(html) => Some(html)
                 Err(msg) => {
-                  println(
-                    "[error] tags/" +
-                    tag_slug +
-                    " page " +
-                    pagination.page_number.to_string() +
-                    ": " +
-                    msg,
+                  diagnostics.push(
+                    build_error(
+                      Some(tag_dir + "/index.html"),
+                      None,
+                      None,
+                      "tags/" +
+                      tag_slug +
+                      " page " +
+                      pagination.page_number.to_string() +
+                      ": " +
+                      msg,
+                    ),
                   )
                   None
                 }
@@ -2494,13 +2665,24 @@ pub fn build(config : BuildConfig, cache_store : @cache.CacheStore) -> BuildResu
                     true
                   } catch {
                     @fs.IOError(msg) => {
-                      println(
-                        "[error] tags/" +
-                        tag_slug +
-                        " page " +
-                        pagination.page_number.to_string() +
-                        ": write failed: " +
-                        msg,
+                      diagnostics.push(
+                        build_error(
+                          Some(
+                            if pagination.page_number == 1 {
+                              tag_dir + "/index.html"
+                            } else {
+                              tag_dir + "/page/" + pagination.page_number.to_string() + "/index.html"
+                            },
+                          ),
+                          None,
+                          None,
+                          "tags/" +
+                          tag_slug +
+                          " page " +
+                          pagination.page_number.to_string() +
+                          ": write failed: " +
+                          msg,
+                        ),
                       )
                       false
                     }
@@ -2544,8 +2726,13 @@ pub fn build(config : BuildConfig, cache_store : @cache.CacheStore) -> BuildResu
             ) {
               Ok(html) => Some(html)
               Err(msg) => {
-                println(
-                  "[error] tags index page " + pagination.page_number.to_string() + ": " + msg,
+                diagnostics.push(
+                  build_error(
+                    Some(tags_root + "/index.html"),
+                    None,
+                    None,
+                    "tags index page " + pagination.page_number.to_string() + ": " + msg,
+                  ),
                 )
                 None
               }
@@ -2564,11 +2751,22 @@ pub fn build(config : BuildConfig, cache_store : @cache.CacheStore) -> BuildResu
                   true
                 } catch {
                   @fs.IOError(msg) => {
-                    println(
-                      "[error] tags index page " +
-                      pagination.page_number.to_string() +
-                      ": write failed: " +
-                      msg,
+                    diagnostics.push(
+                      build_error(
+                        Some(
+                          if pagination.page_number == 1 {
+                            tags_root + "/index.html"
+                          } else {
+                            tags_root + "/page/" + pagination.page_number.to_string() + "/index.html"
+                          },
+                        ),
+                        None,
+                        None,
+                        "tags index page " +
+                        pagination.page_number.to_string() +
+                        ": write failed: " +
+                        msg,
+                      ),
                     )
                     false
                   }
@@ -2596,7 +2794,7 @@ pub fn build(config : BuildConfig, cache_store : @cache.CacheStore) -> BuildResu
         true
       } catch {
         @fs.IOError(msg) => {
-          println("[error] sitemap: write failed: " + msg)
+          diagnostics.push(build_error(Some(config.output_dir + "/sitemap.xml"), None, None, "sitemap: write failed: " + msg))
           false
         }
       }
@@ -2614,7 +2812,14 @@ pub fn build(config : BuildConfig, cache_store : @cache.CacheStore) -> BuildResu
         true
       } catch {
         @fs.IOError(msg) => {
-          println("[error] search index: write failed: " + msg)
+          diagnostics.push(
+            build_error(
+              Some(config.output_dir + "/" + search_index_file_name(config.site)),
+              None,
+              None,
+              "search index: write failed: " + msg,
+            ),
+          )
           false
         }
       }
@@ -2631,7 +2836,7 @@ pub fn build(config : BuildConfig, cache_store : @cache.CacheStore) -> BuildResu
         true
       } catch {
         @fs.IOError(msg) => {
-          println("[error] graph.json: write failed: " + msg)
+          diagnostics.push(build_error(Some(config.output_dir + "/graph.json"), None, None, "graph.json: write failed: " + msg))
           false
         }
       }
@@ -2651,7 +2856,7 @@ pub fn build(config : BuildConfig, cache_store : @cache.CacheStore) -> BuildResu
           }
         }
         Err(e) => {
-          println("[error] static assets: " + asset_error_text(e))
+          diagnostics.push(asset_error_diagnostic(e))
           error_count = error_count + 1
         }
       }
@@ -2660,7 +2865,7 @@ pub fn build(config : BuildConfig, cache_store : @cache.CacheStore) -> BuildResu
       match write_manifest(config, collection_sources) {
         Ok(_) => ()
         Err(msg) => {
-          println("[error] manifest: write failed: " + msg)
+          diagnostics.push(build_error(Some(config.output_dir + "/manifest.json"), None, None, "manifest: write failed: " + msg))
           error_count = error_count + 1
         }
       }
@@ -2669,17 +2874,23 @@ pub fn build(config : BuildConfig, cache_store : @cache.CacheStore) -> BuildResu
       match @cache.save(next_cache_store) {
         Ok(_) => ()
         Err(err) => {
-          println("[error] cache: " + @cache.error_text(err))
+          diagnostics.push(build_error(Some(config.output_dir), None, None, "cache: " + @cache.error_text(err)))
           error_count = error_count + 1
         }
       }
     }
   } else {
-    println(
-      "[warn] skipped collection feeds/indexes, tags, sitemap, and search index generation due to prior build errors",
+    diagnostics.push(
+      build_warning(
+        None,
+        None,
+        None,
+        "skipped collection feeds/indexes, tags, sitemap, and search index generation due to prior build errors",
+      ),
     )
   }
 
+  error_count = @diagnostic.count_errors(diagnostics)
   println(
     "[lattice] " +
     "rebuilt " +
@@ -2690,7 +2901,7 @@ pub fn build(config : BuildConfig, cache_store : @cache.CacheStore) -> BuildResu
     error_count.to_string() +
     " errors",
   )
-  { errors: error_count, rebuilt_pages: rebuilt, unchanged_pages: unchanged }
+  { errors: error_count, diagnostics, rebuilt_pages: rebuilt, unchanged_pages: unchanged }
 }
 
 ///|
@@ -2732,13 +2943,13 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
   let custom_css = default_css()
   let data_store = match load_data_store(config, layout.data_schemas) {
     Ok(store) => store
-    Err(msg) => {
+    Err(err) => {
       violations.push({
         path: data_dir_for_build(config),
         line: None,
         column: None,
         kind: @lint.DataError,
-        message: msg,
+        message: @data.format_error(err),
       })
       @data.empty_store()
     }

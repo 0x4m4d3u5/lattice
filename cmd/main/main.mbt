@@ -62,6 +62,92 @@ fn substr_main(s : String, start : Int, end : Int) -> String {
   buf.to_string()
 }
 
+fn print_diagnostic_main(d : @diagnostic.Diagnostic) -> Unit {
+  println(@diagnostic.format_diagnostic(d))
+}
+
+fn cli_error(message : String) -> @diagnostic.Diagnostic {
+  @diagnostic.error(message)
+}
+
+fn cli_warning(message : String) -> @diagnostic.Diagnostic {
+  @diagnostic.warning(message)
+}
+
+fn with_path(
+  d : @diagnostic.Diagnostic,
+  path : String?,
+  line : Int?,
+  column : Int?
+) -> @diagnostic.Diagnostic {
+  {
+    severity: d.severity,
+    code: d.code,
+    path,
+    line,
+    column,
+    message: d.message,
+    note: d.note,
+  }
+}
+
+fn collections_error_diagnostic(
+  path : String,
+  err : @collections.CollectionsError
+) -> @diagnostic.Diagnostic {
+  match err {
+    @collections.InvalidLine(line, msg) => with_path(cli_error(msg), Some(path), Some(line), None)
+    @collections.MissingRequiredField(collection_name, field) => {
+      {
+        severity: @diagnostic.Error,
+        code: None,
+        path: Some(path),
+        line: None,
+        column: None,
+        message: "missing required field '" + field + "' in collection '" + collection_name + "'",
+        note: None,
+      }
+    }
+    @collections.DuplicateCollection(name) => with_path(
+      cli_error("duplicate collection '" + name + "'"),
+      Some(path),
+      None,
+      None,
+    )
+    @collections.DuplicateDataSchema(name) => with_path(
+      cli_error("duplicate data schema '" + name + "'"),
+      Some(path),
+      None,
+      None,
+    )
+    @collections.InvalidSchema(name, msg) => with_path(
+      cli_error("invalid schema for collection '" + name + "': " + msg),
+      Some(path),
+      None,
+      None,
+    )
+    @collections.EmptyConfig => with_path(cli_error("no collections defined"), Some(path), None, None)
+  }
+}
+
+fn config_error_diagnostic(path : String, err : @config.ConfigError) -> @diagnostic.Diagnostic {
+  match err {
+    @config.InvalidLine(line, msg) => with_path(cli_error(msg), Some(path), Some(line), None)
+    @config.MissingRequiredField(field) => with_path(
+      cli_error("missing required field '" + field + "'"),
+      Some(path),
+      None,
+      None,
+    )
+    @config.InvalidValue(field, msg) => with_path(
+      cli_error("invalid value for '" + field + "': " + msg),
+      Some(path),
+      None,
+      None,
+    )
+  }
+}
+
 fn parse_positive_int_main(value : String) -> Int? {
   if value.length() == 0 {
     return None
@@ -135,7 +221,7 @@ fn parse_cli_options(args : Array[String]) -> CliOptions {
       }
     } else if arg == "--config" {
       if i + 1 >= args.length() {
-        println("[error] missing value for --config")
+        print_diagnostic_main(cli_error("missing value for --config"))
         @sys.exit(1)
       }
       config_path = Some(args[i + 1])
@@ -143,14 +229,14 @@ fn parse_cli_options(args : Array[String]) -> CliOptions {
     } else if starts_with_main(arg, "--config=") {
       let value = substr_main(arg, 9, arg.length())
       if value.length() == 0 {
-        println("[error] missing value for --config")
+        print_diagnostic_main(cli_error("missing value for --config"))
         @sys.exit(1)
       }
       config_path = Some(value)
       i = i + 1
     } else if arg == "--collections" {
       if i + 1 >= args.length() {
-        println("[error] missing value for --collections")
+        print_diagnostic_main(cli_error("missing value for --collections"))
         @sys.exit(1)
       }
       collections_path = Some(args[i + 1])
@@ -158,7 +244,7 @@ fn parse_cli_options(args : Array[String]) -> CliOptions {
     } else if starts_with_main(arg, "--collections=") {
       let value = substr_main(arg, 14, arg.length())
       if value.length() == 0 {
-        println("[error] missing value for --collections")
+        print_diagnostic_main(cli_error("missing value for --collections"))
         @sys.exit(1)
       }
       collections_path = Some(value)
@@ -174,13 +260,13 @@ fn parse_cli_options(args : Array[String]) -> CliOptions {
       i = i + 1
     } else if arg == "--watch-interval" {
       if i + 1 >= args.length() {
-        println("[error] missing value for --watch-interval")
+        print_diagnostic_main(cli_error("missing value for --watch-interval"))
         @sys.exit(1)
       }
       match parse_positive_int_main(args[i + 1]) {
         Some(parsed) => watch_interval_ms = parsed
         None => {
-          println("[error] invalid value for --watch-interval: must be a positive integer")
+          print_diagnostic_main(cli_error("invalid value for --watch-interval: must be a positive integer"))
           @sys.exit(1)
         }
       }
@@ -190,14 +276,21 @@ fn parse_cli_options(args : Array[String]) -> CliOptions {
       match parse_positive_int_main(value) {
         Some(parsed) => watch_interval_ms = parsed
         None => {
-          println("[error] invalid value for --watch-interval: must be a positive integer")
+          print_diagnostic_main(cli_error("invalid value for --watch-interval: must be a positive integer"))
           @sys.exit(1)
         }
       }
       i = i + 1
     } else if starts_with_main(arg, "--") {
-      println("[error] unknown option: " + arg)
-      println("[hint] run with --help to see supported flags")
+      print_diagnostic_main({
+        severity: @diagnostic.Error,
+        code: None,
+        path: None,
+        line: None,
+        column: None,
+        message: "unknown option: " + arg,
+        note: Some("run with --help to see supported flags"),
+      })
       @sys.exit(1)
     } else {
       positionals.push(arg)
@@ -224,38 +317,18 @@ fn parse_cli_options(args : Array[String]) -> CliOptions {
 fn load_collections_for_watch(
   content_dir : String,
   collections_path : String?
-) -> Result[Array[@collections.CollectionDef], String] {
+) -> Result[Array[@collections.CollectionDef], @diagnostic.Diagnostic] {
   match collections_path {
     None => Ok([@collections.default_posts_collection(content_dir)])
     Some(path) => {
       let source = try {
         @fs.read_file_to_string(path)
       } catch {
-        @fs.IOError(msg) => return Err("cannot read collections file " + path + ": " + msg)
+        @fs.IOError(msg) => return Err(with_path(cli_error("cannot read collections file: " + msg), Some(path), None, None))
       }
       match @collections.parse(source) {
         Ok(parsed) => Ok(parsed.definitions)
-        Err(@collections.InvalidLine(line, msg)) => Err(path + ":" + line.to_string() + ": " + msg)
-        Err(@collections.MissingRequiredField(collection_name, field)) => {
-          Err(
-            path +
-            ": missing required field '" +
-            field +
-            "' in collection '" +
-            collection_name +
-            "'",
-          )
-        }
-        Err(@collections.DuplicateCollection(name)) => {
-          Err(path + ": duplicate collection '" + name + "'")
-        }
-        Err(@collections.DuplicateDataSchema(name)) => {
-          Err(path + ": duplicate data schema '" + name + "'")
-        }
-        Err(@collections.InvalidSchema(name, msg)) => {
-          Err(path + ": invalid schema for collection '" + name + "': " + msg)
-        }
-        Err(@collections.EmptyConfig) => Err(path + ": no collections defined")
+        Err(err) => Err(collections_error_diagnostic(path, err))
       }
     }
   }
@@ -271,30 +344,17 @@ fn load_cli_state(options : CliOptions) -> Result[CliState, Int] {
     @fs.read_file_to_string(effective_config_path)
   } catch {
     @fs.IOError(msg) => {
-      println("[error] cannot read config file " + effective_config_path + ": " + msg)
+      print_diagnostic_main(
+        with_path(cli_error("cannot read config file: " + msg), Some(effective_config_path), None, None),
+      )
       return Err(1)
     }
   }
 
   let site = match @config.parse(config_source) {
     Ok(c) => c
-    Err(@config.InvalidLine(line, msg)) => {
-      println(
-        "[error] config parse error " +
-        effective_config_path +
-        ":" +
-        line.to_string() +
-        ": " +
-        msg,
-      )
-      return Err(1)
-    }
-    Err(@config.MissingRequiredField(field)) => {
-      println("[error] config missing required field: " + field)
-      return Err(1)
-    }
-    Err(@config.InvalidValue(field, msg)) => {
-      println("[error] invalid config value for " + field + ": " + msg)
+    Err(err) => {
+      print_diagnostic_main(config_error_diagnostic(effective_config_path, err))
       return Err(1)
     }
   }
@@ -321,8 +381,8 @@ fn load_cli_state(options : CliOptions) -> Result[CliState, Int] {
   }
   let collections = match load_collections_for_watch(options.content_dir, build_config.collections_path) {
     Ok(defs) => defs
-    Err(msg) => {
-      println("[error] collections: " + msg)
+    Err(diagnostic) => {
+      print_diagnostic_main(diagnostic)
       return Err(1)
     }
   }
@@ -357,7 +417,7 @@ fn run_once(build_config : @builder.BuildConfig, check_mode : Bool) -> Int {
     let lint_result = @builder.check(build_config)
     let mut i = 0
     while i < lint_result.violations.length() {
-      println(@lint.format_violation(lint_result.violations[i]))
+      print_diagnostic_main(@diagnostic.of_lint_violation(lint_result.violations[i]))
       i = i + 1
     }
     if @lint.has_violations(lint_result) {
@@ -374,11 +434,24 @@ fn run_once(build_config : @builder.BuildConfig, check_mode : Bool) -> Int {
     let cache_store = match @cache.load(build_config.output_dir) {
       Ok(store) => store
       Err(err) => {
-        println("[warn] cache: " + @cache.error_text(err))
+        print_diagnostic_main(
+          with_path(
+            cli_warning("cache: " + @cache.error_text(err)),
+            Some(build_config.output_dir),
+            None,
+            None,
+          ),
+        )
         @cache.empty(build_config.output_dir)
       }
     }
-    @builder.build(build_config, cache_store).errors
+    let result = @builder.build(build_config, cache_store)
+    let mut i = 0
+    while i < result.diagnostics.length() {
+      print_diagnostic_main(result.diagnostics[i])
+      i = i + 1
+    }
+    result.errors
   }
 }
 
@@ -411,7 +484,7 @@ fn run_watch(options : CliOptions, initial_state : CliState) -> Unit {
     @watch.take_snapshot(current_roots)
   } catch {
     @watch.IOError(msg) => {
-      println("[error] watch snapshot failed: " + msg)
+      print_diagnostic_main(cli_error("watch snapshot failed: " + msg))
       @sys.exit(1)
       return
     }
@@ -427,7 +500,7 @@ fn run_watch(options : CliOptions, initial_state : CliState) -> Unit {
       @watch.take_snapshot(current_roots)
     } catch {
       @watch.IOError(msg) => {
-        println("[warn] watch snapshot failed: " + msg)
+        print_diagnostic_main(cli_warning("watch snapshot failed: " + msg))
         continue
       }
     }
@@ -454,7 +527,7 @@ fn run_watch(options : CliOptions, initial_state : CliState) -> Unit {
       @watch.take_snapshot(current_roots)
     } catch {
       @watch.IOError(msg) => {
-        println("[warn] watch snapshot failed after rebuild: " + msg)
+        print_diagnostic_main(cli_warning("watch snapshot failed after rebuild: " + msg))
         next_snapshot
       }
     }
