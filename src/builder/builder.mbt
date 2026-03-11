@@ -401,6 +401,22 @@ fn load_templates(config : BuildConfig) -> Result[BuildTemplates, String] {
   Ok({ page, index, tag_page, tag_index })
 }
 
+fn load_collection_page_template(
+  collection : @collections.CollectionDef,
+  default_template : @template.Template?
+) -> Result[@template.Template?, String] {
+  match collection.template {
+    Some(path) => {
+      match load_template_file(path) {
+        Ok(Some(tpl)) => Ok(Some(tpl))
+        Ok(None) => Err("missing template " + path)
+        Err(msg) => Err(msg)
+      }
+    }
+    None => Ok(default_template)
+  }
+}
+
 fn parse_int_builder(s : String) -> Int? {
   let n = s.length()
   if n == 0 {
@@ -606,6 +622,29 @@ fn load_templates_for_lint(config : BuildConfig) -> TemplateLoadResult {
   {
     templates: { page, index, tag_page, tag_index },
     violations,
+  }
+}
+
+fn load_collection_page_template_for_lint(
+  collection : @collections.CollectionDef,
+  default_template : @template.Template?,
+  violations : Array[@lint.LintViolation]
+) -> @template.Template? {
+  match collection.template {
+    Some(path) => {
+      match load_template_file(path) {
+        Ok(Some(tpl)) => Some(tpl)
+        Ok(None) => {
+          violations.push(template_violation(path, "missing template " + path))
+          None
+        }
+        Err(msg) => {
+          violations.push(template_violation(path, msg))
+          None
+        }
+      }
+    }
+    None => default_template
   }
 }
 
@@ -1903,7 +1942,10 @@ fn is_root_page_for_site(site : @config.SiteConfig, slug : String) -> Bool {
   }
 }
 
-fn dependency_roots_for_build(config : BuildConfig) -> Array[String] {
+fn dependency_roots_for_build(
+  config : BuildConfig,
+  collections : Array[@collections.CollectionDef]
+) -> Array[String] {
   let roots : Array[String] = [config.config_path]
   match config.collections_path {
     Some(path) => roots.push(path)
@@ -1911,6 +1953,14 @@ fn dependency_roots_for_build(config : BuildConfig) -> Array[String] {
   }
   roots.push(templates_dir_for_build(config))
   roots.push(data_dir_for_build(config))
+  let mut i = 0
+  while i < collections.length() {
+    match collections[i].template {
+      Some(path) => roots.push(path)
+      None => ()
+    }
+    i = i + 1
+  }
   roots
 }
 
@@ -1938,10 +1988,11 @@ fn load_manifest(config : BuildConfig) -> @manifest.ManifestFile? {
 }
 
 fn dependency_manifest_entries(
-  config : BuildConfig
+  config : BuildConfig,
+  collections : Array[@collections.CollectionDef]
 ) -> Result[Array[@manifest.ManifestEntry], String] {
   let snapshot = try {
-    @watch.take_snapshot(dependency_roots_for_build(config))
+    @watch.take_snapshot(dependency_roots_for_build(config, collections))
   } catch {
     @watch.IOError(msg) => return Err(msg)
   }
@@ -1961,7 +2012,8 @@ fn dependency_manifest_entries(
 
 fn build_incremental_state(
   config : BuildConfig,
-  collection_sources : Array[CollectionSources]
+  collection_sources : Array[CollectionSources],
+  collections : Array[@collections.CollectionDef]
 ) -> IncrementalState {
   let previous_entries : Map[String, @manifest.ManifestEntry] = Map::new()
   let changed_sources : Map[String, Bool] = Map::new()
@@ -1980,7 +2032,7 @@ fn build_incremental_state(
     i = i + 1
   }
 
-  let dependency_entries = match dependency_manifest_entries(config) {
+  let dependency_entries = match dependency_manifest_entries(config, collections) {
     Ok(entries) => entries
     Err(msg) => {
       println("[warn] incremental dependency snapshot failed: " + msg)
@@ -2074,9 +2126,10 @@ fn source_manifest_entries(
 
 fn write_manifest(
   config : BuildConfig,
-  collection_sources : Array[CollectionSources]
+  collection_sources : Array[CollectionSources],
+  collections : Array[@collections.CollectionDef]
 ) -> Result[Unit, String] {
-  let dependency_entries = match dependency_manifest_entries(config) {
+  let dependency_entries = match dependency_manifest_entries(config, collections) {
     Ok(entries) => entries
     Err(msg) => return Err(msg)
   }
@@ -2263,7 +2316,7 @@ pub fn build(config : BuildConfig, cache_store : @cache.CacheStore) -> BuildResu
   let known_tags = tag_catalog.name_by_slug
   let page_size = page_size_for_site(config.site)
   let backlink_index = build_backlink_index(collection_sources, page_index)
-  let incremental = build_incremental_state(config, collection_sources)
+  let incremental = build_incremental_state(config, collection_sources, collections)
   let backlink_affected = mark_backlink_targets_changed(incremental, collection_sources)
   let next_cache_store = @cache.empty(config.output_dir)
 
@@ -2310,6 +2363,23 @@ pub fn build(config : BuildConfig, cache_store : @cache.CacheStore) -> BuildResu
   while i < collection_sources.length() {
     let coll = collection_sources[i]
     let coll_pages : Array[@graph.GraphPage] = []
+    let page_template = match load_collection_page_template(coll.definition, templates.page) {
+      Ok(tpl) => tpl
+      Err(msg) => {
+        diagnostics.push(
+          build_error(
+            coll.definition.template,
+            None,
+            None,
+            coll.definition.name + ": " + msg,
+          ),
+        )
+        error_count = error_count + coll.sources.length()
+        rendered_collections.push({ name: coll.definition.name, pages: coll_pages })
+        i = i + 1
+        continue
+      }
+    }
     let collection_root = config.output_dir + "/" + coll.definition.name
     let collection_dir_ok = try {
       ensure_dir(collection_root)
@@ -2369,7 +2439,7 @@ pub fn build(config : BuildConfig, cache_store : @cache.CacheStore) -> BuildResu
         coll.definition.schema,
         config.site,
         data_store,
-        templates.page,
+        page_template,
         nav_links_html,
         custom_css,
         page_backlinks_html,
@@ -2863,7 +2933,7 @@ pub fn build(config : BuildConfig, cache_store : @cache.CacheStore) -> BuildResu
       }
     }
     if error_count == 0 {
-      match write_manifest(config, collection_sources) {
+      match write_manifest(config, collection_sources, collections) {
         Ok(_) => ()
         Err(msg) => {
           diagnostics.push(build_error(Some(config.output_dir + "/manifest.json"), None, None, "manifest: write failed: " + msg))
@@ -3029,6 +3099,11 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
   i = 0
   while i < collection_sources.length() {
     let coll = collection_sources[i]
+    let page_template = load_collection_page_template_for_lint(
+      coll.definition,
+      templates.page,
+      violations,
+    )
     let coll_pages : Array[@graph.GraphPage] = []
     let mut j = 0
     while j < coll.sources.length() {
@@ -3049,7 +3124,7 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
         coll.definition.schema,
         config.site,
         data_store,
-        templates.page,
+        page_template,
         nav_links_html,
         custom_css,
         lint_backlinks_html,
