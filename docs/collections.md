@@ -34,10 +34,11 @@ The current parser supports two section kinds:
 
 ## Per-collection fields
 
-Each collection currently supports exactly two keys:
+Each collection currently supports these keys:
 
 - `schema`: a comma-separated list of `name:Type` declarations
 - `dir`: the directory containing that collection's Markdown files
+- `template`: optional path to the `.html` page template for that collection
 
 Example:
 
@@ -45,9 +46,10 @@ Example:
 [projects]
 schema = title:String, status:String, description:Optional[String]
 dir = example/content/projects
+template = example/templates/project-page.html
 ```
 
-The implementation does not currently support per-collection `template`, `index_template`, or `output_dir` keys. Templates are loaded site-wide from `templates_dir`, and output paths are derived from the collection name.
+If `template` is set, lattice uses that file for pages in the collection instead of the site-wide `page.html`. If `template` is omitted, the collection uses the site-wide page template as before. `output_dir` is still not configurable per collection; output paths are derived from the collection name.
 
 ## Multiple collections
 

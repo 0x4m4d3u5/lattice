@@ -15,3 +15,22 @@ test "collections parse data schemas" {
     Err(_) => assert_true(false)
   }
 }
+
+///|
+test "collections parse optional template override" {
+  let src =
+    "[posts]\n" +
+    "schema = title:String\n" +
+    "dir = content/posts\n" +
+    "template = templates/post.html\n"
+  match parse(src) {
+    Ok(cfg) => {
+      assert_eq(cfg.definitions.length(), 1)
+      match cfg.definitions[0].template {
+        Some(path) => assert_eq(path, "templates/post.html")
+        None => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}

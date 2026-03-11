@@ -17,6 +17,7 @@ pub(all) struct CollectionDef {
   name : String
   schema : @schema.Schema
   content_dir : String
+  template : String?
 }
 
 pub(all) struct DataSchemaDef {
@@ -348,7 +349,8 @@ fn finalize_collection(
   seen : Map[String, Bool],
   name : String,
   schema_text : String?,
-  dir_text : String?
+  dir_text : String?,
+  template_text : String?
 ) -> Result[Unit, CollectionsError] {
   if seen.get(name) != None {
     return Err(DuplicateCollection(name))
@@ -366,7 +368,7 @@ fn finalize_collection(
     Err(e) => return Err(e)
   }
   let schema : @schema.Schema = { name, fields }
-  defs.push({ name, schema, content_dir: dir_value })
+  defs.push({ name, schema, content_dir: dir_value, template: template_text })
   seen.set(name, true)
   Ok(())
 }
@@ -406,6 +408,7 @@ pub fn parse(input : String) -> Result[CollectionsConfig, CollectionsError] {
   let mut current_section : SectionKind? = None
   let mut current_schema : String? = None
   let mut current_dir : String? = None
+  let mut current_template : String? = None
   let mut current_required : String? = None
 
   let mut i = 0
@@ -420,7 +423,14 @@ pub fn parse(input : String) -> Result[CollectionsConfig, CollectionsError] {
     if char_at_collections(raw, 0) == '[' {
       match current_section {
         Some(CollectionSection(name)) => {
-          match finalize_collection(defs, seen_collections, name, current_schema, current_dir) {
+          match finalize_collection(
+            defs,
+            seen_collections,
+            name,
+            current_schema,
+            current_dir,
+            current_template,
+          ) {
             Err(e) => return Err(e)
             Ok(_) => ()
           }
@@ -435,6 +445,7 @@ pub fn parse(input : String) -> Result[CollectionsConfig, CollectionsError] {
       }
       current_schema = None
       current_dir = None
+      current_template = None
       current_required = None
       match parse_section_header(raw, line_no) {
         Ok(section) => current_section = Some(section)
@@ -475,6 +486,8 @@ pub fn parse(input : String) -> Result[CollectionsConfig, CollectionsError] {
           current_schema = Some(value)
         } else if key == "dir" {
           current_dir = Some(value)
+        } else if key == "template" {
+          current_template = Some(value)
         } else {
           return Err(InvalidLine(line_no, "unknown key in section '" + name + "': " + key))
         }
@@ -493,7 +506,14 @@ pub fn parse(input : String) -> Result[CollectionsConfig, CollectionsError] {
 
   match current_section {
     Some(CollectionSection(name)) => {
-      match finalize_collection(defs, seen_collections, name, current_schema, current_dir) {
+      match finalize_collection(
+        defs,
+        seen_collections,
+        name,
+        current_schema,
+        current_dir,
+        current_template,
+      ) {
         Err(e) => return Err(e)
         Ok(_) => ()
       }
@@ -542,5 +562,6 @@ pub fn default_posts_collection(content_dir : String) -> CollectionDef {
       ],
     },
     content_dir,
+    template: None,
   }
 }
