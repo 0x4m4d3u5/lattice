@@ -106,6 +106,7 @@ fn extract_description(fm : @frontmatter.Frontmatter) -> String? {
 ///|
 fn extract_date(fm : @frontmatter.Frontmatter) -> String? {
   match fm.fields.get("date") {
+    Some(@frontmatter.FDate(d)) => Some(d)
     Some(@frontmatter.FStr(d)) => Some(d)
     _ => None
   }

@@ -4,6 +4,7 @@ test "frontmatter parses typed values and preserves body" {
     "---\n" +
     "# comment\n" +
     "title = \"Hello\"\n" +
+    "date = 2026-03-11\n" +
     "count = 42\n" +
     "draft = false\n" +
     "tags = [\"moonbit\", \"ssg\"]\n" +
@@ -15,6 +16,10 @@ test "frontmatter parses typed values and preserves body" {
       assert_eq(fm.body, "Body text\n")
       match fm.fields.get("title") {
         Some(FStr(v)) => assert_eq(v, "Hello")
+        _ => assert_true(false)
+      }
+      match fm.fields.get("date") {
+        Some(FDate(v)) => assert_eq(v, "2026-03-11")
         _ => assert_true(false)
       }
       match fm.fields.get("count") {
@@ -135,7 +140,7 @@ test "frontmatter parses yaml-style obsidian metadata" {
         _ => assert_true(false)
       }
       match fm.fields.get("created") {
-        Some(FStr(v)) => assert_eq(v, "2026-03-08")
+        Some(FDate(v)) => assert_eq(v, "2026-03-08")
         _ => assert_true(false)
       }
       match fm.fields.get("tags") {

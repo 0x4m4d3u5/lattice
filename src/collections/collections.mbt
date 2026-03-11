@@ -7,7 +7,7 @@
 ///
 /// Example:
 /// [posts]
-/// schema = "title:String,date:String"
+/// schema = "title:String,date:Date"
 /// dir = "./content/posts"
 ///
 /// [data.nav]
@@ -199,6 +199,9 @@ fn parse_field_type_at(
   let (name, next) = parse_type_name(s, start)
   if name == "String" {
     return Ok((@schema.TString, next))
+  }
+  if name == "Date" {
+    return Ok((@schema.TDate, next))
   }
   if name == "Int" {
     return Ok((@schema.TInt, next))
@@ -520,7 +523,7 @@ pub fn default_posts_collection(content_dir : String) -> CollectionDef {
       name: "posts",
       fields: [
         { name: "title", field_type: @schema.TString, required: true },
-        { name: "date", field_type: @schema.TString, required: true },
+        { name: "date", field_type: @schema.TDate, required: true },
         {
           name: "description",
           field_type: @schema.TOptional(@schema.TString),

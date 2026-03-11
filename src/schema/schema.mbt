@@ -12,6 +12,7 @@
 /// Field type constraint.
 pub(all) enum FieldType {
   TString
+  TDate
   TInt
   TBool
   TArray(FieldType)
@@ -42,6 +43,7 @@ pub(all) struct ValidationError {
 fn field_type_name(ft : FieldType) -> String {
   match ft {
     TString => "String"
+    TDate => "Date"
     TInt => "Int"
     TBool => "Bool"
     TArray(inner) => "Array[" + field_type_name(inner) + "]"
@@ -58,6 +60,10 @@ fn type_matches(
   match ft {
     TString => match val {
       @frontmatter.FStr(_) => true
+      _ => false
+    }
+    TDate => match val {
+      @frontmatter.FDate(_) => true
       _ => false
     }
     TInt => match val {
