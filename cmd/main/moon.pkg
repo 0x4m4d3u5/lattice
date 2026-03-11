@@ -3,6 +3,7 @@ import {
   "kurisu/lattice/src/cache" @cache,
   "kurisu/lattice/src/collections" @collections,
   "kurisu/lattice/src/config" @config,
+  "kurisu/lattice/src/diagnostic" @diagnostic,
   "kurisu/lattice/src/lint" @lint,
   "kurisu/lattice/src/watch" @watch,
   "moonbitlang/x/fs" @fs,
