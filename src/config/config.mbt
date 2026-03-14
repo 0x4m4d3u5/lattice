@@ -5,6 +5,15 @@
 /// - One `key=value` pair per line.
 /// - Lines beginning with `#` are comments.
 /// - Unknown keys are ignored.
+/// - `[[collections]]` array-of-tables for inline collection declarations.
+pub(all) struct CollectionEntry {
+  name : String
+  dir : String
+  schema : String?
+  template : String?
+}
+
+///|
 pub struct SiteConfig {
   title : String
   base_url : String
@@ -18,6 +27,7 @@ pub struct SiteConfig {
   static_dir : String?
   data_dir : String?
   root_page : String?
+  collections : Array[CollectionEntry]
 }
 
 ///|
@@ -25,6 +35,7 @@ pub enum ConfigError {
   InvalidLine(Int, String)
   MissingRequiredField(String)
   InvalidValue(String, String)
+  MissingCollectionField(String, String)
 }
 
 ///|
@@ -173,6 +184,12 @@ fn parse_string_value_config(value : String) -> String {
 /// - `static_dir`
 /// - `data_dir`
 /// - `root_page`
+///
+/// Inline collections via `[[collections]]` array-of-tables:
+/// - `name`: required, collection name
+/// - `dir`: required, content directory path
+/// - `schema`: optional, schema string (e.g., "title:String,date:Date")
+/// - `template`: optional, template name
 pub fn parse(input : String) -> Result[SiteConfig, ConfigError] {
   let mut title : String? = None
   let mut base_url : String? = None
@@ -187,6 +204,13 @@ pub fn parse(input : String) -> Result[SiteConfig, ConfigError] {
   let mut data_dir : String? = None
   let mut root_page : String? = None
 
+  let collections : Array[CollectionEntry] = []
+  let mut in_collections_block = false
+  let mut current_collection_name : String? = None
+  let mut current_collection_dir : String? = None
+  let mut current_collection_schema : String? = None
+  let mut current_collection_template : String? = None
+
   let lines = split_lines_config(input)
   let mut i = 0
   while i < lines.length() {
@@ -197,88 +221,183 @@ pub fn parse(input : String) -> Result[SiteConfig, ConfigError] {
       continue
     }
 
+    // Check for [[collections]] header
+    if raw == "[[collections]]" {
+      // Finalize previous collection if exists
+      if in_collections_block {
+        let coll_name = match current_collection_name {
+          Some(n) => n
+          None =>
+            return Err(
+              MissingCollectionField(
+                "collections",
+                "name",
+              ),
+            )
+        }
+        let coll_dir = match current_collection_dir {
+          Some(d) => d
+          None =>
+            return Err(
+              MissingCollectionField(
+                coll_name,
+                "dir",
+              ),
+            )
+        }
+        collections.push({
+          name: coll_name,
+          dir: coll_dir,
+          schema: current_collection_schema,
+          template: current_collection_template,
+        })
+      }
+      // Start new collection
+      in_collections_block = true
+      current_collection_name = None
+      current_collection_dir = None
+      current_collection_schema = None
+      current_collection_template = None
+      i = i + 1
+      continue
+    }
+
     match parse_assignment(raw, line_no) {
       Err(e) => return Err(e)
       Ok((key, value)) => {
         let string_value = parse_string_value_config(value)
-        if key == "title" {
-          if string_value.length() == 0 {
-            return Err(InvalidValue("title", "must not be empty"))
-          }
-          title = Some(string_value)
-        } else if key == "base_url" {
-          if string_value.length() == 0 {
-            return Err(InvalidValue("base_url", "must not be empty"))
-          }
-          base_url = Some(string_value)
-        } else if key == "output_dir" {
-          if string_value.length() == 0 {
-            return Err(InvalidValue("output_dir", "must not be empty"))
-          }
-          output_dir = Some(string_value)
-        } else if key == "page_size" {
-          match parse_positive_int_config(value) {
-            Some(parsed) => page_size = Some(parsed)
-            None =>
-              return Err(
-                InvalidValue("page_size", "must be a positive integer"),
-              )
-          }
-        } else if key == "description" {
-          if string_value.length() == 0 {
-            description = None
+        
+        if in_collections_block {
+          // Inside [[collections]] block
+          if key == "name" {
+            if string_value.length() == 0 {
+              return Err(InvalidValue("name", "must not be empty"))
+            }
+            current_collection_name = Some(string_value)
+          } else if key == "dir" {
+            if string_value.length() == 0 {
+              return Err(InvalidValue("dir", "must not be empty"))
+            }
+            current_collection_dir = Some(string_value)
+          } else if key == "schema" {
+            current_collection_schema = Some(string_value)
+          } else if key == "template" {
+            current_collection_template = Some(string_value)
           } else {
-            description = Some(string_value)
-          }
-        } else if key == "collections_file" {
-          if string_value.length() == 0 {
-            collections_file = None
-          } else {
-            collections_file = Some(string_value)
-          }
-        } else if key == "templates_dir" {
-          if string_value.length() == 0 {
-            templates_dir = None
-          } else {
-            templates_dir = Some(string_value)
-          }
-        } else if key == "tags_field" {
-          if string_value.length() == 0 {
-            tags_field = None
-          } else {
-            tags_field = Some(string_value)
-          }
-        } else if key == "search_index_file" {
-          if string_value.length() == 0 {
-            search_index_file = None
-          } else {
-            search_index_file = Some(string_value)
-          }
-        } else if key == "static_dir" {
-          if string_value.length() == 0 {
-            static_dir = None
-          } else {
-            static_dir = Some(string_value)
-          }
-        } else if key == "data_dir" {
-          if string_value.length() == 0 {
-            data_dir = None
-          } else {
-            data_dir = Some(string_value)
-          }
-        } else if key == "root_page" {
-          if string_value.length() == 0 {
-            root_page = None
-          } else {
-            root_page = Some(string_value)
+            // Unknown keys in collections block are ignored
+            ()
           }
         } else {
-          // Unknown keys are ignored.
-          ()
+          // Top-level keys
+          if key == "title" {
+            if string_value.length() == 0 {
+              return Err(InvalidValue("title", "must not be empty"))
+            }
+            title = Some(string_value)
+          } else if key == "base_url" {
+            if string_value.length() == 0 {
+              return Err(InvalidValue("base_url", "must not be empty"))
+            }
+            base_url = Some(string_value)
+          } else if key == "output_dir" {
+            if string_value.length() == 0 {
+              return Err(InvalidValue("output_dir", "must not be empty"))
+            }
+            output_dir = Some(string_value)
+          } else if key == "page_size" {
+            match parse_positive_int_config(value) {
+              Some(parsed) => page_size = Some(parsed)
+              None =>
+                return Err(
+                  InvalidValue("page_size", "must be a positive integer"),
+                )
+            }
+          } else if key == "description" {
+            if string_value.length() == 0 {
+              description = None
+            } else {
+              description = Some(string_value)
+            }
+          } else if key == "collections_file" {
+            if string_value.length() == 0 {
+              collections_file = None
+            } else {
+              collections_file = Some(string_value)
+            }
+          } else if key == "templates_dir" {
+            if string_value.length() == 0 {
+              templates_dir = None
+            } else {
+              templates_dir = Some(string_value)
+            }
+          } else if key == "tags_field" {
+            if string_value.length() == 0 {
+              tags_field = None
+            } else {
+              tags_field = Some(string_value)
+            }
+          } else if key == "search_index_file" {
+            if string_value.length() == 0 {
+              search_index_file = None
+            } else {
+              search_index_file = Some(string_value)
+            }
+          } else if key == "static_dir" {
+            if string_value.length() == 0 {
+              static_dir = None
+            } else {
+              static_dir = Some(string_value)
+            }
+          } else if key == "data_dir" {
+            if string_value.length() == 0 {
+              data_dir = None
+            } else {
+              data_dir = Some(string_value)
+            }
+          } else if key == "root_page" {
+            if string_value.length() == 0 {
+              root_page = None
+            } else {
+              root_page = Some(string_value)
+            }
+          } else {
+            // Unknown keys are ignored.
+            ()
+          }
         }
       }
     }
     i = i + 1
+  }
+
+  // Finalize last collection if we were in a block
+  if in_collections_block {
+    let coll_name = match current_collection_name {
+      Some(n) => n
+      None =>
+        return Err(
+          MissingCollectionField(
+            "collections",
+            "name",
+          ),
+        )
+    }
+    let coll_dir = match current_collection_dir {
+      Some(d) => d
+      None =>
+        return Err(
+          MissingCollectionField(
+            coll_name,
+            "dir",
+          ),
+        )
+    }
+    collections.push({
+      name: coll_name,
+      dir: coll_dir,
+      schema: current_collection_schema,
+      template: current_collection_template,
+    })
   }
 
   let title_value = match title {
@@ -303,5 +422,6 @@ pub fn parse(input : String) -> Result[SiteConfig, ConfigError] {
     static_dir,
     data_dir,
     root_page,
+    collections,
   })
 }

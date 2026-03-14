@@ -2,9 +2,43 @@ title = Research Vault
 base_url = https://research.local
 output_dir = /home/kurisu/code/lattice/_vault_dist
 description = Rendered Obsidian research vault
-collections_file = /home/kurisu/code/lattice/vault.collections.cfg
 templates_dir = /home/kurisu/code/lattice/example/templates
 data_dir = /home/kurisu/code/lattice/example/data
 static_dir = ../example/static
 search_index_file = search-index.json
 root_page = "home"
+
+[[collections]]
+name = root
+dir = /home/kurisu/notes/research
+schema = title:Optional[String], date:Optional[String], type:Optional[String], tags:Optional[Array[String]], status:Optional[String], source:Optional[String], created:Optional[String], description:Optional[String], purpose:Optional[String], goal:Optional[String]
+
+[[collections]]
+name = inbox
+dir = /home/kurisu/notes/research/00 - Inbox
+schema = title:Optional[String], date:Optional[String], type:Optional[String], tags:Optional[Array[String]], status:Optional[String], source:Optional[String], created:Optional[String], description:Optional[String], purpose:Optional[String], goal:Optional[String]
+
+[[collections]]
+name = projects
+dir = /home/kurisu/notes/research/10 - Projects
+schema = title:Optional[String], date:Optional[String], type:Optional[String], tags:Optional[Array[String]], status:Optional[String], source:Optional[String], created:Optional[String], description:Optional[String], purpose:Optional[String], goal:Optional[String]
+
+[[collections]]
+name = areas
+dir = /home/kurisu/notes/research/20 - Areas
+schema = title:Optional[String], date:Optional[String], type:Optional[String], tags:Optional[Array[String]], status:Optional[String], source:Optional[String], created:Optional[String], description:Optional[String], purpose:Optional[String], goal:Optional[String]
+
+[[collections]]
+name = resources
+dir = /home/kurisu/notes/research/30 - Resources
+schema = title:Optional[String], date:Optional[String], type:Optional[String], tags:Optional[Array[String]], status:Optional[String], source:Optional[String], created:Optional[String], description:Optional[String], purpose:Optional[String], goal:Optional[String]
+
+[[collections]]
+name = archive
+dir = /home/kurisu/notes/research/40 - Archive
+schema = title:Optional[String], date:Optional[String], type:Optional[String], tags:Optional[Array[String]], status:Optional[String], source:Optional[String], created:Optional[String], description:Optional[String], purpose:Optional[String], goal:Optional[String]
+
+[[collections]]
+name = templates
+dir = /home/kurisu/notes/research/90 - Templates
+schema = date:Optional[String], type:Optional[String], tags:Optional[Array[String]], status:Optional[String], source:Optional[String], created:Optional[String], description:Optional[String], purpose:Optional[String], goal:Optional[String]
