@@ -1,0 +1,12 @@
+import {
+  "moonbitlang/x/fs",
+  "moonbitlang/core/env",
+}
+
+options(
+  "native-stub": [ "watch_native.c" ],
+  targets: {
+    "watch_native.mbt": [ "native", "llvm" ],
+    "watch_stub.mbt": [ "js", "wasm", "wasm-gc" ],
+  },
+)

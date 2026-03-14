@@ -1,3 +1,4 @@
+///|
 fn page_url(page_number : Int) -> String {
   "/posts/page/" + page_number.to_string() + "/"
 }

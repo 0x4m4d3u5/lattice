@@ -1,3 +1,4 @@
+///|
 fn sample_schema() -> Schema {
   {
     name: "posts",
@@ -12,6 +13,7 @@ fn sample_schema() -> Schema {
   }
 }
 
+///|
 fn parse_frontmatter_or_fail(src : String) -> @frontmatter.Frontmatter {
   match @frontmatter.parse(src) {
     Ok(fm) => fm
@@ -38,10 +40,7 @@ test "schema accepts matching field types and optional absence" {
 ///|
 test "schema reports required field missing" {
   let fm = parse_frontmatter_or_fail(
-    "---\n" +
-    "published = true\n" +
-    "tags = [\"moonbit\"]\n" +
-    "---\n",
+    "---\n" + "published = true\n" + "tags = [\"moonbit\"]\n" + "---\n",
   )
   let errors = validate(fm, sample_schema())
   assert_eq(errors.length(), 2)
@@ -120,7 +119,9 @@ test "schema rejects invalid date string format with typed error" {
 test "schema optional date field handles absence valid value and non-date error" {
   let schema : Schema = {
     name: "posts",
-    fields: [{ name: "published_at", field_type: TOptional(TDate), required: false }],
+    fields: [
+      { name: "published_at", field_type: TOptional(TDate), required: false },
+    ],
   }
 
   let absent = parse_frontmatter_or_fail("---\n---\n")

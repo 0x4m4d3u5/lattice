@@ -5,20 +5,23 @@
 /// The emitter is pure — it takes pre-rendered body HTML and page metadata.
 /// No markdown parsing or wikilink resolution happens here.
 
+///|
 /// Metadata for a rendered page.
 pub(all) struct PageMeta {
   title : String
-  description : String?  // rendered into <meta name="description">
-  lang : String           // HTML lang attribute; defaults to "en" if empty
-  stylesheet : String?    // optional <link rel="stylesheet"> href
+  description : String? // rendered into <meta name="description">
+  lang : String // HTML lang attribute; defaults to "en" if empty
+  stylesheet : String? // optional <link rel="stylesheet"> href
 }
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
+///|
 fn char_at_html(s : String, i : Int) -> Char {
   s[i].to_int().unsafe_to_char()
 }
 
+///|
 /// Escape text for HTML body context (&, <, >).
 fn escape_html_body(s : String) -> String {
   let buf = StringBuilder::new()
@@ -40,6 +43,7 @@ fn escape_html_body(s : String) -> String {
   buf.to_string()
 }
 
+///|
 /// Escape text for HTML attribute context (&, <, >, ").
 fn escape_html_attr(s : String) -> String {
   let buf = StringBuilder::new()
@@ -65,6 +69,7 @@ fn escape_html_attr(s : String) -> String {
 
 // ── public API ────────────────────────────────────────────────────────────────
 
+///|
 /// Render a full HTML5 page document.
 ///
 /// `meta.lang` defaults to "en" when empty.
@@ -82,9 +87,7 @@ pub fn render_page(meta : PageMeta, body_html : String) -> String {
   }
   let style_tag = match meta.stylesheet {
     Some(href) =>
-      "  <link rel=\"stylesheet\" href=\"" +
-      escape_html_attr(href) +
-      "\" />\n"
+      "  <link rel=\"stylesheet\" href=\"" + escape_html_attr(href) + "\" />\n"
     None => ""
   }
   "<!doctype html>\n" +
@@ -106,11 +109,17 @@ pub fn render_page(meta : PageMeta, body_html : String) -> String {
   "</html>\n"
 }
 
+///|
 /// Render an HTML anchor tag.
 pub fn anchor(href : String, text : String) -> String {
-  "<a href=\"" + escape_html_attr(href) + "\">" + escape_html_body(text) + "</a>"
+  "<a href=\"" +
+  escape_html_attr(href) +
+  "\">" +
+  escape_html_body(text) +
+  "</a>"
 }
 
+///|
 /// Render a nav element wrapping a list of (href, label) pairs.
 pub fn nav_links(links : Array[(String, String)]) -> String {
   if links.length() == 0 {

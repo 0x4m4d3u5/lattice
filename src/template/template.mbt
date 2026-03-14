@@ -1,3 +1,4 @@
+///|
 pub(all) enum TemplateSlot {
   Title
   Content
@@ -12,17 +13,20 @@ pub(all) enum TemplateSlot {
   Backlinks
 } derive(Eq, Hash, Show)
 
+///|
 pub(all) enum TemplatePart {
   Text(String)
   Slot(TemplateSlot)
   DataSlot(String, Array[String]) // file name, key path
 }
 
+///|
 pub(all) struct Template {
   parts : Array[TemplatePart]
   required_slots : Array[TemplateSlot]
 }
 
+///|
 pub enum TemplateError {
   UnknownSlot(String)
   MissingRequiredSlot(TemplateSlot)
@@ -30,10 +34,12 @@ pub enum TemplateError {
   ParseError(String)
 }
 
+///|
 fn char_at_template(s : String, i : Int) -> Char {
   s[i].to_int().unsafe_to_char()
 }
 
+///|
 fn substr_template(s : String, start : Int, end_pos : Int) -> String {
   let buf = StringBuilder::new()
   let mut i = start
@@ -44,10 +50,12 @@ fn substr_template(s : String, start : Int, end_pos : Int) -> String {
   buf.to_string()
 }
 
+///|
 fn is_ws_template(c : Char) -> Bool {
   c == ' ' || c == '\t' || c == '\n' || c == '\r'
 }
 
+///|
 fn trim_template(s : String) -> String {
   let n = s.length()
   if n == 0 {
@@ -64,6 +72,7 @@ fn trim_template(s : String) -> String {
   substr_template(s, lo, hi)
 }
 
+///|
 fn starts_with_template(s : String, prefix : String) -> Bool {
   if prefix.length() > s.length() {
     return false
@@ -78,6 +87,7 @@ fn starts_with_template(s : String, prefix : String) -> Bool {
   true
 }
 
+///|
 fn split_dot_template(s : String) -> Array[String] {
   let parts : Array[String] = []
   let mut start = 0
@@ -95,6 +105,7 @@ fn split_dot_template(s : String) -> Array[String] {
   parts
 }
 
+///|
 fn slot_from_name(name : String) -> Result[TemplateSlot, TemplateError] {
   if name == "title" {
     return Ok(Title)
@@ -132,7 +143,10 @@ fn slot_from_name(name : String) -> Result[TemplateSlot, TemplateError] {
   Err(UnknownSlot(name))
 }
 
-fn parse_data_slot_name(name : String) -> Result[(String, Array[String]), TemplateError] {
+///|
+fn parse_data_slot_name(
+  name : String,
+) -> Result[(String, Array[String]), TemplateError] {
   let parts = split_dot_template(name)
   if parts.length() < 3 || parts[0] != "data" {
     return Err(ParseError("invalid data slot '" + name + "'"))
@@ -168,7 +182,8 @@ pub fn parse_template(input : String) -> Result[Template, TemplateError] {
       let mut j = i + 2
       let mut close = -1
       while j + 1 < n {
-        if char_at_template(input, j) == '}' && char_at_template(input, j + 1) == '}' {
+        if char_at_template(input, j) == '}' &&
+          char_at_template(input, j + 1) == '}' {
           close = j
           break
         }
@@ -190,7 +205,14 @@ pub fn parse_template(input : String) -> Result[Template, TemplateError] {
       } else {
         let slot = match slot_from_name(slot_name) {
           Ok(s) => s
-          Err(e) => return Err(e)
+          Err(e) => {
+            // If the slot name contains dots but doesn't start with "data.",
+            // it's likely an attempt to use a data slot without the proper prefix
+            if slot_name.contains(".") {
+              return Err(ParseError("invalid data slot '" + slot_name + "'"))
+            }
+            return Err(e)
+          }
         }
         parts.push(Slot(slot))
         if not(required_slots.contains(slot)) {
@@ -212,10 +234,11 @@ pub fn parse_template(input : String) -> Result[Template, TemplateError] {
   Ok({ parts, required_slots })
 }
 
+///|
 fn render_parts(
   template : Template,
   slots : Map[TemplateSlot, String],
-  data_store : @data.DataStore?
+  data_store : @data.DataStore?,
 ) -> Result[String, TemplateError] {
   let mut i = 0
   while i < template.required_slots.length() {
@@ -232,13 +255,14 @@ fn render_parts(
   while i < template.parts.length() {
     match template.parts[i] {
       Text(t) => out.write_string(t)
-      Slot(slot) => match slots.get(slot) {
-        Some(value) => out.write_string(value)
-        None => return Err(MissingRequiredSlot(slot))
-      }
-      DataSlot(file, key_path) => {
+      Slot(slot) =>
+        match slots.get(slot) {
+          Some(value) => out.write_string(value)
+          None => return Err(MissingRequiredSlot(slot))
+        }
+      DataSlot(file, key_path) =>
         match data_store {
-          Some(store) => {
+          Some(store) =>
             match @data.resolve_string(store, file, key_path) {
               Ok(value) => out.write_string(value)
               Err(_) => {
@@ -254,7 +278,6 @@ fn render_parts(
                 return Err(MissingDataSlot(path.to_string()))
               }
             }
-          }
           None => {
             let path = StringBuilder::new()
             path.write_string("data.")
@@ -268,7 +291,6 @@ fn render_parts(
             return Err(MissingDataSlot(path.to_string()))
           }
         }
-      }
     }
     i = i + 1
   }
@@ -279,7 +301,7 @@ fn render_parts(
 /// Render a parsed template by substituting non-data slots.
 pub fn render_template(
   template : Template,
-  slots : Map[TemplateSlot, String]
+  slots : Map[TemplateSlot, String],
 ) -> Result[String, TemplateError] {
   render_parts(template, slots, None)
 }
@@ -289,7 +311,7 @@ pub fn render_template(
 pub fn render_template_with_data(
   template : Template,
   slots : Map[TemplateSlot, String],
-  data_store : @data.DataStore
+  data_store : @data.DataStore,
 ) -> Result[String, TemplateError] {
   render_parts(template, slots, Some(data_store))
 }

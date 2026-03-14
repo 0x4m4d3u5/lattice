@@ -1,7 +1,6 @@
 ///|
 test "wikilink extract finds links outside code spans and fences" {
-  let src =
-    "See [[guide]] and [[api|API Docs]].\n" +
+  let src = "See [[guide]] and [[api|API Docs]].\n" +
     "`[[inline-code]]`\n" +
     "```\n" +
     "[[fenced]]\n" +
@@ -35,10 +34,7 @@ test "wikilink extract trims whitespace and ignores empty targets" {
 
 ///|
 test "wikilink resolve returns canonical urls and broken link errors" {
-  let links = extract(
-    "[[guide]] and [[missing|Broken]]",
-    "content/index.md",
-  )
+  let links = extract("[[guide]] and [[missing|Broken]]", "content/index.md")
   let index : Map[String, String] = Map::new()
   index.set("guide", "/guide/")
   let (resolved, errors) = resolve(links, index)

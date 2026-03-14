@@ -2,7 +2,6 @@
 /// JSON search index rendering for lattice.
 ///
 /// The renderer is pure: it accepts typed search entries and returns JSON.
-
 pub struct SearchEntry {
   title : String
   slug : String
@@ -12,21 +11,24 @@ pub struct SearchEntry {
   excerpt : String
 }
 
+///|
 pub fn new_entry(
   title : String,
   slug : String,
   url : String,
   tags : Array[String],
   collection : String,
-  excerpt : String
+  excerpt : String,
 ) -> SearchEntry {
   { title, slug, url, tags, collection, excerpt }
 }
 
+///|
 fn char_at_search(s : String, i : Int) -> Char {
   s[i].to_int().unsafe_to_char()
 }
 
+///|
 fn hex_nibble(n : Int) -> Char {
   if n < 10 {
     ('0'.to_int() + n).unsafe_to_char()
@@ -35,6 +37,7 @@ fn hex_nibble(n : Int) -> Char {
   }
 }
 
+///|
 fn write_json_string(buf : StringBuilder, s : String) -> Unit {
   buf.write_char('"')
   let n = s.length()

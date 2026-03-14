@@ -1,8 +1,10 @@
+///|
 pub(all) enum Severity {
   Error
   Warning
 }
 
+///|
 pub(all) struct Diagnostic {
   severity : Severity
   code : String?
@@ -13,13 +15,25 @@ pub(all) struct Diagnostic {
   note : String?
 }
 
+///|
 let ansi_reset = "\u001b[0m"
+
+///|
 let ansi_bold = "\u001b[1m"
+
+///|
 let ansi_dim = "\u001b[2m"
+
+///|
 let ansi_red = "\u001b[31m"
+
+///|
 let ansi_yellow = "\u001b[33m"
+
+///|
 let ansi_underline = "\u001b[4m"
 
+///|
 pub fn error(message : String) -> Diagnostic {
   {
     severity: Error,
@@ -32,6 +46,7 @@ pub fn error(message : String) -> Diagnostic {
   }
 }
 
+///|
 pub fn warning(message : String) -> Diagnostic {
   {
     severity: Warning,
@@ -44,6 +59,7 @@ pub fn warning(message : String) -> Diagnostic {
   }
 }
 
+///|
 pub fn count_errors(items : Array[Diagnostic]) -> Int {
   let mut total = 0
   let mut i = 0
@@ -57,6 +73,7 @@ pub fn count_errors(items : Array[Diagnostic]) -> Int {
   total
 }
 
+///|
 fn severity_label(severity : Severity) -> String {
   match severity {
     Error => "error"
@@ -64,6 +81,7 @@ fn severity_label(severity : Severity) -> String {
   }
 }
 
+///|
 fn severity_color(severity : Severity) -> String {
   match severity {
     Error => ansi_red
@@ -71,18 +89,27 @@ fn severity_color(severity : Severity) -> String {
   }
 }
 
+///|
 fn colored_severity(severity : Severity) -> String {
-  severity_color(severity) + ansi_bold + "[" + severity_label(severity) + "]" + ansi_reset
+  severity_color(severity) +
+  ansi_bold +
+  "[" +
+  severity_label(severity) +
+  "]" +
+  ansi_reset
 }
 
+///|
 fn colored_code(code : String) -> String {
   ansi_dim + "[" + code + "]" + ansi_reset
 }
 
+///|
 fn colored_location(location : String) -> String {
   ansi_bold + ansi_underline + location + ansi_reset
 }
 
+///|
 pub fn format_diagnostic(d : Diagnostic) -> String {
   let buf = StringBuilder::new()
   match d.path {
@@ -128,6 +155,7 @@ pub fn format_diagnostic(d : Diagnostic) -> String {
   buf.to_string()
 }
 
+///|
 fn code_for_violation(kind : @lint.ViolationType) -> String {
   match kind {
     @lint.MissingRequiredFrontmatter => "E001"
@@ -144,6 +172,7 @@ fn code_for_violation(kind : @lint.ViolationType) -> String {
   }
 }
 
+///|
 pub fn of_lint_violation(v : @lint.LintViolation) -> Diagnostic {
   {
     severity: Error,

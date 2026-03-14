@@ -1,3 +1,4 @@
+///|
 fn empty_wl() -> Map[String, String] {
   Map::new()
 }
@@ -33,7 +34,9 @@ test "markdown callout body" {
 test "markdown fenced code highlighting recognized language" {
   let body = "```moonbit\nfn main() {\n  let x = 1\n}\n```"
   let rendered = render(body, empty_wl())
-  assert_true(rendered.contains("<pre class=\"highlight language-moonbit\"><code>"))
+  assert_true(
+    rendered.contains("<pre class=\"highlight language-moonbit\"><code>"),
+  )
   assert_true(rendered.contains("hl-keyword"))
 }
 

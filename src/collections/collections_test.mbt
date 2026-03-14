@@ -1,7 +1,6 @@
 ///|
 test "collections parse data schemas" {
-  let src =
-    "[posts]\n" +
+  let src = "[posts]\n" +
     "schema = title:String\n" +
     "dir = content/posts\n\n" +
     "[data.nav]\n" +
@@ -18,8 +17,7 @@ test "collections parse data schemas" {
 
 ///|
 test "collections parse optional template override" {
-  let src =
-    "[posts]\n" +
+  let src = "[posts]\n" +
     "schema = title:String\n" +
     "dir = content/posts\n" +
     "template = templates/post.html\n"

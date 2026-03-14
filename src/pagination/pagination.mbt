@@ -1,6 +1,5 @@
 ///|
 /// Typed pagination model for index-style pages.
-
 pub struct PaginatedIndex[T] {
   page_number : Int
   total_pages : Int
@@ -19,7 +18,7 @@ pub struct PaginatedIndex[T] {
 pub fn[T] paginate(
   documents : Array[T],
   page_size : Int,
-  page_url_for : (Int) -> String
+  page_url_for : (Int) -> String,
 ) -> Array[PaginatedIndex[T]] {
   let effective_page_size = if page_size > 0 { page_size } else { 1 }
   let total_items = documents.length()

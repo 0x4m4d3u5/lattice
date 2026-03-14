@@ -6,6 +6,7 @@
 /// not a 404. The resolved link carries the target page's canonical URL so
 /// the render step never needs to do path arithmetic.
 
+///|
 /// A raw wikilink extracted from markdown source.
 pub struct RawWikilink {
   target : String
@@ -13,6 +14,7 @@ pub struct RawWikilink {
   source_file : String
 }
 
+///|
 /// A resolved wikilink with a validated target URL.
 pub struct ResolvedWikilink {
   raw : RawWikilink
@@ -20,6 +22,7 @@ pub struct ResolvedWikilink {
   title : String
 }
 
+///|
 /// Resolution error: the target did not match any content page.
 pub struct ResolutionError {
   link : RawWikilink
@@ -28,10 +31,12 @@ pub struct ResolutionError {
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
+///|
 fn char_at_wl(s : String, i : Int) -> Char {
   s[i].to_int().unsafe_to_char()
 }
 
+///|
 fn slugify_lookup_key_wl(s : String, end : Int) -> String {
   let buf = StringBuilder::new()
   let mut i = 0
@@ -49,6 +54,7 @@ fn slugify_lookup_key_wl(s : String, end : Int) -> String {
   buf.to_string()
 }
 
+///|
 /// Canonical lookup key for wikilink targets.
 pub fn lookup_key(target : String) -> String {
   let end = if target.has_suffix(".md") {
@@ -59,6 +65,7 @@ pub fn lookup_key(target : String) -> String {
   slugify_lookup_key_wl(target, end)
 }
 
+///|
 fn substr_wl(s : String, start : Int, end : Int) -> String {
   let buf = StringBuilder::new()
   let mut i = start
@@ -69,6 +76,7 @@ fn substr_wl(s : String, start : Int, end : Int) -> String {
   buf.to_string()
 }
 
+///|
 fn trim_wl(s : String) -> String {
   let n = s.length()
   if n == 0 {
@@ -80,12 +88,13 @@ fn trim_wl(s : String) -> String {
   }
   let mut hi = n
   while hi > lo &&
-    (char_at_wl(s, hi - 1) == ' ' || char_at_wl(s, hi - 1) == '\t') {
+        (char_at_wl(s, hi - 1) == ' ' || char_at_wl(s, hi - 1) == '\t') {
     hi = hi - 1
   }
   substr_wl(s, lo, hi)
 }
 
+///|
 /// Parse the inner text of `[[...]]` into target + optional display.
 fn parse_inner(inner : String, source_file : String) -> RawWikilink {
   let n = inner.length()
@@ -109,6 +118,7 @@ fn parse_inner(inner : String, source_file : String) -> RawWikilink {
 
 // ── public API ────────────────────────────────────────────────────────────────
 
+///|
 /// Extract all wikilinks from a markdown string.
 /// `source_file` is the path of the containing file, embedded in each link
 /// for error reporting during resolution.
@@ -123,7 +133,10 @@ pub fn extract(content : String, source_file : String) -> Array[RawWikilink] {
     if line_start {
       let mut probe = i
       while probe < n &&
-        (char_at_wl(content, probe) == ' ' || char_at_wl(content, probe) == '\t') {
+            (
+              char_at_wl(content, probe) == ' ' ||
+              char_at_wl(content, probe) == '\t'
+            ) {
         probe = probe + 1
       }
       if probe + 2 < n &&
@@ -173,6 +186,7 @@ pub fn extract(content : String, source_file : String) -> Array[RawWikilink] {
   links
 }
 
+///|
 /// Resolve wikilinks against a page index (slug → url map).
 /// Returns resolved links and any links whose targets are not in the index.
 ///
@@ -181,7 +195,7 @@ pub fn extract(content : String, source_file : String) -> Array[RawWikilink] {
 /// the build or collect them for reporting.
 pub fn resolve(
   links : Array[RawWikilink],
-  index : Map[String, String]
+  index : Map[String, String],
 ) -> (Array[ResolvedWikilink], Array[ResolutionError]) {
   let resolved : Array[ResolvedWikilink] = []
   let errors : Array[ResolutionError] = []
@@ -196,12 +210,11 @@ pub fn resolve(
         }
         resolved.push({ raw: link, url, title })
       }
-      None => {
+      None =>
         errors.push({
           link,
           message: "target '" + link.target + "' not found in page index",
         })
-      }
     }
     i = i + 1
   }

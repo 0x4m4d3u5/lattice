@@ -1,13 +1,13 @@
+///|
 fn ensure_dir_test(path : String) -> Unit {
   if not(@fs.path_exists(path)) {
-    try {
-      @fs.create_dir(path)
-    } catch {
+    @fs.create_dir(path) catch {
       @fs.IOError(_) => ()
     }
   }
 }
 
+///|
 fn write_file_test(path : String, content : String) -> Bool {
   try {
     @fs.write_string_to_file(path, content)
@@ -17,18 +17,13 @@ fn write_file_test(path : String, content : String) -> Bool {
   }
 }
 
+///|
 fn reset_dir(path : String) -> Unit {
   ensure_dir_test(path)
-  let files = try {
-    @fs.read_dir(path)
-  } catch {
-    @fs.IOError(_) => []
-  }
+  let files = @fs.read_dir(path) catch { @fs.IOError(_) => [] }
   let mut i = 0
   while i < files.length() {
-    try {
-      @fs.remove_file(path + "/" + files[i])
-    } catch {
+    @fs.remove_file(path + "/" + files[i]) catch {
       @fs.IOError(_) => ()
     }
     i = i + 1
@@ -39,7 +34,9 @@ fn reset_dir(path : String) -> Unit {
 test "data load and resolve" {
   let root = "./_tmp_data_basic"
   reset_dir(root)
-  assert_true(write_file_test(root + "/nav.toml", "title = \"Lattice\"\ncount = 3\n"))
+  assert_true(
+    write_file_test(root + "/nav.toml", "title = \"Lattice\"\ncount = 3\n"),
+  )
 
   let schemas : Map[String, DataSchema] = Map::new()
   schemas.set("nav", new_schema("nav", ["title", "count"]))
@@ -63,16 +60,17 @@ test "data load and resolve" {
 test "data nested keys" {
   let root = "./_tmp_data_nested"
   reset_dir(root)
-  assert_true(write_file_test(root + "/site.toml", "hero.title = \"Welcome\"\n"))
+  assert_true(
+    write_file_test(root + "/site.toml", "hero.title = \"Welcome\"\n"),
+  )
   let schemas : Map[String, DataSchema] = Map::new()
   schemas.set("site", new_schema("site", ["hero.title"]))
   match load_from_dir(root, schemas) {
-    Ok(store) => {
+    Ok(store) =>
       match resolve_string(store, "site", ["hero", "title"]) {
         Ok(v) => assert_eq(v, "Welcome")
         Err(_) => assert_true(false)
       }
-    }
     Err(_) => assert_true(false)
   }
 }

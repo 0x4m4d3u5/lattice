@@ -3,7 +3,7 @@
 ///
 /// Usage:
 ///   lattice [content-dir] [output-dir] [--config path] [--collections path] [--check]
-///           [--force] [--watch] [--watch-interval ms] [--help]
+///           [--force] [--watch] [--watch-interval ms] [--drafts] [--help]
 ///
 /// Defaults:
 ///   content-dir → ./content
@@ -15,7 +15,6 @@
 ///   2. Render each page through the full pipeline; write HTML to output-dir.
 ///
 /// Exit codes: 0 = clean build, 1 = one or more errors.
-
 pub(all) struct CliOptions {
   content_dir : String
   output_dir : String?
@@ -25,17 +24,21 @@ pub(all) struct CliOptions {
   force_rebuild : Bool
   watch_mode : Bool
   watch_interval_ms : Int
+  include_drafts : Bool
 }
 
+///|
 priv struct CliState {
   build_config : @builder.BuildConfig
   watch_roots : Array[String]
 }
 
+///|
 fn char_at_main(s : String, i : Int) -> Char {
   s[i].to_int().unsafe_to_char()
 }
 
+///|
 fn starts_with_main(s : String, prefix : String) -> Bool {
   let n = s.length()
   let plen = prefix.length()
@@ -52,6 +55,7 @@ fn starts_with_main(s : String, prefix : String) -> Bool {
   true
 }
 
+///|
 fn substr_main(s : String, start : Int, end : Int) -> String {
   let buf = StringBuilder::new()
   let mut i = start
@@ -62,23 +66,27 @@ fn substr_main(s : String, start : Int, end : Int) -> String {
   buf.to_string()
 }
 
+///|
 fn print_diagnostic_main(d : @diagnostic.Diagnostic) -> Unit {
   println(@diagnostic.format_diagnostic(d))
 }
 
+///|
 fn cli_error(message : String) -> @diagnostic.Diagnostic {
   @diagnostic.error(message)
 }
 
+///|
 fn cli_warning(message : String) -> @diagnostic.Diagnostic {
   @diagnostic.warning(message)
 }
 
+///|
 fn with_path(
   d : @diagnostic.Diagnostic,
   path : String?,
   line : Int?,
-  column : Int?
+  column : Int?,
 ) -> @diagnostic.Diagnostic {
   {
     severity: d.severity,
@@ -91,63 +99,80 @@ fn with_path(
   }
 }
 
+///|
 fn collections_error_diagnostic(
   path : String,
-  err : @collections.CollectionsError
+  err : @collections.CollectionsError,
 ) -> @diagnostic.Diagnostic {
   match err {
-    @collections.InvalidLine(line, msg) => with_path(cli_error(msg), Some(path), Some(line), None)
-    @collections.MissingRequiredField(collection_name, field) => {
+    @collections.InvalidLine(line, msg) =>
+      with_path(cli_error(msg), Some(path), Some(line), None)
+    @collections.MissingRequiredField(collection_name, field) =>
       {
         severity: @diagnostic.Error,
         code: None,
         path: Some(path),
         line: None,
         column: None,
-        message: "missing required field '" + field + "' in collection '" + collection_name + "'",
+        message: "missing required field '" +
+        field +
+        "' in collection '" +
+        collection_name +
+        "'",
         note: None,
       }
-    }
-    @collections.DuplicateCollection(name) => with_path(
-      cli_error("duplicate collection '" + name + "'"),
-      Some(path),
-      None,
-      None,
-    )
-    @collections.DuplicateDataSchema(name) => with_path(
-      cli_error("duplicate data schema '" + name + "'"),
-      Some(path),
-      None,
-      None,
-    )
-    @collections.InvalidSchema(name, msg) => with_path(
-      cli_error("invalid schema for collection '" + name + "': " + msg),
-      Some(path),
-      None,
-      None,
-    )
-    @collections.EmptyConfig => with_path(cli_error("no collections defined"), Some(path), None, None)
+    @collections.DuplicateCollection(name) =>
+      with_path(
+        cli_error("duplicate collection '" + name + "'"),
+        Some(path),
+        None,
+        None,
+      )
+    @collections.DuplicateDataSchema(name) =>
+      with_path(
+        cli_error("duplicate data schema '" + name + "'"),
+        Some(path),
+        None,
+        None,
+      )
+    @collections.InvalidSchema(name, msg) =>
+      with_path(
+        cli_error("invalid schema for collection '" + name + "': " + msg),
+        Some(path),
+        None,
+        None,
+      )
+    @collections.EmptyConfig =>
+      with_path(cli_error("no collections defined"), Some(path), None, None)
   }
 }
 
-fn config_error_diagnostic(path : String, err : @config.ConfigError) -> @diagnostic.Diagnostic {
+///|
+fn config_error_diagnostic(
+  path : String,
+  err : @config.ConfigError,
+) -> @diagnostic.Diagnostic {
   match err {
-    @config.InvalidLine(line, msg) => with_path(cli_error(msg), Some(path), Some(line), None)
-    @config.MissingRequiredField(field) => with_path(
-      cli_error("missing required field '" + field + "'"),
-      Some(path),
-      None,
-      None,
-    )
-    @config.InvalidValue(field, msg) => with_path(
-      cli_error("invalid value for '" + field + "': " + msg),
-      Some(path),
-      None,
-      None,
-    )
+    @config.InvalidLine(line, msg) =>
+      with_path(cli_error(msg), Some(path), Some(line), None)
+    @config.MissingRequiredField(field) =>
+      with_path(
+        cli_error("missing required field '" + field + "'"),
+        Some(path),
+        None,
+        None,
+      )
+    @config.InvalidValue(field, msg) =>
+      with_path(
+        cli_error("invalid value for '" + field + "': " + msg),
+        Some(path),
+        None,
+        None,
+      )
   }
 }
 
+///|
 fn parse_positive_int_main(value : String) -> Int? {
   if value.length() == 0 {
     return None
@@ -168,12 +193,15 @@ fn parse_positive_int_main(value : String) -> Int? {
   Some(parsed)
 }
 
+///|
 fn print_help() -> Unit {
   println("Usage:")
   println(
     "  lattice [content-dir] [output-dir] [--config path] [--collections path] [--check]",
   )
-  println("          [--force] [--watch] [--watch-interval ms] [--help]")
+  println(
+    "          [--force] [--watch] [--watch-interval ms] [--drafts] [--help]",
+  )
   println("")
   println("Defaults:")
   println("  content-dir         ./content")
@@ -184,15 +212,23 @@ fn print_help() -> Unit {
   println("  --config <path>         Override site config file")
   println("  --collections <path>    Override collections config file")
   println("  --check                 Run validation/lint pipeline only")
-  println("  --force                 Ignore the incremental cache and rebuild everything")
+  println(
+    "  --force                 Ignore incremental cache and rebuild everything",
+  )
   println("  --watch                 Rebuild on file changes with polling")
-  println("  --watch-interval <ms>   Polling interval in milliseconds (default: 500)")
+  println(
+    "  --watch-interval <ms>   Polling interval in milliseconds (default: 500)",
+  )
+  println("  --drafts                Include draft posts in the build")
   println("  --help                  Show this help text")
   println("")
   println("Local dev:")
-  println("  Pair --watch with a static file server such as simple-http-server.")
+  println(
+    "  Pair --watch with a static file server such as simple-http-server.",
+  )
 }
 
+///|
 fn parse_cli_options(args : Array[String]) -> CliOptions {
 
   // args[0] is the program name
@@ -203,6 +239,7 @@ fn parse_cli_options(args : Array[String]) -> CliOptions {
   let mut force_rebuild = false
   let mut watch_mode = false
   let mut watch_interval_ms = 500
+  let mut include_drafts = false
   let mut i = 1
   while i < args.length() {
     let arg = args[i]
@@ -218,6 +255,7 @@ fn parse_cli_options(args : Array[String]) -> CliOptions {
         force_rebuild: false,
         watch_mode: false,
         watch_interval_ms: 500,
+        include_drafts: false,
       }
     } else if arg == "--config" {
       if i + 1 >= args.length() {
@@ -266,7 +304,11 @@ fn parse_cli_options(args : Array[String]) -> CliOptions {
       match parse_positive_int_main(args[i + 1]) {
         Some(parsed) => watch_interval_ms = parsed
         None => {
-          print_diagnostic_main(cli_error("invalid value for --watch-interval: must be a positive integer"))
+          print_diagnostic_main(
+            cli_error(
+              "invalid value for --watch-interval: must be a positive integer",
+            ),
+          )
           @sys.exit(1)
         }
       }
@@ -276,10 +318,17 @@ fn parse_cli_options(args : Array[String]) -> CliOptions {
       match parse_positive_int_main(value) {
         Some(parsed) => watch_interval_ms = parsed
         None => {
-          print_diagnostic_main(cli_error("invalid value for --watch-interval: must be a positive integer"))
+          print_diagnostic_main(
+            cli_error(
+              "invalid value for --watch-interval: must be a positive integer",
+            ),
+          )
           @sys.exit(1)
         }
       }
+      i = i + 1
+    } else if arg == "--drafts" {
+      include_drafts = true
       i = i + 1
     } else if starts_with_main(arg, "--") {
       print_diagnostic_main({
@@ -304,27 +353,39 @@ fn parse_cli_options(args : Array[String]) -> CliOptions {
     } else {
       "./content"
     },
-    output_dir: if positionals.length() > 1 { Some(positionals[1]) } else { None },
+    output_dir: if positionals.length() > 1 {
+      Some(positionals[1])
+    } else {
+      None
+    },
     config_path,
     collections_path,
     check_mode,
     force_rebuild,
     watch_mode,
     watch_interval_ms,
+    include_drafts,
   }
 }
 
+///|
 fn load_collections_for_watch(
   content_dir : String,
-  collections_path : String?
+  collections_path : String?,
 ) -> Result[Array[@collections.CollectionDef], @diagnostic.Diagnostic] {
   match collections_path {
     None => Ok([@collections.default_posts_collection(content_dir)])
     Some(path) => {
-      let source = try {
-        @fs.read_file_to_string(path)
-      } catch {
-        @fs.IOError(msg) => return Err(with_path(cli_error("cannot read collections file: " + msg), Some(path), None, None))
+      let source = @fs.read_file_to_string(path) catch {
+        @fs.IOError(msg) =>
+          return Err(
+            with_path(
+              cli_error("cannot read collections file: " + msg),
+              Some(path),
+              None,
+              None,
+            ),
+          )
       }
       match @collections.parse(source) {
         Ok(parsed) => Ok(parsed.definitions)
@@ -334,18 +395,22 @@ fn load_collections_for_watch(
   }
 }
 
+///|
 fn load_cli_state(options : CliOptions) -> Result[CliState, Int] {
   let effective_config_path = match options.config_path {
     Some(path) => path
     None => options.content_dir + "/lattice.conf"
   }
 
-  let config_source = try {
-    @fs.read_file_to_string(effective_config_path)
-  } catch {
+  let config_source = @fs.read_file_to_string(effective_config_path) catch {
     @fs.IOError(msg) => {
       print_diagnostic_main(
-        with_path(cli_error("cannot read config file: " + msg), Some(effective_config_path), None, None),
+        with_path(
+          cli_error("cannot read config file: " + msg),
+          Some(effective_config_path),
+          None,
+          None,
+        ),
       )
       return Err(1)
     }
@@ -378,8 +443,13 @@ fn load_cli_state(options : CliOptions) -> Result[CliState, Int] {
       None => site.collections_file
     },
     force_rebuild: options.force_rebuild,
+    include_drafts: options.include_drafts,
   }
-  let collections = match load_collections_for_watch(options.content_dir, build_config.collections_path) {
+  let collections = match
+    load_collections_for_watch(
+      options.content_dir,
+      build_config.collections_path,
+    ) {
     Ok(defs) => defs
     Err(diagnostic) => {
       print_diagnostic_main(diagnostic)
@@ -412,12 +482,15 @@ fn load_cli_state(options : CliOptions) -> Result[CliState, Int] {
   Ok({ build_config, watch_roots })
 }
 
+///|
 fn run_once(build_config : @builder.BuildConfig, check_mode : Bool) -> Int {
   if check_mode {
     let lint_result = @builder.check(build_config)
     let mut i = 0
     while i < lint_result.violations.length() {
-      print_diagnostic_main(@diagnostic.of_lint_violation(lint_result.violations[i]))
+      print_diagnostic_main(
+        @diagnostic.of_lint_violation(lint_result.violations[i]),
+      )
       i = i + 1
     }
     if @lint.has_violations(lint_result) {
@@ -455,6 +528,7 @@ fn run_once(build_config : @builder.BuildConfig, check_mode : Bool) -> Int {
   }
 }
 
+///|
 fn watch_timestamp() -> String {
   try {
     let dt = @time.PlainDateTime::from_unix_second(
@@ -470,19 +544,20 @@ fn watch_timestamp() -> String {
   }
 }
 
+///|
 fn run_watch(options : CliOptions, initial_state : CliState) -> Unit {
   @watch.clear_interrupt()
   @watch.install_sigint_handler()
 
   let initial_result = run_once(initial_state.build_config, options.check_mode)
   if initial_result > 0 {
-    println("[lattice] initial build finished with errors; watching for changes")
+    println(
+      "[lattice] initial build finished with errors; watching for changes",
+    )
   }
 
   let mut current_roots = initial_state.watch_roots
-  let mut snapshot = try {
-    @watch.take_snapshot(current_roots)
-  } catch {
+  let mut snapshot = @watch.take_snapshot(current_roots) catch {
     @watch.IOError(msg) => {
       print_diagnostic_main(cli_error("watch snapshot failed: " + msg))
       @sys.exit(1)
@@ -496,9 +571,7 @@ fn run_watch(options : CliOptions, initial_state : CliState) -> Unit {
       println("[lattice] watch stopped")
       return
     }
-    let next_snapshot = try {
-      @watch.take_snapshot(current_roots)
-    } catch {
+    let next_snapshot = @watch.take_snapshot(current_roots) catch {
       @watch.IOError(msg) => {
         print_diagnostic_main(cli_warning("watch snapshot failed: " + msg))
         continue
@@ -523,11 +596,11 @@ fn run_watch(options : CliOptions, initial_state : CliState) -> Unit {
       }
       Err(_) => ()
     }
-    snapshot = try {
-      @watch.take_snapshot(current_roots)
-    } catch {
+    snapshot = @watch.take_snapshot(current_roots) catch {
       @watch.IOError(msg) => {
-        print_diagnostic_main(cli_warning("watch snapshot failed after rebuild: " + msg))
+        print_diagnostic_main(
+          cli_warning("watch snapshot failed after rebuild: " + msg),
+        )
         next_snapshot
       }
     }
@@ -538,6 +611,7 @@ fn run_watch(options : CliOptions, initial_state : CliState) -> Unit {
   }
 }
 
+///|
 fn main {
   let options = parse_cli_options(@sys.get_cli_args())
   let state = match load_cli_state(options) {

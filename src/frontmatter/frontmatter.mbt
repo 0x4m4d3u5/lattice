@@ -6,6 +6,7 @@
 /// converts that tree into a user-defined struct, and mismatches are type
 /// errors caught at build time, not render time.
 
+///|
 /// A raw frontmatter value parsed from TOML-style key-value pairs.
 pub(all) enum FrontmatterValue {
   FStr(String)
@@ -16,6 +17,7 @@ pub(all) enum FrontmatterValue {
   FMap(Map[String, FrontmatterValue])
 }
 
+///|
 /// A parsed frontmatter block: the raw map plus the remaining document body.
 pub struct Frontmatter {
   fields : Map[String, FrontmatterValue]
@@ -26,10 +28,13 @@ pub struct Frontmatter {
 
 // MoonBit: s[i] returns UInt16 (UTF-16 code unit), not Char. Use this for all
 // character access so comparisons against char literals type-check correctly.
+
+///|
 fn char_at(s : String, i : Int) -> Char {
   s[i].to_int().unsafe_to_char()
 }
 
+///|
 fn substr(s : String, start : Int, end : Int) -> String {
   let buf = StringBuilder::new()
   let mut i = start
@@ -40,6 +45,7 @@ fn substr(s : String, start : Int, end : Int) -> String {
   buf.to_string()
 }
 
+///|
 fn trim_ws(s : String) -> String {
   let n = s.length()
   if n == 0 {
@@ -47,19 +53,26 @@ fn trim_ws(s : String) -> String {
   }
   let mut lo = 0
   while lo < n &&
-    (char_at(s, lo) == ' ' || char_at(s, lo) == '\t' || char_at(s, lo) == '\r') {
+        (
+          char_at(s, lo) == ' ' ||
+          char_at(s, lo) == '\t' ||
+          char_at(s, lo) == '\r'
+        ) {
     lo = lo + 1
   }
   let mut hi = n
   while hi > lo &&
-    (char_at(s, hi - 1) == ' ' ||
-      char_at(s, hi - 1) == '\t' ||
-      char_at(s, hi - 1) == '\r') {
+        (
+          char_at(s, hi - 1) == ' ' ||
+          char_at(s, hi - 1) == '\t' ||
+          char_at(s, hi - 1) == '\r'
+        ) {
     hi = hi - 1
   }
   substr(s, lo, hi)
 }
 
+///|
 fn starts_with_at(s : String, pos : Int, prefix : String) -> Bool {
   let plen = prefix.length()
   if pos + plen > s.length() {
@@ -75,6 +88,7 @@ fn starts_with_at(s : String, pos : Int, prefix : String) -> Bool {
   true
 }
 
+///|
 fn contains_char(s : String, needle : Char) -> Bool {
   let mut i = 0
   while i < s.length() {
@@ -86,6 +100,7 @@ fn contains_char(s : String, needle : Char) -> Bool {
   false
 }
 
+///|
 fn next_newline(s : String, from : Int) -> Int {
   let n = s.length()
   let mut i = from
@@ -95,6 +110,7 @@ fn next_newline(s : String, from : Int) -> Int {
   i
 }
 
+///|
 fn split_lines(s : String) -> Array[String] {
   let lines : Array[String] = []
   let n = s.length()
@@ -110,29 +126,64 @@ fn split_lines(s : String) -> Array[String] {
   lines
 }
 
+///|
 fn is_digit(c : Char) -> Bool {
   c >= '0' && c <= '9'
 }
 
-fn is_iso8601_date(s : String) -> Bool {
+///|
+/// Validate ISO 8601 date format with month and day range checking.
+/// Returns true if the date is in YYYY-MM-DD format with valid month (1-12)
+/// and day within the valid range for that month.
+fn is_valid_iso8601_date(s : String) -> Bool {
   if s.length() != 10 {
     return false
   }
-  let mut i = 0
-  while i < s.length() {
-    let c = char_at(s, i)
-    if i == 4 || i == 7 {
-      if c != '-' {
-        return false
-      }
-    } else if not(is_digit(c)) {
-      return false
-    }
-    i = i + 1
+  // Check format: YYYY-MM-DD
+  if char_at(s, 4) != '-' || char_at(s, 7) != '-' {
+    return false
+  }
+  // Extract and validate year (YYYY) - positions 0-3
+  if not(is_digit(char_at(s, 0))) ||
+    not(is_digit(char_at(s, 1))) ||
+    not(is_digit(char_at(s, 2))) ||
+    not(is_digit(char_at(s, 3))) {
+    return false
+  }
+  // Extract and validate month (MM) - positions 5-6
+  if not(is_digit(char_at(s, 5))) || not(is_digit(char_at(s, 6))) {
+    return false
+  }
+  let month_1 = char_at(s, 5).to_int() - '0'.to_int()
+  let month_2 = char_at(s, 6).to_int() - '0'.to_int()
+  let month = month_1 * 10 + month_2
+  if month < 1 || month > 12 {
+    return false
+  }
+  // Extract and validate day (DD) - positions 8-9
+  if not(is_digit(char_at(s, 8))) || not(is_digit(char_at(s, 9))) {
+    return false
+  }
+  let day_1 = char_at(s, 8).to_int() - '0'.to_int()
+  let day_2 = char_at(s, 9).to_int() - '0'.to_int()
+  let day = day_1 * 10 + day_2
+  if day < 1 {
+    return false
+  }
+  // Validate day is within the valid range for the specific month
+  let max_day = match month {
+    1 | 3 | 5 | 7 | 8 | 10 | 12 => 31 // Months with 31 days
+    4 | 6 | 9 | 11 => 30 // Months with 30 days
+    2 => 29 // February: accept 29 for leap year compatibility
+    _ => 31 // Should never reach here
+  }
+  if day > max_day {
+    return false
   }
   true
 }
 
+///|
 fn parse_int_str(s : String) -> Result[Int, String] {
   let n = s.length()
   if n == 0 {
@@ -162,6 +213,7 @@ fn parse_int_str(s : String) -> Result[Int, String] {
   }
 }
 
+///|
 /// Parse a `"..."` string starting at `pos`. Returns (value, next_pos).
 fn parse_quoted(s : String, pos : Int) -> Result[(String, Int), String] {
   let n = s.length()
@@ -197,8 +249,12 @@ fn parse_quoted(s : String, pos : Int) -> Result[(String, Int), String] {
   Err("unterminated string literal")
 }
 
+///|
 /// Parse a single value at `pos` in `s`. Returns (value, next_pos).
-fn parse_value_at(s : String, pos : Int) -> Result[(FrontmatterValue, Int), String] {
+fn parse_value_at(
+  s : String,
+  pos : Int,
+) -> Result[(FrontmatterValue, Int), String] {
   let n = s.length()
   let mut i = pos
   while i < n && (char_at(s, i) == ' ' || char_at(s, i) == '\t') {
@@ -210,13 +266,12 @@ fn parse_value_at(s : String, pos : Int) -> Result[(FrontmatterValue, Int), Stri
   let c = char_at(s, i)
   if c == '"' {
     match parse_quoted(s, i) {
-      Ok((v, next)) => {
-        if is_iso8601_date(v) {
+      Ok((v, next)) =>
+        if is_valid_iso8601_date(v) {
           Ok((FDate(v), next))
         } else {
           Ok((FStr(v), next))
         }
-      }
       Err(e) => Err(e)
     }
   } else if c == '[' {
@@ -228,14 +283,14 @@ fn parse_value_at(s : String, pos : Int) -> Result[(FrontmatterValue, Int), Stri
   } else if is_digit(c) || c == '-' {
     let mut j = i
     while j < n &&
-      char_at(s, j) != ' ' &&
-      char_at(s, j) != '\t' &&
-      char_at(s, j) != ',' &&
-      char_at(s, j) != ']' {
+          char_at(s, j) != ' ' &&
+          char_at(s, j) != '\t' &&
+          char_at(s, j) != ',' &&
+          char_at(s, j) != ']' {
       j = j + 1
     }
     let raw = trim_ws(substr(s, i, j))
-    if is_iso8601_date(raw) {
+    if is_valid_iso8601_date(raw) {
       Ok((FDate(raw), j))
     } else {
       match parse_int_str(raw) {
@@ -253,7 +308,11 @@ fn parse_value_at(s : String, pos : Int) -> Result[(FrontmatterValue, Int), Stri
   }
 }
 
-fn parse_array_at(s : String, pos : Int) -> Result[(FrontmatterValue, Int), String] {
+///|
+fn parse_array_at(
+  s : String,
+  pos : Int,
+) -> Result[(FrontmatterValue, Int), String] {
   let n = s.length()
   if pos >= n || char_at(s, pos) != '[' {
     return Err("expected '['")
@@ -291,6 +350,7 @@ fn parse_array_at(s : String, pos : Int) -> Result[(FrontmatterValue, Int), Stri
   Err("unterminated array literal")
 }
 
+///|
 fn parse_value_strict(s : String) -> Result[FrontmatterValue, String] {
   match parse_value_at(s, 0) {
     Err(e) => Err(e)
@@ -308,8 +368,11 @@ fn parse_value_strict(s : String) -> Result[FrontmatterValue, String] {
   }
 }
 
+///|
 /// Parse one `key = value` assignment line. Caller must ensure non-empty, non-comment.
-fn parse_assignment(line : String) -> Result[(String, FrontmatterValue), String] {
+fn parse_assignment(
+  line : String,
+) -> Result[(String, FrontmatterValue), String] {
   let n = line.length()
   let mut eq = -1
   let mut i = 0
@@ -334,13 +397,14 @@ fn parse_assignment(line : String) -> Result[(String, FrontmatterValue), String]
   }
 }
 
+///|
 fn parse_yaml_value(raw : String) -> FrontmatterValue {
   let value = trim_ws(raw)
   if value.length() >= 2 &&
     char_at(value, 0) == '\'' &&
     char_at(value, value.length() - 1) == '\'' {
     let unquoted = substr(value, 1, value.length() - 1)
-    if is_iso8601_date(unquoted) {
+    if is_valid_iso8601_date(unquoted) {
       return FDate(unquoted)
     }
     return FStr(unquoted)
@@ -351,9 +415,10 @@ fn parse_yaml_value(raw : String) -> FrontmatterValue {
   }
 }
 
+///|
 fn parse_yaml_assignment(
   lines : Array[String],
-  line_index : Int
+  line_index : Int,
 ) -> Result[(String, FrontmatterValue, Int), String] {
   let line = trim_ws(lines[line_index])
   let mut colon = -1
@@ -404,6 +469,7 @@ fn parse_yaml_assignment(
 
 // ── public API ────────────────────────────────────────────────────────────────
 
+///|
 /// Parse the leading `---`-delimited block from a file's content.
 /// Returns an error string if the delimiter is missing or malformed.
 ///

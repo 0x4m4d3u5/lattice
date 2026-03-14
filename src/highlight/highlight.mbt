@@ -1,6 +1,5 @@
 ///|
 /// Syntax highlighting tokenization and HTML rendering for fenced code blocks.
-
 pub(all) enum TokenKind {
   Keyword
   Type
@@ -16,15 +15,18 @@ pub(all) enum TokenKind {
   Unknown
 }
 
+///|
 pub(all) struct Token {
   kind : TokenKind
   text : String
 }
 
+///|
 fn char_at(s : String, i : Int) -> Char {
   s[i].to_int().unsafe_to_char()
 }
 
+///|
 fn starts_with_at(s : String, pos : Int, prefix : String) -> Bool {
   let plen = prefix.length()
   if pos + plen > s.length() {
@@ -40,36 +42,42 @@ fn starts_with_at(s : String, pos : Int, prefix : String) -> Bool {
   true
 }
 
+///|
 fn is_whitespace(c : Char) -> Bool {
   c == ' ' || c == '\t' || c == '\n' || c == '\r'
 }
 
+///|
 fn is_digit(c : Char) -> Bool {
   c >= '0' && c <= '9'
 }
 
+///|
 fn is_hex_digit(c : Char) -> Bool {
-  (c >= '0' && c <= '9') ||
-  (c >= 'a' && c <= 'f') ||
-  (c >= 'A' && c <= 'F')
+  (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')
 }
 
+///|
 fn is_alpha(c : Char) -> Bool {
   (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
 }
 
+///|
 fn is_ident_start(c : Char) -> Bool {
   is_alpha(c) || c == '_'
 }
 
+///|
 fn is_ident_part(c : Char) -> Bool {
   is_ident_start(c) || is_digit(c)
 }
 
+///|
 fn is_octal_digit(c : Char) -> Bool {
   c >= '0' && c <= '7'
 }
 
+///|
 fn is_pascal_case_ident(s : String) -> Bool {
   if s.length() == 0 {
     return false
@@ -78,6 +86,7 @@ fn is_pascal_case_ident(s : String) -> Bool {
   first >= 'A' && first <= 'Z'
 }
 
+///|
 fn is_member(word : String, items : Array[String]) -> Bool {
   let mut i = 0
   while i < items.length() {
@@ -89,18 +98,24 @@ fn is_member(word : String, items : Array[String]) -> Bool {
   false
 }
 
-fn push_token(tokens : Array[Token], kind : TokenKind, text : StringBuilder) -> Unit {
+///|
+fn push_token(
+  tokens : Array[Token],
+  kind : TokenKind,
+  text : StringBuilder,
+) -> Unit {
   let t = text.to_string()
   if t.length() > 0 {
     tokens.push({ kind, text: t })
   }
 }
 
+///|
 fn read_while(
   source : String,
   start : Int,
   pred : (Char) -> Bool,
-  buf : StringBuilder
+  buf : StringBuilder,
 ) -> Int {
   let n = source.length()
   let mut i = start
@@ -111,6 +126,7 @@ fn read_while(
   i
 }
 
+///|
 fn escape_html(s : String) -> String {
   let out = StringBuilder::new()
   let n = s.length()
@@ -133,6 +149,7 @@ fn escape_html(s : String) -> String {
   out.to_string()
 }
 
+///|
 fn token_kind_class(kind : TokenKind) -> String {
   match kind {
     Keyword => "keyword"
@@ -150,6 +167,7 @@ fn token_kind_class(kind : TokenKind) -> String {
   }
 }
 
+///|
 pub fn render_highlighted(tokens : Array[Token]) -> String {
   let out = StringBuilder::new()
   let mut i = 0
@@ -170,6 +188,7 @@ pub fn render_highlighted(tokens : Array[Token]) -> String {
   out.to_string()
 }
 
+///|
 pub fn css_classes() -> String {
   "/* lattice highlight defaults */\n" +
   "pre.highlight { background: #0f172a; color: #e2e8f0; }\n" +
@@ -186,6 +205,7 @@ pub fn css_classes() -> String {
   ".hl-unknown { color: #fda4af; }\n"
 }
 
+///|
 fn is_operator_char(c : Char) -> Bool {
   c == '+' ||
   c == '-' ||
@@ -203,6 +223,7 @@ fn is_operator_char(c : Char) -> Bool {
   c == '?'
 }
 
+///|
 fn is_punct_char(c : Char) -> Bool {
   c == '(' ||
   c == ')' ||
@@ -216,6 +237,7 @@ fn is_punct_char(c : Char) -> Bool {
   c == ':'
 }
 
+///|
 fn tokenize_with_rules(
   source : String,
   keywords : Array[String],
@@ -230,7 +252,7 @@ fn tokenize_with_rules(
   allow_double_quote_string : Bool,
   allow_backtick_string : Bool,
   allow_triple_quote : Bool,
-  type_pascal_case : Bool
+  type_pascal_case : Bool,
 ) -> Array[Token] {
   let tokens : Array[Token] = []
   let n = source.length()
@@ -256,7 +278,7 @@ fn tokenize_with_rules(
     }
 
     match line_comment_1 {
-      Some(prefix) => {
+      Some(prefix) =>
         if starts_with_at(source, i, prefix) {
           let buf = StringBuilder::new()
           while i < n && char_at(source, i) != '\n' {
@@ -266,14 +288,13 @@ fn tokenize_with_rules(
           push_token(tokens, TokenKind::Comment, buf)
           continue
         }
-      }
       None => ()
     }
 
     match block_comment_start {
-      Some(open) => {
+      Some(open) =>
         match block_comment_end {
-          Some(close) => {
+          Some(close) =>
             if starts_with_at(source, i, open) {
               let buf = StringBuilder::new()
               let mut done = false
@@ -297,10 +318,8 @@ fn tokenize_with_rules(
               push_token(tokens, TokenKind::Comment, buf)
               continue
             }
-          }
           None => ()
         }
-      }
       None => ()
     }
 
@@ -385,14 +404,20 @@ fn tokenize_with_rules(
           break
         }
       }
-      let kind = if quote == '\'' { TokenKind::CharLit } else { TokenKind::StringLit }
+      let kind = if quote == '\'' {
+        TokenKind::CharLit
+      } else {
+        TokenKind::StringLit
+      }
       push_token(tokens, kind, buf)
       continue
     }
 
     if is_digit(c) {
       let buf = StringBuilder::new()
-      if c == '0' && i + 1 < n && (char_at(source, i + 1) == 'x' || char_at(source, i + 1) == 'X') {
+      if c == '0' &&
+        i + 1 < n &&
+        (char_at(source, i + 1) == 'x' || char_at(source, i + 1) == 'X') {
         buf.write_char('0')
         buf.write_char(char_at(source, i + 1))
         i = i + 2
@@ -448,12 +473,13 @@ fn tokenize_with_rules(
   tokens
 }
 
+///|
 fn tokenize_number_general(
   source : String,
   start : Int,
   allow_octal_prefix : Bool,
   allow_exponent : Bool,
-  allow_unit_suffix : Bool
+  allow_unit_suffix : Bool,
 ) -> (Token, Int) {
   let buf = StringBuilder::new()
   let n = source.length()
@@ -484,7 +510,10 @@ fn tokenize_number_general(
     return ({ kind: TokenKind::Number, text: buf.to_string() }, i)
   }
   i = read_while(source, i, fn(ch) { is_digit(ch) || ch == '_' }, buf)
-  if i < n && char_at(source, i) == '.' && i + 1 < n && is_digit(char_at(source, i + 1)) {
+  if i < n &&
+    char_at(source, i) == '.' &&
+    i + 1 < n &&
+    is_digit(char_at(source, i + 1)) {
     buf.write_char('.')
     i = i + 1
     i = read_while(source, i, fn(ch) { is_digit(ch) || ch == '_' }, buf)
@@ -506,34 +535,12 @@ fn tokenize_number_general(
   ({ kind: TokenKind::Number, text: buf.to_string() }, i)
 }
 
+///|
 pub fn tokenize_moonbit(source : String) -> Array[Token] {
   let keywords = [
-    "fn",
-    "let",
-    "pub",
-    "priv",
-    "struct",
-    "enum",
-    "type",
-    "impl",
-    "trait",
-    "if",
-    "else",
-    "match",
-    "return",
-    "for",
-    "while",
-    "break",
-    "continue",
-    "true",
-    "false",
-    "is",
-    "as",
-    "in",
-    "raise",
-    "try",
-    "catch",
-    "throw",
+    "fn", "let", "pub", "priv", "struct", "enum", "type", "impl", "trait", "if",
+    "else", "match", "return", "for", "while", "break", "continue", "true", "false",
+    "is", "as", "in", "raise", "try", "catch", "throw",
   ]
   tokenize_with_rules(
     source,
@@ -549,40 +556,16 @@ pub fn tokenize_moonbit(source : String) -> Array[Token] {
     true,
     false,
     false,
-    true
+    true,
   )
 }
 
+///|
 pub fn tokenize_typescript(source : String) -> Array[Token] {
   let keywords = [
-    "function",
-    "const",
-    "let",
-    "var",
-    "class",
-    "interface",
-    "type",
-    "import",
-    "export",
-    "from",
-    "return",
-    "if",
-    "else",
-    "for",
-    "while",
-    "switch",
-    "case",
-    "break",
-    "continue",
-    "new",
-    "this",
-    "null",
-    "undefined",
-    "true",
-    "false",
-    "async",
-    "await",
-    "extends",
+    "function", "const", "let", "var", "class", "interface", "type", "import", "export",
+    "from", "return", "if", "else", "for", "while", "switch", "case", "break", "continue",
+    "new", "this", "null", "undefined", "true", "false", "async", "await", "extends",
     "implements",
   ]
   tokenize_with_rules(
@@ -599,41 +582,16 @@ pub fn tokenize_typescript(source : String) -> Array[Token] {
     true,
     true,
     false,
-    false
+    false,
   )
 }
 
+///|
 pub fn tokenize_python(source : String) -> Array[Token] {
   let keywords = [
-    "def",
-    "class",
-    "import",
-    "from",
-    "return",
-    "if",
-    "elif",
-    "else",
-    "for",
-    "while",
-    "break",
-    "continue",
-    "pass",
-    "True",
-    "False",
-    "None",
-    "and",
-    "or",
-    "not",
-    "in",
-    "is",
-    "lambda",
-    "with",
-    "as",
-    "yield",
-    "raise",
-    "try",
-    "except",
-    "finally",
+    "def", "class", "import", "from", "return", "if", "elif", "else", "for", "while",
+    "break", "continue", "pass", "True", "False", "None", "and", "or", "not", "in",
+    "is", "lambda", "with", "as", "yield", "raise", "try", "except", "finally",
   ]
   tokenize_with_rules(
     source,
@@ -649,43 +607,18 @@ pub fn tokenize_python(source : String) -> Array[Token] {
     true,
     false,
     true,
-    false
+    false,
   )
 }
 
+///|
 pub fn tokenize_bash(source : String) -> Array[Token] {
   let keywords = [
-    "if",
-    "then",
-    "fi",
-    "else",
-    "elif",
-    "for",
-    "while",
-    "do",
-    "done",
-    "case",
-    "esac",
-    "function",
-    "return",
-    "in",
-    "echo",
-    "export",
-    "source",
+    "if", "then", "fi", "else", "elif", "for", "while", "do", "done", "case", "esac",
+    "function", "return", "in", "echo", "export", "source",
   ]
   let builtins = [
-    "cd",
-    "ls",
-    "mkdir",
-    "rm",
-    "cp",
-    "mv",
-    "cat",
-    "grep",
-    "awk",
-    "sed",
-    "find",
-    "chmod",
+    "cd", "ls", "mkdir", "rm", "cp", "mv", "cat", "grep", "awk", "sed", "find", "chmod",
     "chown",
   ]
   tokenize_with_rules(
@@ -702,41 +635,17 @@ pub fn tokenize_bash(source : String) -> Array[Token] {
     true,
     false,
     false,
-    false
+    false,
   )
 }
 
+///|
 pub fn tokenize_go(source : String) -> Array[Token] {
   let keywords = [
-    "package",
-    "import",
-    "func",
-    "var",
-    "const",
-    "type",
-    "struct",
-    "interface",
-    "map",
-    "chan",
-    "go",
-    "defer",
-    "select",
-    "case",
-    "default",
-    "if",
-    "else",
-    "for",
-    "range",
-    "switch",
-    "return",
-    "break",
-    "continue",
-    "fallthrough",
-    "goto",
-    "nil",
-    "true",
-    "false",
-    "iota",
+    "package", "import", "func", "var", "const", "type", "struct", "interface", "map",
+    "chan", "go", "defer", "select", "case", "default", "if", "else", "for", "range",
+    "switch", "return", "break", "continue", "fallthrough", "goto", "nil", "true",
+    "false", "iota",
   ]
   tokenize_with_rules(
     source,
@@ -752,46 +661,18 @@ pub fn tokenize_go(source : String) -> Array[Token] {
     true,
     true,
     false,
-    true
+    true,
   )
 }
 
+///|
 pub fn tokenize_c(source : String) -> Array[Token] {
   let tokens : Array[Token] = []
   let keywords = [
-    "if",
-    "else",
-    "for",
-    "while",
-    "do",
-    "switch",
-    "case",
-    "default",
-    "break",
-    "continue",
-    "return",
-    "goto",
-    "typedef",
-    "struct",
-    "union",
-    "enum",
-    "void",
-    "int",
-    "char",
-    "float",
-    "double",
-    "long",
-    "short",
-    "unsigned",
-    "signed",
-    "const",
-    "static",
-    "extern",
-    "auto",
-    "register",
-    "volatile",
-    "sizeof",
-    "NULL",
+    "if", "else", "for", "while", "do", "switch", "case", "default", "break", "continue",
+    "return", "goto", "typedef", "struct", "union", "enum", "void", "int", "char",
+    "float", "double", "long", "short", "unsigned", "signed", "const", "static",
+    "extern", "auto", "register", "volatile", "sizeof", "NULL",
   ]
   let n = source.length()
   let mut i = 0
@@ -851,12 +732,18 @@ pub fn tokenize_c(source : String) -> Array[Token] {
           break
         }
       }
-      let kind = if quote == '\'' { TokenKind::CharLit } else { TokenKind::StringLit }
+      let kind = if quote == '\'' {
+        TokenKind::CharLit
+      } else {
+        TokenKind::StringLit
+      }
       push_token(tokens, kind, buf)
       continue
     }
     if is_digit(c) {
-      let (token, next_i) = tokenize_number_general(source, i, false, true, false)
+      let (token, next_i) = tokenize_number_general(
+        source, i, false, true, false,
+      )
       tokens.push(token)
       i = next_i
       continue
@@ -893,6 +780,7 @@ pub fn tokenize_c(source : String) -> Array[Token] {
   tokens
 }
 
+///|
 pub fn tokenize_html(source : String) -> Array[Token] {
   let tokens : Array[Token] = []
   let n = source.length()
@@ -912,7 +800,8 @@ pub fn tokenize_html(source : String) -> Array[Token] {
       push_token(tokens, TokenKind::Comment, buf)
       continue
     }
-    if starts_with_at(source, i, "<!DOCTYPE") || starts_with_at(source, i, "<!doctype") {
+    if starts_with_at(source, i, "<!DOCTYPE") ||
+      starts_with_at(source, i, "<!doctype") {
       let buf = StringBuilder::new()
       while i < n {
         let ch = char_at(source, i)
@@ -939,7 +828,12 @@ pub fn tokenize_html(source : String) -> Array[Token] {
       }
       if i < n && is_ident_start(char_at(source, i)) {
         let name = StringBuilder::new()
-        i = read_while(source, i, fn(ch) { is_ident_part(ch) || ch == '-' }, name)
+        i = read_while(
+          source,
+          i,
+          fn(ch) { is_ident_part(ch) || ch == '-' },
+          name,
+        )
         push_token(tokens, TokenKind::Keyword, name)
       }
       while i < n {
@@ -966,7 +860,12 @@ pub fn tokenize_html(source : String) -> Array[Token] {
         }
         if is_ident_start(ch) {
           let name = StringBuilder::new()
-          i = read_while(source, i, fn(inner) { is_ident_part(inner) || inner == '-' }, name)
+          i = read_while(
+            source,
+            i,
+            fn(inner) { is_ident_part(inner) || inner == '-' },
+            name,
+          )
           push_token(tokens, TokenKind::Identifier, name)
           continue
         }
@@ -1009,6 +908,7 @@ pub fn tokenize_html(source : String) -> Array[Token] {
   tokens
 }
 
+///|
 pub fn tokenize_css(source : String) -> Array[Token] {
   let tokens : Array[Token] = []
   let n = source.length()
@@ -1090,8 +990,11 @@ pub fn tokenize_css(source : String) -> Array[Token] {
       push_token(tokens, TokenKind::StringLit, buf)
       continue
     }
-    if is_digit(c) || (c == '-' && i + 1 < n && is_digit(char_at(source, i + 1))) {
-      let (token, next_i) = tokenize_number_general(source, i, false, true, true)
+    if is_digit(c) ||
+      (c == '-' && i + 1 < n && is_digit(char_at(source, i + 1))) {
+      let (token, next_i) = tokenize_number_general(
+        source, i, false, true, true,
+      )
       tokens.push(token)
       i = next_i
       continue
@@ -1099,7 +1002,11 @@ pub fn tokenize_css(source : String) -> Array[Token] {
     let buf = StringBuilder::new()
     while i < n {
       let inner = char_at(source, i)
-      if inner == '{' || inner == '}' || inner == ':' || inner == ';' || is_whitespace(inner) {
+      if inner == '{' ||
+        inner == '}' ||
+        inner == ':' ||
+        inner == ';' ||
+        is_whitespace(inner) {
         break
       }
       if starts_with_at(source, i, "/*") {
@@ -1127,6 +1034,7 @@ pub fn tokenize_css(source : String) -> Array[Token] {
   tokens
 }
 
+///|
 pub fn tokenize_json(source : String) -> Array[Token] {
   let tokens : Array[Token] = []
   let n = source.length()
@@ -1164,8 +1072,11 @@ pub fn tokenize_json(source : String) -> Array[Token] {
       push_token(tokens, TokenKind::Punct, buf)
       continue
     }
-    if is_digit(c) || (c == '-' && i + 1 < n && is_digit(char_at(source, i + 1))) {
-      let (token, next_i) = tokenize_number_general(source, i, false, true, false)
+    if is_digit(c) ||
+      (c == '-' && i + 1 < n && is_digit(char_at(source, i + 1))) {
+      let (token, next_i) = tokenize_number_general(
+        source, i, false, true, false,
+      )
       tokens.push(token)
       i = next_i
       continue
@@ -1189,6 +1100,7 @@ pub fn tokenize_json(source : String) -> Array[Token] {
   tokens
 }
 
+///|
 pub fn tokenize_plain(source : String) -> Array[Token] {
   let tokens : Array[Token] = []
   let mut i = 0
@@ -1202,6 +1114,7 @@ pub fn tokenize_plain(source : String) -> Array[Token] {
   tokens
 }
 
+///|
 fn normalize_lang(lang : String) -> String {
   let l = lang
   if l == "js" {
@@ -1219,6 +1132,7 @@ fn normalize_lang(lang : String) -> String {
   l
 }
 
+///|
 pub fn highlight(lang : String, source : String) -> Array[Token] {
   match normalize_lang(lang) {
     "moonbit" => tokenize_moonbit(source)
@@ -1235,6 +1149,7 @@ pub fn highlight(lang : String, source : String) -> Array[Token] {
   }
 }
 
+///|
 pub fn language_supported(lang : String) -> Bool {
   match normalize_lang(lang) {
     "moonbit" => true

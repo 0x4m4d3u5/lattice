@@ -5,7 +5,6 @@
 /// - One `key=value` pair per line.
 /// - Lines beginning with `#` are comments.
 /// - Unknown keys are ignored.
-
 pub struct SiteConfig {
   title : String
   base_url : String
@@ -21,16 +20,19 @@ pub struct SiteConfig {
   root_page : String?
 }
 
+///|
 pub enum ConfigError {
   InvalidLine(Int, String)
   MissingRequiredField(String)
   InvalidValue(String, String)
 }
 
+///|
 fn char_at_config(s : String, i : Int) -> Char {
   s[i].to_int().unsafe_to_char()
 }
 
+///|
 fn substr_config(s : String, start : Int, end : Int) -> String {
   let buf = StringBuilder::new()
   let mut i = start
@@ -41,6 +43,7 @@ fn substr_config(s : String, start : Int, end : Int) -> String {
   buf.to_string()
 }
 
+///|
 fn trim_config(s : String) -> String {
   let n = s.length()
   if n == 0 {
@@ -48,21 +51,26 @@ fn trim_config(s : String) -> String {
   }
   let mut lo = 0
   while lo < n &&
-    (char_at_config(s, lo) == ' ' ||
-      char_at_config(s, lo) == '\t' ||
-      char_at_config(s, lo) == '\r') {
+        (
+          char_at_config(s, lo) == ' ' ||
+          char_at_config(s, lo) == '\t' ||
+          char_at_config(s, lo) == '\r'
+        ) {
     lo = lo + 1
   }
   let mut hi = n
   while hi > lo &&
-    (char_at_config(s, hi - 1) == ' ' ||
-      char_at_config(s, hi - 1) == '\t' ||
-      char_at_config(s, hi - 1) == '\r') {
+        (
+          char_at_config(s, hi - 1) == ' ' ||
+          char_at_config(s, hi - 1) == '\t' ||
+          char_at_config(s, hi - 1) == '\r'
+        ) {
     hi = hi - 1
   }
   substr_config(s, lo, hi)
 }
 
+///|
 fn next_newline_config(s : String, from : Int) -> Int {
   let n = s.length()
   let mut i = from
@@ -72,6 +80,7 @@ fn next_newline_config(s : String, from : Int) -> Int {
   i
 }
 
+///|
 fn split_lines_config(s : String) -> Array[String] {
   let lines : Array[String] = []
   let n = s.length()
@@ -87,7 +96,11 @@ fn split_lines_config(s : String) -> Array[String] {
   lines
 }
 
-fn parse_assignment(line : String, line_no : Int) -> Result[(String, String), ConfigError] {
+///|
+fn parse_assignment(
+  line : String,
+  line_no : Int,
+) -> Result[(String, String), ConfigError] {
   let n = line.length()
   let mut eq = -1
   let mut i = 0
@@ -109,6 +122,7 @@ fn parse_assignment(line : String, line_no : Int) -> Result[(String, String), Co
   Ok((key, value))
 }
 
+///|
 fn parse_positive_int_config(value : String) -> Int? {
   let n = value.length()
   if n == 0 {
@@ -130,9 +144,12 @@ fn parse_positive_int_config(value : String) -> Int? {
   Some(parsed)
 }
 
+///|
 fn parse_string_value_config(value : String) -> String {
   let n = value.length()
-  if n >= 2 && char_at_config(value, 0) == '"' && char_at_config(value, n - 1) == '"' {
+  if n >= 2 &&
+    char_at_config(value, 0) == '"' &&
+    char_at_config(value, n - 1) == '"' {
     return substr_config(value, 1, n - 1)
   }
   value
@@ -202,7 +219,10 @@ pub fn parse(input : String) -> Result[SiteConfig, ConfigError] {
         } else if key == "page_size" {
           match parse_positive_int_config(value) {
             Some(parsed) => page_size = Some(parsed)
-            None => return Err(InvalidValue("page_size", "must be a positive integer"))
+            None =>
+              return Err(
+                InvalidValue("page_size", "must be a positive integer"),
+              )
           }
         } else if key == "description" {
           if string_value.length() == 0 {

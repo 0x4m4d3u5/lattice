@@ -5,7 +5,6 @@
 /// - Missing source directory is not an error.
 /// - Copy preserves binary bytes and relative paths.
 /// - All failures are typed (no panics).
-
 pub enum AssetCopyError {
   SourceReadError(String, String)
   SourceNotDirectory(String)
@@ -14,10 +13,12 @@ pub enum AssetCopyError {
   FileWriteError(String, String)
 }
 
+///|
 pub struct AssetValidation {
   errors : Array[AssetCopyError]
 }
 
+///|
 fn join_path(base : String, part : String) -> String {
   if base.length() == 0 {
     return part
@@ -28,11 +29,10 @@ fn join_path(base : String, part : String) -> String {
   base + "/" + part
 }
 
+///|
 fn ensure_dir(path : String) -> Result[Unit, AssetCopyError] {
   if @fs.path_exists(path) {
-    let exists_as_dir = try {
-      @fs.is_dir(path)
-    } catch {
+    let exists_as_dir = @fs.is_dir(path) catch {
       @fs.IOError(msg) => return Err(SourceReadError(path, msg))
     }
     if exists_as_dir {
@@ -50,10 +50,12 @@ fn ensure_dir(path : String) -> Result[Unit, AssetCopyError] {
   }
 }
 
-fn copy_file(src_file : String, dest_file : String) -> Result[Unit, AssetCopyError] {
-  let bytes = try {
-    @fs.read_file_to_bytes(src_file)
-  } catch {
+///|
+fn copy_file(
+  src_file : String,
+  dest_file : String,
+) -> Result[Unit, AssetCopyError] {
+  let bytes = @fs.read_file_to_bytes(src_file) catch {
     @fs.IOError(msg) => return Err(FileReadError(src_file, msg))
   }
   try {
@@ -64,15 +66,17 @@ fn copy_file(src_file : String, dest_file : String) -> Result[Unit, AssetCopyErr
   }
 }
 
-fn copy_tree(src_dir : String, dest_dir : String) -> Result[Int, AssetCopyError] {
+///|
+fn copy_tree(
+  src_dir : String,
+  dest_dir : String,
+) -> Result[Int, AssetCopyError] {
   match ensure_dir(dest_dir) {
     Ok(_) => ()
     Err(e) => return Err(e)
   }
 
-  let entries = try {
-    @fs.read_dir(src_dir)
-  } catch {
+  let entries = @fs.read_dir(src_dir) catch {
     @fs.IOError(msg) => return Err(SourceReadError(src_dir, msg))
   }
 
@@ -82,9 +86,7 @@ fn copy_tree(src_dir : String, dest_dir : String) -> Result[Int, AssetCopyError]
     let name = entries[i]
     let src_path = join_path(src_dir, name)
     let dest_path = join_path(dest_dir, name)
-    let is_dir = try {
-      @fs.is_dir(src_path)
-    } catch {
+    let is_dir = @fs.is_dir(src_path) catch {
       @fs.IOError(msg) => return Err(SourceReadError(src_path, msg))
     }
     if is_dir {
@@ -103,10 +105,9 @@ fn copy_tree(src_dir : String, dest_dir : String) -> Result[Int, AssetCopyError]
   Ok(copied)
 }
 
+///|
 fn validate_tree(path : String, errors : Array[AssetCopyError]) -> Unit {
-  let entries = try {
-    @fs.read_dir(path)
-  } catch {
+  let entries = @fs.read_dir(path) catch {
     @fs.IOError(msg) => {
       errors.push(SourceReadError(path, msg))
       return
@@ -116,9 +117,7 @@ fn validate_tree(path : String, errors : Array[AssetCopyError]) -> Unit {
   let mut i = 0
   while i < entries.length() {
     let entry_path = join_path(path, entries[i])
-    let is_dir = try {
-      @fs.is_dir(entry_path)
-    } catch {
+    let is_dir = @fs.is_dir(entry_path) catch {
       @fs.IOError(msg) => {
         errors.push(SourceReadError(entry_path, msg))
         i = i + 1
@@ -128,9 +127,7 @@ fn validate_tree(path : String, errors : Array[AssetCopyError]) -> Unit {
     if is_dir {
       validate_tree(entry_path, errors)
     } else {
-      let _ = try {
-        @fs.read_file_to_bytes(entry_path)
-      } catch {
+      let _ = @fs.read_file_to_bytes(entry_path) catch {
         @fs.IOError(msg) => {
           errors.push(FileReadError(entry_path, msg))
           i = i + 1
@@ -142,6 +139,7 @@ fn validate_tree(path : String, errors : Array[AssetCopyError]) -> Unit {
   }
 }
 
+///|
 pub fn error_path(err : AssetCopyError) -> String {
   match err {
     SourceReadError(path, _) => path
@@ -152,13 +150,19 @@ pub fn error_path(err : AssetCopyError) -> String {
   }
 }
 
+///|
 pub fn format_error(err : AssetCopyError) -> String {
   match err {
-    SourceReadError(path, msg) => "cannot read static assets source " + path + ": " + msg
-    SourceNotDirectory(path) => "static assets path exists but is not a directory: " + path
-    DestCreateError(path, msg) => "cannot create static asset directory " + path + ": " + msg
-    FileReadError(path, msg) => "cannot read static asset file " + path + ": " + msg
-    FileWriteError(path, msg) => "cannot write static asset file " + path + ": " + msg
+    SourceReadError(path, msg) =>
+      "cannot read static assets source " + path + ": " + msg
+    SourceNotDirectory(path) =>
+      "static assets path exists but is not a directory: " + path
+    DestCreateError(path, msg) =>
+      "cannot create static asset directory " + path + ": " + msg
+    FileReadError(path, msg) =>
+      "cannot read static asset file " + path + ": " + msg
+    FileWriteError(path, msg) =>
+      "cannot write static asset file " + path + ": " + msg
   }
 }
 
@@ -172,9 +176,7 @@ pub fn check_static(site_root : String, static_dir : String) -> AssetValidation 
     return { errors, }
   }
 
-  let is_source_dir = try {
-    @fs.is_dir(source_root)
-  } catch {
+  let is_source_dir = @fs.is_dir(source_root) catch {
     @fs.IOError(msg) => {
       errors.push(SourceReadError(source_root, msg))
       return { errors, }
@@ -196,16 +198,14 @@ pub fn check_static(site_root : String, static_dir : String) -> AssetValidation 
 pub fn copy_static(
   site_root : String,
   output_dir : String,
-  static_dir : String
+  static_dir : String,
 ) -> Result[Int, AssetCopyError] {
   let source_root = join_path(site_root, static_dir)
   if not(@fs.path_exists(source_root)) {
     return Ok(0)
   }
 
-  let source_is_dir = try {
-    @fs.is_dir(source_root)
-  } catch {
+  let source_is_dir = @fs.is_dir(source_root) catch {
     @fs.IOError(msg) => return Err(SourceReadError(source_root, msg))
   }
   if not(source_is_dir) {

@@ -1,7 +1,6 @@
 ///|
 test "frontmatter parses typed values and preserves body" {
-  let src =
-    "---\n" +
+  let src = "---\n" +
     "# comment\n" +
     "title = \"Hello\"\n" +
     "date = 2026-03-11\n" +
@@ -11,7 +10,7 @@ test "frontmatter parses typed values and preserves body" {
     "slug = hello-world\n" +
     "---\n" +
     "Body text\n"
-  match parse(src) {
+  match @frontmatter.parse(src) {
     Ok(fm) => {
       assert_eq(fm.body, "Body text\n")
       match fm.fields.get("title") {
@@ -55,13 +54,12 @@ test "frontmatter parses typed values and preserves body" {
 
 ///|
 test "frontmatter parses nested arrays and escapes in strings" {
-  let src =
-    "---\n" +
+  let src = "---\n" +
     "matrix = [[1, 2], [3, 4]]\n" +
     "summary = \"line\\nnext\\tindent\\\"quote\\\"\"\n" +
     "---\n" +
     "\n"
-  match parse(src) {
+  match @frontmatter.parse(src) {
     Ok(fm) => {
       match fm.fields.get("matrix") {
         Some(FArray(rows)) => {
@@ -94,12 +92,8 @@ test "frontmatter parses nested arrays and escapes in strings" {
 
 ///|
 test "frontmatter rejects malformed assignments with line context" {
-  let src =
-    "---\n" +
-    "title = \"ok\"\n" +
-    "broken = [1 2]\n" +
-    "---\n"
-  match parse(src) {
+  let src = "---\n" + "title = \"ok\"\n" + "broken = [1 2]\n" + "---\n"
+  match @frontmatter.parse(src) {
     Ok(_) => assert_true(false)
     Err(msg) => {
       assert_true(msg.contains("line 2"))
@@ -111,7 +105,7 @@ test "frontmatter rejects malformed assignments with line context" {
 ///|
 test "frontmatter rejects missing closing delimiter" {
   let src = "---\n" + "title = \"open\"\n"
-  match parse(src) {
+  match @frontmatter.parse(src) {
     Ok(_) => assert_true(false)
     Err(msg) => assert_eq(msg, "missing closing '---' delimiter")
   }
@@ -119,8 +113,7 @@ test "frontmatter rejects missing closing delimiter" {
 
 ///|
 test "frontmatter parses yaml-style obsidian metadata" {
-  let src =
-    "---\n" +
+  let src = "---\n" +
     "title: Home\n" +
     "type: home\n" +
     "created: 2026-03-08\n" +
@@ -129,7 +122,7 @@ test "frontmatter parses yaml-style obsidian metadata" {
     "  - vault/home\n" +
     "---\n" +
     "Body\n"
-  match parse(src) {
+  match @frontmatter.parse(src) {
     Ok(fm) => {
       match fm.fields.get("title") {
         Some(FStr(v)) => assert_eq(v, "Home")
@@ -160,5 +153,87 @@ test "frontmatter parses yaml-style obsidian metadata" {
       assert_eq(fm.body, "Body\n")
     }
     Err(_) => assert_true(false)
+  }
+}
+
+///|
+fn parse_frontmatter_or_fail(src : String) -> @frontmatter.Frontmatter {
+  match @frontmatter.parse(src) {
+    Ok(fm) => fm
+    Err(_) => abort("expected frontmatter parse to succeed")
+  }
+}
+
+///|
+test "frontmatter accepts valid date in various positions" {
+  // Date in quoted string
+  let fm1 = parse_frontmatter_or_fail(
+    "---\n" + "date = \"2026-03-11\"\n" + "---\n",
+  )
+  match fm1.fields.get("date") {
+    Some(FDate(v)) => assert_eq(v, "2026-03-11")
+    _ => assert_true(false)
+  }
+
+  // Date as bare string (unquoted)
+  let fm2 = parse_frontmatter_or_fail("---\n" + "date = 2026-03-11\n" + "---\n")
+  match fm2.fields.get("date") {
+    Some(FDate(v)) => assert_eq(v, "2026-03-11")
+    _ => assert_true(false)
+  }
+
+  // Date in YAML-style single quotes
+  let fm3 = parse_frontmatter_or_fail(
+    "---\n" + "date: '2026-03-11'\n" + "---\n",
+  )
+  match fm3.fields.get("date") {
+    Some(FDate(v)) => assert_eq(v, "2026-03-11")
+    _ => assert_true(false)
+  }
+}
+
+///|
+test "frontmatter validates date format strictly" {
+  // Invalid month - should be treated as string, not FDate
+  let fm1 = parse_frontmatter_or_fail(
+    "---\n" + "created = 2026-13-01\n" + "---\n",
+  )
+  match fm1.fields.get("created") {
+    Some(FStr(v)) => assert_eq(v, "2026-13-01")
+    _ => assert_true(false)
+  }
+
+  // Invalid day - should be treated as string, not FDate
+  let fm2 = parse_frontmatter_or_fail(
+    "---\n" + "created = 2026-02-30\n" + "---\n",
+  )
+  match fm2.fields.get("created") {
+    Some(FStr(v)) => assert_eq(v, "2026-02-30")
+    _ => assert_true(false)
+  }
+
+  // Wrong separator format (YYYY/MM/DD) - should be treated as string
+  let fm3 = parse_frontmatter_or_fail(
+    "---\n" + "created = 2026/03/11\n" + "---\n",
+  )
+  match fm3.fields.get("created") {
+    Some(FStr(v)) => assert_eq(v, "2026/03/11")
+    _ => assert_true(false)
+  }
+
+  // Too short - should be treated as string
+  let fm4 = parse_frontmatter_or_fail("---\n" + "created = 2026-03\n" + "---\n")
+  match fm4.fields.get("created") {
+    Some(FStr(v)) => assert_eq(v, "2026-03")
+    _ => assert_true(false)
+  }
+
+  // Too long - should be treated as string
+  let fm5 = parse_frontmatter_or_fail(
+    "---\n" + "created = 2026-03-11-extra\n" + "---\n",
+  )
+  match fm5.fields.get("created") {
+    Some(FStr(v)) => assert_eq(v, "2026-03-11-extra")
+    _ => assert_true(false)
   }
 }

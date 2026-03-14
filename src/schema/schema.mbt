@@ -9,6 +9,7 @@
 /// these violations at render time or at runtime. Here they are caught at the
 /// schema validation step, which runs before the render pipeline begins.
 
+///|
 /// Field type constraint.
 pub(all) enum FieldType {
   TString
@@ -19,6 +20,7 @@ pub(all) enum FieldType {
   TOptional(FieldType)
 }
 
+///|
 /// A single field definition in a schema.
 pub(all) struct FieldDef {
   name : String
@@ -26,12 +28,14 @@ pub(all) struct FieldDef {
   required : Bool
 }
 
+///|
 /// A content collection schema.
 pub(all) struct Schema {
   name : String
   fields : Array[FieldDef]
 }
 
+///|
 /// A validation error: the field name and what went wrong.
 pub(all) struct ValidationError {
   field : String
@@ -40,6 +44,7 @@ pub(all) struct ValidationError {
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
+///|
 fn field_type_name(ft : FieldType) -> String {
   match ft {
     TString => "String"
@@ -51,56 +56,60 @@ fn field_type_name(ft : FieldType) -> String {
   }
 }
 
+///|
 /// Check whether a parsed value conforms to a field type.
 /// TOptional matches the inner type — absence is handled in validate().
-fn type_matches(
-  val : @frontmatter.FrontmatterValue,
-  ft : FieldType
-) -> Bool {
+fn type_matches(val : @frontmatter.FrontmatterValue, ft : FieldType) -> Bool {
   match ft {
-    TString => match val {
-      @frontmatter.FStr(_) => true
-      _ => false
-    }
-    TDate => match val {
-      @frontmatter.FDate(_) => true
-      _ => false
-    }
-    TInt => match val {
-      @frontmatter.FInt(_) => true
-      _ => false
-    }
-    TBool => match val {
-      @frontmatter.FBool(_) => true
-      _ => false
-    }
-    TArray(elem) => match val {
-      @frontmatter.FArray(items) => {
-        let mut ok = true
-        let mut i = 0
-        while i < items.length() {
-          if not(type_matches(items[i], elem)) {
-            ok = false
-            break
-          }
-          i = i + 1
-        }
-        ok
+    TString =>
+      match val {
+        @frontmatter.FStr(_) => true
+        _ => false
       }
-      _ => false
-    }
+    TDate =>
+      match val {
+        @frontmatter.FDate(_) => true
+        _ => false
+      }
+    TInt =>
+      match val {
+        @frontmatter.FInt(_) => true
+        _ => false
+      }
+    TBool =>
+      match val {
+        @frontmatter.FBool(_) => true
+        _ => false
+      }
+    TArray(elem) =>
+      match val {
+        @frontmatter.FArray(items) => {
+          let mut ok = true
+          let mut i = 0
+          while i < items.length() {
+            if not(type_matches(items[i], elem)) {
+              ok = false
+              break
+            }
+            i = i + 1
+          }
+          ok
+        }
+        _ => false
+      }
     TOptional(inner) => type_matches(val, inner)
   }
 }
 
 // ── public API ────────────────────────────────────────────────────────────────
 
+///|
 /// Validate a parsed frontmatter map against a schema.
 /// Returns all errors found — missing required fields, type mismatches,
 /// and fields not declared in the schema.
 pub fn validate(
   fm : @frontmatter.Frontmatter,
-  schema : Schema
+  schema : Schema,
 ) -> Array[ValidationError] {
   let errors : Array[ValidationError] = []
   // Phase 1: check declared fields
@@ -108,12 +117,11 @@ pub fn validate(
   while i < schema.fields.length() {
     let fdef = schema.fields[i]
     match fm.fields.get(fdef.name) {
-      None => {
+      None =>
         if fdef.required {
           errors.push({ field: fdef.name, message: "required field missing" })
         }
-        // optional absent fields are fine
-      }
+      // optional absent fields are fine
       Some(val) => {
         // unwrap Optional for matching — absence is already handled above
         let expected = match fdef.field_type {
@@ -124,8 +132,8 @@ pub fn validate(
           errors.push({
             field: fdef.name,
             message: "expected " +
-              field_type_name(expected) +
-              " but got incompatible value",
+            field_type_name(expected) +
+            " but got incompatible value",
           })
         }
       }

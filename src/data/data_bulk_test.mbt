@@ -703,9 +703,7 @@ test "data bulk store from string file" {
     ("k700", "value-700"),
   ]
 
-  let store = new_store([
-    new_string_file("bulk", fields),
-  ])
+  let store = new_store([new_string_file("bulk", fields)])
 
   match resolve_string(store, "bulk", ["k1"]) {
     Ok(v) => assert_eq(v, "value-1")

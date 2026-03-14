@@ -1,13 +1,13 @@
+///|
 fn ensure_dir_test(path : String) -> Unit {
   if not(@fs.path_exists(path)) {
-    try {
-      @fs.create_dir(path)
-    } catch {
+    @fs.create_dir(path) catch {
       @fs.IOError(_) => ()
     }
   }
 }
 
+///|
 fn write_file_test(path : String, content : String) -> Bool {
   try {
     @fs.write_string_to_file(path, content)
@@ -96,8 +96,7 @@ test "build uses per-collection page template override" {
       "<html><body>override {{content}}</body></html>\n",
     ),
   )
-  let site_cfg =
-    "title = Test\n" +
+  let site_cfg = "title = Test\n" +
     "base_url = /\n" +
     "templates_dir = " +
     templates_root +
@@ -141,14 +140,13 @@ test "build uses per-collection page template override" {
       site,
       collections_path: Some(root + "/collections.cfg"),
       force_rebuild: true,
+      include_drafts: false,
     },
     @cache.empty(output_root),
   )
   assert_eq(result.errors, 0)
 
-  let output = try {
-    @fs.read_file_to_string(output_root + "/posts/hello/index.html")
-  } catch {
+  let output = @fs.read_file_to_string(output_root + "/posts/hello/index.html") catch {
     @fs.IOError(_) => ""
   }
   assert_true(output.contains("override"))

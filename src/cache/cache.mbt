@@ -1,35 +1,43 @@
+///|
 pub(all) struct CacheEntry {
   slug : String
   fingerprint : String
 }
 
+///|
 pub(all) struct CacheFile {
   version : Int
   entries : Array[CacheEntry]
 }
 
+///|
 pub(all) struct CacheStore {
   output_dir : String
   entries : Array[CacheEntry]
   index_by_slug : Map[String, Int]
 }
 
+///|
 pub(all) suberror CacheParseError {
   ParseFailure(String)
 }
 
+///|
 pub(all) suberror CacheError {
   ReadError(String)
   ParseError(String)
   WriteError(String)
 }
 
+///|
 const CACHE_VERSION : Int = 1
 
+///|
 fn char_at_cache(s : String, i : Int) -> Char {
   s[i].to_int().unsafe_to_char()
 }
 
+///|
 fn write_json_hex_digit_cache(n : Int) -> Char {
   if n < 10 {
     ('0'.to_int() + n).unsafe_to_char()
@@ -38,6 +46,7 @@ fn write_json_hex_digit_cache(n : Int) -> Char {
   }
 }
 
+///|
 fn write_json_string_cache(buf : StringBuilder, s : String) -> Unit {
   buf.write_char('"')
   let mut i = 0
@@ -68,19 +77,27 @@ fn write_json_string_cache(buf : StringBuilder, s : String) -> Unit {
   buf.write_char('"')
 }
 
+///|
 fn skip_ws_cache(source : String, idx : Int) -> Int {
   let mut i = idx
   while i < source.length() &&
-    (char_at_cache(source, i) == ' ' ||
-      char_at_cache(source, i) == '\n' ||
-      char_at_cache(source, i) == '\r' ||
-      char_at_cache(source, i) == '\t') {
+        (
+          char_at_cache(source, i) == ' ' ||
+          char_at_cache(source, i) == '\n' ||
+          char_at_cache(source, i) == '\r' ||
+          char_at_cache(source, i) == '\t'
+        ) {
     i = i + 1
   }
   i
 }
 
-fn expect_char_cache(source : String, idx : Int, expected : Char) -> Int raise CacheParseError {
+///|
+fn expect_char_cache(
+  source : String,
+  idx : Int,
+  expected : Char,
+) -> Int raise CacheParseError {
   let i = skip_ws_cache(source, idx)
   if i >= source.length() || char_at_cache(source, i) != expected {
     raise ParseFailure("expected '" + expected.to_string() + "'")
@@ -88,7 +105,11 @@ fn expect_char_cache(source : String, idx : Int, expected : Char) -> Int raise C
   i + 1
 }
 
-fn parse_json_string_cache(source : String, idx : Int) -> (String, Int) raise CacheParseError {
+///|
+fn parse_json_string_cache(
+  source : String,
+  idx : Int,
+) -> (String, Int) raise CacheParseError {
   let mut i = skip_ws_cache(source, idx)
   if i >= source.length() || char_at_cache(source, i) != '"' {
     raise ParseFailure("expected string")
@@ -136,22 +157,32 @@ fn parse_json_string_cache(source : String, idx : Int) -> (String, Int) raise Ca
   raise ParseFailure("unterminated string")
 }
 
-fn parse_int_cache(source : String, idx : Int) -> (Int, Int) raise CacheParseError {
+///|
+fn parse_int_cache(
+  source : String,
+  idx : Int,
+) -> (Int, Int) raise CacheParseError {
   let mut i = skip_ws_cache(source, idx)
-  if i >= source.length() || char_at_cache(source, i) < '0' || char_at_cache(source, i) > '9' {
+  if i >= source.length() ||
+    char_at_cache(source, i) < '0' ||
+    char_at_cache(source, i) > '9' {
     raise ParseFailure("expected integer")
   }
   let mut value = 0
   while i < source.length() &&
-    char_at_cache(source, i) >= '0' &&
-    char_at_cache(source, i) <= '9' {
+        char_at_cache(source, i) >= '0' &&
+        char_at_cache(source, i) <= '9' {
     value = value * 10 + (char_at_cache(source, i).to_int() - '0'.to_int())
     i = i + 1
   }
   (value, i)
 }
 
-fn parse_entry_cache(source : String, idx : Int) -> (CacheEntry, Int) raise CacheParseError {
+///|
+fn parse_entry_cache(
+  source : String,
+  idx : Int,
+) -> (CacheEntry, Int) raise CacheParseError {
   let mut i = expect_char_cache(source, idx, '{')
   let mut slug = ""
   let mut fingerprint = ""
@@ -201,7 +232,11 @@ fn parse_entry_cache(source : String, idx : Int) -> (CacheEntry, Int) raise Cach
   raise ParseFailure("unterminated entry object")
 }
 
-fn parse_entries_cache(source : String, idx : Int) -> (Array[CacheEntry], Int) raise CacheParseError {
+///|
+fn parse_entries_cache(
+  source : String,
+  idx : Int,
+) -> (Array[CacheEntry], Int) raise CacheParseError {
   let mut i = expect_char_cache(source, idx, '[')
   let entries : Array[CacheEntry] = []
   i = skip_ws_cache(source, i)
@@ -227,6 +262,7 @@ fn parse_entries_cache(source : String, idx : Int) -> (Array[CacheEntry], Int) r
   raise ParseFailure("unterminated entries array")
 }
 
+///|
 pub fn parse(source : String) -> CacheFile raise CacheParseError {
   let mut i = expect_char_cache(source, 0, '{')
   let (version_key, next_after_version_key) = parse_json_string_cache(source, i)
@@ -257,6 +293,7 @@ pub fn parse(source : String) -> CacheFile raise CacheParseError {
   { version, entries }
 }
 
+///|
 pub fn render(file : CacheFile) -> String {
   let buf = StringBuilder::new()
   buf.write_string("{\"version\":")
@@ -279,18 +316,17 @@ pub fn render(file : CacheFile) -> String {
   buf.to_string()
 }
 
+///|
 pub fn cache_path(output_dir : String) -> String {
   output_dir + "/.lattice-cache"
 }
 
+///|
 pub fn empty(output_dir : String) -> CacheStore {
-  {
-    output_dir,
-    entries: [],
-    index_by_slug: Map::new(),
-  }
+  { output_dir, entries: [], index_by_slug: Map::new() }
 }
 
+///|
 fn from_file(output_dir : String, file : CacheFile) -> CacheStore {
   let deduped : Array[CacheEntry] = []
   let index_by_slug : Map[String, Int] = Map::new()
@@ -309,27 +345,27 @@ fn from_file(output_dir : String, file : CacheFile) -> CacheStore {
   { output_dir, entries: deduped, index_by_slug }
 }
 
+///|
 pub fn load(output_dir : String) -> Result[CacheStore, CacheError] {
   let path = cache_path(output_dir)
   if not(@fs.path_exists(path)) {
     return Ok(empty(output_dir))
   }
-  let source = try {
-    @fs.read_file_to_string(path)
-  } catch {
+  let source = @fs.read_file_to_string(path) catch {
     @fs.IOError(msg) => return Err(ReadError(msg))
   }
-  let parsed = try {
-    parse(source)
-  } catch {
+  let parsed = parse(source) catch {
     ParseFailure(msg) => return Err(ParseError(msg))
   }
   if parsed.version != CACHE_VERSION {
-    return Err(ParseError("unsupported cache version " + parsed.version.to_string()))
+    return Err(
+      ParseError("unsupported cache version " + parsed.version.to_string()),
+    )
   }
   Ok(from_file(output_dir, parsed))
 }
 
+///|
 pub fn save(store : CacheStore) -> Result[Unit, CacheError] {
   let path = cache_path(store.output_dir)
   let payload = render({ version: CACHE_VERSION, entries: store.entries })
@@ -341,6 +377,7 @@ pub fn save(store : CacheStore) -> Result[Unit, CacheError] {
   }
 }
 
+///|
 pub fn lookup(store : CacheStore, slug : String) -> String? {
   match store.index_by_slug.get(slug) {
     Some(at) => Some(store.entries[at].fingerprint)
@@ -348,7 +385,12 @@ pub fn lookup(store : CacheStore, slug : String) -> String? {
   }
 }
 
-pub fn remember(store : CacheStore, slug : String, fingerprint : String) -> Unit {
+///|
+pub fn remember(
+  store : CacheStore,
+  slug : String,
+  fingerprint : String,
+) -> Unit {
   let entry : CacheEntry = { slug, fingerprint }
   match store.index_by_slug.get(slug) {
     Some(at) => store.entries[at] = entry
@@ -359,12 +401,13 @@ pub fn remember(store : CacheStore, slug : String, fingerprint : String) -> Unit
   }
 }
 
+///|
 pub fn should_skip(
   store : CacheStore,
   slug : String,
   fingerprint : String,
   output_path : String,
-  force_rebuild : Bool
+  force_rebuild : Bool,
 ) -> Bool {
   if force_rebuild {
     return false
@@ -378,6 +421,7 @@ pub fn should_skip(
   }
 }
 
+///|
 fn hash_string_cache(seed : Int64, source : String) -> Int64 {
   let mut hash = seed
   let mut i = 0
@@ -389,6 +433,7 @@ fn hash_string_cache(seed : Int64, source : String) -> Int64 {
   hash
 }
 
+///|
 pub fn fingerprint_for_source(path : String, source : String) -> String {
   let mut hash = 1469598103934665603L
   hash = hash_string_cache(hash, path)
@@ -397,6 +442,7 @@ pub fn fingerprint_for_source(path : String, source : String) -> String {
   hash.to_string()
 }
 
+///|
 pub fn error_text(err : CacheError) -> String {
   match err {
     ReadError(msg) => "read failed: " + msg

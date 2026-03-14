@@ -1,3 +1,4 @@
+///|
 fn hash_bytes_watch(bytes : Bytes) -> Int64 {
   let mut hash = 1469598103934665603L
   let mut i = 0
@@ -9,26 +10,22 @@ fn hash_bytes_watch(bytes : Bytes) -> Int64 {
   hash
 }
 
+///|
 fn mtime_millis_internal(path : String) -> Int64 {
   if not(@fs.path_exists(path)) {
     return -1L
   }
-  let is_dir = try {
-    @fs.is_dir(path)
-  } catch {
-    @fs.IOError(_) => return -1L
-  }
+  let is_dir = @fs.is_dir(path) catch { @fs.IOError(_) => return -1L }
   if is_dir {
     return 0L
   }
-  let bytes = try {
-    @fs.read_file_to_bytes(path)
-  } catch {
+  let bytes = @fs.read_file_to_bytes(path) catch {
     @fs.IOError(_) => return -1L
   }
   hash_bytes_watch(bytes)
 }
 
+///|
 pub fn sleep_ms(ms : Int) -> Unit {
   if ms <= 0 {
     return
@@ -40,18 +37,22 @@ pub fn sleep_ms(ms : Int) -> Unit {
   }
 }
 
+///|
 pub fn install_sigint_handler() -> Unit {
   ()
 }
 
+///|
 pub fn interrupted() -> Bool {
   false
 }
 
+///|
 pub fn clear_interrupt() -> Unit {
   ()
 }
 
+///|
 pub fn current_unix_second() -> Int64 {
   (@env.now() / 1000UL).reinterpret_as_int64()
 }

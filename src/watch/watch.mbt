@@ -1,40 +1,42 @@
+///|
 pub(all) struct SnapshotEntry {
   path : String
   stamp : Int64
 }
 
+///|
 pub(all) suberror WatchError {
   IOError(String)
 }
 
+///|
 fn file_mtime_millis(path : String) -> Int64 {
   mtime_millis_internal(path)
 }
 
+///|
 pub fn file_stamp(path : String) -> Int64 {
   file_mtime_millis(path)
 }
 
+///|
 fn collect_snapshot_entries(
   path : String,
-  entries : Array[SnapshotEntry]
+  entries : Array[SnapshotEntry],
 ) -> Unit raise WatchError {
   entries.push({ path, stamp: file_mtime_millis(path) })
   if not(@fs.path_exists(path)) {
     return
   }
-  let is_dir = try {
-    @fs.is_dir(path)
-  } catch {
+  let is_dir = @fs.is_dir(path) catch {
     @fs.IOError(msg) => raise IOError("cannot stat " + path + ": " + msg)
   }
   if not(is_dir) {
     return
   }
-  let children = try {
-    @fs.read_dir(path)
-  } catch {
-    @fs.IOError(msg) => raise IOError("cannot read directory " + path + ": " + msg)
+  let children = @fs.read_dir(path) catch {
+    @fs.IOError(msg) =>
+      raise IOError("cannot read directory " + path + ": " + msg)
   }
   children.sort()
   let mut i = 0
@@ -44,7 +46,10 @@ fn collect_snapshot_entries(
   }
 }
 
-pub fn take_snapshot(paths : Array[String]) -> Array[SnapshotEntry] raise WatchError {
+///|
+pub fn take_snapshot(
+  paths : Array[String],
+) -> Array[SnapshotEntry] raise WatchError {
   let roots : Array[String] = []
   let mut i = 0
   while i < paths.length() {
@@ -69,9 +74,10 @@ pub fn take_snapshot(paths : Array[String]) -> Array[SnapshotEntry] raise WatchE
   entries
 }
 
+///|
 pub fn diff_paths(
   previous : Array[SnapshotEntry],
-  current : Array[SnapshotEntry]
+  current : Array[SnapshotEntry],
 ) -> Array[String] {
   let changed : Array[String] = []
   let mut i = 0

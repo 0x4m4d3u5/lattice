@@ -12,6 +12,7 @@ pub(all) struct GraphPage {
   outgoing : Array[@wikilink.ResolvedWikilink]
 }
 
+///|
 fn hex_nibble_graph(n : Int) -> Char {
   if n < 10 {
     ('0'.to_int() + n).unsafe_to_char()
@@ -20,6 +21,7 @@ fn hex_nibble_graph(n : Int) -> Char {
   }
 }
 
+///|
 fn write_json_string_graph(buf : StringBuilder, s : String) -> Unit {
   buf.write_char('"')
   let n = s.length()

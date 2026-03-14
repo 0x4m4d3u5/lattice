@@ -12,7 +12,6 @@
 ///
 /// [data.nav]
 /// required = "title,links"
-
 pub(all) struct CollectionDef {
   name : String
   schema : @schema.Schema
@@ -20,17 +19,20 @@ pub(all) struct CollectionDef {
   template : String?
 }
 
+///|
 pub(all) struct DataSchemaDef {
   name : String
   required_keys : Array[String]
 }
 
+///|
 pub struct CollectionsConfig {
   definitions : Array[CollectionDef]
   data_schemas : Map[String, DataSchemaDef]
   data_schema_list : Array[DataSchemaDef]
 }
 
+///|
 pub enum CollectionsError {
   InvalidLine(Int, String)
   MissingRequiredField(String, String)
@@ -40,15 +42,18 @@ pub enum CollectionsError {
   EmptyConfig
 }
 
+///|
 priv enum SectionKind {
   CollectionSection(String)
   DataSection(String)
 }
 
+///|
 fn char_at_collections(s : String, i : Int) -> Char {
   s[i].to_int().unsafe_to_char()
 }
 
+///|
 fn substr_collections(s : String, start : Int, end_pos : Int) -> String {
   let buf = StringBuilder::new()
   let mut i = start
@@ -59,6 +64,7 @@ fn substr_collections(s : String, start : Int, end_pos : Int) -> String {
   buf.to_string()
 }
 
+///|
 fn trim_collections(s : String) -> String {
   let n = s.length()
   if n == 0 {
@@ -66,21 +72,26 @@ fn trim_collections(s : String) -> String {
   }
   let mut lo = 0
   while lo < n &&
-    (char_at_collections(s, lo) == ' ' ||
-      char_at_collections(s, lo) == '\t' ||
-      char_at_collections(s, lo) == '\r') {
+        (
+          char_at_collections(s, lo) == ' ' ||
+          char_at_collections(s, lo) == '\t' ||
+          char_at_collections(s, lo) == '\r'
+        ) {
     lo = lo + 1
   }
   let mut hi = n
   while hi > lo &&
-    (char_at_collections(s, hi - 1) == ' ' ||
-      char_at_collections(s, hi - 1) == '\t' ||
-      char_at_collections(s, hi - 1) == '\r') {
+        (
+          char_at_collections(s, hi - 1) == ' ' ||
+          char_at_collections(s, hi - 1) == '\t' ||
+          char_at_collections(s, hi - 1) == '\r'
+        ) {
     hi = hi - 1
   }
   substr_collections(s, lo, hi)
 }
 
+///|
 fn next_newline_collections(s : String, from : Int) -> Int {
   let n = s.length()
   let mut i = from
@@ -90,6 +101,7 @@ fn next_newline_collections(s : String, from : Int) -> Int {
   i
 }
 
+///|
 fn split_lines_collections(s : String) -> Array[String] {
   let lines : Array[String] = []
   let n = s.length()
@@ -105,6 +117,7 @@ fn split_lines_collections(s : String) -> Array[String] {
   lines
 }
 
+///|
 fn starts_with_collections(s : String, prefix : String) -> Bool {
   if prefix.length() > s.length() {
     return false
@@ -119,14 +132,17 @@ fn starts_with_collections(s : String, prefix : String) -> Bool {
   true
 }
 
+///|
 fn is_field_name_start(c : Char) -> Bool {
   (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_'
 }
 
+///|
 fn is_field_name_char(c : Char) -> Bool {
   is_field_name_start(c) || (c >= '0' && c <= '9') || c == '-'
 }
 
+///|
 fn is_valid_field_name(name : String) -> Bool {
   if name.length() == 0 {
     return false
@@ -144,8 +160,13 @@ fn is_valid_field_name(name : String) -> Bool {
   true
 }
 
-fn parse_section_header(raw : String, line_no : Int) -> Result[SectionKind, CollectionsError] {
-  if raw.length() < 3 || char_at_collections(raw, 0) != '[' ||
+///|
+fn parse_section_header(
+  raw : String,
+  line_no : Int,
+) -> Result[SectionKind, CollectionsError] {
+  if raw.length() < 3 ||
+    char_at_collections(raw, 0) != '[' ||
     char_at_collections(raw, raw.length() - 1) != ']' {
     return Err(InvalidLine(line_no, "invalid section header"))
   }
@@ -154,7 +175,9 @@ fn parse_section_header(raw : String, line_no : Int) -> Result[SectionKind, Coll
     return Err(InvalidLine(line_no, "empty section header"))
   }
   if starts_with_collections(section, "data.") {
-    let name = trim_collections(substr_collections(section, 5, section.length()))
+    let name = trim_collections(
+      substr_collections(section, 5, section.length()),
+    )
     if not(is_valid_field_name(name)) {
       return Err(InvalidLine(line_no, "invalid data schema name"))
     }
@@ -166,15 +189,17 @@ fn parse_section_header(raw : String, line_no : Int) -> Result[SectionKind, Coll
   Ok(CollectionSection(section))
 }
 
+///|
 fn skip_ws_type(s : String, pos : Int) -> Int {
   let mut i = pos
   while i < s.length() &&
-    (char_at_collections(s, i) == ' ' || char_at_collections(s, i) == '\t') {
+        (char_at_collections(s, i) == ' ' || char_at_collections(s, i) == '\t') {
     i = i + 1
   }
   i
 }
 
+///|
 fn parse_type_name(s : String, pos : Int) -> (String, Int) {
   let mut i = pos
   while i < s.length() {
@@ -188,9 +213,10 @@ fn parse_type_name(s : String, pos : Int) -> (String, Int) {
   (substr_collections(s, pos, i), i)
 }
 
+///|
 fn parse_field_type_at(
   s : String,
-  pos : Int
+  pos : Int,
 ) -> Result[(@schema.FieldType, Int), String] {
   let start = skip_ws_type(s, pos)
   if start >= s.length() {
@@ -232,6 +258,7 @@ fn parse_field_type_at(
   Err("unknown field type: " + name)
 }
 
+///|
 fn parse_field_type_text(s : String) -> Result[@schema.FieldType, String] {
   match parse_field_type_at(s, 0) {
     Err(e) => Err(e)
@@ -246,9 +273,10 @@ fn parse_field_type_text(s : String) -> Result[@schema.FieldType, String] {
   }
 }
 
+///|
 fn parse_schema_fields(
   collection_name : String,
-  schema_text : String
+  schema_text : String,
 ) -> Result[Array[@schema.FieldDef], CollectionsError] {
   let fields : Array[@schema.FieldDef] = []
   let n = schema_text.length()
@@ -271,7 +299,9 @@ fn parse_schema_fields(
       continue
     }
     if c == ',' && depth == 0 {
-      let entry = trim_collections(substr_collections(schema_text, seg_start, i))
+      let entry = trim_collections(
+        substr_collections(schema_text, seg_start, i),
+      )
       if entry.length() > 0 {
         let mut colon = -1
         let mut j = 0
@@ -283,14 +313,23 @@ fn parse_schema_fields(
           j = j + 1
         }
         if colon <= 0 || colon >= entry.length() - 1 {
-          return Err(InvalidSchema(collection_name, "invalid field declaration: " + entry))
+          return Err(
+            InvalidSchema(
+              collection_name,
+              "invalid field declaration: " + entry,
+            ),
+          )
         }
 
         let field_name = trim_collections(substr_collections(entry, 0, colon))
         if not(is_valid_field_name(field_name)) {
-          return Err(InvalidSchema(collection_name, "invalid field name: " + field_name))
+          return Err(
+            InvalidSchema(collection_name, "invalid field name: " + field_name),
+          )
         }
-        let type_text = trim_collections(substr_collections(entry, colon + 1, entry.length()))
+        let type_text = trim_collections(
+          substr_collections(entry, colon + 1, entry.length()),
+        )
         let field_type = match parse_field_type_text(type_text) {
           Ok(ft) => ft
           Err(e) => return Err(InvalidSchema(collection_name, e))
@@ -307,18 +346,25 @@ fn parse_schema_fields(
   }
 
   if fields.length() == 0 {
-    return Err(InvalidSchema(collection_name, "schema must define at least one field"))
+    return Err(
+      InvalidSchema(collection_name, "schema must define at least one field"),
+    )
   }
   Ok(fields)
 }
 
-fn parse_value_literal(line_no : Int, raw : String) -> Result[String, CollectionsError] {
+///|
+fn parse_value_literal(
+  line_no : Int,
+  raw : String,
+) -> Result[String, CollectionsError] {
   let value = trim_collections(raw)
   if value.length() == 0 {
     return Err(InvalidLine(line_no, "empty value"))
   }
   if char_at_collections(value, 0) == '"' {
-    if value.length() < 2 || char_at_collections(value, value.length() - 1) != '"' {
+    if value.length() < 2 ||
+      char_at_collections(value, value.length() - 1) != '"' {
       return Err(InvalidLine(line_no, "unterminated quoted string"))
     }
     Ok(substr_collections(value, 1, value.length() - 1))
@@ -327,6 +373,7 @@ fn parse_value_literal(line_no : Int, raw : String) -> Result[String, Collection
   }
 }
 
+///|
 fn parse_required_keys_data(s : String) -> Array[String] {
   let keys : Array[String] = []
   let mut start = 0
@@ -344,13 +391,14 @@ fn parse_required_keys_data(s : String) -> Array[String] {
   keys
 }
 
+///|
 fn finalize_collection(
   defs : Array[CollectionDef],
   seen : Map[String, Bool],
   name : String,
   schema_text : String?,
   dir_text : String?,
-  template_text : String?
+  template_text : String?,
 ) -> Result[Unit, CollectionsError] {
   if seen.get(name) != None {
     return Err(DuplicateCollection(name))
@@ -373,12 +421,13 @@ fn finalize_collection(
   Ok(())
 }
 
+///|
 fn finalize_data_schema(
   schemas : Map[String, DataSchemaDef],
   schema_list : Array[DataSchemaDef],
   seen : Map[String, Bool],
   name : String,
-  required : String?
+  required : String?,
 ) -> Result[Unit, CollectionsError] {
   if seen.get(name) != None {
     return Err(DuplicateDataSchema(name))
@@ -422,25 +471,22 @@ pub fn parse(input : String) -> Result[CollectionsConfig, CollectionsError] {
 
     if char_at_collections(raw, 0) == '[' {
       match current_section {
-        Some(CollectionSection(name)) => {
-          match finalize_collection(
-            defs,
-            seen_collections,
-            name,
-            current_schema,
-            current_dir,
-            current_template,
-          ) {
+        Some(CollectionSection(name)) =>
+          match
+            finalize_collection(
+              defs, seen_collections, name, current_schema, current_dir, current_template,
+            ) {
             Err(e) => return Err(e)
             Ok(_) => ()
           }
-        }
-        Some(DataSection(name)) => {
-          match finalize_data_schema(data_schemas, data_schema_list, seen_data, name, current_required) {
+        Some(DataSection(name)) =>
+          match
+            finalize_data_schema(
+              data_schemas, data_schema_list, seen_data, name, current_required,
+            ) {
             Err(e) => return Err(e)
             Ok(_) => ()
           }
-        }
         None => ()
       }
       current_schema = None
@@ -481,7 +527,7 @@ pub fn parse(input : String) -> Result[CollectionsConfig, CollectionsError] {
     }
 
     match section {
-      CollectionSection(name) => {
+      CollectionSection(name) =>
         if key == "schema" {
           current_schema = Some(value)
         } else if key == "dir" {
@@ -489,41 +535,46 @@ pub fn parse(input : String) -> Result[CollectionsConfig, CollectionsError] {
         } else if key == "template" {
           current_template = Some(value)
         } else {
-          return Err(InvalidLine(line_no, "unknown key in section '" + name + "': " + key))
+          return Err(
+            InvalidLine(
+              line_no,
+              "unknown key in section '" + name + "': " + key,
+            ),
+          )
         }
-      }
-      DataSection(name) => {
+      DataSection(name) =>
         if key == "required" {
           current_required = Some(value)
         } else {
-          return Err(InvalidLine(line_no, "unknown key in section 'data." + name + "': " + key))
+          return Err(
+            InvalidLine(
+              line_no,
+              "unknown key in section 'data." + name + "': " + key,
+            ),
+          )
         }
-      }
     }
 
     i = i + 1
   }
 
   match current_section {
-    Some(CollectionSection(name)) => {
-      match finalize_collection(
-        defs,
-        seen_collections,
-        name,
-        current_schema,
-        current_dir,
-        current_template,
-      ) {
+    Some(CollectionSection(name)) =>
+      match
+        finalize_collection(
+          defs, seen_collections, name, current_schema, current_dir, current_template,
+        ) {
         Err(e) => return Err(e)
         Ok(_) => ()
       }
-    }
-    Some(DataSection(name)) => {
-      match finalize_data_schema(data_schemas, data_schema_list, seen_data, name, current_required) {
+    Some(DataSection(name)) =>
+      match
+        finalize_data_schema(
+          data_schemas, data_schema_list, seen_data, name, current_required,
+        ) {
         Err(e) => return Err(e)
         Ok(_) => ()
       }
-    }
     None => ()
   }
 

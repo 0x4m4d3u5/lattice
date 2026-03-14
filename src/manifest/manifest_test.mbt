@@ -1,3 +1,4 @@
+///|
 test "manifest render and parse roundtrip" {
   let manifest : ManifestFile = {
     version: 1,
@@ -8,19 +9,12 @@ test "manifest render and parse roundtrip" {
         out: "_site/posts/hello/index.html",
         targets: ["about", "contact"],
       },
-      {
-        src: "content/lattice.conf",
-        mtime: 42L,
-        out: "",
-        targets: [],
-      },
+      { src: "content/lattice.conf", mtime: 42L, out: "", targets: [] },
     ],
   }
 
   let rendered = render(manifest)
-  let parsed = try {
-    parse(rendered)
-  } catch {
+  let parsed = parse(rendered) catch {
     ParseError(_) => {
       assert_true(false)
       { version: 0, entries: [] }
@@ -38,12 +32,10 @@ test "manifest render and parse roundtrip" {
   assert_eq(parsed.entries[1].targets.length(), 0)
 }
 
+///|
 test "manifest parse accepts entries without targets" {
-  let source =
-    "{\"version\":1,\"entries\":[{\"src\":\"a.md\",\"mtime\":1,\"out\":\"out/index.html\"}]}"
-  let parsed = try {
-    parse(source)
-  } catch {
+  let source = "{\"version\":1,\"entries\":[{\"src\":\"a.md\",\"mtime\":1,\"out\":\"out/index.html\"}]}"
+  let parsed = parse(source) catch {
     ParseError(_) => {
       assert_true(false)
       { version: 0, entries: [] }

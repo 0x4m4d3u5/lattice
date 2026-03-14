@@ -1,3 +1,4 @@
+///|
 pub(all) struct ManifestEntry {
   src : String
   mtime : Int64
@@ -5,19 +6,23 @@ pub(all) struct ManifestEntry {
   targets : Array[String]
 }
 
+///|
 pub(all) struct ManifestFile {
   version : Int
   entries : Array[ManifestEntry]
 }
 
+///|
 pub(all) suberror ManifestError {
   ParseError(String)
 }
 
+///|
 fn char_at_manifest(s : String, i : Int) -> Char {
   s[i].to_int().unsafe_to_char()
 }
 
+///|
 fn write_json_hex_digit_manifest(n : Int) -> Char {
   if n < 10 {
     ('0'.to_int() + n).unsafe_to_char()
@@ -26,6 +31,7 @@ fn write_json_hex_digit_manifest(n : Int) -> Char {
   }
 }
 
+///|
 fn write_json_string_manifest(buf : StringBuilder, s : String) -> Unit {
   buf.write_char('"')
   let mut i = 0
@@ -56,19 +62,27 @@ fn write_json_string_manifest(buf : StringBuilder, s : String) -> Unit {
   buf.write_char('"')
 }
 
+///|
 fn skip_ws_manifest(source : String, idx : Int) -> Int {
   let mut i = idx
   while i < source.length() &&
-    (char_at_manifest(source, i) == ' ' ||
-      char_at_manifest(source, i) == '\n' ||
-      char_at_manifest(source, i) == '\r' ||
-      char_at_manifest(source, i) == '\t') {
+        (
+          char_at_manifest(source, i) == ' ' ||
+          char_at_manifest(source, i) == '\n' ||
+          char_at_manifest(source, i) == '\r' ||
+          char_at_manifest(source, i) == '\t'
+        ) {
     i = i + 1
   }
   i
 }
 
-fn expect_char_manifest(source : String, idx : Int, expected : Char) -> Int raise ManifestError {
+///|
+fn expect_char_manifest(
+  source : String,
+  idx : Int,
+  expected : Char,
+) -> Int raise ManifestError {
   let i = skip_ws_manifest(source, idx)
   if i >= source.length() || char_at_manifest(source, i) != expected {
     raise ParseError("expected '" + expected.to_string() + "'")
@@ -76,7 +90,11 @@ fn expect_char_manifest(source : String, idx : Int, expected : Char) -> Int rais
   i + 1
 }
 
-fn parse_json_string_manifest(source : String, idx : Int) -> (String, Int) raise ManifestError {
+///|
+fn parse_json_string_manifest(
+  source : String,
+  idx : Int,
+) -> (String, Int) raise ManifestError {
   let mut i = skip_ws_manifest(source, idx)
   if i >= source.length() || char_at_manifest(source, i) != '"' {
     raise ParseError("expected string")
@@ -124,7 +142,11 @@ fn parse_json_string_manifest(source : String, idx : Int) -> (String, Int) raise
   raise ParseError("unterminated string")
 }
 
-fn parse_int64_manifest(source : String, idx : Int) -> (Int64, Int) raise ManifestError {
+///|
+fn parse_int64_manifest(
+  source : String,
+  idx : Int,
+) -> (Int64, Int) raise ManifestError {
   let mut i = skip_ws_manifest(source, idx)
   if i >= source.length() {
     raise ParseError("expected integer")
@@ -134,14 +156,17 @@ fn parse_int64_manifest(source : String, idx : Int) -> (Int64, Int) raise Manife
     negative = true
     i = i + 1
   }
-  if i >= source.length() || char_at_manifest(source, i) < '0' || char_at_manifest(source, i) > '9' {
+  if i >= source.length() ||
+    char_at_manifest(source, i) < '0' ||
+    char_at_manifest(source, i) > '9' {
     raise ParseError("expected integer")
   }
   let mut value = 0L
   while i < source.length() &&
-    char_at_manifest(source, i) >= '0' &&
-    char_at_manifest(source, i) <= '9' {
-    value = value * 10L + (char_at_manifest(source, i).to_int() - '0'.to_int()).to_int64()
+        char_at_manifest(source, i) >= '0' &&
+        char_at_manifest(source, i) <= '9' {
+    value = value * 10L +
+      (char_at_manifest(source, i).to_int() - '0'.to_int()).to_int64()
     i = i + 1
   }
   if negative {
@@ -151,12 +176,20 @@ fn parse_int64_manifest(source : String, idx : Int) -> (Int64, Int) raise Manife
   }
 }
 
-fn parse_int_manifest(source : String, idx : Int) -> (Int, Int) raise ManifestError {
+///|
+fn parse_int_manifest(
+  source : String,
+  idx : Int,
+) -> (Int, Int) raise ManifestError {
   let (value, next) = parse_int64_manifest(source, idx)
   (value.to_int(), next)
 }
 
-fn parse_targets_manifest(source : String, idx : Int) -> (Array[String], Int) raise ManifestError {
+///|
+fn parse_targets_manifest(
+  source : String,
+  idx : Int,
+) -> (Array[String], Int) raise ManifestError {
   let mut i = expect_char_manifest(source, idx, '[')
   let targets : Array[String] = []
   i = skip_ws_manifest(source, i)
@@ -182,7 +215,11 @@ fn parse_targets_manifest(source : String, idx : Int) -> (Array[String], Int) ra
   raise ParseError("unterminated targets array")
 }
 
-fn parse_entry_manifest(source : String, idx : Int) -> (ManifestEntry, Int) raise ManifestError {
+///|
+fn parse_entry_manifest(
+  source : String,
+  idx : Int,
+) -> (ManifestEntry, Int) raise ManifestError {
   let mut i = expect_char_manifest(source, idx, '{')
   let mut src = ""
   let mut out = ""
@@ -249,9 +286,12 @@ fn parse_entry_manifest(source : String, idx : Int) -> (ManifestEntry, Int) rais
   raise ParseError("unterminated entry object")
 }
 
+///|
 pub fn parse(source : String) -> ManifestFile raise ManifestError {
   let mut i = expect_char_manifest(source, 0, '{')
-  let (version_key, next_after_version_key) = parse_json_string_manifest(source, i)
+  let (version_key, next_after_version_key) = parse_json_string_manifest(
+    source, i,
+  )
   if version_key != "version" {
     raise ParseError("expected 'version' field")
   }
@@ -262,7 +302,9 @@ pub fn parse(source : String) -> ManifestFile raise ManifestError {
     raise ParseError("expected ',' after version")
   }
   i = i + 1
-  let (entries_key, next_after_entries_key) = parse_json_string_manifest(source, i)
+  let (entries_key, next_after_entries_key) = parse_json_string_manifest(
+    source, i,
+  )
   if entries_key != "entries" {
     raise ParseError("expected 'entries' field")
   }
@@ -299,6 +341,7 @@ pub fn parse(source : String) -> ManifestFile raise ManifestError {
   { version, entries }
 }
 
+///|
 pub fn render(file : ManifestFile) -> String {
   let buf = StringBuilder::new()
   buf.write_string("{\"version\":")

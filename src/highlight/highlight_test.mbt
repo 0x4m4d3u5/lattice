@@ -1,3 +1,4 @@
+///|
 fn flatten_text(tokens : Array[Token]) -> String {
   let buf = StringBuilder::new()
   let mut i = 0
@@ -8,6 +9,7 @@ fn flatten_text(tokens : Array[Token]) -> String {
   buf.to_string()
 }
 
+///|
 fn has_kind(tokens : Array[Token], kind : TokenKind) -> Bool {
   let mut i = 0
   while i < tokens.length() {
@@ -31,10 +33,12 @@ fn has_kind(tokens : Array[Token], kind : TokenKind) -> Bool {
   false
 }
 
+///|
 fn token_text(tokens : Array[Token], idx : Int) -> String {
   tokens[idx].text
 }
 
+///|
 fn token_kind_is(tokens : Array[Token], idx : Int, kind : TokenKind) -> Bool {
   match (tokens[idx].kind, kind) {
     (Keyword, Keyword) => true
@@ -53,6 +57,7 @@ fn token_kind_is(tokens : Array[Token], idx : Int, kind : TokenKind) -> Bool {
   }
 }
 
+///|
 fn find_token_index(tokens : Array[Token], text : String) -> Int {
   let mut i = 0
   while i < tokens.length() {
@@ -64,6 +69,7 @@ fn find_token_index(tokens : Array[Token], text : String) -> Int {
   -1
 }
 
+///|
 fn has_token(tokens : Array[Token], text : String, kind : TokenKind) -> Bool {
   let idx = find_token_index(tokens, text)
   idx >= 0 && token_kind_is(tokens, idx, kind)
@@ -71,8 +77,7 @@ fn has_token(tokens : Array[Token], text : String, kind : TokenKind) -> Bool {
 
 ///|
 test "highlight moonbit tokenization basics" {
-  let src =
-    "pub fn demo() {\n" +
+  let src = "pub fn demo() {\n" +
     "  let n = 42\n" +
     "  let t : Result = \"ok\"\n" +
     "  // line\n" +
@@ -89,8 +94,7 @@ test "highlight moonbit tokenization basics" {
 
 ///|
 test "highlight typescript supports decorators and template strings" {
-  let src =
-    "@sealed\n" +
+  let src = "@sealed\n" +
     "export class User {\n" +
     "  name: string = `hi`\n" +
     "}\n"
@@ -133,8 +137,7 @@ test "highlight typescript keeps decorators and dotted names separate" {
 
 ///|
 test "highlight python supports triple quote" {
-  let src =
-    "def f():\n" +
+  let src = "def f():\n" +
     "    x = \"\"\"hello\nworld\"\"\"\n" +
     "    return x\n"
   let tokens = tokenize_python(src)
@@ -145,10 +148,7 @@ test "highlight python supports triple quote" {
 
 ///|
 test "highlight bash supports variables and builtins" {
-  let src =
-    "export ROOT=/tmp\n" +
-    "cd ${ROOT}\n" +
-    "echo $ROOT\n"
+  let src = "export ROOT=/tmp\n" + "cd ${ROOT}\n" + "echo $ROOT\n"
   let tokens = tokenize_bash(src)
   assert_eq(flatten_text(tokens), src)
   assert_true(has_kind(tokens, Keyword))
@@ -157,14 +157,13 @@ test "highlight bash supports variables and builtins" {
 
 ///|
 test "highlight go tokenization covers comments raw strings and numbers" {
-  let src =
-    "package main\n" +
+  let src = "package main\n" +
     "func demo() {\n" +
     "  var msg = `hi`\n" +
     "  var r = 'x'\n" +
     "  var n = 0x2A\n" +
     "  // note\n" +
-  "}\n"
+    "}\n"
   let tokens = tokenize_go(src)
   assert_eq(flatten_text(tokens), src)
   assert_true(has_token(tokens, "package", Keyword))
@@ -177,13 +176,12 @@ test "highlight go tokenization covers comments raw strings and numbers" {
 
 ///|
 test "highlight c tokenization covers preprocessor chars and floats" {
-  let src =
-    "#include <stdio.h>\n" +
+  let src = "#include <stdio.h>\n" +
     "static int main() {\n" +
     "  char c = 'x';\n" +
     "  double n = 3.14;\n" +
     "  return 0;\n" +
-  "}\n"
+    "}\n"
   let tokens = tokenize_c(src)
   assert_eq(flatten_text(tokens), src)
   assert_true(has_token(tokens, "#include <stdio.h>", Comment))
@@ -195,8 +193,7 @@ test "highlight c tokenization covers preprocessor chars and floats" {
 
 ///|
 test "highlight html tokenization covers tags attributes and comments" {
-  let src =
-    "<!DOCTYPE html>\n" +
+  let src = "<!DOCTYPE html>\n" +
     "<div class=\"hero\">Hello<span>!</span><!-- note --></div>\n"
   let tokens = tokenize_html(src)
   assert_eq(flatten_text(tokens), src)
@@ -210,8 +207,7 @@ test "highlight html tokenization covers tags attributes and comments" {
 
 ///|
 test "highlight css tokenization covers selectors properties and values" {
-  let src =
-    "@media screen {\n" +
+  let src = "@media screen {\n" +
     "  .card {\n" +
     "    color: #abc123;\n" +
     "    margin: 12px;\n" +

@@ -30,10 +30,12 @@ pub(all) struct FeedChannel {
   items : Array[FeedItem]
 }
 
+///|
 fn char_at_rss(s : String, i : Int) -> Char {
   s[i].to_int().unsafe_to_char()
 }
 
+///|
 fn escape_xml_text(s : String) -> String {
   let buf = StringBuilder::new()
   let n = s.length()
@@ -54,6 +56,7 @@ fn escape_xml_text(s : String) -> String {
   buf.to_string()
 }
 
+///|
 fn escape_xml_attr(s : String) -> String {
   let buf = StringBuilder::new()
   let n = s.length()
@@ -76,6 +79,7 @@ fn escape_xml_attr(s : String) -> String {
   buf.to_string()
 }
 
+///|
 fn starts_with_at(s : String, pos : Int, prefix : String) -> Bool {
   let plen = prefix.length()
   if pos + plen > s.length() {
@@ -91,18 +95,25 @@ fn starts_with_at(s : String, pos : Int, prefix : String) -> Bool {
   true
 }
 
+///|
 fn trim(s : String) -> String {
   let n = s.length()
   let mut lo = 0
   while lo < n &&
-    (char_at_rss(s, lo) == ' ' || char_at_rss(s, lo) == '\t' || char_at_rss(s, lo) == '\r') {
+        (
+          char_at_rss(s, lo) == ' ' ||
+          char_at_rss(s, lo) == '\t' ||
+          char_at_rss(s, lo) == '\r'
+        ) {
     lo = lo + 1
   }
   let mut hi = n
   while hi > lo &&
-    (char_at_rss(s, hi - 1) == ' ' ||
-      char_at_rss(s, hi - 1) == '\t' ||
-      char_at_rss(s, hi - 1) == '\r') {
+        (
+          char_at_rss(s, hi - 1) == ' ' ||
+          char_at_rss(s, hi - 1) == '\t' ||
+          char_at_rss(s, hi - 1) == '\r'
+        ) {
     hi = hi - 1
   }
   let buf = StringBuilder::new()
@@ -114,10 +125,12 @@ fn trim(s : String) -> String {
   buf.to_string()
 }
 
+///|
 fn is_digit(c : Char) -> Bool {
   c >= '0' && c <= '9'
 }
 
+///|
 fn parse_fixed_uint(s : String, start : Int, count : Int) -> Int? {
   if start + count > s.length() {
     return None
@@ -135,6 +148,7 @@ fn parse_fixed_uint(s : String, start : Int, count : Int) -> Int? {
   Some(value)
 }
 
+///|
 fn is_leap_year(year : Int) -> Bool {
   if year % 400 == 0 {
     true
@@ -145,6 +159,7 @@ fn is_leap_year(year : Int) -> Bool {
   }
 }
 
+///|
 fn days_in_month(year : Int, month : Int) -> Int {
   if month == 1 ||
     month == 3 ||
@@ -167,6 +182,7 @@ fn days_in_month(year : Int, month : Int) -> Int {
   }
 }
 
+///|
 /// Parse either YYYY-MM-DD or RFC3339-like date; normalize to RFC3339 UTC.
 fn normalize_feed_datetime(raw : String?) -> String? {
   match raw {
@@ -196,7 +212,9 @@ fn normalize_feed_datetime(raw : String?) -> String? {
           }
           _ => None
         }
-      } else if starts_with_at(s, 0, "20") && s.has_suffix("Z") && s.length() >= 20 {
+      } else if starts_with_at(s, 0, "20") &&
+        s.has_suffix("Z") &&
+        s.length() >= 20 {
         Some(s)
       } else {
         None
@@ -205,6 +223,7 @@ fn normalize_feed_datetime(raw : String?) -> String? {
   }
 }
 
+///|
 fn normalize_base_url(base_url : String) -> String {
   let trimmed = trim(base_url)
   if trimmed == "/" {
@@ -223,6 +242,7 @@ fn normalize_base_url(base_url : String) -> String {
   trimmed
 }
 
+///|
 fn absolute_url(base_url : String, path : String) -> String {
   let base = normalize_base_url(base_url)
   if base.length() == 0 {
@@ -239,23 +259,17 @@ fn absolute_url(base_url : String, path : String) -> String {
   }
 }
 
+///|
 fn compare_iso_desc(a : String?, b : String?) -> Int {
   match (a, b) {
-    (Some(av), Some(bv)) => {
-      if av == bv {
-        0
-      } else if av > bv {
-        -1
-      } else {
-        1
-      }
-    }
+    (Some(av), Some(bv)) => if av == bv { 0 } else if av > bv { -1 } else { 1 }
     (Some(_), None) => -1
     (None, Some(_)) => 1
     (None, None) => 0
   }
 }
 
+///|
 fn compare_pages(a : @graph.GraphPage, b : @graph.GraphPage) -> Int {
   let ad = normalize_feed_datetime(a.date)
   let bd = normalize_feed_datetime(b.date)
@@ -272,7 +286,10 @@ fn compare_pages(a : @graph.GraphPage, b : @graph.GraphPage) -> Int {
   }
 }
 
-fn sort_pages_for_feed(pages : Array[@graph.GraphPage]) -> Array[@graph.GraphPage] {
+///|
+fn sort_pages_for_feed(
+  pages : Array[@graph.GraphPage],
+) -> Array[@graph.GraphPage] {
   let sorted : Array[@graph.GraphPage] = []
   let mut i = 0
   while i < pages.length() {
@@ -293,6 +310,7 @@ fn sort_pages_for_feed(pages : Array[@graph.GraphPage]) -> Array[@graph.GraphPag
   sorted
 }
 
+///|
 fn to_feed_item(base_url : String, page : @graph.GraphPage) -> FeedItem {
   let link = absolute_url(base_url, page.url)
   let normalized_date = normalize_feed_datetime(page.date)
@@ -306,10 +324,11 @@ fn to_feed_item(base_url : String, page : @graph.GraphPage) -> FeedItem {
   }
 }
 
+///|
 fn build_feed_channel(
   title : String,
   base_url : String,
-  pages : Array[@graph.GraphPage]
+  pages : Array[@graph.GraphPage],
 ) -> FeedChannel {
   let sorted_pages = sort_pages_for_feed(pages)
   let items : Array[FeedItem] = []
@@ -324,11 +343,7 @@ fn build_feed_channel(
   while i < items.length() {
     match (latest, items[i].updated) {
       (None, Some(v)) => latest = Some(v)
-      (Some(cur), Some(v)) => {
-        if v > cur {
-          latest = Some(v)
-        }
-      }
+      (Some(cur), Some(v)) => if v > cur { latest = Some(v) }
       _ => ()
     }
     i = i + 1
@@ -345,7 +360,12 @@ fn build_feed_channel(
   }
 }
 
-fn render_atom_item(buf : StringBuilder, item : FeedItem, fallback_updated : String) -> Unit {
+///|
+fn render_atom_item(
+  buf : StringBuilder,
+  item : FeedItem,
+  fallback_updated : String,
+) -> Unit {
   let effective_updated = match item.updated {
     Some(v) => v
     None => fallback_updated
@@ -389,6 +409,7 @@ fn render_atom_item(buf : StringBuilder, item : FeedItem, fallback_updated : Str
   buf.write_string("  </entry>\n")
 }
 
+///|
 fn render_atom(channel : FeedChannel) -> String {
   let feed_updated = match channel.updated {
     Some(v) => v
@@ -431,7 +452,11 @@ fn render_atom(channel : FeedChannel) -> String {
 
 ///|
 /// Render a complete Atom feed XML document from typed graph pages.
-pub fn render_feed(title : String, base_url : String, pages : Array[@graph.GraphPage]) -> String {
+pub fn render_feed(
+  title : String,
+  base_url : String,
+  pages : Array[@graph.GraphPage],
+) -> String {
   let channel = build_feed_channel(title, base_url, pages)
   render_atom(channel)
 }

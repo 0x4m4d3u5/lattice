@@ -3,54 +3,63 @@
 ///
 /// Tags are only extracted from typed frontmatter array fields (`Array[String]`)
 /// and are normalized to URL slugs.
-
 pub(all) struct TagRef {
   value : String
   slug : String
 }
 
+///|
 pub(all) struct TaggedPage {
   title : String
   url : String
   slug : String
 }
 
+///|
 pub(all) struct TagPage {
   tag : String
   slug : String
   pages : Array[TaggedPage]
 }
 
+///|
 pub(all) struct TagSummary {
   tag : String
   slug : String
   count : Int
 }
 
+///|
 pub(all) struct TagIndex {
   tags : Array[TagSummary]
 }
 
+///|
 fn char_at_tags(s : String, i : Int) -> Char {
   s[i].to_int().unsafe_to_char()
 }
 
+///|
 fn trim_tags(s : String) -> String {
   let n = s.length()
   let mut lo = 0
   while lo < n &&
-    (char_at_tags(s, lo) == ' ' ||
-      char_at_tags(s, lo) == '\t' ||
-      char_at_tags(s, lo) == '\r' ||
-      char_at_tags(s, lo) == '\n') {
+        (
+          char_at_tags(s, lo) == ' ' ||
+          char_at_tags(s, lo) == '\t' ||
+          char_at_tags(s, lo) == '\r' ||
+          char_at_tags(s, lo) == '\n'
+        ) {
     lo = lo + 1
   }
   let mut hi = n
   while hi > lo &&
-    (char_at_tags(s, hi - 1) == ' ' ||
-      char_at_tags(s, hi - 1) == '\t' ||
-      char_at_tags(s, hi - 1) == '\r' ||
-      char_at_tags(s, hi - 1) == '\n') {
+        (
+          char_at_tags(s, hi - 1) == ' ' ||
+          char_at_tags(s, hi - 1) == '\t' ||
+          char_at_tags(s, hi - 1) == '\r' ||
+          char_at_tags(s, hi - 1) == '\n'
+        ) {
     hi = hi - 1
   }
   let buf = StringBuilder::new()
@@ -62,6 +71,7 @@ fn trim_tags(s : String) -> String {
   buf.to_string()
 }
 
+///|
 fn escape_html_tags(s : String) -> String {
   let buf = StringBuilder::new()
   let n = s.length()
@@ -82,6 +92,7 @@ fn escape_html_tags(s : String) -> String {
   buf.to_string()
 }
 
+///|
 pub fn tag_url(slug : String) -> String {
   "/tags/" + slug + "/"
 }
@@ -91,39 +102,43 @@ pub fn tag_url(slug : String) -> String {
 ///
 /// - Missing field: empty tag list.
 /// - Present field must be `Array[String]`.
-pub fn extract(fm : @frontmatter.Frontmatter, tags_field : String) -> Result[Array[TagRef], String] {
+pub fn extract(
+  fm : @frontmatter.Frontmatter,
+  tags_field : String,
+) -> Result[Array[TagRef], String] {
   match fm.fields.get(tags_field) {
     None => Ok([])
-    Some(value) => match value {
-      @frontmatter.FArray(items) => {
-        let seen : Map[String, Bool] = Map::new()
-        let tags : Array[TagRef] = []
-        let mut i = 0
-        while i < items.length() {
-          match items[i] {
-            @frontmatter.FStr(raw) => {
-              let tag_value = trim_tags(raw)
-              if tag_value.length() > 0 {
-                let tag_slug = @slug.filename_to_slug(tag_value)
-                if not(seen.contains(tag_slug)) {
-                  seen.set(tag_slug, true)
-                  tags.push({ value: tag_value, slug: tag_slug })
+    Some(value) =>
+      match value {
+        @frontmatter.FArray(items) => {
+          let seen : Map[String, Bool] = Map::new()
+          let tags : Array[TagRef] = []
+          let mut i = 0
+          while i < items.length() {
+            match items[i] {
+              @frontmatter.FStr(raw) => {
+                let tag_value = trim_tags(raw)
+                if tag_value.length() > 0 {
+                  let tag_slug = @slug.filename_to_slug(tag_value)
+                  if not(seen.contains(tag_slug)) {
+                    seen.set(tag_slug, true)
+                    tags.push({ value: tag_value, slug: tag_slug })
+                  }
                 }
               }
+              _ =>
+                return Err("expected Array[String], found non-string element")
             }
-            _ => {
-              return Err("expected Array[String], found non-string element")
-            }
+            i = i + 1
           }
-          i = i + 1
+          Ok(tags)
         }
-        Ok(tags)
+        _ => Err("expected Array[String]")
       }
-      _ => Err("expected Array[String]")
-    }
   }
 }
 
+///|
 pub fn render_page_tags(tags : Array[TagRef]) -> String {
   if tags.length() == 0 {
     return ""
@@ -142,6 +157,7 @@ pub fn render_page_tags(tags : Array[TagRef]) -> String {
   out.to_string()
 }
 
+///|
 pub fn render_tag_page(page : TagPage) -> String {
   let out = StringBuilder::new()
   out.write_string("<main>\n")
@@ -166,6 +182,7 @@ pub fn render_tag_page(page : TagPage) -> String {
   out.to_string()
 }
 
+///|
 pub fn render_tag_index(index : TagIndex) -> String {
   let out = StringBuilder::new()
   out.write_string("<main>\n")

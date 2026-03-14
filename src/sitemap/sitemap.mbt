@@ -2,11 +2,11 @@
 /// Sitemap XML rendering for lattice.
 ///
 /// The renderer is pure: it accepts typed page graph input and returns XML.
-
 fn char_at_sitemap(s : String, i : Int) -> Char {
   s[i].to_int().unsafe_to_char()
 }
 
+///|
 fn escape_xml_text(s : String) -> String {
   let buf = StringBuilder::new()
   let n = s.length()
@@ -27,20 +27,25 @@ fn escape_xml_text(s : String) -> String {
   buf.to_string()
 }
 
+///|
 fn trim_sitemap(s : String) -> String {
   let n = s.length()
   let mut lo = 0
   while lo < n &&
-    (char_at_sitemap(s, lo) == ' ' ||
-      char_at_sitemap(s, lo) == '\t' ||
-      char_at_sitemap(s, lo) == '\r') {
+        (
+          char_at_sitemap(s, lo) == ' ' ||
+          char_at_sitemap(s, lo) == '\t' ||
+          char_at_sitemap(s, lo) == '\r'
+        ) {
     lo = lo + 1
   }
   let mut hi = n
   while hi > lo &&
-    (char_at_sitemap(s, hi - 1) == ' ' ||
-      char_at_sitemap(s, hi - 1) == '\t' ||
-      char_at_sitemap(s, hi - 1) == '\r') {
+        (
+          char_at_sitemap(s, hi - 1) == ' ' ||
+          char_at_sitemap(s, hi - 1) == '\t' ||
+          char_at_sitemap(s, hi - 1) == '\r'
+        ) {
     hi = hi - 1
   }
   let buf = StringBuilder::new()
@@ -52,6 +57,7 @@ fn trim_sitemap(s : String) -> String {
   buf.to_string()
 }
 
+///|
 fn normalize_base_url_sitemap(base_url : String) -> String {
   let trimmed = trim_sitemap(base_url)
   if trimmed == "/" {
@@ -70,6 +76,7 @@ fn normalize_base_url_sitemap(base_url : String) -> String {
   trimmed
 }
 
+///|
 fn absolute_url_sitemap(base_url : String, path : String) -> String {
   let base = normalize_base_url_sitemap(base_url)
   if base.length() == 0 {
@@ -85,6 +92,7 @@ fn absolute_url_sitemap(base_url : String, path : String) -> String {
   }
 }
 
+///|
 fn sitemap_priority_for(slug : String) -> String {
   if slug == "index" {
     "0.8"
@@ -95,10 +103,15 @@ fn sitemap_priority_for(slug : String) -> String {
 
 ///|
 /// Render a sitemap.xml document from typed graph pages.
-pub fn render_sitemap(base_url : String, pages : Array[@graph.GraphPage]) -> String {
+pub fn render_sitemap(
+  base_url : String,
+  pages : Array[@graph.GraphPage],
+) -> String {
   let buf = StringBuilder::new()
   buf.write_string("<?xml version=\"1.0\" encoding=\"utf-8\"?>\n")
-  buf.write_string("<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n")
+  buf.write_string(
+    "<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n",
+  )
 
   let mut i = 0
   while i < pages.length() {
