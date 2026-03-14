@@ -96,9 +96,8 @@ That is not exhaustive end-to-end coverage, but it does cover the structural con
 
 ## What comes next
 
-Three next steps are clear from the current state of the code.
+Two next steps are clear from the current state of the code.
 
-- vault note rendering: the wikilink and graph pieces are in place, but the site still wants a stronger "notes vault" workflow instead of only collection-oriented content
 - full TOML config: the current config format is intentionally simple and narrower than real TOML
 - richer template slots: the current slot model is strict and useful, but it is still shallow compared with the layout composition people expect from mature SSGs
 
