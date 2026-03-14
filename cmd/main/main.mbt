@@ -175,6 +175,15 @@ fn config_error_diagnostic(
         None,
         None,
       )
+    @config.MissingCollectionField(collection, field) =>
+      with_path(
+        cli_error(
+          "missing required field '" + field + "' in collection '" + collection + "'",
+        ),
+        Some(path),
+        None,
+        None,
+      )
   }
 }
 
@@ -484,6 +493,42 @@ fn load_collections_for_watch(
 }
 
 ///|
+fn load_inline_collections(
+  entries : Array[@config.CollectionEntry],
+) -> Result[Array[@collections.CollectionDef], @diagnostic.Diagnostic] {
+  let defs : Array[@collections.CollectionDef] = []
+  let mut i = 0
+  while i < entries.length() {
+    let entry = entries[i]
+    let schema = match entry.schema {
+      Some(schema_text) =>
+        match @collections.parse_schema_string(entry.name, schema_text) {
+          Ok(s) => s
+          Err(err) =>
+            return Err(collections_error_diagnostic("<inline>", err))
+        }
+      None =>
+        return Err(
+          with_path(
+            cli_error("missing schema for collection '" + entry.name + "'"),
+            None,
+            None,
+            None,
+          ),
+        )
+    }
+    defs.push({
+      name: entry.name,
+      schema,
+      content_dir: entry.dir,
+      template: entry.template,
+    })
+    i = i + 1
+  }
+  Ok(defs)
+}
+
+///|
 fn load_cli_state(options : CliOptions) -> Result[CliState, Int] {
   let effective_config_path = match options.config_path {
     Some(path) => path
@@ -533,15 +578,27 @@ fn load_cli_state(options : CliOptions) -> Result[CliState, Int] {
     force_rebuild: options.force_rebuild,
     include_drafts: options.include_drafts,
   }
-  let collections = match
-    load_collections_for_watch(
+  
+  let collections = if site.collections.length() > 0 && options.collections_path == None {
+    // Use inline collections from vault.toml
+    match load_inline_collections(site.collections) {
+      Ok(defs) => defs
+      Err(diagnostic) => {
+        print_diagnostic_main(diagnostic)
+        return Err(1)
+      }
+    }
+  } else {
+    // Fall back to external collections file or default
+    match load_collections_for_watch(
       options.content_dir,
       build_config.collections_path,
     ) {
-    Ok(defs) => defs
-    Err(diagnostic) => {
-      print_diagnostic_main(diagnostic)
-      return Err(1)
+      Ok(defs) => defs
+      Err(diagnostic) => {
+        print_diagnostic_main(diagnostic)
+        return Err(1)
+      }
     }
   }
   let watch_roots : Array[String] = []

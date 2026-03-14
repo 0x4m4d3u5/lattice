@@ -616,3 +616,17 @@ pub fn default_posts_collection(content_dir : String) -> CollectionDef {
     template: None,
   }
 }
+
+///|
+/// Parse a schema string (e.g., "title:String,date:Date") into a Schema struct.
+/// Used for parsing inline collection schemas from config.
+pub fn parse_schema_string(
+  collection_name : String,
+  schema_text : String,
+) -> Result[@schema.Schema, CollectionsError] {
+  let fields = match parse_schema_fields(collection_name, schema_text) {
+    Ok(f) => f
+    Err(e) => return Err(e)
+  }
+  Ok({ name: collection_name, fields })
+}
