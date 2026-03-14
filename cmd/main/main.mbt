@@ -34,6 +34,12 @@ priv struct CliState {
 }
 
 ///|
+priv struct VersionDisplay {
+  name : String
+  version : String
+}
+
+///|
 fn char_at_main(s : String, i : Int) -> Char {
   s[i].to_int().unsafe_to_char()
 }
@@ -194,13 +200,73 @@ fn parse_positive_int_main(value : String) -> Int? {
 }
 
 ///|
+fn parse_version_from_mod() -> Result[VersionDisplay, String] {
+  let mod_path = "./moon.mod.json"
+  let source = @fs.read_file_to_string(mod_path) catch {
+    @fs.IOError(msg) => return Err("cannot read moon.mod.json: " + msg)
+  }
+  
+  let mut name : String? = None
+  let mut version : String? = None
+  let mut i = 0
+  let n = source.length()
+  
+  while i < n {
+    if i + 5 <= n && char_at_main(source, i) == '"' &&
+       char_at_main(source, i + 1) == 'n' &&
+       char_at_main(source, i + 2) == 'a' &&
+       char_at_main(source, i + 3) == 'm' &&
+       char_at_main(source, i + 4) == 'e' {
+      let mut j = i + 6
+      let buf = StringBuilder::new()
+      while j < n && char_at_main(source, j) != '"' {
+        buf.write_char(char_at_main(source, j))
+        j = j + 1
+      }
+      if j < n {
+        name = Some(buf.to_string())
+      }
+    }
+    
+    if i + 8 <= n && char_at_main(source, i) == '"' &&
+       char_at_main(source, i + 1) == 'v' &&
+       char_at_main(source, i + 2) == 'e' &&
+       char_at_main(source, i + 3) == 'r' &&
+       char_at_main(source, i + 4) == 's' &&
+       char_at_main(source, i + 5) == 'i' &&
+       char_at_main(source, i + 6) == 'o' &&
+       char_at_main(source, i + 7) == 'n' {
+      let mut j = i + 9
+      let buf = StringBuilder::new()
+      while j < n && char_at_main(source, j) != '"' {
+        buf.write_char(char_at_main(source, j))
+        j = j + 1
+      }
+      if j < n {
+        version = Some(buf.to_string())
+      }
+    }
+    
+    i = i + 1
+  }
+  
+  match name {
+    Some(n) => match version {
+      Some(v) => Ok({ name: n, version: v })
+      None => Err("version not found in moon.mod.json")
+    }
+    None => Err("name not found in moon.mod.json")
+  }
+}
+
+///|
 fn print_help() -> Unit {
   println("Usage:")
   println(
     "  lattice [content-dir] [output-dir] [--config path] [--collections path] [--check]",
   )
   println(
-    "          [--force] [--watch] [--watch-interval ms] [--drafts] [--help]",
+    "          [--force] [--watch] [--watch-interval ms] [--drafts] [--help] [--version]",
   )
   println("")
   println("Defaults:")
@@ -221,6 +287,7 @@ fn print_help() -> Unit {
   )
   println("  --drafts                Include draft posts in the build")
   println("  --help                  Show this help text")
+  println("  --version               Print version information")
   println("")
   println("Local dev:")
   println(
@@ -240,11 +307,32 @@ fn parse_cli_options(args : Array[String]) -> CliOptions {
   let mut watch_mode = false
   let mut watch_interval_ms = 500
   let mut include_drafts = false
-  let mut i = 1
+  let mut i =1
   while i < args.length() {
     let arg = args[i]
     if arg == "--help" || arg == "-h" {
       print_help()
+      @sys.exit(0)
+      return {
+        content_dir: "./content",
+        output_dir: None,
+        config_path: None,
+        collections_path: None,
+        check_mode: false,
+        force_rebuild: false,
+        watch_mode: false,
+        watch_interval_ms: 500,
+        include_drafts: false,
+      }
+    } else if arg == "--version" {
+      match parse_version_from_mod() {
+        Ok(v) => {
+          println(v.name + " version " + v.version)
+        }
+        Err(msg) => {
+          print_diagnostic_main(cli_error(msg))
+        }
+      }
       @sys.exit(0)
       return {
         content_dir: "./content",
