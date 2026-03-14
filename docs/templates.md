@@ -24,17 +24,52 @@ If `tag.html` or `tags.html` are missing, lattice falls back to `index.html` for
 
 The current implementation supports these built-in slots:
 
-- `{{title}}`
-- `{{content}}`
-- `{{date}}`
-- `{{description}}`
-- `{{url}}`
-- `{{site_name}}`
-- `{{nav_links}}`
-- `{{custom_css}}`
-- `{{tag_name}}`
-- `{{tag_count}}`
-- `{{backlinks}}`
+### Page metadata slots
+
+- `{{title}}` - page title from frontmatter
+- `{{content}}` - full rendered page content (including frontmatter in blog views)
+- `{{body}}` - markdown-rendered body only (excludes frontmatter, useful with custom frontmatter layout)
+- `{{date}}` - frontmatter date string
+- `{{description}}` - page description from frontmatter or site config fallback
+- `{{url}}` - canonical page URL
+- `{{site_name}}` - site title from config
+
+### Content collection slots
+
+- `{{collection}}` - name of the current collection (e.g., "posts", "projects")
+
+### Tag slots
+
+- `{{tags}}` - comma-separated tag list from frontmatter
+- `{{tag_name}}` - current tag name when rendering a tag page
+- `{{tag_count}}` - number of pages for a tag when rendering tag views
+
+### Navigation slots
+
+- `{{nav_links}}` - HTML navigation built from available collections plus `/tags/`
+
+### Link slots
+
+- `{{backlinks}}` - generated HTML for pages that link to the current page
+
+### Pagination slots
+
+- `{{next_page}}` - URL for next page in paginated views
+- `{{prev_page}}` - URL for previous page in paginated views
+- `{{page_num}}` - current page number (1-indexed)
+- `{{is_first_page}}` - boolean "true" or "false" for conditional rendering
+- `{{is_last_page}}` - boolean "true" or "false" for conditional rendering
+- `{{page_url}}` - URL for the current paginated page
+
+### Date component slots
+
+- `{{year}}` - year component from date (e.g., "2024")
+- `{{month}}` - month component from date (e.g., "01" through "12")
+- `{{day}}` - day component from date (e.g., "01" through "31")
+
+### Styling slots
+
+- `{{custom_css}}` - built-in stylesheet text
 
 It also supports data slots of the form:
 
@@ -194,3 +229,48 @@ The rest of the override story is still site-wide:
 - `tag.html` overrides tag-page rendering if present
 - `tags.html` overrides tags-index rendering if present
 - collection index pages still use the shared site-level `index.html`
+
+## Pagination example
+
+For paginated collection indexes, the new pagination slots enable cleaner navigation:
+
+```html
+<div class="pagination">
+  {{#if is_first_page}}
+  <span class="disabled">← Previous</span>
+  {{#else}}
+  <a href="{{prev_page}}">← Previous</a>
+  {{#end}}
+
+  <span>Page {{page_num}}</span>
+
+  {{#if is_last_page}}
+  <span class="disabled">Next →</span>
+  {{#else}}
+  <a href="{{next_page}}">Next →</a>
+  {{#end}}
+</div>
+```
+
+This example shows:
+
+- Using `is_first_page` and `is_last_page` for conditional rendering
+- Displaying current page number with `{{page_num}}`
+- Creating navigation links to previous/next pages with `{{prev_page}}` and `{{next_page}}`
+
+Note: `{{#if ...}} {{#else}} {{#end}}` syntax shown here is illustrative. Template conditionals must be implemented as separate HTML templates with slot substitution at this time.
+
+## Date archive example
+
+The new date component slots enable date-based archive organization:
+
+```html
+<h1>{{year}} Archive</h1>
+<ul class="months">
+  <li><a href="/{{year}}/01/">January {{year}}</a></li>
+  <li><a href="/{{year}}/02/">February {{year}}</a></li>
+  <!-- ... -->
+</ul>
+```
+
+When rendering a specific archive page, lattice populates these with date components extracted from the page's frontmatter date field.
