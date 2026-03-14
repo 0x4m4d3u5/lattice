@@ -2,6 +2,9 @@
 _build/
 .mooncakes/
 .moonagent/
+.moonagent.bak/
+*.mbti
+CHANGES_SUMMARY.md
 dist/
 _tmp_*/
 _vault_dist/
