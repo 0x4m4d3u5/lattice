@@ -73,12 +73,11 @@ test "config parse [[collections]] missing name field" {
     "dir = ./content/posts\n"
   match parse(src) {
     Ok(_) => assert_true(false)
-    Err(err) => {
+    Err(err) =>
       match err {
         MissingCollectionField(_, field) => assert_eq(field, "name")
         _ => assert_true(false)
       }
-    }
   }
 }
 
@@ -90,12 +89,11 @@ test "config parse [[collections]] missing dir field" {
     "name = posts\n"
   match parse(src) {
     Ok(_) => assert_true(false)
-    Err(err) => {
+    Err(err) =>
       match err {
         MissingCollectionField("posts", field) => assert_eq(field, "dir")
         _ => assert_true(false)
       }
-    }
   }
 }
 

@@ -62,22 +62,15 @@ pub fn extract_vault_metadata(fm : @frontmatter.Frontmatter) -> VaultMetadata? {
   }
 
   if note_type == None &&
-     status == None &&
-     purpose == None &&
-     goal == None &&
-     source == None &&
-     created == None {
+    status == None &&
+    purpose == None &&
+    goal == None &&
+    source == None &&
+    created == None {
     return None
   }
 
-  Some({
-    note_type,
-    status,
-    purpose,
-    goal,
-    source,
-    created,
-  })
+  Some({ note_type, status, purpose, goal, source, created })
 }
 
 ///|
@@ -88,7 +81,7 @@ pub fn extract_vault_metadata(fm : @frontmatter.Frontmatter) -> VaultMetadata? {
 pub fn is_active_project(meta : VaultMetadata?) -> Bool {
   match meta {
     None => false
-    Some(m) => {
+    Some(m) =>
       match m.status {
         None => false
         Some(s) => {
@@ -100,7 +93,6 @@ pub fn is_active_project(meta : VaultMetadata?) -> Bool {
           lower == "in progress"
         }
       }
-    }
   }
 }
 
@@ -111,7 +103,7 @@ pub fn is_active_project(meta : VaultMetadata?) -> Bool {
 pub fn is_archived(meta : VaultMetadata?) -> Bool {
   match meta {
     None => false
-    Some(m) => {
+    Some(m) =>
       match m.status {
         None => false
         Some(s) => {
@@ -122,7 +114,6 @@ pub fn is_archived(meta : VaultMetadata?) -> Bool {
           lower == "finished"
         }
       }
-    }
   }
 }
 
@@ -134,12 +125,11 @@ pub fn is_archived(meta : VaultMetadata?) -> Bool {
 pub fn categorize_note(meta : VaultMetadata?) -> String {
   match meta {
     None => "uncategorized"
-    Some(m) => {
+    Some(m) =>
       match m.note_type {
         None => "uncategorized"
         Some(t) => normalize_type(t)
       }
-    }
   }
 }
 
@@ -154,10 +144,10 @@ fn normalize_type(raw_type : String) -> String {
     return "project"
   }
   if lower == "area" ||
-     lower == "areas" ||
-     lower == "area of focus" ||
-     lower == "domain" ||
-     lower == "domains" {
+    lower == "areas" ||
+    lower == "area of focus" ||
+    lower == "domain" ||
+    lower == "domains" {
     return "area"
   }
   if lower == "resource" || lower == "resources" || lower == "reference" {
@@ -258,7 +248,7 @@ pub fn render_metadata_badge(meta : VaultMetadata?) -> String {
 pub fn should_exclude_from_index(meta : VaultMetadata?) -> Bool {
   match meta {
     None => false
-    Some(m) => {
+    Some(m) =>
       match m.note_type {
         None => false
         Some(t) => {
@@ -269,7 +259,6 @@ pub fn should_exclude_from_index(meta : VaultMetadata?) -> Bool {
           lower == "work in progress"
         }
       }
-    }
   }
 }
 
@@ -309,10 +298,12 @@ pub fn category_label(category : String) -> String {
 
 // ── private helpers ─────────────────────────────────────────────────────────────
 
+///|
 fn char_at_vault(s : String, i : Int) -> Char {
   s[i].to_int().unsafe_to_char()
 }
 
+///|
 fn to_lowercase(s : String) -> String {
   let buf = StringBuilder::new()
   let mut i = 0
@@ -323,11 +314,12 @@ fn to_lowercase(s : String) -> String {
     } else {
       buf.write_char(c)
     }
-    i = i +1
+    i = i + 1
   }
   buf.to_string()
 }
 
+///|
 fn escape_html_vault(s : String) -> String {
   let buf = StringBuilder::new()
   let mut i = 0

@@ -178,7 +178,11 @@ fn config_error_diagnostic(
     @config.MissingCollectionField(collection, field) =>
       with_path(
         cli_error(
-          "missing required field '" + field + "' in collection '" + collection + "'",
+          "missing required field '" +
+          field +
+          "' in collection '" +
+          collection +
+          "'",
         ),
         Some(path),
         None,
@@ -214,18 +218,19 @@ fn parse_version_from_mod() -> Result[VersionDisplay, String] {
   let source = @fs.read_file_to_string(mod_path) catch {
     @fs.IOError(msg) => return Err("cannot read moon.mod.json: " + msg)
   }
-  
+
   let mut name : String? = None
   let mut version : String? = None
   let mut i = 0
   let n = source.length()
-  
+
   while i < n {
-    if i + 5 <= n && char_at_main(source, i) == '"' &&
-       char_at_main(source, i + 1) == 'n' &&
-       char_at_main(source, i + 2) == 'a' &&
-       char_at_main(source, i + 3) == 'm' &&
-       char_at_main(source, i + 4) == 'e' {
+    if i + 5 <= n &&
+      char_at_main(source, i) == '"' &&
+      char_at_main(source, i + 1) == 'n' &&
+      char_at_main(source, i + 2) == 'a' &&
+      char_at_main(source, i + 3) == 'm' &&
+      char_at_main(source, i + 4) == 'e' {
       let mut j = i + 6
       let buf = StringBuilder::new()
       while j < n && char_at_main(source, j) != '"' {
@@ -236,15 +241,16 @@ fn parse_version_from_mod() -> Result[VersionDisplay, String] {
         name = Some(buf.to_string())
       }
     }
-    
-    if i + 8 <= n && char_at_main(source, i) == '"' &&
-       char_at_main(source, i + 1) == 'v' &&
-       char_at_main(source, i + 2) == 'e' &&
-       char_at_main(source, i + 3) == 'r' &&
-       char_at_main(source, i + 4) == 's' &&
-       char_at_main(source, i + 5) == 'i' &&
-       char_at_main(source, i + 6) == 'o' &&
-       char_at_main(source, i + 7) == 'n' {
+
+    if i + 8 <= n &&
+      char_at_main(source, i) == '"' &&
+      char_at_main(source, i + 1) == 'v' &&
+      char_at_main(source, i + 2) == 'e' &&
+      char_at_main(source, i + 3) == 'r' &&
+      char_at_main(source, i + 4) == 's' &&
+      char_at_main(source, i + 5) == 'i' &&
+      char_at_main(source, i + 6) == 'o' &&
+      char_at_main(source, i + 7) == 'n' {
       let mut j = i + 9
       let buf = StringBuilder::new()
       while j < n && char_at_main(source, j) != '"' {
@@ -255,15 +261,16 @@ fn parse_version_from_mod() -> Result[VersionDisplay, String] {
         version = Some(buf.to_string())
       }
     }
-    
+
     i = i + 1
   }
-  
+
   match name {
-    Some(n) => match version {
-      Some(v) => Ok({ name: n, version: v })
-      None => Err("version not found in moon.mod.json")
-    }
+    Some(n) =>
+      match version {
+        Some(v) => Ok({ name: n, version: v })
+        None => Err("version not found in moon.mod.json")
+      }
     None => Err("name not found in moon.mod.json")
   }
 }
@@ -316,7 +323,7 @@ fn parse_cli_options(args : Array[String]) -> CliOptions {
   let mut watch_mode = false
   let mut watch_interval_ms = 500
   let mut include_drafts = false
-  let mut i =1
+  let mut i = 1
   while i < args.length() {
     let arg = args[i]
     if arg == "--help" || arg == "-h" {
@@ -335,12 +342,8 @@ fn parse_cli_options(args : Array[String]) -> CliOptions {
       }
     } else if arg == "--version" {
       match parse_version_from_mod() {
-        Ok(v) => {
-          println(v.name + " version " + v.version)
-        }
-        Err(msg) => {
-          print_diagnostic_main(cli_error(msg))
-        }
+        Ok(v) => println(v.name + " version " + v.version)
+        Err(msg) => print_diagnostic_main(cli_error(msg))
       }
       @sys.exit(0)
       return {
@@ -504,8 +507,7 @@ fn load_inline_collections(
       Some(schema_text) =>
         match @collections.parse_schema_string(entry.name, schema_text) {
           Ok(s) => s
-          Err(err) =>
-            return Err(collections_error_diagnostic("<inline>", err))
+          Err(err) => return Err(collections_error_diagnostic("<inline>", err))
         }
       None =>
         return Err(
@@ -578,8 +580,9 @@ fn load_cli_state(options : CliOptions) -> Result[CliState, Int] {
     force_rebuild: options.force_rebuild,
     include_drafts: options.include_drafts,
   }
-  
-  let collections = if site.collections.length() > 0 && options.collections_path == None {
+
+  let collections = if site.collections.length() > 0 &&
+    options.collections_path == None {
     // Use inline collections from vault.toml
     match load_inline_collections(site.collections) {
       Ok(defs) => defs
@@ -590,10 +593,11 @@ fn load_cli_state(options : CliOptions) -> Result[CliState, Int] {
     }
   } else {
     // Fall back to external collections file or default
-    match load_collections_for_watch(
-      options.content_dir,
-      build_config.collections_path,
-    ) {
+    match
+      load_collections_for_watch(
+        options.content_dir,
+        build_config.collections_path,
+      ) {
       Ok(defs) => defs
       Err(diagnostic) => {
         print_diagnostic_main(diagnostic)

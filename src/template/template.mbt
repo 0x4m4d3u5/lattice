@@ -30,12 +30,15 @@ pub(all) enum TemplatePart {
   Text(String)
   Slot(TemplateSlot)
   DataSlot(String, Array[String]) // file name, key path
+  Include(String) // filename to include, resolved at load time
+  Layout(String) // layout filename, resolved at load time
 }
 
 ///|
 pub(all) struct Template {
   parts : Array[TemplatePart]
   required_slots : Array[TemplateSlot]
+  layout : Template? // if set, this template's render output feeds into layout's Body slot
 }
 
 ///|
@@ -44,6 +47,7 @@ pub enum TemplateError {
   MissingRequiredSlot(TemplateSlot)
   MissingDataSlot(String)
   ParseError(String)
+  CycleError(String)
 }
 
 ///|
@@ -245,7 +249,23 @@ pub fn parse_template(input : String) -> Result[Template, TemplateError] {
       if slot_name.length() == 0 {
         return Err(ParseError("empty template slot"))
       }
-      if starts_with_template(slot_name, "data.") {
+      if starts_with_template(slot_name, "include:") {
+        let filename = trim_template(
+          substr_template(slot_name, 8, slot_name.length()),
+        )
+        if filename.length() == 0 {
+          return Err(ParseError("empty include filename"))
+        }
+        parts.push(Include(filename))
+      } else if starts_with_template(slot_name, "layout:") {
+        let filename = trim_template(
+          substr_template(slot_name, 7, slot_name.length()),
+        )
+        if filename.length() == 0 {
+          return Err(ParseError("empty layout filename"))
+        }
+        parts.push(Layout(filename))
+      } else if starts_with_template(slot_name, "data.") {
         match parse_data_slot_name(slot_name) {
           Ok((file, key_path)) => parts.push(DataSlot(file, key_path))
           Err(e) => return Err(e)
@@ -279,7 +299,7 @@ pub fn parse_template(input : String) -> Result[Template, TemplateError] {
   if text_start < n {
     parts.push(Text(substr_template(input, text_start, n)))
   }
-  Ok({ parts, required_slots })
+  Ok({ parts, required_slots, layout: None })
 }
 
 ///|
@@ -339,6 +359,10 @@ fn render_parts(
             return Err(MissingDataSlot(path.to_string()))
           }
         }
+      Include(_) =>
+        return Err(ParseError("include directive not resolved at render time"))
+      Layout(_) =>
+        return Err(ParseError("layout directive not resolved at render time"))
     }
     i = i + 1
   }
@@ -351,7 +375,27 @@ pub fn render_template(
   template : Template,
   slots : Map[TemplateSlot, String],
 ) -> Result[String, TemplateError] {
-  render_parts(template, slots, None)
+  // If template has a layout, render child first, then render layout with body
+  match template.layout {
+    Some(layout) => {
+      // Render the child template
+      let child_output = match render_parts(template, slots, None) {
+        Ok(output) => output
+        Err(e) => return Err(e)
+      }
+
+      // Add body to slots for layout
+      let layout_slots = Map::new()
+      for key, value in slots {
+        layout_slots.set(key, value)
+      }
+      layout_slots.set(Body, child_output)
+
+      // Render layout with all slots including body
+      render_parts(layout, layout_slots, None)
+    }
+    None => render_parts(template, slots, None)
+  }
 }
 
 ///|
@@ -361,5 +405,185 @@ pub fn render_template_with_data(
   slots : Map[TemplateSlot, String],
   data_store : @data.DataStore,
 ) -> Result[String, TemplateError] {
-  render_parts(template, slots, Some(data_store))
+  // If template has a layout, render child first, then render layout with body
+  match template.layout {
+    Some(layout) => {
+      // Render the child template
+      let child_output = match render_parts(template, slots, Some(data_store)) {
+        Ok(output) => output
+        Err(e) => return Err(e)
+      }
+
+      // Add body to slots for layout
+      let layout_slots = Map::new()
+      for key, value in slots {
+        layout_slots.set(key, value)
+      }
+      layout_slots.set(Body, child_output)
+
+      // Render layout with all slots including body
+      render_parts(layout, layout_slots, Some(data_store))
+    }
+    None => render_parts(template, slots, Some(data_store))
+  }
+}
+
+///|
+/// Flatten includes and resolve layouts by parsing with a resolver callback.
+///
+/// The resolver function takes a filename and returns template source or an error.
+/// Includes are resolved recursively at load time, not render time.
+/// Layouts are also resolved at load time.
+/// Cycles are detected and reported as errors.
+pub fn parse_template_with_includes(
+  source : String,
+  resolver : (String) -> Result[String, String],
+) -> Result[Template, TemplateError] {
+  // First, parse source to get initial Template
+  let base_template = match parse_template(source) {
+    Ok(tpl) => tpl
+    Err(e) => return Err(e)
+  }
+
+  // Track visited files for cycle detection
+  let visited : Map[String, Bool] = Map::new()
+
+  // Helper function to flatten includes recursively
+  fn flatten_includes(
+    parts : Array[TemplatePart],
+    resolver : (String) -> Result[String, String],
+    visited : Map[String, Bool],
+  ) -> Result[Array[TemplatePart], TemplateError] {
+    let result : Array[TemplatePart] = []
+    let mut i = 0
+    while i < parts.length() {
+      match parts[i] {
+        Text(s) => result.push(Text(s))
+        Slot(slot) => result.push(Slot(slot))
+        DataSlot(file, keys) => result.push(DataSlot(file, keys))
+        Layout(path) => result.push(Layout(path))
+        Include(filename) => {
+          // Check for cycles
+          if visited.contains(filename) {
+            return Err(CycleError("include cycle detected: " + filename))
+          }
+
+          // Mark as visited
+          let new_visited = Map::new()
+          new_visited.set(filename, true)
+          for key, _ in visited {
+            new_visited.set(key, true)
+          }
+
+          // Resolve include
+          match resolver(filename) {
+            Ok(included_source) =>
+              // Parse included template
+              match parse_template(included_source) {
+                Ok(included_template) =>
+                  // Recursively flatten its includes
+                  match
+                    flatten_includes(
+                      included_template.parts,
+                      resolver,
+                      new_visited,
+                    ) {
+                    Ok(flattened_parts) => {
+                      // Splice flattened parts into result
+                      let mut j = 0
+                      while j < flattened_parts.length() {
+                        result.push(flattened_parts[j])
+                        j = j + 1
+                      }
+                    }
+                    Err(e) => return Err(e)
+                  }
+                Err(e) => return Err(e)
+              }
+            Err(msg) =>
+              return Err(
+                ParseError("cannot resolve include '" + filename + "': " + msg),
+              )
+          }
+        }
+      }
+      i = i + 1
+    }
+    Ok(result)
+  }
+
+  // Flatten all includes
+  let flattened_parts = match
+    flatten_includes(base_template.parts, resolver, visited) {
+    Ok(parts) => parts
+    Err(e) => return Err(e)
+  }
+
+  // Find layout directive in parts (must be first non-whitespace)
+  let mut layout_path : String? = None
+  let mut layout_idx : Int? = None
+  let mut i = 0
+  while i < flattened_parts.length() {
+    match flattened_parts[i] {
+      Layout(path) => {
+        layout_path = Some(path)
+        layout_idx = Some(i)
+        break
+      }
+      Text(s) => {
+        let trimmed = trim_template(s)
+        if trimmed.length() > 0 {
+          // Found non-whitespace text before layout directive
+          break
+        }
+      }
+      _ =>
+        // Found slot or data slot before layout directive
+        break
+    }
+    i = i + 1
+  }
+
+  // Remove layout directive from parts if found
+  let final_parts : Array[TemplatePart] = []
+  i = 0
+  while i < flattened_parts.length() {
+    match layout_idx {
+      Some(idx) => if i != idx { final_parts.push(flattened_parts[i]) }
+      None => final_parts.push(flattened_parts[i])
+    }
+    i = i + 1
+  }
+
+  // Collect required slots from final parts
+  let required_slots : Array[TemplateSlot] = []
+  i = 0
+  while i < final_parts.length() {
+    match final_parts[i] {
+      Slot(slot) =>
+        if not(required_slots.contains(slot)) {
+          required_slots.push(slot)
+        }
+      _ => ()
+    }
+    i = i + 1
+  }
+
+  // Resolve layout if found
+  let resolved_layout : Template? = match layout_path {
+    Some(path) =>
+      match resolver(path) {
+        Ok(layout_source) =>
+          // Parse layout template (includes are flattened for layout too)
+          match parse_template_with_includes(layout_source, resolver) {
+            Ok(layout_tpl) => Some(layout_tpl)
+            Err(e) => return Err(e)
+          }
+        Err(msg) =>
+          return Err(ParseError("cannot resolve layout '" + path + "': " + msg))
+      }
+    None => None
+  }
+
+  Ok({ parts: final_parts, required_slots, layout: resolved_layout })
 }

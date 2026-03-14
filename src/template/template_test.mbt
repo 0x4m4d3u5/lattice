@@ -8,7 +8,7 @@ test "template render with data" {
     Ok(v) => v
     Err(_) => {
       assert_true(false)
-      { parts: [], required_slots: [] }
+      { parts: [], required_slots: [], layout: None }
     }
   }
   let slots : Map[TemplateSlot, String] = Map::new()
@@ -24,7 +24,7 @@ test "template missing data" {
     Ok(v) => v
     Err(_) => {
       assert_true(false)
-      { parts: [], required_slots: [] }
+      { parts: [], required_slots: [], layout: None }
     }
   }
   let slots : Map[TemplateSlot, String] = Map::new()
@@ -103,7 +103,7 @@ test "template missing required slot at render" {
     Ok(v) => v
     Err(_) => {
       assert_true(false)
-      { parts: [], required_slots: [] }
+      { parts: [], required_slots: [], layout: None }
     }
   }
   let slots : Map[TemplateSlot, String] = Map::new()
@@ -131,7 +131,7 @@ test "template multiple data slots" {
     Ok(v) => v
     Err(_) => {
       assert_true(false)
-      { parts: [], required_slots: [] }
+      { parts: [], required_slots: [], layout: None }
     }
   }
   let slots : Map[TemplateSlot, String] = Map::new()
@@ -155,7 +155,7 @@ test "template nested data path" {
     Ok(v) => v
     Err(_) => {
       assert_true(false)
-      { parts: [], required_slots: [] }
+      { parts: [], required_slots: [], layout: None }
     }
   }
   let slots : Map[TemplateSlot, String] = Map::new()
@@ -178,7 +178,7 @@ test "template mixed data and standard slots" {
     Ok(v) => v
     Err(_) => {
       assert_true(false)
-      { parts: [], required_slots: [] }
+      { parts: [], required_slots: [], layout: None }
     }
   }
   let slots : Map[TemplateSlot, String] = Map::new()
@@ -216,7 +216,7 @@ test "template parse new pagination slots" {
     Ok(v) => v
     Err(_) => {
       assert_true(false)
-      { parts: [], required_slots: [] }
+      { parts: [], required_slots: [], layout: None }
     }
   }
   match tpl_next.parts[0] {
@@ -228,7 +228,7 @@ test "template parse new pagination slots" {
     Ok(v) => v
     Err(_) => {
       assert_true(false)
-      { parts: [], required_slots: [] }
+      { parts: [], required_slots: [], layout: None }
     }
   }
   match tpl_prev.parts[0] {
@@ -241,7 +241,7 @@ test "template parse new pagination slots" {
     Ok(v) => v
     Err(_) => {
       assert_true(false)
-      { parts: [], required_slots: [] }
+      { parts: [], required_slots: [], layout: None }
     }
   }
   match tpl_page.parts {
@@ -253,7 +253,7 @@ test "template parse new pagination slots" {
     Ok(v) => v
     Err(_) => {
       assert_true(false)
-      { parts: [], required_slots: [] }
+      { parts: [], required_slots: [], layout: None }
     }
   }
   match tpl_first.parts[0] {
@@ -265,7 +265,7 @@ test "template parse new pagination slots" {
     Ok(v) => v
     Err(_) => {
       assert_true(false)
-      { parts: [], required_slots: [] }
+      { parts: [], required_slots: [], layout: None }
     }
   }
   match tpl_last.parts[0] {
@@ -277,7 +277,7 @@ test "template parse new pagination slots" {
     Ok(v) => v
     Err(_) => {
       assert_true(false)
-      { parts: [], required_slots: [] }
+      { parts: [], required_slots: [], layout: None }
     }
   }
   match tpl_page_url.parts[0] {
@@ -292,7 +292,7 @@ test "template parse date component slots" {
     Ok(v) => v
     Err(_) => {
       assert_true(false)
-      { parts: [], required_slots: [] }
+      { parts: [], required_slots: [], layout: None }
     }
   }
   match tpl.parts {
@@ -303,14 +303,17 @@ test "template parse date component slots" {
 
 ///|
 test "template parse content metadata slots" {
-  let tpl = match parse_template("<h1>{{title}}</h1><p>{{collection}}</p><div>{{body}}</div><ul>{{tags}}</ul>") {
+  let tpl = match
+    parse_template(
+      "<h1>{{title}}</h1><p>{{collection}}</p><div>{{body}}</div><ul>{{tags}}</ul>",
+    ) {
     Ok(v) => v
     Err(_) => {
       assert_true(false)
-      { parts: [], required_slots: [] }
+      { parts: [], required_slots: [], layout: None }
     }
   }
-  
+
   let mut has_title = false
   let mut has_collection = false
   let mut has_body = false
@@ -324,7 +327,7 @@ test "template parse content metadata slots" {
       _ => ()
     }
   }
-  
+
   assert_true(has_title)
   assert_true(has_collection)
   assert_true(has_body)
@@ -337,13 +340,192 @@ test "template render missing new slot" {
     Ok(v) => v
     Err(_) => {
       assert_true(false)
-      { parts: [], required_slots: [] }
+      { parts: [], required_slots: [], layout: None }
     }
   }
   let slots : Map[TemplateSlot, String] = Map::new()
   match render_template(tpl, slots) {
     Ok(_) => assert_true(false)
     Err(MissingRequiredSlot(Tags)) => ()
+    Err(_) => assert_true(false)
+  }
+}
+//   }
+// }
+
+///|
+test "template include cycle detection" {
+  // Mock resolver that creates a cycle
+  let resolver = fn(filename : String) -> Result[String, String] {
+    if filename == "a.html" {
+      Ok("{{include: b.html}}")
+    } else if filename == "b.html" {
+      Ok("{{include: a.html}}")
+    } else {
+      Err("file not found: " + filename)
+    }
+  }
+
+  let source = "{{include: a.html}}"
+  match parse_template_with_includes(source, resolver) {
+    Ok(_) => assert_true(false)
+    Err(CycleError(msg)) => assert_true(msg.contains("cycle detected"))
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "template layout extension" {
+  // Mock resolver that returns layout source
+  let resolver = fn(filename : String) -> Result[String, String] {
+    if filename == "base.html" {
+      Ok("<html><body>{{body}}</body></html>")
+    } else {
+      Err("file not found: " + filename)
+    }
+  }
+
+  let source = "{{layout: base.html}}\n<article>{{content}}</article>"
+  match parse_template_with_includes(source, resolver) {
+    Ok(tpl) => {
+      // Verify layout is resolved and stored
+      match tpl.layout {
+        Some(layout) =>
+          // Layout should have a Body slot
+          assert_true(layout.required_slots.contains(Body))
+        None => assert_true(false)
+      }
+      // Verify layout directive is removed from parts
+      let mut has_layout_directive = false
+      let mut i = 0
+      while i < tpl.parts.length() {
+        match tpl.parts[i] {
+          Layout(_) => has_layout_directive = true
+          _ => ()
+        }
+        i = i + 1
+      }
+      assert_true(not(has_layout_directive))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "template render with layout" {
+  // Mock resolver for layout
+  let resolver = fn(filename : String) -> Result[String, String] {
+    if filename == "base.html" {
+      Ok(
+        "<html><head><title>{{title}}</title></head><body>{{body}}</body></html>",
+      )
+    } else {
+      Err("file not found: " + filename)
+    }
+  }
+
+  let source = "{{layout: base.html}}\n<h1>{{title}}</h1><p>{{content}}</p>"
+  match parse_template_with_includes(source, resolver) {
+    Ok(tpl) => {
+      let slots : Map[TemplateSlot, String] = Map::new()
+      slots.set(Title, "My Page")
+      slots.set(Content, "Page content")
+
+      match render_template(tpl, slots) {
+        Ok(html) => {
+          // Verify child is rendered and injected into layout's body slot
+          assert_true(html.contains("<html>"))
+          assert_true(html.contains("<head><title>My Page</title></head>"))
+          assert_true(html.contains("<body>"))
+          assert_true(html.contains("<h1>My Page</h1>"))
+          assert_true(html.contains("<p>Page content</p>"))
+          assert_true(html.contains("</body>"))
+          assert_true(html.contains("</html>"))
+        }
+        Err(_) => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "template nested includes" {
+  // Mock resolver with nested includes
+  let resolver = fn(filename : String) -> Result[String, String] {
+    if filename == "parent.html" {
+      Ok("{{include: child1.html}}\n{{include: child2.html}}")
+    } else if filename == "child1.html" {
+      Ok("Child 1: {{include: grandchild.html}}")
+    } else if filename == "child2.html" {
+      Ok("Child 2: {{content}}")
+    } else if filename == "grandchild.html" {
+      Ok("Grandchild content")
+    } else {
+      Err("file not found: " + filename)
+    }
+  }
+
+  let source = "{{include: parent.html}}"
+  match parse_template_with_includes(source, resolver) {
+    Ok(tpl) => {
+      // Verify all nested includes are flattened
+      assert_eq(tpl.parts.length(), 3)
+      match tpl.parts[0] {
+        Text(s) => assert_eq(s, "Child 1: Grandchild content")
+        _ => assert_true(false)
+      }
+      match tpl.parts[1] {
+        Text(s) => assert_eq(s, "\nChild 2: ")
+        _ => assert_true(false)
+      }
+      match tpl.parts[2] {
+        Slot(Content) => ()
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "template include in layout file" {
+  // Mock resolver where layout itself has includes
+  let resolver = fn(filename : String) -> Result[String, String] {
+    if filename == "layout.html" {
+      Ok("{{include: header.html}}\n{{body}}\n{{include: footer.html}}")
+    } else if filename == "header.html" {
+      Ok("<header>Header</header>")
+    } else if filename == "footer.html" {
+      Ok("<footer>Footer</footer>")
+    } else {
+      Err("file not found: " + filename)
+    }
+  }
+
+  let source = "{{layout: layout.html}}\n<main>{{content}}</main>"
+  match parse_template_with_includes(source, resolver) {
+    Ok(tpl) =>
+      // Verify layout has includes flattened
+      match tpl.layout {
+        Some(layout) => {
+          // Layout should have header, body, footer in that order
+          assert_eq(layout.parts.length(), 3)
+          match layout.parts[0] {
+            Text(s) => assert_eq(s, "<header>Header</header>")
+            _ => assert_true(false)
+          }
+          match layout.parts[1] {
+            Text(s) => assert_eq(s, "\n")
+            _ => assert_true(false)
+          }
+          match layout.parts[2] {
+            Slot(Body) => ()
+            _ => assert_true(false)
+          }
+        }
+        None => assert_true(false)
+      }
     Err(_) => assert_true(false)
   }
 }

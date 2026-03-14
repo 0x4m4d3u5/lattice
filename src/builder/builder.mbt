@@ -379,6 +379,7 @@ fn template_error_text(e : @template.TemplateError) -> String {
       "missing required slot '" + slot.to_string() + "'"
     @template.MissingDataSlot(path) => "missing data slot '" + path + "'"
     @template.ParseError(msg) => msg
+    @template.CycleError(msg) => "include cycle: " + msg
   }
 }
 
@@ -398,7 +399,39 @@ fn load_template_file(path : String) -> Result[@template.Template?, String] {
   let source = @fs.read_file_to_string(path) catch {
     @fs.IOError(msg) => return Err("cannot read template " + path + ": " + msg)
   }
-  match @template.parse_template(source) {
+
+  // Extract directory from path for resolving includes
+  let base_dir = if path.contains("/") {
+    let mut last_slash = 0
+    let mut i = 0
+    while i < path.length() {
+      if char_at_builder(path, i) == '/' {
+        last_slash = i
+      }
+      i = i + 1
+    }
+    substr_builder(path, 0, last_slash)
+  } else {
+    "."
+  }
+
+  // Create resolver that reads files relative to templates directory
+  let resolver = fn(filename : String) -> Result[String, String] {
+    let include_path = if filename.contains("/") || filename.has_prefix("../") {
+      // Absolute path or parent directory reference - use as-is
+      filename
+    } else {
+      // Relative path - resolve from base directory
+      base_dir + "/" + filename
+    }
+    let result = @fs.read_file_to_string(include_path) catch {
+      @fs.IOError(msg) =>
+        return Err("cannot read include '" + filename + "': " + msg)
+    }
+    Ok(result)
+  }
+
+  match @template.parse_template_with_includes(source, resolver) {
     Ok(parsed) => Ok(Some(parsed))
     Err(e) => Err("invalid template " + path + ": " + template_error_text(e))
   }
