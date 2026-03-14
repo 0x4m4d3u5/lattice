@@ -11,6 +11,18 @@ pub(all) enum TemplateSlot {
   TagName
   TagCount
   Backlinks
+  Tags
+  Collection
+  Year
+  Month
+  Day
+  NextPage
+  PrevPage
+  PageNum
+  IsFirstPage
+  IsLastPage
+  PageUrl
+  Body
 } derive(Eq, Hash, Show)
 
 ///|
@@ -139,6 +151,42 @@ fn slot_from_name(name : String) -> Result[TemplateSlot, TemplateError] {
   }
   if name == "backlinks" {
     return Ok(Backlinks)
+  }
+  if name == "tags" {
+    return Ok(Tags)
+  }
+  if name == "collection" {
+    return Ok(Collection)
+  }
+  if name == "year" {
+    return Ok(Year)
+  }
+  if name == "month" {
+    return Ok(Month)
+  }
+  if name == "day" {
+    return Ok(Day)
+  }
+  if name == "next_page" {
+    return Ok(NextPage)
+  }
+  if name == "prev_page" {
+    return Ok(PrevPage)
+  }
+  if name == "page_num" {
+    return Ok(PageNum)
+  }
+  if name == "is_first_page" {
+    return Ok(IsFirstPage)
+  }
+  if name == "is_last_page" {
+    return Ok(IsLastPage)
+  }
+  if name == "page_url" {
+    return Ok(PageUrl)
+  }
+  if name == "body" {
+    return Ok(Body)
   }
   Err(UnknownSlot(name))
 }

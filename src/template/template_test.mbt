@@ -208,3 +208,142 @@ test "template invalid data slot format error" {
     Err(_) => assert_true(false)
   }
 }
+
+///|
+test "template parse new pagination slots" {
+  // Next/Prev page links
+  let tpl_next = match parse_template("{{next_page}}") {
+    Ok(v) => v
+    Err(_) => {
+      assert_true(false)
+      { parts: [], required_slots: [] }
+    }
+  }
+  match tpl_next.parts[0] {
+    Slot(NextPage) => ()
+    _ => assert_true(false)
+  }
+
+  let tpl_prev = match parse_template("{{prev_page}}") {
+    Ok(v) => v
+    Err(_) => {
+      assert_true(false)
+      { parts: [], required_slots: [] }
+    }
+  }
+  match tpl_prev.parts[0] {
+    Slot(PrevPage) => ()
+    _ => assert_true(false)
+  }
+
+  // Page number and flags
+  let tpl_page = match parse_template("Page {{page_num}} of 5") {
+    Ok(v) => v
+    Err(_) => {
+      assert_true(false)
+      { parts: [], required_slots: [] }
+    }
+  }
+  match tpl_page.parts {
+    [Text("Page "), Slot(PageNum), Text(" of 5")] => ()
+    _ => assert_true(false)
+  }
+
+  let tpl_first = match parse_template("{{is_first_page}}") {
+    Ok(v) => v
+    Err(_) => {
+      assert_true(false)
+      { parts: [], required_slots: [] }
+    }
+  }
+  match tpl_first.parts[0] {
+    Slot(IsFirstPage) => ()
+    _ => assert_true(false)
+  }
+
+  let tpl_last = match parse_template("{{is_last_page}}") {
+    Ok(v) => v
+    Err(_) => {
+      assert_true(false)
+      { parts: [], required_slots: [] }
+    }
+  }
+  match tpl_last.parts[0] {
+    Slot(IsLastPage) => ()
+    _ => assert_true(false)
+  }
+
+  let tpl_page_url = match parse_template("{{page_url}}") {
+    Ok(v) => v
+    Err(_) => {
+      assert_true(false)
+      { parts: [], required_slots: [] }
+    }
+  }
+  match tpl_page_url.parts[0] {
+    Slot(PageUrl) => ()
+    _ => assert_true(false)
+  }
+}
+
+///|
+test "template parse date component slots" {
+  let tpl = match parse_template("{{year}}-{{month}}-{{day}}") {
+    Ok(v) => v
+    Err(_) => {
+      assert_true(false)
+      { parts: [], required_slots: [] }
+    }
+  }
+  match tpl.parts {
+    [Slot(Year), Text("-"), Slot(Month), Text("-"), Slot(Day)] => ()
+    _ => assert_true(false)
+  }
+}
+
+///|
+test "template parse content metadata slots" {
+  let tpl = match parse_template("<h1>{{title}}</h1><p>{{collection}}</p><div>{{body}}</div><ul>{{tags}}</ul>") {
+    Ok(v) => v
+    Err(_) => {
+      assert_true(false)
+      { parts: [], required_slots: [] }
+    }
+  }
+  
+  let mut has_title = false
+  let mut has_collection = false
+  let mut has_body = false
+  let mut has_tags = false
+  for part in tpl.parts {
+    match part {
+      Slot(Title) => has_title = true
+      Slot(Collection) => has_collection = true
+      Slot(Body) => has_body = true
+      Slot(Tags) => has_tags = true
+      _ => ()
+    }
+  }
+  
+  assert_true(has_title)
+  assert_true(has_collection)
+  assert_true(has_body)
+  assert_true(has_tags)
+}
+
+///|
+test "template render missing new slot" {
+  let tpl = match parse_template("{{tags}}") {
+    Ok(v) => v
+    Err(_) => {
+      assert_true(false)
+      { parts: [], required_slots: [] }
+    }
+  }
+  let slots : Map[TemplateSlot, String] = Map::new()
+  match render_template(tpl, slots) {
+    Ok(_) => assert_true(false)
+    Err(MissingRequiredSlot(Tags)) => ()
+    Err(_) => assert_true(false)
+  }
+}
