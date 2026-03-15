@@ -29,6 +29,15 @@ pub enum Inline {
 }
 
 ///|
+/// Column alignment for a GFM table column.
+pub enum ColAlign {
+  AlignLeft
+  AlignCenter
+  AlignRight
+  AlignDefault
+}
+
+///|
 /// A block element in the markdown AST.
 pub enum Block {
   Heading(Int, Array[Inline])
@@ -38,6 +47,9 @@ pub enum Block {
   UnorderedList(Array[Array[Inline]]) // each item is inline content
   OrderedList(Array[Array[Inline]]) // each item is inline content
   HRule
+  // GFM table: column alignments, header cells, data rows.
+  // Each cell is an Array[Inline] so inline formatting works inside cells.
+  Table(Array[ColAlign], Array[Array[Inline]], Array[Array[Array[Inline]]])
 }
 
 ///|
@@ -603,6 +615,104 @@ fn strip_blockquote_marker(line : String) -> String {
   substr(line, start, n)
 }
 
+// ── GFM table helpers ─────────────────────────────────────────────────────────
+
+///|
+/// A line qualifies as a potential table row if it contains a pipe character.
+fn is_table_row_line(line : String) -> Bool {
+  line.contains("|")
+}
+
+///|
+/// Split a GFM table row into trimmed cell strings.
+/// Handles both `| a | b |` (outer pipes) and `a | b` formats.
+fn split_table_row(line : String) -> Array[String] {
+  let t = trim(line)
+  let n = t.length()
+  // strip leading pipe
+  let start = if n > 0 && char_at(t, 0) == '|' { 1 } else { 0 }
+  // strip trailing pipe
+  let end_pos = if n > 0 && char_at(t, n - 1) == '|' { n - 1 } else { n }
+  let inner = substr(t, start, end_pos)
+  // split on '|'
+  let cells : Array[String] = []
+  let inner_n = inner.length()
+  let mut i = 0
+  let mut cell_start = 0
+  while i <= inner_n {
+    if i == inner_n || char_at(inner, i) == '|' {
+      cells.push(trim(substr(inner, cell_start, i)))
+      cell_start = i + 1
+    }
+    i = i + 1
+  }
+  cells
+}
+
+///|
+/// A separator cell contains only `-` and `:` characters with at least one `-`.
+/// Examples: `---`, `:---`, `---:`, `:---:`.
+fn is_separator_cell(cell : String) -> Bool {
+  let t = trim(cell)
+  let n = t.length()
+  if n == 0 {
+    return false
+  }
+  let mut has_dash = false
+  let mut i = 0
+  while i < n {
+    let c = char_at(t, i)
+    if c == '-' {
+      has_dash = true
+    } else if c != ':' {
+      return false
+    }
+    i = i + 1
+  }
+  has_dash
+}
+
+///|
+/// A separator row has at least one cell and every cell is a separator cell.
+fn is_separator_row(line : String) -> Bool {
+  if not(line.contains("|")) && not(line.contains("-")) {
+    return false
+  }
+  let cells = split_table_row(line)
+  if cells.length() == 0 {
+    return false
+  }
+  let mut i = 0
+  while i < cells.length() {
+    if not(is_separator_cell(cells[i])) {
+      return false
+    }
+    i = i + 1
+  }
+  true
+}
+
+///|
+/// Derive column alignment from a separator cell string.
+fn parse_col_align(cell : String) -> ColAlign {
+  let t = trim(cell)
+  let n = t.length()
+  if n == 0 {
+    return AlignDefault
+  }
+  let starts_colon = char_at(t, 0) == ':'
+  let ends_colon = char_at(t, n - 1) == ':'
+  if starts_colon && ends_colon {
+    AlignCenter
+  } else if starts_colon {
+    AlignLeft
+  } else if ends_colon {
+    AlignRight
+  } else {
+    AlignDefault
+  }
+}
+
 ///|
 fn is_block_starter(line : String) -> Bool {
   is_heading_line(line) ||
@@ -674,6 +784,49 @@ pub fn parse_blocks(ls : Array[String]) -> Array[Block] {
         i = i + 1
       }
       result.push(OrderedList(items))
+    } else if is_table_row_line(line) &&
+      i + 1 < n &&
+      is_separator_row(ls[i + 1]) {
+      // GFM table: header row followed by a separator row.
+      let header_cells = split_table_row(line)
+      let sep_cells = split_table_row(ls[i + 1])
+      let num_cols = header_cells.length()
+      // build alignment array from the separator row
+      let aligns : Array[ColAlign] = []
+      let mut k = 0
+      while k < num_cols {
+        let al = if k < sep_cells.length() {
+          parse_col_align(sep_cells[k])
+        } else {
+          AlignDefault
+        }
+        aligns.push(al)
+        k = k + 1
+      }
+      // parse header cells as inline content
+      let header_inlines : Array[Array[Inline]] = []
+      k = 0
+      while k < num_cols {
+        let ct = header_cells[k]
+        header_inlines.push(parse_inlines(ct, 0, ct.length()))
+        k = k + 1
+      }
+      i = i + 2 // consume header + separator
+      // parse data rows until a non-table line or blank line
+      let rows : Array[Array[Array[Inline]]] = []
+      while i < n && is_table_row_line(ls[i]) && not(is_blank(ls[i])) {
+        let row_cells = split_table_row(ls[i])
+        let row_inlines : Array[Array[Inline]] = []
+        k = 0
+        while k < num_cols {
+          let ct = if k < row_cells.length() { row_cells[k] } else { "" }
+          row_inlines.push(parse_inlines(ct, 0, ct.length()))
+          k = k + 1
+        }
+        rows.push(row_inlines)
+        i = i + 1
+      }
+      result.push(Table(aligns, header_inlines, rows))
     } else {
       // paragraph: accumulate non-blank, non-block-starter lines
       let para_lines : Array[String] = []
@@ -1009,6 +1162,53 @@ pub fn render_block(block : Block, wl : Map[String, String]) -> String {
       buf.to_string()
     }
     HRule => "<hr />\n"
+    Table(aligns, headers, rows) => {
+      let buf = StringBuilder::new()
+      buf.write_string("<table>\n<thead>\n<tr>\n")
+      let mut c = 0
+      while c < headers.length() {
+        let align_attr = if c < aligns.length() {
+          match aligns[c] {
+            AlignLeft => " style=\"text-align:left\""
+            AlignCenter => " style=\"text-align:center\""
+            AlignRight => " style=\"text-align:right\""
+            AlignDefault => ""
+          }
+        } else {
+          ""
+        }
+        buf.write_string("<th" + align_attr + ">")
+        buf.write_string(render_inlines(headers[c], wl))
+        buf.write_string("</th>\n")
+        c = c + 1
+      }
+      buf.write_string("</tr>\n</thead>\n<tbody>\n")
+      let mut r = 0
+      while r < rows.length() {
+        buf.write_string("<tr>\n")
+        c = 0
+        while c < rows[r].length() {
+          let align_attr = if c < aligns.length() {
+            match aligns[c] {
+              AlignLeft => " style=\"text-align:left\""
+              AlignCenter => " style=\"text-align:center\""
+              AlignRight => " style=\"text-align:right\""
+              AlignDefault => ""
+            }
+          } else {
+            ""
+          }
+          buf.write_string("<td" + align_attr + ">")
+          buf.write_string(render_inlines(rows[r][c], wl))
+          buf.write_string("</td>\n")
+          c = c + 1
+        }
+        buf.write_string("</tr>\n")
+        r = r + 1
+      }
+      buf.write_string("</tbody>\n</table>\n")
+      buf.to_string()
+    }
   }
 }
 
@@ -1088,6 +1288,58 @@ fn render_block_with_issues(
       { html: buf.to_string(), shortcode_errors: issues }
     }
     HRule => { html: "<hr />\n", shortcode_errors: [] }
+    Table(aligns, headers, rows) => {
+      let buf = StringBuilder::new()
+      let issues : Array[ShortcodeIssue] = []
+      buf.write_string("<table>\n<thead>\n<tr>\n")
+      let mut c = 0
+      while c < headers.length() {
+        let align_attr = if c < aligns.length() {
+          match aligns[c] {
+            AlignLeft => " style=\"text-align:left\""
+            AlignCenter => " style=\"text-align:center\""
+            AlignRight => " style=\"text-align:right\""
+            AlignDefault => ""
+          }
+        } else {
+          ""
+        }
+        buf.write_string("<th" + align_attr + ">")
+        let rendered = render_inlines_with_issues(headers[c], wl)
+        buf.write_string(rendered.html)
+        merge_shortcode_errors(issues, rendered.shortcode_errors)
+        buf.write_string("</th>\n")
+        c = c + 1
+      }
+      buf.write_string("</tr>\n</thead>\n<tbody>\n")
+      let mut r = 0
+      while r < rows.length() {
+        buf.write_string("<tr>\n")
+        c = 0
+        while c < rows[r].length() {
+          let align_attr = if c < aligns.length() {
+            match aligns[c] {
+              AlignLeft => " style=\"text-align:left\""
+              AlignCenter => " style=\"text-align:center\""
+              AlignRight => " style=\"text-align:right\""
+              AlignDefault => ""
+            }
+          } else {
+            ""
+          }
+          buf.write_string("<td" + align_attr + ">")
+          let rendered = render_inlines_with_issues(rows[r][c], wl)
+          buf.write_string(rendered.html)
+          merge_shortcode_errors(issues, rendered.shortcode_errors)
+          buf.write_string("</td>\n")
+          c = c + 1
+        }
+        buf.write_string("</tr>\n")
+        r = r + 1
+      }
+      buf.write_string("</tbody>\n</table>\n")
+      { html: buf.to_string(), shortcode_errors: issues }
+    }
   }
 }
 

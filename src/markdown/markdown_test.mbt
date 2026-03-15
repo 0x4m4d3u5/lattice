@@ -55,3 +55,57 @@ test "markdown fenced code empty language stays plain" {
   assert_true(rendered.contains("<pre><code>plain text</code></pre>"))
   assert_true(not(rendered.contains("hl-")))
 }
+
+///|
+test "markdown table basic" {
+  let body = "| Name | Age |\n| ---- | --- |\n| Alice | 30 |\n| Bob | 25 |"
+  let rendered = render(body, empty_wl())
+  assert_true(rendered.contains("<table>"))
+  assert_true(rendered.contains("<thead>"))
+  assert_true(rendered.contains("<tbody>"))
+  assert_true(rendered.contains("<th>Name</th>"))
+  assert_true(rendered.contains("<th>Age</th>"))
+  assert_true(rendered.contains("<td>Alice</td>"))
+  assert_true(rendered.contains("<td>30</td>"))
+  assert_true(rendered.contains("<td>Bob</td>"))
+  assert_true(rendered.contains("<td>25</td>"))
+}
+
+///|
+test "markdown table alignment" {
+  let body = "| L | C | R |\n| :--- | :---: | ---: |\n| a | b | c |"
+  let rendered = render(body, empty_wl())
+  assert_true(rendered.contains("<th style=\"text-align:left\">L</th>"))
+  assert_true(rendered.contains("<th style=\"text-align:center\">C</th>"))
+  assert_true(rendered.contains("<th style=\"text-align:right\">R</th>"))
+  assert_true(rendered.contains("<td style=\"text-align:left\">a</td>"))
+  assert_true(rendered.contains("<td style=\"text-align:center\">b</td>"))
+  assert_true(rendered.contains("<td style=\"text-align:right\">c</td>"))
+}
+
+///|
+test "markdown table inline content in cells" {
+  let body = "| Feature | Status |\n| --- | --- |\n| **bold** | `code` |"
+  let rendered = render(body, empty_wl())
+  assert_true(rendered.contains("<strong>bold</strong>"))
+  assert_true(rendered.contains("<code>code</code>"))
+}
+
+///|
+test "markdown table no data rows" {
+  let body = "| X | Y |\n| --- | --- |"
+  let rendered = render(body, empty_wl())
+  assert_true(rendered.contains("<table>"))
+  assert_true(rendered.contains("<th>X</th>"))
+  assert_true(rendered.contains("<th>Y</th>"))
+  assert_true(rendered.contains("<tbody>"))
+}
+
+///|
+test "non-table pipe line not parsed as table" {
+  // A line with | but no separator row should become a paragraph
+  let body = "a | b | c\nno separator here"
+  let rendered = render(body, empty_wl())
+  assert_true(not(rendered.contains("<table>")))
+  assert_true(rendered.contains("<p>"))
+}
