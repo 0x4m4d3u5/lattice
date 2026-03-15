@@ -1,3 +1,10 @@
+pre-commit:
+  commands:
+    moon-check:
+      run: moon check 2>&1
+    moon-test:
+      run: moon test 2>&1
+
 pre-push:
   commands:
     check-dirty:
