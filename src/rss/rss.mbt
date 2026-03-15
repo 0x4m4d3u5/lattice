@@ -329,11 +329,16 @@ fn build_feed_channel(
   title : String,
   base_url : String,
   pages : Array[@graph.GraphPage],
+  limit : Int?,
 ) -> FeedChannel {
   let sorted_pages = sort_pages_for_feed(pages)
   let items : Array[FeedItem] = []
+  let count = match limit {
+    Some(n) => if n < sorted_pages.length() { n } else { sorted_pages.length() }
+    None => sorted_pages.length()
+  }
   let mut i = 0
-  while i < sorted_pages.length() {
+  while i < count {
     items.push(to_feed_item(base_url, sorted_pages[i]))
     i = i + 1
   }
@@ -456,7 +461,8 @@ pub fn render_feed(
   title : String,
   base_url : String,
   pages : Array[@graph.GraphPage],
+  limit : Int?,
 ) -> String {
-  let channel = build_feed_channel(title, base_url, pages)
+  let channel = build_feed_channel(title, base_url, pages, limit)
   render_atom(channel)
 }

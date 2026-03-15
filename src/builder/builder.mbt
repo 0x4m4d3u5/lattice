@@ -2818,6 +2818,7 @@ pub fn build(
           feed_title,
           config.site.base_url,
           coll.pages,
+          config.site.feed_limit,
         )
         let out_path = coll_dir + "/feed.xml"
         @fs.write_string_to_file(out_path, feed_xml)
@@ -3529,7 +3530,7 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
     i = i + 1
   }
 
-  i = 0
+    i = 0
   while i < rendered_collections.length() {
     let coll = rendered_collections[i]
     let feed_title = config.site.title + " (" + coll.name + ")"
@@ -3537,6 +3538,7 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
       feed_title,
       config.site.base_url,
       coll.pages,
+      config.site.feed_limit,
     )
     let paginated_index_pages = @pagination.paginate(coll.pages, page_size, fn(
       page_number,

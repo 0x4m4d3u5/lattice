@@ -28,6 +28,7 @@ pub struct SiteConfig {
   data_dir : String?
   root_page : String?
   collections : Array[CollectionEntry]
+  feed_limit : Int?
 }
 
 ///|
@@ -184,6 +185,7 @@ fn parse_string_value_config(value : String) -> String {
 /// - `static_dir`
 /// - `data_dir`
 /// - `root_page`
+/// - `feed_limit`
 ///
 /// Inline collections via `[[collections]]` array-of-tables:
 /// - `name`: required, collection name
@@ -203,6 +205,7 @@ pub fn parse(input : String) -> Result[SiteConfig, ConfigError] {
   let mut static_dir : String? = None
   let mut data_dir : String? = None
   let mut root_page : String? = None
+  let mut feed_limit : Int? = None
 
   let collections : Array[CollectionEntry] = []
   let mut in_collections_block = false
@@ -347,6 +350,14 @@ pub fn parse(input : String) -> Result[SiteConfig, ConfigError] {
           } else {
             root_page = Some(string_value)
           }
+        } else if key == "feed_limit" {
+          match parse_positive_int_config(value) {
+            Some(parsed) => feed_limit = Some(parsed)
+            None =>
+              return Err(
+                InvalidValue("feed_limit", "must be a positive integer"),
+              )
+          }
         } else {
           // Unknown keys are ignored.
           ()
@@ -397,5 +408,6 @@ pub fn parse(input : String) -> Result[SiteConfig, ConfigError] {
     data_dir,
     root_page,
     collections,
+    feed_limit,
   })
 }

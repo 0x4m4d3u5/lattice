@@ -34,7 +34,7 @@ fn test_pages() -> Array[@graph.GraphPage] {
 ///|
 test "render_feed generates valid Atom feed XML" {
   let pages = test_pages()
-  let feed = @rss.render_feed("Test Site", "https://example.com", pages)
+  let feed = @rss.render_feed("Test Site", "https://example.com", pages, None)
   
   // Check for XML declaration
   assert(feed.contains("<?xml version=\"1.0\" encoding=\"utf-8\"?>"))
@@ -77,7 +77,7 @@ test "render_feed includes entry details" {
       outgoing: [],
     },
   ]
-  let feed = @rss.render_feed("Test", "https://example.com", pages)
+  let feed = @rss.render_feed("Test", "https://example.com", pages, None)
   
   // Check entry title
   assert(feed.contains("<title>Test Post Title</title>"))
@@ -111,7 +111,7 @@ test "render_feed handles pages without description" {
       outgoing: [],
     },
   ]
-  let feed = @rss.render_feed("Test", "https://example.com", pages)
+  let feed = @rss.render_feed("Test", "https://example.com", pages, None)
   
   // Entry should still be created, just without summary element
   assert(feed.contains("<title>Post Without Description</title>"))
@@ -129,7 +129,7 @@ test "render_feed handles pages without date" {
       outgoing: [],
     },
   ]
-  let feed = @rss.render_feed("Test", "https://example.com", pages)
+  let feed = @rss.render_feed("Test", "https://example.com", pages, None)
   
   // Entry should still be created, feed uses default timestamp
   assert(feed.contains("<title>Post Without Date</title>"))
@@ -147,7 +147,7 @@ test "render_feed with RFC3339 date format" {
       outgoing: [],
     },
   ]
-  let feed = @rss.render_feed("Test", "https://example.com", pages)
+  let feed = @rss.render_feed("Test", "https://example.com", pages, None)
   
   // RFC3339 date should be preserved as-is
   assert(feed.contains("<updated>2024-03-15T14:30:00Z</updated>"))
@@ -159,15 +159,15 @@ test "render_feed handles base URL variations" {
   let pages = test_pages()
   
   // Base URL without trailing slash
-  let feed1 = @rss.render_feed("Test", "https://example.com", pages)
+  let feed1 = @rss.render_feed("Test", "https://example.com", pages, None)
   assert(feed1.contains("<id>https://example.com/</id>"))
   
   // Base URL with trailing slash
-  let feed2 = @rss.render_feed("Test", "https://example.com/", pages)
+  let feed2 = @rss.render_feed("Test", "https://example.com/", pages, None)
   assert(feed2.contains("<id>https://example.com/</id>"))
   
   // Base URL with path
-  let feed3 = @rss.render_feed("Test", "https://example.com/blog", pages)
+  let feed3 = @rss.render_feed("Test", "https://example.com/blog", pages, None)
   assert(feed3.contains("<id>https://example.com/blog/</id>"))
   assert(feed3.contains("<link href=\"https://example.com/blog/posts/first-post/\" />"))
 }
@@ -175,7 +175,7 @@ test "render_feed handles base URL variations" {
 ///|
 test "render_feed handles empty pages array" {
   let pages : Array[@graph.GraphPage] = []
-  let feed = @rss.render_feed("Empty Site", "https://example.com", pages)
+  let feed = @rss.render_feed("Empty Site", "https://example.com", pages, None)
   
   // Should still generate valid feed structure
   assert(feed.contains("<?xml version=\"1.0\" encoding=\"utf-8\"?>"))
@@ -198,7 +198,7 @@ test "render_feed XML character escaping" {
       outgoing: [],
     },
   ]
-  let feed = @rss.render_feed("Test", "https://example.com", pages)
+  let feed = @rss.render_feed("Test", "https://example.com", pages, None)
   
   // Check XML entities are properly escaped
   assert(feed.contains("&amp;"))
@@ -211,4 +211,63 @@ test "render_feed XML character escaping" {
   assert(not(feed.contains(" < ")))
   assert(not(feed.contains(" > ")))
   assert(not(feed.contains(" \" ")))
+}
+
+///|
+test "render_feed respects limit parameter" {
+  let pages = [
+    {
+      slug: "post-1",
+      title: "Post 1",
+      url: "/posts/post-1/",
+      description: Some("First"),
+      date: Some("2024-01-01"),
+      outgoing: [],
+    },
+    {
+      slug: "post-2",
+      title: "Post 2",
+      url: "/posts/post-2/",
+      description: Some("Second"),
+      date: Some("2024-01-02"),
+      outgoing: [],
+    },
+    {
+      slug: "post-3",
+      title: "Post 3",
+      url: "/posts/post-3/",
+      description: Some("Third"),
+      date: Some("2024-01-03"),
+      outgoing: [],
+    },
+  ]
+  
+  // With limit, only include specified number of entries
+  let limited_feed = @rss.render_feed("Test", "https://example.com", pages, Some(2))
+  assert(limited_feed.contains("<title>Post 3</title>"))
+  assert(limited_feed.contains("<title>Post 2</title>"))
+  assert(not(limited_feed.contains("<title>Post 1</title>")))
+  
+  // Without limit (None), include all entries
+  let full_feed = @rss.render_feed("Test", "https://example.com", pages, None)
+  assert(full_feed.contains("<title>Post 3</title>"))
+  assert(full_feed.contains("<title>Post 2</title>"))
+  assert(full_feed.contains("<title>Post 1</title>"))
+  
+  // Limit larger than array size includes all entries
+  let oversized_feed = @rss.render_feed("Test", "https://example.com", pages, Some(100))
+  assert(oversized_feed.contains("<title>Post 1</title>"))
+  assert(oversized_feed.contains("<title>Post 2</title>"))
+  assert(oversized_feed.contains("<title>Post 3</title>"))
+}
+
+///|
+test "render_feed with limit of 1" {
+  let pages = test_pages()
+  let feed = @rss.render_feed("Test", "https://example.com", pages, Some(1))
+  
+  // Only newest entry should be present
+  assert(feed.contains("<title>Second Post</title>"))
+  assert(not(feed.contains("<title>First Post</title>")))
+  assert(not(feed.contains("<title>Third Post</title>")))
 }
