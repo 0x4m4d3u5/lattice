@@ -93,7 +93,7 @@ moon run cmd/main -- ./content ./dist --watch --watch-interval 1000
 - `shortcode`: shortcode parsing/rendering with typed params/errors.
 - `sitemap`: sitemap XML rendering.
 - `slug`: deterministic slug/path normalization helpers.
-- `tags`: typed tag extraction and tag-page artifacts.
+- `tags`: typed tag extraction from frontmatter with automatic tag index and per-tag page generation.
 - `template`: template slot parser/renderer with typed slot and data-path checks.
 - `wikilink`: wikilink extraction/resolution against page index.
 
