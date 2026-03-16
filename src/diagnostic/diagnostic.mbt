@@ -173,6 +173,23 @@ fn code_for_violation(kind : @lint.ViolationType) -> String {
 }
 
 ///|
+fn hint_for_violation(kind : @lint.ViolationType) -> String? {
+  match kind {
+    @lint.MissingRequiredFrontmatter => Some("add the missing field to the --- frontmatter block at the top of the file")
+    @lint.SchemaError => Some("check the field type in the collection schema")
+    @lint.FrontmatterError => Some("frontmatter must be valid TOML-like syntax between --- delimiters")
+    @lint.BrokenWikilink => Some("check that the target file exists and its slug matches the link target")
+    @lint.DanglingTagReference => Some("ensure the referenced tag has a corresponding tag page template")
+    @lint.TemplateSlotError => Some("check the template for the correct slot name")
+    @lint.DataError => Some("verify the data file path and schema match the collection definition")
+    @lint.ShortcodeError => Some("check the shortcode name and argument syntax")
+    @lint.CollectionsError => Some("review the collections config file for syntax errors")
+    @lint.DuplicateSlug => Some("rename one of the conflicting files so slugs are unique")
+    @lint.IOError => Some("check file permissions and that the path exists")
+  }
+}
+
+///|
 pub fn of_lint_violation(v : @lint.LintViolation) -> Diagnostic {
   {
     severity: Error,
@@ -181,6 +198,6 @@ pub fn of_lint_violation(v : @lint.LintViolation) -> Diagnostic {
     line: v.line,
     column: v.column,
     message: v.message,
-    note: None,
+    note: hint_for_violation(v.kind),
   }
 }
