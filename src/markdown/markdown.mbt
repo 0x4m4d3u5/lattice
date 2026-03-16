@@ -844,17 +844,6 @@ pub fn parse_blocks(ls : Array[String]) -> Array[Block] {
 // ── rendering ─────────────────────────────────────────────────────────────────
 
 ///|
-fn render_inlines(inlines : Array[Inline], wl : Map[String, String]) -> String {
-  let buf = StringBuilder::new()
-  let mut i = 0
-  while i < inlines.length() {
-    buf.write_string(render_inline(inlines[i], wl))
-    i = i + 1
-  }
-  buf.to_string()
-}
-
-///|
 fn merge_shortcode_errors(
   target : Array[ShortcodeIssue],
   from : Array[ShortcodeIssue],
@@ -881,45 +870,6 @@ fn render_inlines_with_issues(
     i = i + 1
   }
   { html: buf.to_string(), shortcode_errors: issues }
-}
-
-///|
-fn render_blocks(blocks : Array[Block], wl : Map[String, String]) -> String {
-  let buf = StringBuilder::new()
-  let mut i = 0
-  while i < blocks.length() {
-    match blocks[i] {
-      OrderedList(items) => {
-        // Coalesce consecutive ordered-list blocks into one <ol>.
-        let merged : Array[Array[Inline]] = []
-        let mut k = 0
-        while k < items.length() {
-          merged.push(items[k])
-          k = k + 1
-        }
-        i = i + 1
-        while i < blocks.length() {
-          match blocks[i] {
-            OrderedList(next_items) => {
-              let mut j = 0
-              while j < next_items.length() {
-                merged.push(next_items[j])
-                j = j + 1
-              }
-              i = i + 1
-            }
-            _ => break
-          }
-        }
-        buf.write_string(render_block(OrderedList(merged), wl))
-      }
-      _ => {
-        buf.write_string(render_block(blocks[i], wl))
-        i = i + 1
-      }
-    }
-  }
-  buf.to_string()
 }
 
 ///|
@@ -1007,36 +957,7 @@ fn render_fenced_code(lang : String?, code : String) -> String {
 /// defensive path; the build pipeline should have already aborted on missing
 /// targets.
 pub fn render_inline(inline : Inline, wl : Map[String, String]) -> String {
-  match inline {
-    Text(t) => escape_html(t)
-    Bold(inner) => "<strong>" + render_inlines(inner, wl) + "</strong>"
-    Italic(inner) => "<em>" + render_inlines(inner, wl) + "</em>"
-    BoldItalic(inner) =>
-      "<strong><em>" + render_inlines(inner, wl) + "</em></strong>"
-    InlineCode(code) => "<code>" + escape_html(code) + "</code>"
-    Link(text, url) =>
-      "<a href=\"" + escape_html(url) + "\">" + escape_html(text) + "</a>"
-    WikiRef(target, display) => {
-      let text = match display {
-        Some(d) => d
-        None => target
-      }
-      match wl.get(target) {
-        Some(url) =>
-          "<a href=\"" + escape_html(url) + "\">" + escape_html(text) + "</a>"
-        // Broken wikilink: should have been caught at build time. Render
-        // visually as broken so the problem is discoverable at review.
-        None =>
-          "<a class=\"wl-broken\" href=\"#\">" + escape_html(text) + "</a>"
-      }
-    }
-    Shortcode(call) =>
-      match @shortcode.render(call) {
-        Ok(html) => html
-        Err(_) => ""
-      }
-    HardBreak => "<br />\n"
-  }
+  render_inline_with_issues(inline, wl).html
 }
 
 ///|
@@ -1115,101 +1036,7 @@ fn render_inline_with_issues(
 ///|
 /// Render a single block element to an HTML string.
 pub fn render_block(block : Block, wl : Map[String, String]) -> String {
-  match block {
-    Heading(level, inlines) => {
-      let tag = "h" + level.to_string()
-      "<" + tag + ">" + render_inlines(inlines, wl) + "</" + tag + ">\n"
-    }
-    Paragraph(inlines) => {
-      if inlines.length() == 1 {
-        match inlines[0] {
-          Shortcode(call) =>
-            if shortcode_is_block(call) {
-              return render_inline(inlines[0], wl) + "\n"
-            }
-          _ => ()
-        }
-      }
-      "<p>" + render_inlines(inlines, wl) + "</p>\n"
-    }
-    FencedCode(lang, code) => render_fenced_code(lang, code)
-    BlockQuote(inner_blocks) =>
-      "<blockquote>\n" + render_blocks(inner_blocks, wl) + "</blockquote>\n"
-    UnorderedList(items) => {
-      let buf = StringBuilder::new()
-      buf.write_string("<ul>\n")
-      let mut i = 0
-      while i < items.length() {
-        buf.write_string("<li>")
-        buf.write_string(render_inlines(items[i], wl))
-        buf.write_string("</li>\n")
-        i = i + 1
-      }
-      buf.write_string("</ul>\n")
-      buf.to_string()
-    }
-    OrderedList(items) => {
-      let buf = StringBuilder::new()
-      buf.write_string("<ol>\n")
-      let mut i = 0
-      while i < items.length() {
-        buf.write_string("<li>")
-        buf.write_string(render_inlines(items[i], wl))
-        buf.write_string("</li>\n")
-        i = i + 1
-      }
-      buf.write_string("</ol>\n")
-      buf.to_string()
-    }
-    HRule => "<hr />\n"
-    Table(aligns, headers, rows) => {
-      let buf = StringBuilder::new()
-      buf.write_string("<table>\n<thead>\n<tr>\n")
-      let mut c = 0
-      while c < headers.length() {
-        let align_attr = if c < aligns.length() {
-          match aligns[c] {
-            AlignLeft => " style=\"text-align:left\""
-            AlignCenter => " style=\"text-align:center\""
-            AlignRight => " style=\"text-align:right\""
-            AlignDefault => ""
-          }
-        } else {
-          ""
-        }
-        buf.write_string("<th" + align_attr + ">")
-        buf.write_string(render_inlines(headers[c], wl))
-        buf.write_string("</th>\n")
-        c = c + 1
-      }
-      buf.write_string("</tr>\n</thead>\n<tbody>\n")
-      let mut r = 0
-      while r < rows.length() {
-        buf.write_string("<tr>\n")
-        c = 0
-        while c < rows[r].length() {
-          let align_attr = if c < aligns.length() {
-            match aligns[c] {
-              AlignLeft => " style=\"text-align:left\""
-              AlignCenter => " style=\"text-align:center\""
-              AlignRight => " style=\"text-align:right\""
-              AlignDefault => ""
-            }
-          } else {
-            ""
-          }
-          buf.write_string("<td" + align_attr + ">")
-          buf.write_string(render_inlines(rows[r][c], wl))
-          buf.write_string("</td>\n")
-          c = c + 1
-        }
-        buf.write_string("</tr>\n")
-        r = r + 1
-      }
-      buf.write_string("</tbody>\n</table>\n")
-      buf.to_string()
-    }
-  }
+  render_block_with_issues(block, wl).html
 }
 
 ///|
