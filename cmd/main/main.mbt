@@ -673,6 +673,23 @@ fn run_once(build_config : @builder.BuildConfig, check_mode : Bool) -> Int {
       print_diagnostic_main(result.diagnostics[i])
       i = i + 1
     }
+    if result.errors == 0 {
+      println(
+        "[lattice] built " +
+        result.rebuilt_pages.to_string() +
+        " page(s) [" +
+        result.unchanged_pages.to_string() +
+        " unchanged]",
+      )
+    } else {
+      println(
+        "[lattice] build failed: " +
+        result.errors.to_string() +
+        " error(s), " +
+        result.rebuilt_pages.to_string() +
+        " page(s) rebuilt",
+      )
+    }
     result.errors
   }
 }
