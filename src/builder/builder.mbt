@@ -40,6 +40,7 @@ pub(all) struct BuildResult {
   diagnostics : Array[@diagnostic.Diagnostic]
   rebuilt_pages : Int
   unchanged_pages : Int
+  skipped_drafts : Int
 }
 
 ///|
@@ -2659,7 +2660,7 @@ pub fn build(
       diagnostics.push(
         build_error(config.collections_path, None, None, "collections: " + msg),
       )
-      return { errors: 1, diagnostics, rebuilt_pages: 0, unchanged_pages: 0 }
+      return { errors: 1, diagnostics, rebuilt_pages: 0, unchanged_pages: 0, skipped_drafts: 0 }
     }
   }
   let collections = layout.collections
@@ -2670,7 +2671,7 @@ pub fn build(
     Ok(t) => t
     Err(msg) => {
       diagnostics.push(build_error(None, None, None, "templates: " + msg))
-      return { errors: 1, diagnostics, rebuilt_pages: 0, unchanged_pages: 0 }
+      return { errors: 1, diagnostics, rebuilt_pages: 0, unchanged_pages: 0, skipped_drafts: 0 }
     }
   }
   let nav_links_html = build_nav_links_html(collections)
@@ -2688,7 +2689,7 @@ pub fn build(
         message: "data: " + diag.message,
         note: diag.note,
       })
-      return { errors: 1, diagnostics, rebuilt_pages: 0, unchanged_pages: 0 }
+      return { errors: 1, diagnostics, rebuilt_pages: 0, unchanged_pages: 0, skipped_drafts: 0 }
     }
   }
   println("[lattice] loaded data files from " + data_dir_for_build(config))
@@ -2712,7 +2713,7 @@ pub fn build(
             msg,
           ),
         )
-        return { errors: 1, diagnostics, rebuilt_pages: 0, unchanged_pages: 0 }
+        return { errors: 1, diagnostics, rebuilt_pages: 0, unchanged_pages: 0, skipped_drafts: 0 }
       }
     }
     source_count = source_count + sources.length()
@@ -2751,6 +2752,7 @@ pub fn build(
             diagnostics,
             rebuilt_pages: 0,
             unchanged_pages: 0,
+            skipped_drafts: 0,
           }
         }
         None => {
@@ -2798,7 +2800,7 @@ pub fn build(
     }
   }
   if not(dir_ok) {
-    return { errors: 1, diagnostics, rebuilt_pages: 0, unchanged_pages: 0 }
+    return { errors: 1, diagnostics, rebuilt_pages: 0, unchanged_pages: 0, skipped_drafts: 0 }
   }
 
   // Write default CSS (once, if not already present)
@@ -2829,6 +2831,7 @@ pub fn build(
   let mut error_count = 0
   let mut rebuilt = 0
   let mut unchanged = 0
+  let mut skipped_drafts = 0
   let graph_pages : Array[@graph.GraphPage] = []
   let search_entries : Array[@search.SearchEntry] = []
   let tag_pages_by_slug : Map[String, Array[@tags.TaggedPage]] = Map::new()
@@ -2991,6 +2994,7 @@ pub fn build(
                 rebuilt = rebuilt + 1
               } else if should_skip_draft {
                 // Draft skipped, don't count as rebuilt or unchanged
+                skipped_drafts = skipped_drafts + 1
                 ()
               } else if not(should_rebuild) {
                 println("[skip] " + page_context)
@@ -3582,11 +3586,19 @@ pub fn build(
     error_count.to_string() +
     " errors",
   )
+  if skipped_drafts > 0 && not(config.include_drafts) {
+    println(
+      "[lattice] skipped " +
+      skipped_drafts.to_string() +
+      " draft(s). Use --drafts to include them.",
+    )
+  }
   {
     errors: error_count,
     diagnostics,
     rebuilt_pages: rebuilt,
     unchanged_pages: unchanged,
+    skipped_drafts,
   }
 }
 
