@@ -17,6 +17,7 @@ pub(all) struct CollectionDef {
   schema : @schema.Schema
   content_dir : String
   template : String?
+  page_size : Int?
 }
 
 ///|
@@ -392,6 +393,27 @@ fn parse_required_keys_data(s : String) -> Array[String] {
 }
 
 ///|
+fn parse_positive_int_collections(value : String) -> Int? {
+  if value.length() == 0 {
+    return None
+  }
+  let mut parsed = 0
+  let mut i = 0
+  while i < value.length() {
+    let c = char_at_collections(value, i)
+    if c < '0' || c > '9' {
+      return None
+    }
+    parsed = parsed * 10 + (c.to_int() - '0'.to_int())
+    i = i + 1
+  }
+  if parsed <= 0 {
+    return None
+  }
+  Some(parsed)
+}
+
+///|
 fn finalize_collection(
   defs : Array[CollectionDef],
   seen : Map[String, Bool],
@@ -399,6 +421,7 @@ fn finalize_collection(
   schema_text : String?,
   dir_text : String?,
   template_text : String?,
+  page_size : Int?,
 ) -> Result[Unit, CollectionsError] {
   if seen.get(name) != None {
     return Err(DuplicateCollection(name))
@@ -416,7 +439,13 @@ fn finalize_collection(
     Err(e) => return Err(e)
   }
   let schema : @schema.Schema = { name, fields }
-  defs.push({ name, schema, content_dir: dir_value, template: template_text })
+  defs.push({
+    name,
+    schema,
+    content_dir: dir_value,
+    template: template_text,
+    page_size,
+  })
   seen.set(name, true)
   Ok(())
 }
@@ -458,6 +487,7 @@ pub fn parse(input : String) -> Result[CollectionsConfig, CollectionsError] {
   let mut current_schema : String? = None
   let mut current_dir : String? = None
   let mut current_template : String? = None
+  let mut current_page_size : Int? = None
   let mut current_required : String? = None
 
   let mut i = 0
@@ -474,7 +504,13 @@ pub fn parse(input : String) -> Result[CollectionsConfig, CollectionsError] {
         Some(CollectionSection(name)) =>
           match
             finalize_collection(
-              defs, seen_collections, name, current_schema, current_dir, current_template,
+              defs,
+              seen_collections,
+              name,
+              current_schema,
+              current_dir,
+              current_template,
+              current_page_size,
             ) {
             Err(e) => return Err(e)
             Ok(_) => ()
@@ -492,6 +528,7 @@ pub fn parse(input : String) -> Result[CollectionsConfig, CollectionsError] {
       current_schema = None
       current_dir = None
       current_template = None
+      current_page_size = None
       current_required = None
       match parse_section_header(raw, line_no) {
         Ok(section) => current_section = Some(section)
@@ -534,6 +571,14 @@ pub fn parse(input : String) -> Result[CollectionsConfig, CollectionsError] {
           current_dir = Some(value)
         } else if key == "template" {
           current_template = Some(value)
+        } else if key == "page_size" {
+          match parse_positive_int_collections(value) {
+            Some(parsed) => current_page_size = Some(parsed)
+            None =>
+              return Err(
+                InvalidLine(line_no, "page_size must be a positive integer"),
+              )
+          }
         } else {
           return Err(
             InvalidLine(
@@ -562,7 +607,13 @@ pub fn parse(input : String) -> Result[CollectionsConfig, CollectionsError] {
     Some(CollectionSection(name)) =>
       match
         finalize_collection(
-          defs, seen_collections, name, current_schema, current_dir, current_template,
+          defs,
+          seen_collections,
+          name,
+          current_schema,
+          current_dir,
+          current_template,
+          current_page_size,
         ) {
         Err(e) => return Err(e)
         Ok(_) => ()
@@ -614,6 +665,7 @@ pub fn default_posts_collection(content_dir : String) -> CollectionDef {
     },
     content_dir,
     template: None,
+    page_size: None,
   }
 }
 

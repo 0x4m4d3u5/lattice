@@ -52,6 +52,7 @@ priv struct CollectionSources {
 priv struct CollectionRenderResult {
   name : String
   pages : Array[@graph.GraphPage]
+  page_size : Int?
 }
 
 ///|
@@ -915,10 +916,35 @@ fn data_dir_for_build(config : BuildConfig) -> String {
 }
 
 ///|
-fn page_size_for_site(site : @config.SiteConfig) -> Int {
-  match site.page_size {
-    Some(size) => size
-    None => 10
+fn page_size_for_site(site : @config.SiteConfig) -> Int? {
+  site.page_size
+}
+
+///|
+fn page_size_for_collection(
+  site : @config.SiteConfig,
+  collection : @collections.CollectionDef,
+) -> Int? {
+  match collection.page_size {
+    Some(size) => Some(size)
+    None => page_size_for_site(site)
+  }
+}
+
+///|
+fn[T] paginate_with_optional_size(
+  documents : Array[T],
+  page_size : Int?,
+  page_url_for : (Int) -> String,
+) -> Array[@pagination.PaginatedIndex[T]] {
+  match page_size {
+    Some(size) => @pagination.paginate(documents, size, page_url_for)
+    None =>
+      @pagination.paginate(
+        documents,
+        if documents.length() > 0 { documents.length() } else { 1 },
+        page_url_for,
+      )
   }
 }
 
@@ -1693,6 +1719,42 @@ fn build_data_schema_map(
 
 ///|
 fn load_project_layout(config : BuildConfig) -> Result[ProjectLayout, String] {
+  if config.site.collections.length() > 0 && config.collections_path == None {
+    let defs : Array[@collections.CollectionDef] = []
+    let mut i = 0
+    while i < config.site.collections.length() {
+      let entry = config.site.collections[i]
+      let schema_text = match entry.schema {
+        Some(text) => text
+        None => return Err("inline collection '" + entry.name + "' is missing schema")
+      }
+      let schema = match @collections.parse_schema_string(entry.name, schema_text) {
+        Ok(parsed) => parsed
+        Err(@collections.InvalidSchema(_, msg)) =>
+          return Err("invalid schema for collection '" + entry.name + "': " + msg)
+        Err(@collections.InvalidLine(line, msg)) =>
+          return Err("<inline>:" + line.to_string() + ": " + msg)
+        Err(@collections.MissingRequiredField(_, field)) =>
+          return Err(
+            "missing required field '" + field + "' in collection '" + entry.name + "'",
+          )
+        Err(@collections.DuplicateCollection(name)) =>
+          return Err("duplicate collection '" + name + "'")
+        Err(@collections.DuplicateDataSchema(name)) =>
+          return Err("duplicate data schema '" + name + "'")
+        Err(@collections.EmptyConfig) => return Err("no collections defined")
+      }
+      defs.push({
+        name: entry.name,
+        schema,
+        content_dir: entry.dir,
+        template: entry.template,
+        page_size: entry.page_size,
+      })
+      i = i + 1
+    }
+    return Ok({ collections: defs, data_schemas: Map::new() })
+  }
   match config.collections_path {
     None =>
       Ok({
@@ -2791,6 +2853,7 @@ pub fn build(
         rendered_collections.push({
           name: coll.definition.name,
           pages: coll_pages,
+          page_size: page_size_for_collection(config.site, coll.definition),
         })
         i = i + 1
         continue
@@ -2823,10 +2886,11 @@ pub fn build(
         ),
       )
       error_count = error_count + coll.sources.length()
-      rendered_collections.push({
-        name: coll.definition.name,
-        pages: coll_pages,
-      })
+        rendered_collections.push({
+          name: coll.definition.name,
+          pages: coll_pages,
+          page_size: page_size_for_collection(config.site, coll.definition),
+        })
       i = i + 1
       continue
     }
@@ -2993,7 +3057,11 @@ pub fn build(
       }
       j = j + 1
     }
-    rendered_collections.push({ name: coll.definition.name, pages: coll_pages })
+    rendered_collections.push({
+      name: coll.definition.name,
+      pages: coll_pages,
+      page_size: page_size_for_collection(config.site, coll.definition),
+    })
     i = i + 1
   }
 
@@ -3032,7 +3100,7 @@ pub fn build(
         error_count = error_count + 1
       }
 
-      let paginated_index_pages = @pagination.paginate(coll.pages, page_size, fn(
+      let paginated_index_pages = paginate_with_optional_size(coll.pages, coll.page_size, fn(
         page_number,
       ) {
         collection_index_page_url(coll.name, page_number)
@@ -3168,7 +3236,7 @@ pub fn build(
             }
           }
           if tag_dir_ok {
-            let paginated_tag_pages = @pagination.paginate(pages, page_size, fn(
+            let paginated_tag_pages = paginate_with_optional_size(pages, page_size, fn(
               page_number,
             ) {
               tag_page_url(tag_slug, page_number)
@@ -3272,7 +3340,7 @@ pub fn build(
         }
 
         if error_count == 0 {
-          let paginated_tags_index = @pagination.paginate(
+          let paginated_tags_index = paginate_with_optional_size(
             tag_summaries,
             page_size,
             fn(page_number) { tags_index_page_url(page_number) },
@@ -3717,7 +3785,11 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
       }
       j = j + 1
     }
-    rendered_collections.push({ name: coll.definition.name, pages: coll_pages })
+    rendered_collections.push({
+      name: coll.definition.name,
+      pages: coll_pages,
+      page_size: page_size_for_collection(config.site, coll.definition),
+    })
     i = i + 1
   }
 
@@ -3731,7 +3803,7 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
       coll.pages,
       config.site.feed_limit,
     )
-    let paginated_index_pages = @pagination.paginate(coll.pages, page_size, fn(
+    let paginated_index_pages = paginate_with_optional_size(coll.pages, coll.page_size, fn(
       page_number,
     ) {
       collection_index_page_url(coll.name, page_number)
@@ -3780,7 +3852,7 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
       Some(items) => items
       None => []
     }
-    let paginated_tag_pages = @pagination.paginate(pages, page_size, fn(
+    let paginated_tag_pages = paginate_with_optional_size(pages, page_size, fn(
       page_number,
     ) {
       tag_page_url(tag_slug, page_number)
@@ -3825,7 +3897,7 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
     i = i + 1
   }
 
-  let paginated_tags_index = @pagination.paginate(tag_summaries, page_size, fn(
+  let paginated_tags_index = paginate_with_optional_size(tag_summaries, page_size, fn(
     page_number,
   ) {
     tags_index_page_url(page_number)

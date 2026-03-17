@@ -11,6 +11,7 @@ pub(all) struct CollectionEntry {
   dir : String
   schema : String?
   template : String?
+  page_size : Int?
 }
 
 ///|
@@ -192,6 +193,7 @@ fn parse_string_value_config(value : String) -> String {
 /// - `dir`: required, content directory path
 /// - `schema`: optional, schema string (e.g., "title:String,date:Date")
 /// - `template`: optional, template name
+/// - `page_size`: optional, positive integer override for collection pagination
 pub fn parse(input : String) -> Result[SiteConfig, ConfigError] {
   let mut title : String? = None
   let mut base_url : String? = None
@@ -213,6 +215,7 @@ pub fn parse(input : String) -> Result[SiteConfig, ConfigError] {
   let mut current_collection_dir : String? = None
   let mut current_collection_schema : String? = None
   let mut current_collection_template : String? = None
+  let mut current_collection_page_size : Int? = None
 
   let lines = split_lines_config(input)
   let mut i = 0
@@ -241,6 +244,7 @@ pub fn parse(input : String) -> Result[SiteConfig, ConfigError] {
           dir: coll_dir,
           schema: current_collection_schema,
           template: current_collection_template,
+          page_size: current_collection_page_size,
         })
       }
       // Start new collection
@@ -249,6 +253,7 @@ pub fn parse(input : String) -> Result[SiteConfig, ConfigError] {
       current_collection_dir = None
       current_collection_schema = None
       current_collection_template = None
+      current_collection_page_size = None
       i = i + 1
       continue
     }
@@ -274,6 +279,14 @@ pub fn parse(input : String) -> Result[SiteConfig, ConfigError] {
             current_collection_schema = Some(string_value)
           } else if key == "template" {
             current_collection_template = Some(string_value)
+          } else if key == "page_size" {
+            match parse_positive_int_config(value) {
+              Some(parsed) => current_collection_page_size = Some(parsed)
+              None =>
+                return Err(
+                  InvalidValue("collections.page_size", "must be a positive integer"),
+                )
+            }
           } else {
             // Unknown keys in collections block are ignored
             ()
@@ -382,6 +395,7 @@ pub fn parse(input : String) -> Result[SiteConfig, ConfigError] {
       dir: coll_dir,
       schema: current_collection_schema,
       template: current_collection_template,
+      page_size: current_collection_page_size,
     })
   }
 

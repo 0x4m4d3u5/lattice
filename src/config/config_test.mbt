@@ -21,7 +21,8 @@ test "config parse single [[collections]] block" {
     "name = posts\n" +
     "dir = ./content/posts\n" +
     "schema = title:String,date:Date\n" +
-    "template = post.html\n"
+    "template = post.html\n" +
+    "page_size = 7\n"
   match parse(src) {
     Ok(cfg) => {
       assert_eq(cfg.collections.length(), 1)
@@ -30,6 +31,7 @@ test "config parse single [[collections]] block" {
       assert_eq(coll.dir, "./content/posts")
       assert_eq(coll.schema, Some("title:String,date:Date"))
       assert_eq(coll.template, Some("post.html"))
+      assert_eq(coll.page_size, Some(7))
     }
     Err(_) => assert_true(false)
   }
@@ -60,8 +62,27 @@ test "config parse multiple [[collections]] blocks" {
       assert_eq(cfg.collections[2].name, "docs")
       assert_eq(cfg.collections[2].dir, "./content/docs")
       assert_eq(cfg.collections[2].schema, None)
+      assert_eq(cfg.collections[2].page_size, None)
     }
     Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "config parse [[collections]] invalid page_size" {
+  let src = "title = Example\n" +
+    "base_url = https://example.test\n" +
+    "[[collections]]\n" +
+    "name = posts\n" +
+    "dir = ./content/posts\n" +
+    "page_size = 0\n"
+  match parse(src) {
+    Ok(_) => assert_true(false)
+    Err(err) =>
+      match err {
+        InvalidValue("collections.page_size", _) => ()
+        _ => assert_true(false)
+      }
   }
 }
 

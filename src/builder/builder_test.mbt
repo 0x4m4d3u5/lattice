@@ -24,6 +24,7 @@ test "collection index lookup alias uses numeric prefix directory basename" {
     schema: { name: "projects", fields: [] },
     content_dir: "/vault/10 - Projects",
     template: None,
+    page_size: None,
   }
   match @builder.collection_index_lookup_alias(collection) {
     Some(lookup_key) => assert_eq(lookup_key, "10---projects")
@@ -38,6 +39,7 @@ test "collection index lookup alias skips matching directory names" {
     schema: { name: "posts", fields: [] },
     content_dir: "/vault/posts",
     template: None,
+    page_size: None,
   }
   match @builder.collection_index_lookup_alias(collection) {
     Some(_) => assert_true(false)
@@ -52,6 +54,7 @@ test "collection index lookup alias skips basename that normalizes to collection
     schema: { name: "posts", fields: [] },
     content_dir: "/vault/Posts",
     template: None,
+    page_size: None,
   }
   match @builder.collection_index_lookup_alias(collection) {
     Some(_) => assert_true(false)
@@ -268,6 +271,253 @@ test "build with paginated index template exposes page_num and total_pages" {
   assert_true(page2.contains("page=2"))
   assert_true(page2.contains("of=2"))
   assert_true(page2.contains("prev=/posts/"))
+}
+
+///|
+test "build uses per-collection page_size override from inline collections" {
+  let root = "./_tmp_builder_inline_collection_page_size_override"
+  let content_root = root + "/content"
+  let posts_root = content_root + "/posts"
+  let notes_root = content_root + "/notes"
+  let data_root = content_root + "/data"
+  let templates_root = root + "/templates"
+  let output_root = root + "/dist"
+  ensure_dir_test(root)
+  ensure_dir_test(content_root)
+  ensure_dir_test(posts_root)
+  ensure_dir_test(notes_root)
+  ensure_dir_test(data_root)
+  ensure_dir_test(templates_root)
+  ensure_dir_test(output_root)
+
+  let mut i = 0
+  while i < 3 {
+    let n = (i + 1).to_string()
+    assert_true(
+      write_file_test(
+        posts_root + "/post" + n + ".md",
+        "---\ntitle: Post " + n + "\ndate: 2026-03-0" + n + "\n---\nPost " + n + "\n",
+      ),
+    )
+    assert_true(
+      write_file_test(
+        notes_root + "/note" + n + ".md",
+        "---\ntitle: Note " + n + "\ndate: 2026-03-0" + n + "\n---\nNote " + n + "\n",
+      ),
+    )
+    i = i + 1
+  }
+
+  assert_true(
+    write_file_test(
+      templates_root + "/index.html",
+      "page={{page_num}} of={{total_pages}} prev={{prev_page}} next={{next_page}}\n",
+    ),
+  )
+
+  let site_cfg = "title = InlinePagination\n" +
+    "base_url = /\n" +
+    "page_size = 3\n" +
+    "templates_dir = " +
+    templates_root +
+    "\n" +
+    "data_dir = " +
+    data_root +
+    "\n" +
+    "output_dir = " +
+    output_root +
+    "\n" +
+    "[[collections]]\n" +
+    "name = posts\n" +
+    "dir = " +
+    posts_root +
+    "\n" +
+    "schema = title:String,date:Date\n" +
+    "page_size = 2\n" +
+    "[[collections]]\n" +
+    "name = notes\n" +
+    "dir = " +
+    notes_root +
+    "\n" +
+    "schema = title:String,date:Date\n"
+
+  let site = match @config.parse(site_cfg) {
+    Ok(parsed) => parsed
+    Err(_) => {
+      assert_true(false)
+      abort("site config parse failed")
+    }
+  }
+  let result = @builder.build(
+    {
+      content_dir: content_root,
+      output_dir: output_root,
+      config_path: root + "/site.cfg",
+      site,
+      collections_path: None,
+      force_rebuild: true,
+      include_drafts: false,
+    },
+    @cache.empty(output_root),
+  )
+  assert_eq(result.errors, 0)
+
+  assert_true(@fs.path_exists(output_root + "/posts/page/2/index.html"))
+  assert_true(not(@fs.path_exists(output_root + "/notes/page/2/index.html")))
+}
+
+///|
+test "build inline collections fall back to global page_size" {
+  let root = "./_tmp_builder_inline_collection_page_size_global"
+  let content_root = root + "/content"
+  let posts_root = content_root + "/posts"
+  let data_root = content_root + "/data"
+  let templates_root = root + "/templates"
+  let output_root = root + "/dist"
+  ensure_dir_test(root)
+  ensure_dir_test(content_root)
+  ensure_dir_test(posts_root)
+  ensure_dir_test(data_root)
+  ensure_dir_test(templates_root)
+  ensure_dir_test(output_root)
+
+  let mut i = 0
+  while i < 3 {
+    let n = (i + 1).to_string()
+    assert_true(
+      write_file_test(
+        posts_root + "/post" + n + ".md",
+        "---\ntitle: Post " + n + "\ndate: 2026-03-0" + n + "\n---\nPost " + n + "\n",
+      ),
+    )
+    i = i + 1
+  }
+
+  assert_true(
+    write_file_test(
+      templates_root + "/index.html",
+      "page={{page_num}} of={{total_pages}}\n",
+    ),
+  )
+
+  let site_cfg = "title = InlineGlobalFallback\n" +
+    "base_url = /\n" +
+    "page_size = 2\n" +
+    "templates_dir = " +
+    templates_root +
+    "\n" +
+    "data_dir = " +
+    data_root +
+    "\n" +
+    "output_dir = " +
+    output_root +
+    "\n" +
+    "[[collections]]\n" +
+    "name = posts\n" +
+    "dir = " +
+    posts_root +
+    "\n" +
+    "schema = title:String,date:Date\n"
+
+  let site = match @config.parse(site_cfg) {
+    Ok(parsed) => parsed
+    Err(_) => {
+      assert_true(false)
+      abort("site config parse failed")
+    }
+  }
+  let result = @builder.build(
+    {
+      content_dir: content_root,
+      output_dir: output_root,
+      config_path: root + "/site.cfg",
+      site,
+      collections_path: None,
+      force_rebuild: true,
+      include_drafts: false,
+    },
+    @cache.empty(output_root),
+  )
+  assert_eq(result.errors, 0)
+
+  assert_true(@fs.path_exists(output_root + "/posts/page/2/index.html"))
+}
+
+///|
+test "build inline collections without page_size does not paginate" {
+  let root = "./_tmp_builder_inline_collection_page_size_none"
+  let content_root = root + "/content"
+  let posts_root = content_root + "/posts"
+  let data_root = content_root + "/data"
+  let templates_root = root + "/templates"
+  let output_root = root + "/dist"
+  ensure_dir_test(root)
+  ensure_dir_test(content_root)
+  ensure_dir_test(posts_root)
+  ensure_dir_test(data_root)
+  ensure_dir_test(templates_root)
+  ensure_dir_test(output_root)
+
+  let mut i = 0
+  while i < 11 {
+    let n = (i + 1).to_string()
+    let day = if i < 9 { "0" + n } else { n }
+    assert_true(
+      write_file_test(
+        posts_root + "/post" + n + ".md",
+        "---\ntitle: Post " + n + "\ndate: 2026-03-" + day + "\n---\nPost " + n + "\n",
+      ),
+    )
+    i = i + 1
+  }
+
+  assert_true(
+    write_file_test(
+      templates_root + "/index.html",
+      "page={{page_num}} of={{total_pages}}\n",
+    ),
+  )
+
+  let site_cfg = "title = InlineNoPagination\n" +
+    "base_url = /\n" +
+    "templates_dir = " +
+    templates_root +
+    "\n" +
+    "data_dir = " +
+    data_root +
+    "\n" +
+    "output_dir = " +
+    output_root +
+    "\n" +
+    "[[collections]]\n" +
+    "name = posts\n" +
+    "dir = " +
+    posts_root +
+    "\n" +
+    "schema = title:String,date:Date\n"
+
+  let site = match @config.parse(site_cfg) {
+    Ok(parsed) => parsed
+    Err(_) => {
+      assert_true(false)
+      abort("site config parse failed")
+    }
+  }
+  let result = @builder.build(
+    {
+      content_dir: content_root,
+      output_dir: output_root,
+      config_path: root + "/site.cfg",
+      site,
+      collections_path: None,
+      force_rebuild: true,
+      include_drafts: false,
+    },
+    @cache.empty(output_root),
+  )
+  assert_eq(result.errors, 0)
+
+  assert_true(not(@fs.path_exists(output_root + "/posts/page/2/index.html")))
 }
 
 ///|

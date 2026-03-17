@@ -589,6 +589,7 @@ fn load_inline_collections(
       schema,
       content_dir: entry.dir,
       template: entry.template,
+      page_size: entry.page_size,
     })
     i = i + 1
   }
