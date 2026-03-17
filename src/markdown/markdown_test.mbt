@@ -109,3 +109,46 @@ test "non-table pipe line not parsed as table" {
   assert_true(not(rendered.contains("<table>")))
   assert_true(rendered.contains("<p>"))
 }
+
+///|
+test "markdown image basic" {
+  let body = "![hero image](/images/hero.png)"
+  let rendered = render(body, empty_wl())
+  assert_true(rendered.contains("<img src=\"/images/hero.png\""))
+  assert_true(rendered.contains("alt=\"hero image\""))
+  assert_true(rendered.contains("/>"))
+}
+
+///|
+test "markdown image empty alt" {
+  let body = "![](/logo.svg)"
+  let rendered = render(body, empty_wl())
+  assert_true(rendered.contains("<img src=\"/logo.svg\""))
+  assert_true(rendered.contains("alt=\"\""))
+}
+
+///|
+test "markdown image with special chars in alt escaped" {
+  let body = "![a & b](/img.png)"
+  let rendered = render(body, empty_wl())
+  assert_true(rendered.contains("alt=\"a &amp; b\""))
+}
+
+///|
+test "markdown image inline in paragraph" {
+  let body = "Before ![photo](/p.jpg) after"
+  let rendered = render(body, empty_wl())
+  assert_true(rendered.contains("<img src=\"/p.jpg\""))
+  assert_true(rendered.contains("alt=\"photo\""))
+  assert_true(rendered.contains("Before"))
+  assert_true(rendered.contains("after"))
+}
+
+///|
+test "markdown bare exclamation not image" {
+  // ! without following [ is literal
+  let body = "Hello! World"
+  let rendered = render(body, empty_wl())
+  assert_true(rendered.contains("Hello! World"))
+  assert_true(not(rendered.contains("<img")))
+}

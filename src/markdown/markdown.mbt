@@ -23,6 +23,7 @@ pub enum Inline {
   BoldItalic(Array[Inline])
   InlineCode(String)
   Link(String, String) // display text, url
+  Image(String, String) // alt text, url
   WikiRef(String, String?) // target slug, optional display text
   Shortcode(@shortcode.ShortcodeCall)
   HardBreak
@@ -419,6 +420,28 @@ pub fn parse_inlines(s : String, from : Int, to : Int) -> Array[Inline] {
         i = i + 3
       }
       text_start = i
+    } else if c == '!' && i + 1 < to && char_at(s, i + 1) == '[' {
+      // image: ![alt](url)
+      let bracket_close = find_char(s, i + 2, ']', to)
+      if bracket_close >= 0 &&
+        bracket_close + 1 < to &&
+        char_at(s, bracket_close + 1) == '(' {
+        let paren_close = find_char(s, bracket_close + 2, ')', to)
+        if paren_close >= 0 {
+          if text_start < i {
+            result.push(Text(substr(s, text_start, i)))
+          }
+          let alt = substr(s, i + 2, bracket_close)
+          let url = substr(s, bracket_close + 2, paren_close)
+          result.push(Image(alt, url))
+          i = paren_close + 1
+          text_start = i
+        } else {
+          i = i + 1
+        }
+      } else {
+        i = i + 1
+      }
     } else if c == '[' && i + 1 < to && char_at(s, i + 1) == '[' {
       // wikilink: [[target]] or [[target|display]]
       if text_start < i {
@@ -997,6 +1020,15 @@ fn render_inline_with_issues(
         "\">" +
         escape_html(text) +
         "</a>",
+        shortcode_errors: [],
+      }
+    Image(alt, url) =>
+      {
+        html: "<img src=\"" +
+        escape_html(url) +
+        "\" alt=\"" +
+        escape_html(alt) +
+        "\" />",
         shortcode_errors: [],
       }
     WikiRef(target, display) => {
