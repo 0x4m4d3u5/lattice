@@ -26,6 +26,7 @@ pub(all) enum TemplateSlot {
   Body
   ReadingTime
   WordCount
+  TableOfContents
 } derive(Eq, Hash, Show)
 
 ///|
@@ -203,6 +204,9 @@ fn slot_from_name(name : String) -> Result[TemplateSlot, TemplateError] {
   }
   if name == "word_count" {
     return Ok(WordCount)
+  }
+  if name == "table_of_contents" {
+    return Ok(TableOfContents)
   }
   Err(UnknownSlot(name))
 }

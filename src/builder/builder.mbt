@@ -122,6 +122,29 @@ fn extract_date(fm : @frontmatter.Frontmatter) -> String? {
 }
 
 ///|
+fn extract_toc_enabled(fm : @frontmatter.Frontmatter) -> Bool {
+  match fm.fields.get("toc") {
+    Some(@frontmatter.FBool(enabled)) => enabled
+    _ => true
+  }
+}
+
+///|
+fn extract_toc_depth(fm : @frontmatter.Frontmatter) -> Int {
+  match fm.fields.get("toc_depth") {
+    Some(@frontmatter.FInt(depth)) =>
+      if depth < 2 {
+        1
+      } else if depth > 6 {
+        6
+      } else {
+        depth
+      }
+    _ => 3
+  }
+}
+
+///|
 fn is_draft(fm : @frontmatter.Frontmatter) -> Bool {
   match fm.fields.get("draft") {
     Some(@frontmatter.FBool(true)) => true
@@ -227,6 +250,23 @@ fn render_backlinks_html(backlinks : Array[BacklinkRef]) -> String {
   }
   buf.write_string("</ul>\n</section>\n")
   buf.to_string()
+}
+
+///|
+fn filter_toc_entries(
+  entries : Array[@markdown.TocEntry],
+  max_depth : Int,
+) -> Array[@markdown.TocEntry] {
+  let filtered : Array[@markdown.TocEntry] = []
+  let mut i = 0
+  while i < entries.length() {
+    let entry = entries[i]
+    if entry.level <= max_depth {
+      filtered.push(entry)
+    }
+    i = i + 1
+  }
+  filtered
 }
 
 ///|
@@ -738,6 +778,7 @@ fn build_template_slots(
   slots.set(@template.TagCount, tag_count)
   slots.set(@template.ReadingTime, "")
   slots.set(@template.WordCount, "")
+  slots.set(@template.TableOfContents, "")
   slots
 }
 
@@ -1867,6 +1908,13 @@ fn process_document(
     return { document: None, diagnostics }
   }
   let body_html = markdown_result.html + @tags.render_page_tags(page_tags)
+  let toc_html = if extract_toc_enabled(fm) {
+    @markdown.render_table_of_contents(
+      filter_toc_entries(markdown_result.toc, extract_toc_depth(fm)),
+    )
+  } else {
+    ""
+  }
   // Step 6: emit the complete HTML5 page
   let full_title = page_title_builder(title, site.title)
   let description_text = match description_value {
@@ -1893,6 +1941,7 @@ fn process_document(
         "",
       )
       slots.set(@template.Backlinks, backlinks_html)
+      slots.set(@template.TableOfContents, toc_html)
       let wc = count_words_markdown(fm.body)
       slots.set(@template.WordCount, wc.to_string())
       slots.set(@template.ReadingTime, reading_time_str(wc))
@@ -1919,9 +1968,9 @@ fn process_document(
         stylesheet: Some(absolute_url_builder(site.base_url, "/style.css")),
       }
       let page_body = if backlinks_html.length() > 0 {
-        body_html + backlinks_html
+        toc_html + body_html + backlinks_html
       } else {
-        body_html
+        toc_html + body_html
       }
       @html.render_page(meta, page_body)
     }
@@ -2081,6 +2130,13 @@ fn process_document_for_lint(
   }
 
   let body_html = markdown_result.html + @tags.render_page_tags(page_tags)
+  let toc_html = if extract_toc_enabled(fm) {
+    @markdown.render_table_of_contents(
+      filter_toc_entries(markdown_result.toc, extract_toc_depth(fm)),
+    )
+  } else {
+    ""
+  }
   let excerpt = extract_excerpt_builder(fm.body)
   let title = extract_title(fm)
   let full_title = page_title_builder(title, site.title)
@@ -2110,6 +2166,7 @@ fn process_document_for_lint(
         "",
       )
       slots.set(@template.Backlinks, backlinks_html)
+      slots.set(@template.TableOfContents, toc_html)
       let wc = count_words_markdown(fm.body)
       slots.set(@template.WordCount, wc.to_string())
       slots.set(@template.ReadingTime, reading_time_str(wc))
@@ -2135,9 +2192,9 @@ fn process_document_for_lint(
         stylesheet: Some(absolute_url_builder(site.base_url, "/style.css")),
       }
       let page_body = if backlinks_html.length() > 0 {
-        body_html + backlinks_html
+        toc_html + body_html + backlinks_html
       } else {
-        body_html
+        toc_html + body_html
       }
       @html.render_page(meta, page_body)
     }

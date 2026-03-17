@@ -326,3 +326,350 @@ test "count_words_markdown heading lines counted as words" {
   // "# My Title" = 3 tokens, "Some text here." = 3 tokens → 6
   assert_eq(@builder.count_words_markdown(body), 6)
 }
+
+///|
+test "build populates table_of_contents slot from content headings" {
+  let root = "./_tmp_builder_toc"
+  let content_root = root + "/content"
+  let posts_root = content_root + "/posts"
+  let data_root = content_root + "/data"
+  let templates_root = root + "/templates"
+  let output_root = root + "/dist"
+  ensure_dir_test(root)
+  ensure_dir_test(content_root)
+  ensure_dir_test(posts_root)
+  ensure_dir_test(data_root)
+  ensure_dir_test(templates_root)
+  ensure_dir_test(output_root)
+
+  assert_true(
+    write_file_test(
+      posts_root + "/guide.md",
+      "---\n" +
+      "title: Guide\n" +
+      "date: 2026-03-17\n" +
+      "---\n\n" +
+      "## Intro\n\n" +
+      "Body.\n\n" +
+      "### Setup\n\n" +
+      "More.\n",
+    ),
+  )
+  assert_true(
+    write_file_test(
+      templates_root + "/page.html",
+      "<html><body><aside>{{table_of_contents}}</aside><main>{{content}}</main></body></html>\n",
+    ),
+  )
+  assert_true(
+    write_file_test(
+      root + "/collections.cfg",
+      "[posts]\n" +
+      "schema = title:String,date:Date\n" +
+      "dir = " +
+      posts_root +
+      "\n",
+    ),
+  )
+
+  let site_cfg = "title = ToCTest\n" +
+    "base_url = /\n" +
+    "templates_dir = " +
+    templates_root +
+    "\n" +
+    "data_dir = " +
+    data_root +
+    "\n" +
+    "collections_file = " +
+    root +
+    "/collections.cfg\n" +
+    "output_dir = " +
+    output_root +
+    "\n"
+  assert_true(write_file_test(root + "/site.cfg", site_cfg))
+
+  let site = match @config.parse(site_cfg) {
+    Ok(parsed) => parsed
+    Err(_) => {
+      assert_true(false)
+      abort("site config parse failed")
+    }
+  }
+  let result = @builder.build(
+    {
+      content_dir: content_root,
+      output_dir: output_root,
+      config_path: root + "/site.cfg",
+      site,
+      collections_path: Some(root + "/collections.cfg"),
+      force_rebuild: true,
+      include_drafts: false,
+    },
+    @cache.empty(output_root),
+  )
+  assert_eq(result.errors, 0)
+
+  let output = @fs.read_file_to_string(output_root + "/posts/guide/index.html") catch {
+    @fs.IOError(_) => ""
+  }
+  assert_true(output.contains("table-of-contents"))
+  assert_true(output.contains("href=\"#intro\""))
+  assert_true(output.contains("href=\"#setup\""))
+}
+
+///|
+test "build table_of_contents slot is empty when page has no headings" {
+  let root = "./_tmp_builder_toc_empty"
+  let content_root = root + "/content"
+  let posts_root = content_root + "/posts"
+  let data_root = content_root + "/data"
+  let templates_root = root + "/templates"
+  let output_root = root + "/dist"
+  ensure_dir_test(root)
+  ensure_dir_test(content_root)
+  ensure_dir_test(posts_root)
+  ensure_dir_test(data_root)
+  ensure_dir_test(templates_root)
+  ensure_dir_test(output_root)
+
+  assert_true(
+    write_file_test(
+      posts_root + "/plain.md",
+      "---\n" + "title: Plain\n" + "date: 2026-03-17\n" + "---\n\n" + "No headings here.\n",
+    ),
+  )
+  assert_true(
+    write_file_test(
+      templates_root + "/page.html",
+      "<html><body><aside>{{table_of_contents}}</aside><main>{{content}}</main></body></html>\n",
+    ),
+  )
+  assert_true(
+    write_file_test(
+      root + "/collections.cfg",
+      "[posts]\n" +
+      "schema = title:String,date:Date\n" +
+      "dir = " +
+      posts_root +
+      "\n",
+    ),
+  )
+
+  let site_cfg = "title = ToCEmpty\n" +
+    "base_url = /\n" +
+    "templates_dir = " +
+    templates_root +
+    "\n" +
+    "data_dir = " +
+    data_root +
+    "\n" +
+    "collections_file = " +
+    root +
+    "/collections.cfg\n" +
+    "output_dir = " +
+    output_root +
+    "\n"
+  assert_true(write_file_test(root + "/site.cfg", site_cfg))
+
+  let site = match @config.parse(site_cfg) {
+    Ok(parsed) => parsed
+    Err(_) => {
+      assert_true(false)
+      abort("site config parse failed")
+    }
+  }
+  let result = @builder.build(
+    {
+      content_dir: content_root,
+      output_dir: output_root,
+      config_path: root + "/site.cfg",
+      site,
+      collections_path: Some(root + "/collections.cfg"),
+      force_rebuild: true,
+      include_drafts: false,
+    },
+    @cache.empty(output_root),
+  )
+  assert_eq(result.errors, 0)
+
+  let output = @fs.read_file_to_string(output_root + "/posts/plain/index.html") catch {
+    @fs.IOError(_) => ""
+  }
+  assert_true(output.contains("<aside></aside>"))
+}
+
+///|
+test "build table_of_contents slot is empty when toc disabled" {
+  let root = "./_tmp_builder_toc_disabled"
+  let content_root = root + "/content"
+  let posts_root = content_root + "/posts"
+  let data_root = content_root + "/data"
+  let templates_root = root + "/templates"
+  let output_root = root + "/dist"
+  ensure_dir_test(root)
+  ensure_dir_test(content_root)
+  ensure_dir_test(posts_root)
+  ensure_dir_test(data_root)
+  ensure_dir_test(templates_root)
+  ensure_dir_test(output_root)
+
+  assert_true(
+    write_file_test(
+      posts_root + "/hidden.md",
+      "---\n" +
+      "title: Hidden\n" +
+      "date: 2026-03-17\n" +
+      "toc: false\n" +
+      "---\n\n" +
+      "## Intro\n\n" +
+      "Body.\n",
+    ),
+  )
+  assert_true(
+    write_file_test(
+      templates_root + "/page.html",
+      "<html><body><aside>{{table_of_contents}}</aside><main>{{content}}</main></body></html>\n",
+    ),
+  )
+  assert_true(
+    write_file_test(
+      root + "/collections.cfg",
+      "[posts]\n" +
+      "schema = title:String,date:Date\n" +
+      "dir = " +
+      posts_root +
+      "\n",
+    ),
+  )
+
+  let site_cfg = "title = ToCDisabled\n" +
+    "base_url = /\n" +
+    "templates_dir = " +
+    templates_root +
+    "\n" +
+    "data_dir = " +
+    data_root +
+    "\n" +
+    "collections_file = " +
+    root +
+    "/collections.cfg\n" +
+    "output_dir = " +
+    output_root +
+    "\n"
+  assert_true(write_file_test(root + "/site.cfg", site_cfg))
+
+  let site = match @config.parse(site_cfg) {
+    Ok(parsed) => parsed
+    Err(_) => {
+      assert_true(false)
+      abort("site config parse failed")
+    }
+  }
+  let result = @builder.build(
+    {
+      content_dir: content_root,
+      output_dir: output_root,
+      config_path: root + "/site.cfg",
+      site,
+      collections_path: Some(root + "/collections.cfg"),
+      force_rebuild: true,
+      include_drafts: false,
+    },
+    @cache.empty(output_root),
+  )
+  assert_eq(result.errors, 0)
+
+  let output = @fs.read_file_to_string(output_root + "/posts/hidden/index.html") catch {
+    @fs.IOError(_) => ""
+  }
+  assert_true(output.contains("<aside></aside>"))
+  assert_true(not(output.contains("table-of-contents")))
+}
+
+///|
+test "build table_of_contents depth filters deeper headings" {
+  let root = "./_tmp_builder_toc_depth"
+  let content_root = root + "/content"
+  let posts_root = content_root + "/posts"
+  let data_root = content_root + "/data"
+  let templates_root = root + "/templates"
+  let output_root = root + "/dist"
+  ensure_dir_test(root)
+  ensure_dir_test(content_root)
+  ensure_dir_test(posts_root)
+  ensure_dir_test(data_root)
+  ensure_dir_test(templates_root)
+  ensure_dir_test(output_root)
+
+  assert_true(
+    write_file_test(
+      posts_root + "/depth.md",
+      "---\n" +
+      "title: Depth\n" +
+      "date: 2026-03-17\n" +
+      "toc_depth: 2\n" +
+      "---\n\n" +
+      "## Intro\n\n" +
+      "### Setup\n",
+    ),
+  )
+  assert_true(
+    write_file_test(
+      templates_root + "/page.html",
+      "<html><body><aside>{{table_of_contents}}</aside><main>{{content}}</main></body></html>\n",
+    ),
+  )
+  assert_true(
+    write_file_test(
+      root + "/collections.cfg",
+      "[posts]\n" +
+      "schema = title:String,date:Date\n" +
+      "dir = " +
+      posts_root +
+      "\n",
+    ),
+  )
+
+  let site_cfg = "title = ToCDepth\n" +
+    "base_url = /\n" +
+    "templates_dir = " +
+    templates_root +
+    "\n" +
+    "data_dir = " +
+    data_root +
+    "\n" +
+    "collections_file = " +
+    root +
+    "/collections.cfg\n" +
+    "output_dir = " +
+    output_root +
+    "\n"
+  assert_true(write_file_test(root + "/site.cfg", site_cfg))
+
+  let site = match @config.parse(site_cfg) {
+    Ok(parsed) => parsed
+    Err(_) => {
+      assert_true(false)
+      abort("site config parse failed")
+    }
+  }
+  let result = @builder.build(
+    {
+      content_dir: content_root,
+      output_dir: output_root,
+      config_path: root + "/site.cfg",
+      site,
+      collections_path: Some(root + "/collections.cfg"),
+      force_rebuild: true,
+      include_drafts: false,
+    },
+    @cache.empty(output_root),
+  )
+  assert_eq(result.errors, 0)
+
+  let output = @fs.read_file_to_string(output_root + "/posts/depth/index.html") catch {
+    @fs.IOError(_) => ""
+  }
+  assert_true(output.contains("href=\"#intro\""))
+  assert_true(not(output.contains("href=\"#setup\"")))
+}

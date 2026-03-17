@@ -61,9 +61,17 @@ pub struct ShortcodeIssue {
 }
 
 ///|
+pub struct TocEntry {
+  level : Int
+  anchor : String
+  text : String
+}
+
+///|
 pub struct RenderResult {
   html : String
   shortcode_errors : Array[ShortcodeIssue]
+  toc : Array[TocEntry]
 }
 
 // ── character helpers ─────────────────────────────────────────────────────────
@@ -202,6 +210,100 @@ fn escape_html(s : String) -> String {
     i = i + 1
   }
   buf.to_string()
+}
+
+///|
+fn ascii_lower_char(c : Char) -> Char {
+  if c >= 'A' && c <= 'Z' {
+    (c.to_int() + 32).unsafe_to_char()
+  } else {
+    c
+  }
+}
+
+///|
+fn is_ascii_alnum(c : Char) -> Bool {
+  (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9')
+}
+
+///|
+fn slugify_heading_text(text : String) -> String {
+  let trimmed = trim(text)
+  if trimmed.length() == 0 {
+    return "section"
+  }
+  let buf = StringBuilder::new()
+  let mut wrote_dash = false
+  let mut wrote_any = false
+  let mut i = 0
+  while i < trimmed.length() {
+    let lower = ascii_lower_char(char_at(trimmed, i))
+    if is_ascii_alnum(lower) {
+      buf.write_char(lower)
+      wrote_any = true
+      wrote_dash = false
+    } else if wrote_any && not(wrote_dash) {
+      buf.write_char('-')
+      wrote_dash = true
+    }
+    i = i + 1
+  }
+  let slug = buf.to_string()
+  if slug.length() == 0 {
+    return "section"
+  }
+  if char_at(slug, slug.length() - 1) == '-' {
+    substr(slug, 0, slug.length() - 1)
+  } else {
+    slug
+  }
+}
+
+///|
+fn plain_text_inline(inline : Inline) -> String {
+  match inline {
+    Text(t) => t
+    Bold(inner) => plain_text_inlines(inner)
+    Italic(inner) => plain_text_inlines(inner)
+    BoldItalic(inner) => plain_text_inlines(inner)
+    Strikethrough(inner) => plain_text_inlines(inner)
+    InlineCode(code) => code
+    Link(text, _) => text
+    Image(alt, _) => alt
+    WikiRef(target, display) =>
+      match display {
+        Some(text) => text
+        None => target
+      }
+    Shortcode(_) => ""
+    HardBreak => " "
+  }
+}
+
+///|
+fn plain_text_inlines(inlines : Array[Inline]) -> String {
+  let buf = StringBuilder::new()
+  let mut i = 0
+  while i < inlines.length() {
+    buf.write_string(plain_text_inline(inlines[i]))
+    i = i + 1
+  }
+  trim(buf.to_string())
+}
+
+///|
+fn next_heading_anchor(text : String, counts : Map[String, Int]) -> String {
+  let base = slugify_heading_text(text)
+  let next = match counts.get(base) {
+    Some(n) => n + 1
+    None => 1
+  }
+  counts.set(base, next)
+  if next == 1 {
+    base
+  } else {
+    base + "-" + next.to_string()
+  }
 }
 
 // ── inline parsing helpers ────────────────────────────────────────────────────
@@ -896,6 +998,38 @@ fn merge_shortcode_errors(
 }
 
 ///|
+fn collect_toc_entries_into(
+  blocks : Array[Block],
+  max_depth : Int,
+  counts : Map[String, Int],
+  entries : Array[TocEntry],
+) -> Unit {
+  let mut i = 0
+  while i < blocks.length() {
+    match blocks[i] {
+      Heading(level, inlines) => {
+        let text = plain_text_inlines(inlines)
+        let anchor = next_heading_anchor(text, counts)
+        if level >= 2 && level <= max_depth {
+          entries.push({ level, anchor, text })
+        }
+      }
+      BlockQuote(inner) => collect_toc_entries_into(inner, max_depth, counts, entries)
+      _ => ()
+    }
+    i = i + 1
+  }
+}
+
+///|
+fn collect_toc_entries(blocks : Array[Block], max_depth : Int) -> Array[TocEntry] {
+  let counts : Map[String, Int] = Map::new()
+  let entries : Array[TocEntry] = []
+  collect_toc_entries_into(blocks, max_depth, counts, entries)
+  entries
+}
+
+///|
 fn render_inlines_with_issues(
   inlines : Array[Inline],
   wl : Map[String, String],
@@ -909,7 +1043,7 @@ fn render_inlines_with_issues(
     merge_shortcode_errors(issues, rendered.shortcode_errors)
     i = i + 1
   }
-  { html: buf.to_string(), shortcode_errors: issues }
+  { html: buf.to_string(), shortcode_errors: issues, toc: [] }
 }
 
 ///|
@@ -924,6 +1058,7 @@ fn shortcode_is_block(call : @shortcode.ShortcodeCall) -> Bool {
 fn render_blocks_with_issues(
   blocks : Array[Block],
   wl : Map[String, String],
+  heading_counts : Map[String, Int],
 ) -> RenderResult {
   let buf = StringBuilder::new()
   let issues : Array[ShortcodeIssue] = []
@@ -951,19 +1086,19 @@ fn render_blocks_with_issues(
             _ => break
           }
         }
-        let rendered = render_block_with_issues(OrderedList(merged), wl)
+        let rendered = render_block_with_issues(OrderedList(merged), wl, heading_counts)
         buf.write_string(rendered.html)
         merge_shortcode_errors(issues, rendered.shortcode_errors)
       }
       _ => {
-        let rendered = render_block_with_issues(blocks[i], wl)
+        let rendered = render_block_with_issues(blocks[i], wl, heading_counts)
         buf.write_string(rendered.html)
         merge_shortcode_errors(issues, rendered.shortcode_errors)
         i = i + 1
       }
     }
   }
-  { html: buf.to_string(), shortcode_errors: issues }
+  { html: buf.to_string(), shortcode_errors: issues, toc: [] }
 }
 
 ///|
@@ -1006,12 +1141,13 @@ fn render_inline_with_issues(
   wl : Map[String, String],
 ) -> RenderResult {
   match inline {
-    Text(t) => { html: escape_html(t), shortcode_errors: [] }
+    Text(t) => { html: escape_html(t), shortcode_errors: [], toc: [] }
     Bold(inner) => {
       let rendered = render_inlines_with_issues(inner, wl)
       {
         html: "<strong>" + rendered.html + "</strong>",
         shortcode_errors: rendered.shortcode_errors,
+        toc: [],
       }
     }
     Italic(inner) => {
@@ -1019,6 +1155,7 @@ fn render_inline_with_issues(
       {
         html: "<em>" + rendered.html + "</em>",
         shortcode_errors: rendered.shortcode_errors,
+        toc: [],
       }
     }
     BoldItalic(inner) => {
@@ -1026,6 +1163,7 @@ fn render_inline_with_issues(
       {
         html: "<strong><em>" + rendered.html + "</em></strong>",
         shortcode_errors: rendered.shortcode_errors,
+        toc: [],
       }
     }
     Strikethrough(inner) => {
@@ -1033,10 +1171,15 @@ fn render_inline_with_issues(
       {
         html: "<del>" + rendered.html + "</del>",
         shortcode_errors: rendered.shortcode_errors,
+        toc: [],
       }
     }
     InlineCode(code) =>
-      { html: "<code>" + escape_html(code) + "</code>", shortcode_errors: [] }
+      {
+        html: "<code>" + escape_html(code) + "</code>",
+        shortcode_errors: [],
+        toc: [],
+      }
     Link(text, url) =>
       {
         html: "<a href=\"" +
@@ -1045,6 +1188,7 @@ fn render_inline_with_issues(
         escape_html(text) +
         "</a>",
         shortcode_errors: [],
+        toc: [],
       }
     Image(alt, url) =>
       {
@@ -1054,6 +1198,7 @@ fn render_inline_with_issues(
         escape_html(alt) +
         "\" />",
         shortcode_errors: [],
+        toc: [],
       }
     WikiRef(target, display) => {
       let text = match display {
@@ -1069,6 +1214,7 @@ fn render_inline_with_issues(
             escape_html(text) +
             "</a>",
             shortcode_errors: [],
+            toc: [],
           }
         None =>
           {
@@ -1076,37 +1222,54 @@ fn render_inline_with_issues(
             escape_html(text) +
             "</a>",
             shortcode_errors: [],
+            toc: [],
           }
       }
     }
     Shortcode(call) =>
       match @shortcode.render(call) {
-        Ok(html) => { html, shortcode_errors: [] }
+        Ok(html) => { html, shortcode_errors: [], toc: [] }
         Err(err) =>
-          { html: "", shortcode_errors: [{ call: Some(call), error: err }] }
+          {
+            html: "",
+            shortcode_errors: [{ call: Some(call), error: err }],
+            toc: [],
+          }
       }
-    HardBreak => { html: "<br />\n", shortcode_errors: [] }
+    HardBreak => { html: "<br />\n", shortcode_errors: [], toc: [] }
   }
 }
 
 ///|
 /// Render a single block element to an HTML string.
 pub fn render_block(block : Block, wl : Map[String, String]) -> String {
-  render_block_with_issues(block, wl).html
+  let counts : Map[String, Int] = Map::new()
+  render_block_with_issues(block, wl, counts).html
 }
 
 ///|
 fn render_block_with_issues(
   block : Block,
   wl : Map[String, String],
+  heading_counts : Map[String, Int],
 ) -> RenderResult {
   match block {
     Heading(level, inlines) => {
       let rendered = render_inlines_with_issues(inlines, wl)
       let tag = "h" + level.to_string()
+      let anchor = next_heading_anchor(plain_text_inlines(inlines), heading_counts)
       {
-        html: "<" + tag + ">" + rendered.html + "</" + tag + ">\n",
+        html: "<" +
+        tag +
+        " id=\"" +
+        escape_html(anchor) +
+        "\">" +
+        rendered.html +
+        "</" +
+        tag +
+        ">\n",
         shortcode_errors: rendered.shortcode_errors,
+        toc: [],
       }
     }
     Paragraph(inlines) => {
@@ -1118,6 +1281,7 @@ fn render_block_with_issues(
               return {
                 html: rendered_inline.html + "\n",
                 shortcode_errors: rendered_inline.shortcode_errors,
+                toc: [],
               }
             }
           _ => ()
@@ -1127,15 +1291,17 @@ fn render_block_with_issues(
       {
         html: "<p>" + rendered.html + "</p>\n",
         shortcode_errors: rendered.shortcode_errors,
+        toc: [],
       }
     }
     FencedCode(lang, code) =>
-      { html: render_fenced_code(lang, code), shortcode_errors: [] }
+      { html: render_fenced_code(lang, code), shortcode_errors: [], toc: [] }
     BlockQuote(inner_blocks) => {
-      let rendered = render_blocks_with_issues(inner_blocks, wl)
+      let rendered = render_blocks_with_issues(inner_blocks, wl, heading_counts)
       {
         html: "<blockquote>\n" + rendered.html + "</blockquote>\n",
         shortcode_errors: rendered.shortcode_errors,
+        toc: [],
       }
     }
     UnorderedList(items) => {
@@ -1195,7 +1361,7 @@ fn render_block_with_issues(
         i = i + 1
       }
       buf.write_string("</ul>\n")
-      { html: buf.to_string(), shortcode_errors: issues }
+      { html: buf.to_string(), shortcode_errors: issues, toc: [] }
     }
     OrderedList(items) => {
       let buf = StringBuilder::new()
@@ -1211,9 +1377,9 @@ fn render_block_with_issues(
         i = i + 1
       }
       buf.write_string("</ol>\n")
-      { html: buf.to_string(), shortcode_errors: issues }
+      { html: buf.to_string(), shortcode_errors: issues, toc: [] }
     }
-    HRule => { html: "<hr />\n", shortcode_errors: [] }
+    HRule => { html: "<hr />\n", shortcode_errors: [], toc: [] }
     Table(aligns, headers, rows) => {
       let buf = StringBuilder::new()
       let issues : Array[ShortcodeIssue] = []
@@ -1264,9 +1430,40 @@ fn render_block_with_issues(
         r = r + 1
       }
       buf.write_string("</tbody>\n</table>\n")
-      { html: buf.to_string(), shortcode_errors: issues }
+      { html: buf.to_string(), shortcode_errors: issues, toc: [] }
     }
   }
+}
+
+///|
+pub fn render_table_of_contents(entries : Array[TocEntry]) -> String {
+  if entries.length() == 0 {
+    return ""
+  }
+  let buf = StringBuilder::new()
+  buf.write_string("<nav class=\"table-of-contents\">\n<ul>\n")
+  let mut i = 0
+  while i < entries.length() {
+    let entry = entries[i]
+    buf.write_string("<li class=\"toc-level-")
+    buf.write_string(entry.level.to_string())
+    buf.write_string("\"><a href=\"#")
+    buf.write_string(escape_html(entry.anchor))
+    buf.write_string("\">")
+    buf.write_string(escape_html(entry.text))
+    buf.write_string("</a></li>\n")
+    i = i + 1
+  }
+  buf.write_string("</ul>\n</nav>\n")
+  buf.to_string()
+}
+
+///|
+pub fn extract_table_of_contents(body : String, max_depth : Int) -> Array[TocEntry] {
+  let preprocessed = preprocess_callout_next_line(body)
+  let ls = lines_of(preprocessed)
+  let blocks = parse_blocks(ls)
+  collect_toc_entries(blocks, max_depth)
 }
 
 ///|
@@ -1277,7 +1474,13 @@ pub fn render_with_diagnostics(
   let preprocessed = preprocess_callout_next_line(body)
   let ls = lines_of(preprocessed)
   let blocks = parse_blocks(ls)
-  render_blocks_with_issues(blocks, wikilinks)
+  let heading_counts : Map[String, Int] = Map::new()
+  let rendered = render_blocks_with_issues(blocks, wikilinks, heading_counts)
+  {
+    html: rendered.html,
+    shortcode_errors: rendered.shortcode_errors,
+    toc: collect_toc_entries(blocks, 6),
+  }
 }
 
 ///|

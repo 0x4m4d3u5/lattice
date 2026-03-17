@@ -562,6 +562,25 @@ test "template parse reading_time and word_count slots" {
 }
 
 ///|
+test "template parse table_of_contents slot" {
+  let tpl = match parse_template("<aside>{{table_of_contents}}</aside>") {
+    Ok(v) => v
+    Err(_) => {
+      assert_true(false)
+      { parts: [], required_slots: [], layout: None }
+    }
+  }
+  let mut has_toc = false
+  for part in tpl.parts {
+    match part {
+      Slot(TableOfContents) => has_toc = true
+      _ => ()
+    }
+  }
+  assert_true(has_toc)
+}
+
+///|
 test "template render reading_time and word_count slots" {
   let tpl = match parse_template("{{reading_time}} · {{word_count}} words") {
     Ok(v) => v
@@ -578,6 +597,26 @@ test "template render reading_time and word_count slots" {
       assert_true(html.contains("3 min"))
       assert_true(html.contains("612 words"))
     }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "template render table_of_contents slot" {
+  let tpl = match parse_template("<aside>{{table_of_contents}}</aside>") {
+    Ok(v) => v
+    Err(_) => {
+      assert_true(false)
+      { parts: [], required_slots: [], layout: None }
+    }
+  }
+  let slots : Map[TemplateSlot, String] = Map::new()
+  slots.set(
+    TableOfContents,
+    "<nav class=\"table-of-contents\"><ul><li>Intro</li></ul></nav>",
+  )
+  match render_template(tpl, slots) {
+    Ok(html) => assert_true(html.contains("table-of-contents"))
     Err(_) => assert_true(false)
   }
 }

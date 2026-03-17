@@ -4,6 +4,53 @@ fn empty_wl() -> Map[String, String] {
 }
 
 ///|
+test "markdown headings render ids and toc entries" {
+  let body = "# Title\n\n## Intro\n\n### Deep Dive\n"
+  let rendered = render_with_diagnostics(body, empty_wl())
+  assert_true(rendered.html.contains("<h1 id=\"title\">Title</h1>"))
+  assert_true(rendered.html.contains("<h2 id=\"intro\">Intro</h2>"))
+  assert_true(rendered.html.contains("<h3 id=\"deep-dive\">Deep Dive</h3>"))
+  assert_eq(rendered.toc.length(), 2)
+  assert_eq(rendered.toc[0].level, 2)
+  assert_eq(rendered.toc[0].anchor, "intro")
+  assert_eq(rendered.toc[0].text, "Intro")
+  assert_eq(rendered.toc[1].anchor, "deep-dive")
+}
+
+///|
+test "markdown toc duplicate headings get unique anchors" {
+  let body = "## Repeat!\n\n## Repeat?\n\n### Repeat\n"
+  let entries = extract_table_of_contents(body, 3)
+  assert_eq(entries.length(), 3)
+  assert_eq(entries[0].anchor, "repeat")
+  assert_eq(entries[1].anchor, "repeat-2")
+  assert_eq(entries[2].anchor, "repeat-3")
+}
+
+///|
+test "markdown toc depth filter excludes deeper headings" {
+  let body = "## Keep\n\n### Skip\n"
+  let entries = extract_table_of_contents(body, 2)
+  assert_eq(entries.length(), 1)
+  assert_eq(entries[0].anchor, "keep")
+}
+
+///|
+test "markdown toc html renders anchor links" {
+  let body = "## Intro & Setup\n\n### API\n"
+  let html = render_table_of_contents(extract_table_of_contents(body, 3))
+  assert_true(html.contains("<nav class=\"table-of-contents\">"))
+  assert_true(html.contains("href=\"#intro-setup\""))
+  assert_true(html.contains("class=\"toc-level-2\""))
+  assert_true(html.contains("class=\"toc-level-3\""))
+}
+
+///|
+test "markdown toc html empty for no headings" {
+  assert_eq(render_table_of_contents(extract_table_of_contents("Plain text only", 3)), "")
+}
+
+///|
 test "markdown image shortcode" {
   let body = "Before {{< image src=\"/img.png\" alt=\"hero\" >}} after"
   let rendered = render_with_diagnostics(body, empty_wl())
