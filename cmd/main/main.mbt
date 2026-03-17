@@ -4,6 +4,8 @@
 /// Usage:
 ///   lattice [content-dir] [output-dir] [--config path] [--collections path] [--check]
 ///           [--force] [--watch] [--watch-interval ms] [--drafts] [--help]
+///   lattice serve [content-dir] [output-dir] [--port N] [--config path] [--drafts]
+///   lattice dev   [content-dir] [output-dir] [--port N] [--config path] [--drafts]
 ///
 /// Defaults:
 ///   content-dir → ./content
@@ -25,6 +27,8 @@ pub(all) struct CliOptions {
   watch_mode : Bool
   watch_interval_ms : Int
   include_drafts : Bool
+  serve_mode : Bool
+  serve_port : Int
 }
 
 ///|
@@ -284,6 +288,8 @@ fn print_help() -> Unit {
   println(
     "          [--force] [--watch] [--watch-interval ms] [--drafts] [--help] [--version]",
   )
+  println("  lattice serve [content-dir] [output-dir] [--port N] [--config path] [--drafts]")
+  println("  lattice dev   [content-dir] [output-dir] [--port N] [--config path] [--drafts]")
   println("")
   println("Defaults:")
   println("  content-dir         ./content")
@@ -305,10 +311,10 @@ fn print_help() -> Unit {
   println("  --help                  Show this help text")
   println("  --version               Print version information")
   println("")
-  println("Local dev:")
-  println(
-    "  Pair --watch with a static file server such as simple-http-server.",
-  )
+  println("Dev server (serve / dev subcommand):")
+  println("  --port <N>              HTTP port for dev server (default: 4321)")
+  println("  Starts a local HTTP server, watches for changes, and signals")
+  println("  connected browser tabs to reload via Server-Sent Events.")
 }
 
 ///|
@@ -323,7 +329,17 @@ fn parse_cli_options(args : Array[String]) -> CliOptions {
   let mut watch_mode = false
   let mut watch_interval_ms = 500
   let mut include_drafts = false
+  let mut serve_mode = false
+  let mut serve_port = @serve.default_port()
+
+  // Detect serve / dev subcommand as first positional argument
   let mut i = 1
+  if args.length() > 1 && (args[1] == "serve" || args[1] == "dev") {
+    serve_mode = true
+    watch_mode = true
+    i = 2
+  }
+
   while i < args.length() {
     let arg = args[i]
     if arg == "--help" || arg == "-h" {
@@ -339,6 +355,8 @@ fn parse_cli_options(args : Array[String]) -> CliOptions {
         watch_mode: false,
         watch_interval_ms: 500,
         include_drafts: false,
+        serve_mode: false,
+        serve_port: @serve.default_port(),
       }
     } else if arg == "--version" {
       match parse_version_from_mod() {
@@ -356,7 +374,52 @@ fn parse_cli_options(args : Array[String]) -> CliOptions {
         watch_mode: false,
         watch_interval_ms: 500,
         include_drafts: false,
+        serve_mode: false,
+        serve_port: @serve.default_port(),
       }
+    } else if arg == "--port" {
+      if i + 1 >= args.length() {
+        print_diagnostic_main(cli_error("missing value for --port"))
+        @sys.exit(1)
+      }
+      match parse_positive_int_main(args[i + 1]) {
+        Some(parsed) =>
+          if @serve.is_valid_port(parsed) {
+            serve_port = parsed
+          } else {
+            print_diagnostic_main(
+              cli_error("invalid value for --port: must be 1–65535"),
+            )
+            @sys.exit(1)
+          }
+        None => {
+          print_diagnostic_main(
+            cli_error("invalid value for --port: must be a positive integer"),
+          )
+          @sys.exit(1)
+        }
+      }
+      i = i + 2
+    } else if starts_with_main(arg, "--port=") {
+      let value = substr_main(arg, 7, arg.length())
+      match parse_positive_int_main(value) {
+        Some(parsed) =>
+          if @serve.is_valid_port(parsed) {
+            serve_port = parsed
+          } else {
+            print_diagnostic_main(
+              cli_error("invalid value for --port: must be 1–65535"),
+            )
+            @sys.exit(1)
+          }
+        None => {
+          print_diagnostic_main(
+            cli_error("invalid value for --port: must be a positive integer"),
+          )
+          @sys.exit(1)
+        }
+      }
+      i = i + 1
     } else if arg == "--config" {
       if i + 1 >= args.length() {
         print_diagnostic_main(cli_error("missing value for --config"))
@@ -465,6 +528,8 @@ fn parse_cli_options(args : Array[String]) -> CliOptions {
     watch_mode,
     watch_interval_ms,
     include_drafts,
+    serve_mode,
+    serve_port,
   }
 }
 
@@ -721,6 +786,9 @@ fn run_watch(options : CliOptions, initial_state : CliState) -> Unit {
       "[lattice] initial build finished with errors; watching for changes",
     )
   }
+  if options.serve_mode {
+    @serve.broadcast_reload()
+  }
 
   let mut current_roots = initial_state.watch_roots
   let mut snapshot = @watch.take_snapshot(current_roots) catch {
@@ -735,6 +803,9 @@ fn run_watch(options : CliOptions, initial_state : CliState) -> Unit {
     @watch.sleep_ms(options.watch_interval_ms)
     if @watch.interrupted() {
       println("[lattice] watch stopped")
+      if options.serve_mode {
+        @serve.stop()
+      }
       return
     }
     let next_snapshot = @watch.take_snapshot(current_roots) catch {
@@ -759,6 +830,9 @@ fn run_watch(options : CliOptions, initial_state : CliState) -> Unit {
       Ok(state) => {
         let _ = run_once(state.build_config, options.check_mode)
         current_roots = state.watch_roots
+        if options.serve_mode {
+          @serve.broadcast_reload()
+        }
       }
       Err(_) => ()
     }
@@ -772,6 +846,9 @@ fn run_watch(options : CliOptions, initial_state : CliState) -> Unit {
     }
     if @watch.interrupted() {
       println("[lattice] watch stopped")
+      if options.serve_mode {
+        @serve.stop()
+      }
       return
     }
   }
@@ -786,6 +863,35 @@ fn main {
       @sys.exit(code)
       return
     }
+  }
+  if options.serve_mode {
+    if not(@serve.is_valid_port(options.serve_port)) {
+      print_diagnostic_main(cli_error("invalid port: " + options.serve_port.to_string()))
+      @sys.exit(1)
+      return
+    }
+    let output_dir = state.build_config.output_dir
+    if not(@serve.start(options.serve_port, output_dir)) {
+      print_diagnostic_main(
+        cli_error(
+          "failed to start dev server on port " +
+          options.serve_port.to_string() +
+          " — is the port already in use?",
+        ),
+      )
+      @sys.exit(1)
+      return
+    }
+    println(
+      "[lattice] dev server listening on http://localhost:" +
+      options.serve_port.to_string() +
+      "  (serving " +
+      output_dir +
+      ")",
+    )
+    println("[lattice] watching for changes — press Ctrl-C to stop")
+    run_watch(options, state)
+    return
   }
   if options.watch_mode {
     run_watch(options, state)

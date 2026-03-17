@@ -1,0 +1,7 @@
+options(
+  "native-stub": [ "serve_native.c" ],
+  targets: {
+    "serve_native.mbt": [ "native", "llvm" ],
+    "serve_stub.mbt":   [ "js", "wasm", "wasm-gc" ],
+  },
+)
