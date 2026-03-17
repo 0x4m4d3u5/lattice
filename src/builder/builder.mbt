@@ -1082,6 +1082,7 @@ fn inline_text_builder(inline : @markdown.Inline) -> String {
     @markdown.BoldItalic(inlines) => inlines_text_builder(inlines)
     @markdown.InlineCode(text) => text
     @markdown.Link(text, _) => text
+    @markdown.Image(alt, _) => alt
     @markdown.WikiRef(target, display) =>
       match display {
         Some(text) => text
