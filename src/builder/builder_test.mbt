@@ -923,3 +923,316 @@ test "build table_of_contents depth filters deeper headings" {
   assert_true(output.contains("href=\"#intro\""))
   assert_true(not(output.contains("href=\"#setup\"")))
 }
+
+
+///|
+test "draft post is excluded from collection index when --drafts is false" {
+  let root = "./_tmp_builder_draft_excluded"
+  let content_root = root + "/content"
+  let posts_root = content_root + "/posts"
+  let templates_root = root + "/templates"
+  let output_root = root + "/dist"
+  ensure_dir_test(root)
+  ensure_dir_test(content_root)
+  ensure_dir_test(posts_root)
+  ensure_dir_test(templates_root)
+  ensure_dir_test(output_root)
+
+  assert_true(
+    write_file_test(
+      posts_root + "/published.md",
+      "---\n" +
+      "title: Published Post\n" +
+      "date: 2026-03-11\n" +
+      "---\n\n" +
+      "This is published.\n",
+    ),
+  )
+  assert_true(
+    write_file_test(
+      posts_root + "/draft.md",
+      "---\n" +
+      "title: Draft Post\n" +
+      "date: 2026-03-12\n" +
+      "draft = true\n" +
+      "---\n\n" +
+      "This is a draft.\n",
+    ),
+  )
+  assert_true(
+    write_file_test(
+      templates_root + "/page.html",
+      "<html><body>{{content}}</body></html>\n",
+    ),
+  )
+  assert_true(
+    write_file_test(
+      templates_root + "/index.html",
+      "<html><body>Index:{{content}}</body></html>\n",
+    ),
+  )
+  assert_true(
+    write_file_test(
+      content_root + "/lattice.conf",
+      "title = \"Test\"\n" +
+      "base_url = \"/\"\n" +
+      "collections = []\n",
+    ),
+  )
+  assert_true(
+    write_file_test(
+      content_root + "/collections.cfg",
+      "[posts]\n" +
+      "dir = \"posts\"\n" +
+      "schema = \"\"\n",
+    ),
+  )
+
+  let site_cfg = "title = Test\n" +
+    "base_url = /\n" +
+    "templates_dir = " +
+    templates_root +
+    "\n" +
+    "collections_file = " +
+    content_root +
+    "/collections.cfg\n" +
+    "output_dir = " +
+    output_root +
+    "\n"
+  assert_true(write_file_test(content_root + "/site.cfg", site_cfg))
+
+  let site = match @config.parse(site_cfg) {
+    Ok(parsed) => parsed
+    Err(_) => {
+      assert_true(false)
+      abort("site config parse failed")
+    }
+  }
+
+  let config : @builder.BuildConfig = {
+    content_dir: content_root,
+    output_dir: output_root,
+    config_path: content_root + "/lattice.conf",
+    site,
+    collections_path: Some(content_root + "/collections.cfg"),
+    force_rebuild: true,
+    include_drafts: false,
+  }
+
+  let result = @builder.build(config, @cache.empty(output_root))
+  assert_eq(result.errors, 0)
+  // Published page should be built
+  assert_true(@fs.path_exists(output_root + "/posts/published/index.html"))
+  // Draft page should not be built
+  assert_false(@fs.path_exists(output_root + "/posts/draft/index.html"))
+  // Collection index should only contain published page
+  assert_true(@fs.path_exists(output_root + "/posts/index.html"))
+  let index_content = @fs.read_file_to_string(output_root + "/posts/index.html") catch {
+    @fs.IOError(_) => { assert_true(false); "" }
+  }
+  assert_true(index_content.contains("Published Post"))
+  assert_false(index_content.contains("Draft Post"))
+  // Should report 1 skipped draft
+  assert_eq(result.skipped_drafts, 1)
+}
+
+///|
+test "draft post is included when --drafts flag is true" {
+  let root = "./_tmp_builder_draft_included"
+  let content_root = root + "/content"
+  let posts_root = content_root + "/posts"
+  let templates_root = root + "/templates"
+  let output_root = root + "/dist"
+  ensure_dir_test(root)
+  ensure_dir_test(content_root)
+  ensure_dir_test(posts_root)
+  ensure_dir_test(templates_root)
+  ensure_dir_test(output_root)
+
+  assert_true(
+    write_file_test(
+      posts_root + "/published.md",
+      "---\n" +
+      "title: Published Post\n" +
+      "date: 2026-03-11\n" +
+      "---\n\n" +
+      "This is published.\n",
+    ),
+  )
+  assert_true(
+    write_file_test(
+      posts_root + "/draft.md",
+      "---\n" +
+      "title: Draft Post\n" +
+      "date: 2026-03-12\n" +
+      "draft = true\n" +
+      "---\n\n" +
+      "This is a draft.\n",
+    ),
+  )
+  assert_true(
+    write_file_test(
+      templates_root + "/page.html",
+      "<html><body>{{content}}</body></html>\n",
+    ),
+  )
+  assert_true(
+    write_file_test(
+      templates_root + "/index.html",
+      "<html><body>Index:{{content}}</body></html>\n",
+    ),
+  )
+  assert_true(
+    write_file_test(
+      content_root + "/lattice.conf",
+      "title = \"Test\"\n" +
+      "base_url = \"/\"\n" +
+      "collections = []\n",
+    ),
+  )
+  assert_true(
+    write_file_test(
+      content_root + "/collections.cfg",
+      "[posts]\n" +
+      "dir = \"posts\"\n" +
+      "schema = \"\"\n",
+    ),
+  )
+
+  let site_cfg = "title = Test\n" +
+    "base_url = /\n" +
+    "templates_dir = " +
+    templates_root +
+    "\n" +
+    "collections_file = " +
+    content_root +
+    "/collections.cfg\n" +
+    "output_dir = " +
+    output_root +
+    "\n"
+  assert_true(write_file_test(content_root + "/site.cfg", site_cfg))
+
+  let site = match @config.parse(site_cfg) {
+    Ok(parsed) => parsed
+    Err(_) => {
+      assert_true(false)
+      abort("site config parse failed")
+    }
+  }
+
+  let config : @builder.BuildConfig = {
+    content_dir: content_root,
+    output_dir: output_root,
+    config_path: content_root + "/lattice.conf",
+    site,
+    collections_path: Some(content_root + "/collections.cfg"),
+    force_rebuild: true,
+    include_drafts: true,
+  }
+
+  let result = @builder.build(config, @cache.empty(output_root))
+  assert_eq(result.errors, 0)
+  // Both pages should be built
+  assert_true(@fs.path_exists(output_root + "/posts/published/index.html"))
+  assert_true(@fs.path_exists(output_root + "/posts/draft/index.html"))
+  // Collection index should contain both pages
+  assert_true(@fs.path_exists(output_root + "/posts/index.html"))
+  let index_content = @fs.read_file_to_string(output_root + "/posts/index.html") catch {
+    @fs.IOError(_) => { assert_true(false); "" }
+  }
+  assert_true(index_content.contains("Published Post"))
+  assert_true(index_content.contains("Draft Post"))
+  // Should report 0 skipped drafts
+  assert_eq(result.skipped_drafts, 0)
+}
+
+///|
+test "page without draft key is always included" {
+  let root = "./_tmp_builder_no_draft_key"
+  let content_root = root + "/content"
+  let posts_root = content_root + "/posts"
+  let templates_root = root + "/templates"
+  let output_root = root + "/dist"
+  ensure_dir_test(root)
+  ensure_dir_test(content_root)
+  ensure_dir_test(posts_root)
+  ensure_dir_test(templates_root)
+  ensure_dir_test(output_root)
+
+  assert_true(
+    write_file_test(
+      posts_root + "/nodraft.md",
+      "---\n" +
+      "title: No Draft Key\n" +
+      "date: 2026-03-11\n" +
+      "---\n\n" +
+      "This has no draft key.\n",
+    ),
+  )
+  assert_true(
+    write_file_test(
+      templates_root + "/page.html",
+      "<html><body>{{content}}</body></html>\n",
+    ),
+  )
+  assert_true(
+    write_file_test(
+      templates_root + "/index.html",
+      "<html><body>Index:{{content}}</body></html>\n",
+    ),
+  )
+  assert_true(
+    write_file_test(
+      content_root + "/lattice.conf",
+      "title = \"Test\"\n" +
+      "base_url = \"/\"\n" +
+      "collections = []\n",
+    ),
+  )
+  assert_true(
+    write_file_test(
+      content_root + "/collections.cfg",
+      "[posts]\n" +
+      "dir = \"posts\"\n" +
+      "schema = \"\"\n",
+    ),
+  )
+
+  let site_cfg = "title = Test\n" +
+    "base_url = /\n" +
+    "templates_dir = " +
+    templates_root +
+    "\n" +
+    "collections_file = " +
+    content_root +
+    "/collections.cfg\n" +
+    "output_dir = " +
+    output_root +
+    "\n"
+  assert_true(write_file_test(content_root + "/site.cfg", site_cfg))
+
+  let site = match @config.parse(site_cfg) {
+    Ok(parsed) => parsed
+    Err(_) => {
+      assert_true(false)
+      abort("site config parse failed")
+    }
+  }
+
+  let config : @builder.BuildConfig = {
+    content_dir: content_root,
+    output_dir: output_root,
+    config_path: content_root + "/lattice.conf",
+    site,
+    collections_path: Some(content_root + "/collections.cfg"),
+    force_rebuild: true,
+    include_drafts: false,
+  }
+
+  let result = @builder.build(config, @cache.empty(output_root))
+  assert_eq(result.errors, 0)
+  // Page without draft key should be built
+  assert_true(@fs.path_exists(output_root + "/posts/nodraft/index.html"))
+  // Should report 0 skipped drafts
+  assert_eq(result.skipped_drafts, 0)
+}
