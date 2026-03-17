@@ -21,6 +21,7 @@ pub struct SiteConfig {
   output_dir : String?
   page_size : Int?
   description : String?
+  og_image : String?
   collections_file : String?
   templates_dir : String?
   tags_field : String?
@@ -179,6 +180,7 @@ fn parse_string_value_config(value : String) -> String {
 /// - `output_dir`
 /// - `page_size`
 /// - `description`
+/// - `og_image`
 /// - `collections_file`
 /// - `templates_dir`
 /// - `tags_field`
@@ -200,6 +202,7 @@ pub fn parse(input : String) -> Result[SiteConfig, ConfigError] {
   let mut output_dir : String? = None
   let mut page_size : Int? = None
   let mut description : String? = None
+  let mut og_image : String? = None
   let mut collections_file : String? = None
   let mut templates_dir : String? = None
   let mut tags_field : String? = None
@@ -284,7 +287,9 @@ pub fn parse(input : String) -> Result[SiteConfig, ConfigError] {
               Some(parsed) => current_collection_page_size = Some(parsed)
               None =>
                 return Err(
-                  InvalidValue("collections.page_size", "must be a positive integer"),
+                  InvalidValue(
+                    "collections.page_size", "must be a positive integer",
+                  ),
                 )
             }
           } else {
@@ -320,6 +325,12 @@ pub fn parse(input : String) -> Result[SiteConfig, ConfigError] {
             description = None
           } else {
             description = Some(string_value)
+          }
+        } else if key == "og_image" {
+          if string_value.length() == 0 {
+            og_image = None
+          } else {
+            og_image = Some(string_value)
           }
         } else if key == "collections_file" {
           if string_value.length() == 0 {
@@ -414,6 +425,7 @@ pub fn parse(input : String) -> Result[SiteConfig, ConfigError] {
     output_dir,
     page_size,
     description,
+    og_image,
     collections_file,
     templates_dir,
     tags_field,

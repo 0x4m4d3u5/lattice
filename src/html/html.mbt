@@ -12,6 +12,8 @@ pub(all) struct PageMeta {
   description : String? // rendered into <meta name="description">
   lang : String // HTML lang attribute; defaults to "en" if empty
   stylesheet : String? // optional <link rel="stylesheet"> href
+  canonical_url : String? // absolute URL, renders as <link rel="canonical"> + og:url
+  og_image : String? // absolute image URL, renders as og:image
 }
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -90,6 +92,37 @@ pub fn render_page(meta : PageMeta, body_html : String) -> String {
       "  <link rel=\"stylesheet\" href=\"" + escape_html_attr(href) + "\" />\n"
     None => ""
   }
+  let og_tags = match meta.canonical_url {
+    Some(url) => {
+      let og_desc = match meta.description {
+        Some(d) =>
+          "  <meta property=\"og:description\" content=\"" +
+          escape_html_attr(d) +
+          "\" />\n"
+        None => ""
+      }
+      let og_img = match meta.og_image {
+        Some(img) =>
+          "  <meta property=\"og:image\" content=\"" +
+          escape_html_attr(img) +
+          "\" />\n"
+        None => ""
+      }
+      "  <link rel=\"canonical\" href=\"" +
+      escape_html_attr(url) +
+      "\" />\n" +
+      "  <meta property=\"og:type\" content=\"article\" />\n" +
+      "  <meta property=\"og:title\" content=\"" +
+      escape_html_attr(meta.title) +
+      "\" />\n" +
+      og_desc +
+      "  <meta property=\"og:url\" content=\"" +
+      escape_html_attr(url) +
+      "\" />\n" +
+      og_img
+    }
+    None => ""
+  }
   "<!doctype html>\n" +
   "<html lang=\"" +
   escape_html_attr(lang) +
@@ -101,6 +134,7 @@ pub fn render_page(meta : PageMeta, body_html : String) -> String {
   escape_html_body(meta.title) +
   "</title>\n" +
   desc_tag +
+  og_tags +
   style_tag +
   "</head>\n" +
   "<body>\n" +

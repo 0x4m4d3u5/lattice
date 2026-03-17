@@ -115,6 +115,14 @@ fn extract_description(fm : @frontmatter.Frontmatter) -> String? {
 }
 
 ///|
+fn extract_og_image(fm : @frontmatter.Frontmatter) -> String? {
+  match fm.fields.get("og_image") {
+    Some(@frontmatter.FStr(img)) => Some(img)
+    _ => None
+  }
+}
+
+///|
 fn extract_date(fm : @frontmatter.Frontmatter) -> String? {
   match fm.fields.get("date") {
     Some(@frontmatter.FDate(d)) => Some(d)
@@ -809,13 +817,14 @@ fn set_pagination_slots(
     None => ""
   }
   slots.set(@template.NextPage, next)
-  slots.set(
-    @template.IsFirstPage,
-    if page_number == 1 { "true" } else { "" },
-  )
+  slots.set(@template.IsFirstPage, if page_number == 1 { "true" } else { "" })
   slots.set(
     @template.IsLastPage,
-    if page_number == total_pages { "true" } else { "" },
+    if page_number == total_pages {
+      "true"
+    } else {
+      ""
+    },
   )
   slots.set(@template.PageUrl, page_url)
 }
@@ -943,7 +952,11 @@ fn[T] paginate_with_optional_size(
     None =>
       @pagination.paginate(
         documents,
-        if documents.length() > 0 { documents.length() } else { 1 },
+        if documents.length() > 0 {
+          documents.length()
+        } else {
+          1
+        },
         page_url_for,
       )
   }
@@ -1318,7 +1331,10 @@ pub fn count_words_markdown(body : String) -> Int {
     let mut j = 0
     while j < n {
       while j < n &&
-            (char_at_builder(line, j) == ' ' || char_at_builder(line, j) == '\t') {
+            (
+              char_at_builder(line, j) == ' ' ||
+              char_at_builder(line, j) == '\t'
+            ) {
         j = j + 1
       }
       if j < n {
@@ -1343,7 +1359,11 @@ pub fn reading_time_str(word_count : Int) -> String {
     1
   } else {
     let raw = (word_count + 224) / 225
-    if raw < 1 { 1 } else { raw }
+    if raw < 1 {
+      1
+    } else {
+      raw
+    }
   }
   mins.to_string() + " min"
 }
@@ -1465,11 +1485,17 @@ fn render_tag_page_html(
       }
     }
     None => {
+      let canonical = absolute_url_builder(
+        site.base_url,
+        tag_page_url(page.slug, pagination.page_number),
+      )
       let meta : @html.PageMeta = {
         title: full_title,
         description: Some(description),
         lang: "en",
         stylesheet: Some(absolute_url_builder(site.base_url, "/style.css")),
+        canonical_url: Some(canonical),
+        og_image: site.og_image,
       }
       Ok(@html.render_page(meta, body))
     }
@@ -1533,11 +1559,17 @@ fn render_tags_index_html(
       }
     }
     None => {
+      let canonical = absolute_url_builder(
+        site.base_url,
+        tags_index_page_url(pagination.page_number),
+      )
       let meta : @html.PageMeta = {
         title: full_title,
         description: Some(description),
         lang: "en",
         stylesheet: Some(absolute_url_builder(site.base_url, "/style.css")),
+        canonical_url: Some(canonical),
+        og_image: site.og_image,
       }
       Ok(@html.render_page(meta, body))
     }
@@ -1692,11 +1724,17 @@ fn render_collection_index(
     None => ()
   }
 
+  let canonical = absolute_url_builder(
+    site.base_url,
+    collection_index_page_url(collection_name, pagination.page_number),
+  )
   let meta : @html.PageMeta = {
     title: full_title,
     description: Some(description),
     lang: "en",
     stylesheet: Some(absolute_url_builder(site.base_url, "/style.css")),
+    canonical_url: Some(canonical),
+    og_image: site.og_image,
   }
   Ok(@html.render_page(meta, body.to_string()))
 }
@@ -1727,17 +1765,25 @@ fn load_project_layout(config : BuildConfig) -> Result[ProjectLayout, String] {
       let entry = config.site.collections[i]
       let schema_text = match entry.schema {
         Some(text) => text
-        None => return Err("inline collection '" + entry.name + "' is missing schema")
+        None =>
+          return Err("inline collection '" + entry.name + "' is missing schema")
       }
-      let schema = match @collections.parse_schema_string(entry.name, schema_text) {
+      let schema = match
+        @collections.parse_schema_string(entry.name, schema_text) {
         Ok(parsed) => parsed
         Err(@collections.InvalidSchema(_, msg)) =>
-          return Err("invalid schema for collection '" + entry.name + "': " + msg)
+          return Err(
+            "invalid schema for collection '" + entry.name + "': " + msg,
+          )
         Err(@collections.InvalidLine(line, msg)) =>
           return Err("<inline>:" + line.to_string() + ": " + msg)
         Err(@collections.MissingRequiredField(_, field)) =>
           return Err(
-            "missing required field '" + field + "' in collection '" + entry.name + "'",
+            "missing required field '" +
+            field +
+            "' in collection '" +
+            entry.name +
+            "'",
           )
         Err(@collections.DuplicateCollection(name)) =>
           return Err("duplicate collection '" + name + "'")
@@ -1936,6 +1982,7 @@ fn process_document(
   let title = extract_title(fm)
   let description_value = extract_description(fm)
   let date_value = extract_date(fm)
+  let og_image_value = extract_og_image(fm)
   if not(render_page_html) {
     return {
       document: Some({
@@ -2024,11 +2071,18 @@ fn process_document(
       }
     }
     None => {
+      let canonical = absolute_url_builder(site.base_url, url)
+      let page_og_image = match og_image_value {
+        Some(img) => Some(img)
+        None => site.og_image
+      }
       let meta : @html.PageMeta = {
         title: full_title,
         description: description_value,
         lang: "en",
         stylesheet: Some(absolute_url_builder(site.base_url, "/style.css")),
+        canonical_url: Some(canonical),
+        og_image: page_og_image,
       }
       let page_body = if backlinks_html.length() > 0 {
         toc_html + body_html + backlinks_html
@@ -2205,6 +2259,7 @@ fn process_document_for_lint(
   let full_title = page_title_builder(title, site.title)
   let description_value = extract_description(fm)
   let date_value = extract_date(fm)
+  let og_image_value = extract_og_image(fm)
   let description_text = match description_value {
     Some(v) => v
     None => truncate_to_builder(excerpt, 160)
@@ -2248,11 +2303,18 @@ fn process_document_for_lint(
       }
     }
     None => {
+      let canonical = absolute_url_builder(site.base_url, url)
+      let page_og_image = match og_image_value {
+        Some(img) => Some(img)
+        None => site.og_image
+      }
       let meta : @html.PageMeta = {
         title: full_title,
         description: description_value,
         lang: "en",
         stylesheet: Some(absolute_url_builder(site.base_url, "/style.css")),
+        canonical_url: Some(canonical),
+        og_image: page_og_image,
       }
       let page_body = if backlinks_html.length() > 0 {
         toc_html + body_html + backlinks_html
@@ -2660,7 +2722,13 @@ pub fn build(
       diagnostics.push(
         build_error(config.collections_path, None, None, "collections: " + msg),
       )
-      return { errors: 1, diagnostics, rebuilt_pages: 0, unchanged_pages: 0, skipped_drafts: 0 }
+      return {
+        errors: 1,
+        diagnostics,
+        rebuilt_pages: 0,
+        unchanged_pages: 0,
+        skipped_drafts: 0,
+      }
     }
   }
   let collections = layout.collections
@@ -2671,7 +2739,13 @@ pub fn build(
     Ok(t) => t
     Err(msg) => {
       diagnostics.push(build_error(None, None, None, "templates: " + msg))
-      return { errors: 1, diagnostics, rebuilt_pages: 0, unchanged_pages: 0, skipped_drafts: 0 }
+      return {
+        errors: 1,
+        diagnostics,
+        rebuilt_pages: 0,
+        unchanged_pages: 0,
+        skipped_drafts: 0,
+      }
     }
   }
   let nav_links_html = build_nav_links_html(collections)
@@ -2689,7 +2763,13 @@ pub fn build(
         message: "data: " + diag.message,
         note: diag.note,
       })
-      return { errors: 1, diagnostics, rebuilt_pages: 0, unchanged_pages: 0, skipped_drafts: 0 }
+      return {
+        errors: 1,
+        diagnostics,
+        rebuilt_pages: 0,
+        unchanged_pages: 0,
+        skipped_drafts: 0,
+      }
     }
   }
   println("[lattice] loaded data files from " + data_dir_for_build(config))
@@ -2713,7 +2793,13 @@ pub fn build(
             msg,
           ),
         )
-        return { errors: 1, diagnostics, rebuilt_pages: 0, unchanged_pages: 0, skipped_drafts: 0 }
+        return {
+          errors: 1,
+          diagnostics,
+          rebuilt_pages: 0,
+          unchanged_pages: 0,
+          skipped_drafts: 0,
+        }
       }
     }
     source_count = source_count + sources.length()
@@ -2800,7 +2886,13 @@ pub fn build(
     }
   }
   if not(dir_ok) {
-    return { errors: 1, diagnostics, rebuilt_pages: 0, unchanged_pages: 0, skipped_drafts: 0 }
+    return {
+      errors: 1,
+      diagnostics,
+      rebuilt_pages: 0,
+      unchanged_pages: 0,
+      skipped_drafts: 0,
+    }
   }
 
   // Write default CSS (once, if not already present)
@@ -2889,11 +2981,11 @@ pub fn build(
         ),
       )
       error_count = error_count + coll.sources.length()
-        rendered_collections.push({
-          name: coll.definition.name,
-          pages: coll_pages,
-          page_size: page_size_for_collection(config.site, coll.definition),
-        })
+      rendered_collections.push({
+        name: coll.definition.name,
+        pages: coll_pages,
+        page_size: page_size_for_collection(config.site, coll.definition),
+      })
       i = i + 1
       continue
     }
@@ -3104,11 +3196,11 @@ pub fn build(
         error_count = error_count + 1
       }
 
-      let paginated_index_pages = paginate_with_optional_size(coll.pages, coll.page_size, fn(
-        page_number,
-      ) {
-        collection_index_page_url(coll.name, page_number)
-      })
+      let paginated_index_pages = paginate_with_optional_size(
+        coll.pages,
+        coll.page_size,
+        fn(page_number) { collection_index_page_url(coll.name, page_number) },
+      )
       let mut page_idx = 0
       while page_idx < paginated_index_pages.length() {
         let pagination = paginated_index_pages[page_idx]
@@ -3240,11 +3332,11 @@ pub fn build(
             }
           }
           if tag_dir_ok {
-            let paginated_tag_pages = paginate_with_optional_size(pages, page_size, fn(
-              page_number,
-            ) {
-              tag_page_url(tag_slug, page_number)
-            })
+            let paginated_tag_pages = paginate_with_optional_size(
+              pages,
+              page_size,
+              fn(page_number) { tag_page_url(tag_slug, page_number) },
+            )
             let mut page_idx = 0
             while page_idx < paginated_tag_pages.length() {
               let pagination = paginated_tag_pages[page_idx]
@@ -3805,7 +3897,7 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
     i = i + 1
   }
 
-    i = 0
+  i = 0
   while i < rendered_collections.length() {
     let coll = rendered_collections[i]
     let feed_title = config.site.title + " (" + coll.name + ")"
@@ -3815,11 +3907,11 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
       coll.pages,
       config.site.feed_limit,
     )
-    let paginated_index_pages = paginate_with_optional_size(coll.pages, coll.page_size, fn(
-      page_number,
-    ) {
-      collection_index_page_url(coll.name, page_number)
-    })
+    let paginated_index_pages = paginate_with_optional_size(
+      coll.pages,
+      coll.page_size,
+      fn(page_number) { collection_index_page_url(coll.name, page_number) },
+    )
     let mut page_idx = 0
     while page_idx < paginated_index_pages.length() {
       let pagination = paginated_index_pages[page_idx]
@@ -3909,11 +4001,11 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
     i = i + 1
   }
 
-  let paginated_tags_index = paginate_with_optional_size(tag_summaries, page_size, fn(
-    page_number,
-  ) {
-    tags_index_page_url(page_number)
-  })
+  let paginated_tags_index = paginate_with_optional_size(
+    tag_summaries,
+    page_size,
+    fn(page_number) { tags_index_page_url(page_number) },
+  )
   i = 0
   while i < paginated_tags_index.length() {
     let pagination = paginated_tags_index[i]
