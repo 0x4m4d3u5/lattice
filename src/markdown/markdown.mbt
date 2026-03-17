@@ -21,6 +21,7 @@ pub enum Inline {
   Bold(Array[Inline])
   Italic(Array[Inline])
   BoldItalic(Array[Inline])
+  Strikethrough(Array[Inline])
   InlineCode(String)
   Link(String, String) // display text, url
   Image(String, String) // alt text, url
@@ -363,6 +364,22 @@ pub fn parse_inlines(s : String, from : Int, to : Int) -> Array[Inline] {
         text_start = i
       } else {
         // no matching close — treat stars as literal text
+        i = i + 1
+      }
+    } else if c == '~' && i + 1 < to && char_at(s, i + 1) == '~' {
+      // strikethrough: ~~text~~
+      let inner_start = i + 2
+      let close = find_str(s, inner_start, "~~", to)
+      if close > inner_start {
+        if text_start < i {
+          result.push(Text(substr(s, text_start, i)))
+        }
+        let inner = parse_inlines(s, inner_start, close)
+        result.push(Strikethrough(inner))
+        i = close + 2
+        text_start = i
+      } else {
+        // no matching close — treat tildes as literal text
         i = i + 1
       }
     } else if c == '{' &&
@@ -1011,6 +1028,13 @@ fn render_inline_with_issues(
         shortcode_errors: rendered.shortcode_errors,
       }
     }
+    Strikethrough(inner) => {
+      let rendered = render_inlines_with_issues(inner, wl)
+      {
+        html: "<del>" + rendered.html + "</del>",
+        shortcode_errors: rendered.shortcode_errors,
+      }
+    }
     InlineCode(code) =>
       { html: "<code>" + escape_html(code) + "</code>", shortcode_errors: [] }
     Link(text, url) =>
@@ -1120,9 +1144,52 @@ fn render_block_with_issues(
       buf.write_string("<ul>\n")
       let mut i = 0
       while i < items.length() {
-        let rendered_item = render_inlines_with_issues(items[i], wl)
+        // Check if this is a task list item
+        let mut is_task_list = items[i].length() > 0
+        let mut task_checked = false
+        let mut task_prefix_stripped : Array[Inline] = items[i]
+        if is_task_list {
+          match items[i][0] {
+            Text(t) => {
+              if t.has_prefix("[ ] ") {
+                task_checked = false
+                let stripped = t[4:].to_string()
+                // Build new array with stripped text and remaining inlines
+                let new_inlines : Array[Inline] = [Text(stripped)]
+                let mut j = 1
+                while j < items[i].length() {
+                  new_inlines.push(items[i][j])
+                  j = j + 1
+                }
+                task_prefix_stripped = new_inlines
+              } else if t.has_prefix("[x] ") || t.has_prefix("[X] ") {
+                task_checked = true
+                let stripped = t[4:].to_string()
+                // Build new array with stripped text and remaining inlines
+                let new_inlines : Array[Inline] = [Text(stripped)]
+                let mut j = 1
+                while j < items[i].length() {
+                  new_inlines.push(items[i][j])
+                  j = j + 1
+                }
+                task_prefix_stripped = new_inlines
+              } else {
+                is_task_list = false
+              }
+            }
+            _ => { is_task_list = false }
+          }
+        }
+        let rendered_item = render_inlines_with_issues(task_prefix_stripped, wl)
         merge_shortcode_errors(issues, rendered_item.shortcode_errors)
         buf.write_string("<li>")
+        if is_task_list {
+          buf.write_string("<input type=\"checkbox\" disabled")
+          if task_checked {
+            buf.write_string(" checked")
+          }
+          buf.write_string(" /> ")
+        }
         buf.write_string(rendered_item.html)
         buf.write_string("</li>\n")
         i = i + 1

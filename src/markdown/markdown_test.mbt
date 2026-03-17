@@ -152,3 +152,67 @@ test "markdown bare exclamation not image" {
   assert_true(rendered.contains("Hello! World"))
   assert_true(not(rendered.contains("<img")))
 }
+
+
+///|
+test "strikethrough basic" {
+  let body = "~~hello~~"
+  let rendered = render(body, empty_wl())
+  assert_true(rendered.contains("<del>hello</del>"))
+}
+
+///|
+test "strikethrough nested inline" {
+  let body = "~~**bold**~~"
+  let rendered = render(body, empty_wl())
+  assert_true(rendered.contains("<del><strong>bold</strong></del>"))
+}
+
+///|
+test "strikethrough unclosed falls back" {
+  let body = "~~hello"
+  let rendered = render(body, empty_wl())
+  // Unclosed ~~ should be treated as literal text, no <del> tag
+  assert_true(not(rendered.contains("<del>")))
+  assert_true(rendered.contains("~~hello"))
+}
+
+///|
+test "task list unchecked" {
+  let body = "- [ ] buy milk"
+  let rendered = render(body, empty_wl())
+  assert_true(rendered.contains("<input type=\"checkbox\" disabled"))
+}
+
+///|
+test "task list checked" {
+  let body = "- [x] done"
+  let rendered = render(body, empty_wl())
+  assert_true(rendered.contains("<input type=\"checkbox\" checked disabled"))
+}
+
+///|
+test "task list checked uppercase" {
+  let body = "- [X] done"
+  let rendered = render(body, empty_wl())
+  assert_true(rendered.contains("<input type=\"checkbox\" checked disabled"))
+}
+
+///|
+test "task list mixed" {
+  let body = "- [ ] todo\n- [x] done\n- [ ] another"
+  let rendered = render(body, empty_wl())
+  // Should have both checked and unchecked checkboxes
+  assert_true(rendered.contains("<input type=\"checkbox\" disabled"))
+  assert_true(rendered.contains("<input type=\"checkbox\" checked disabled"))
+}
+
+///|
+test "regular list unaffected" {
+  let body = "- plain item"
+  let rendered = render(body, empty_wl())
+  // Should not have checkbox input
+  assert_true(not(rendered.contains("<input")))
+  assert_true(rendered.contains("<li>"))
+  assert_true(rendered.contains("plain item"))
+}
