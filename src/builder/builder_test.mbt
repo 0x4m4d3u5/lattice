@@ -930,11 +930,13 @@ test "draft post is excluded from collection index when --drafts is false" {
   let root = "./_tmp_builder_draft_excluded"
   let content_root = root + "/content"
   let posts_root = content_root + "/posts"
+  let data_root = content_root + "/data"
   let templates_root = root + "/templates"
   let output_root = root + "/dist"
   ensure_dir_test(root)
   ensure_dir_test(content_root)
   ensure_dir_test(posts_root)
+  ensure_dir_test(data_root)
   ensure_dir_test(templates_root)
   ensure_dir_test(output_root)
 
@@ -983,8 +985,8 @@ test "draft post is excluded from collection index when --drafts is false" {
     write_file_test(
       content_root + "/collections.cfg",
       "[posts]\n" +
-      "dir = \"posts\"\n" +
-      "schema = \"\"\n",
+      "dir = " + posts_root + "\n" +
+      "schema = title:String,date:Date\n",
     ),
   )
 
@@ -1012,7 +1014,7 @@ test "draft post is excluded from collection index when --drafts is false" {
   let config : @builder.BuildConfig = {
     content_dir: content_root,
     output_dir: output_root,
-    config_path: content_root + "/lattice.conf",
+    config_path: content_root + "/site.cfg",
     site,
     collections_path: Some(content_root + "/collections.cfg"),
     force_rebuild: true,
@@ -1041,11 +1043,13 @@ test "draft post is included when --drafts flag is true" {
   let root = "./_tmp_builder_draft_included"
   let content_root = root + "/content"
   let posts_root = content_root + "/posts"
+  let data_root = content_root + "/data"
   let templates_root = root + "/templates"
   let output_root = root + "/dist"
   ensure_dir_test(root)
   ensure_dir_test(content_root)
   ensure_dir_test(posts_root)
+  ensure_dir_test(data_root)
   ensure_dir_test(templates_root)
   ensure_dir_test(output_root)
 
@@ -1094,8 +1098,8 @@ test "draft post is included when --drafts flag is true" {
     write_file_test(
       content_root + "/collections.cfg",
       "[posts]\n" +
-      "dir = \"posts\"\n" +
-      "schema = \"\"\n",
+      "dir = " + posts_root + "\n" +
+      "schema = title:String,date:Date\n",
     ),
   )
 
@@ -1123,7 +1127,7 @@ test "draft post is included when --drafts flag is true" {
   let config : @builder.BuildConfig = {
     content_dir: content_root,
     output_dir: output_root,
-    config_path: content_root + "/lattice.conf",
+    config_path: content_root + "/site.cfg",
     site,
     collections_path: Some(content_root + "/collections.cfg"),
     force_rebuild: true,
@@ -1151,11 +1155,13 @@ test "page without draft key is always included" {
   let root = "./_tmp_builder_no_draft_key"
   let content_root = root + "/content"
   let posts_root = content_root + "/posts"
+  let data_root = content_root + "/data"
   let templates_root = root + "/templates"
   let output_root = root + "/dist"
   ensure_dir_test(root)
   ensure_dir_test(content_root)
   ensure_dir_test(posts_root)
+  ensure_dir_test(data_root)
   ensure_dir_test(templates_root)
   ensure_dir_test(output_root)
 
@@ -1193,8 +1199,8 @@ test "page without draft key is always included" {
     write_file_test(
       content_root + "/collections.cfg",
       "[posts]\n" +
-      "dir = \"posts\"\n" +
-      "schema = \"\"\n",
+      "dir = " + posts_root + "\n" +
+      "schema = title:String,date:Date\n",
     ),
   )
 
@@ -1222,7 +1228,7 @@ test "page without draft key is always included" {
   let config : @builder.BuildConfig = {
     content_dir: content_root,
     output_dir: output_root,
-    config_path: content_root + "/lattice.conf",
+    config_path: content_root + "/site.cfg",
     site,
     collections_path: Some(content_root + "/collections.cfg"),
     force_rebuild: true,
