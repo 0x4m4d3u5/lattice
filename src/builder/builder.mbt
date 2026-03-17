@@ -736,6 +736,8 @@ fn build_template_slots(
   slots.set(@template.CustomCss, custom_css)
   slots.set(@template.TagName, tag_name)
   slots.set(@template.TagCount, tag_count)
+  slots.set(@template.ReadingTime, "")
+  slots.set(@template.WordCount, "")
   slots
 }
 
@@ -1222,6 +1224,70 @@ fn extract_excerpt_builder(markdown_body : String) -> String {
     }
   }
   ""
+}
+
+///|
+/// Count words in a markdown body, skipping fenced code blocks.
+/// Words are whitespace-delimited runs of non-whitespace characters.
+pub fn count_words_markdown(body : String) -> Int {
+  let ls = split_lines_builder(body)
+  let mut count = 0
+  let mut i = 0
+  while i < ls.length() {
+    let line = ls[i]
+    if is_fence_start_builder(line) {
+      let fence_char = fence_char_builder(line)
+      i = i + 1
+      while i < ls.length() && not(is_fence_end_builder(ls[i], fence_char)) {
+        i = i + 1
+      }
+      if i < ls.length() {
+        i = i + 1
+      }
+      continue
+    }
+    let n = line.length()
+    let mut j = 0
+    while j < n {
+      while j < n &&
+            (char_at_builder(line, j) == ' ' || char_at_builder(line, j) == '\t') {
+        j = j + 1
+      }
+      if j < n {
+        count = count + 1
+        while j < n &&
+              char_at_builder(line, j) != ' ' &&
+              char_at_builder(line, j) != '\t' {
+          j = j + 1
+        }
+      }
+    }
+    i = i + 1
+  }
+  count
+}
+
+///|
+/// Return "N min" reading time from a word count at ~225 wpm (200–250 wpm midpoint).
+/// Minimum result is "1 min".
+pub fn reading_time_str(word_count : Int) -> String {
+  let mins = if word_count <= 0 {
+    1
+  } else {
+    let raw = (word_count + 224) / 225
+    if raw < 1 { 1 } else { raw }
+  }
+  mins.to_string() + " min"
+}
+
+///|
+/// Truncate a string to at most max_len characters.
+pub fn truncate_to_builder(s : String, max_len : Int) -> String {
+  if s.length() <= max_len {
+    s
+  } else {
+    substr_builder(s, 0, max_len)
+  }
 }
 
 ///|
@@ -1805,7 +1871,7 @@ fn process_document(
   let full_title = page_title_builder(title, site.title)
   let description_text = match description_value {
     Some(v) => v
-    None => ""
+    None => truncate_to_builder(excerpt, 160)
   }
   let date_text = match date_value {
     Some(v) => v
@@ -1827,6 +1893,9 @@ fn process_document(
         "",
       )
       slots.set(@template.Backlinks, backlinks_html)
+      let wc = count_words_markdown(fm.body)
+      slots.set(@template.WordCount, wc.to_string())
+      slots.set(@template.ReadingTime, reading_time_str(wc))
       match @template.render_template_with_data(tpl, slots, data_store) {
         Ok(html) => html
         Err(e) => {
@@ -2019,7 +2088,7 @@ fn process_document_for_lint(
   let date_value = extract_date(fm)
   let description_text = match description_value {
     Some(v) => v
-    None => ""
+    None => truncate_to_builder(excerpt, 160)
   }
   let date_text = match date_value {
     Some(v) => v
@@ -2041,6 +2110,9 @@ fn process_document_for_lint(
         "",
       )
       slots.set(@template.Backlinks, backlinks_html)
+      let wc = count_words_markdown(fm.body)
+      slots.set(@template.WordCount, wc.to_string())
+      slots.set(@template.ReadingTime, reading_time_str(wc))
       match @template.render_template_with_data(tpl, slots, data_store) {
         Ok(html) => html
         Err(e) => {

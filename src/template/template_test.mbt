@@ -538,3 +538,70 @@ test "template include in layout file" {
     Err(_) => assert_true(false)
   }
 }
+
+///|
+test "template parse reading_time and word_count slots" {
+  let tpl = match parse_template("{{reading_time}} read · {{word_count}} words") {
+    Ok(v) => v
+    Err(_) => {
+      assert_true(false)
+      { parts: [], required_slots: [], layout: None }
+    }
+  }
+  let mut has_rt = false
+  let mut has_wc = false
+  for part in tpl.parts {
+    match part {
+      Slot(ReadingTime) => has_rt = true
+      Slot(WordCount) => has_wc = true
+      _ => ()
+    }
+  }
+  assert_true(has_rt)
+  assert_true(has_wc)
+}
+
+///|
+test "template render reading_time and word_count slots" {
+  let tpl = match parse_template("{{reading_time}} · {{word_count}} words") {
+    Ok(v) => v
+    Err(_) => {
+      assert_true(false)
+      { parts: [], required_slots: [], layout: None }
+    }
+  }
+  let slots : Map[TemplateSlot, String] = Map::new()
+  slots.set(ReadingTime, "3 min")
+  slots.set(WordCount, "612")
+  match render_template(tpl, slots) {
+    Ok(html) => {
+      assert_true(html.contains("3 min"))
+      assert_true(html.contains("612 words"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "template render description slot" {
+  let tpl = match
+    parse_template("<meta name=\"description\" content=\"{{description}}\">") {
+    Ok(v) => v
+    Err(_) => {
+      assert_true(false)
+      { parts: [], required_slots: [], layout: None }
+    }
+  }
+  let slots : Map[TemplateSlot, String] = Map::new()
+  slots.set(
+    Description,
+    "A short intro extracted from the first paragraph.",
+  )
+  match render_template(tpl, slots) {
+    Ok(html) =>
+      assert_true(
+        html.contains("A short intro extracted from the first paragraph."),
+      )
+    Err(_) => assert_true(false)
+  }
+}

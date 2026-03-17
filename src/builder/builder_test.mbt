@@ -269,3 +269,60 @@ test "build with paginated index template exposes page_num and total_pages" {
   assert_true(page2.contains("of=2"))
   assert_true(page2.contains("prev=/posts/"))
 }
+
+///|
+test "count_words_markdown simple prose" {
+  // 10 words
+  let body = "The quick brown fox jumps over the lazy dog today"
+  assert_eq(@builder.count_words_markdown(body), 10)
+}
+
+///|
+test "count_words_markdown skips fenced code blocks" {
+  let body =
+    "Intro paragraph here.\n\n```\nlet x = 1;\nlet y = 2;\n```\n\nConclusion."
+  // "Intro paragraph here." = 3 words, "Conclusion." = 1 word → 4 total
+  assert_eq(@builder.count_words_markdown(body), 4)
+}
+
+///|
+test "count_words_markdown empty body" {
+  assert_eq(@builder.count_words_markdown(""), 0)
+}
+
+///|
+test "reading_time_str typical article" {
+  // 450 words ÷ 225 = 2 min
+  assert_eq(@builder.reading_time_str(450), "2 min")
+}
+
+///|
+test "reading_time_str short content rounds up to 1 min" {
+  assert_eq(@builder.reading_time_str(50), "1 min")
+  assert_eq(@builder.reading_time_str(0), "1 min")
+}
+
+///|
+test "reading_time_str long article" {
+  // 2250 words ÷ 225 = 10 min
+  assert_eq(@builder.reading_time_str(2250), "10 min")
+}
+
+///|
+test "truncate_to_builder within limit returns original" {
+  assert_eq(@builder.truncate_to_builder("short text", 160), "short text")
+}
+
+///|
+test "truncate_to_builder over limit truncates at char boundary" {
+  let long = "abcdefghij"
+  assert_eq(@builder.truncate_to_builder(long, 5), "abcde")
+}
+
+///|
+test "count_words_markdown heading lines counted as words" {
+  // Headings are not skipped — their words contribute to count
+  let body = "# My Title\n\nSome text here."
+  // "# My Title" = 3 tokens, "Some text here." = 3 tokens → 6
+  assert_eq(@builder.count_words_markdown(body), 6)
+}
