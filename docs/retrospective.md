@@ -42,6 +42,14 @@ The workflow was: human provides high-level direction, agent implements and test
 
 Honest observation: the agent occasionally over-engineered first drafts. The template cycle detection and the frontmatter validation both went through iterations where we simplified the implementation after the initial version worked. This isn't a criticism of the agent — it's what code review is for. The retrospectives value is in documenting that we caught it and fixed it, not that we wrote perfect code on the first try.
 
+### The Gap Between Shortcode and Syntax
+
+When we added image support, we initially exposed it only through a `{{< image src="..." alt="..." >}}` shortcode. The shortcode works and produces correct HTML, but it violates an implicit contract with the writer: native markdown image syntax (`![alt](url)`) should just work. A content author coming from any other markdown tool would write `![hero](/images/hero.png)` and expect an `<img>` tag.
+
+The parser silently handled `!` as a literal character, then `[alt](url)` as a regular link — so the visual output was a broken link rather than an image, with no diagnostic surfaced. This is exactly the kind of silent mismatch that lattice is supposed to prevent for *content structure*, but we hadn't enforced it for *syntax coverage*.
+
+The fix (commit `3c6c5a5`) adds `Image(String, String)` to the `Inline` enum and a `'!'` handler in `parse_inlines`. The structural lesson: the `Inline` enum is the type contract for what the parser can produce. An omission from that enum is a latent bug — the type system doesn't enforce completeness of parser coverage, only correctness of existing paths. Gaps in coverage are invisible until you write the test that demonstrates the wrong output.
+
 ### What Types Didn't Solve
 
 The type system eliminates a class of structural errors: missing fields, type mismatches, broken links, configuration cycles. But it doesn't eliminate semantic errors. A post with `published: 2026-13-01` would now fail at schema validation (good). But `published: 2099-01-01` passes validation — the type is `FDate`, structurally valid, but semantically a future-dated post that might be accidentally published if you forget to check date ranges.
