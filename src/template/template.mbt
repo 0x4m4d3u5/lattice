@@ -21,6 +21,7 @@ pub(all) enum TemplateSlot {
   PageNum
   IsFirstPage
   IsLastPage
+  TotalPages
   PageUrl
   Body
 } derive(Eq, Hash, Show)
@@ -185,6 +186,9 @@ fn slot_from_name(name : String) -> Result[TemplateSlot, TemplateError] {
   }
   if name == "is_last_page" {
     return Ok(IsLastPage)
+  }
+  if name == "total_pages" {
+    return Ok(TotalPages)
   }
   if name == "page_url" {
     return Ok(PageUrl)

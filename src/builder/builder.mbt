@@ -740,6 +740,42 @@ fn build_template_slots(
 }
 
 ///|
+/// Populate pagination-specific template slots into an existing slots map.
+///
+/// Sets: page_num, total_pages, prev_page, next_page, is_first_page,
+/// is_last_page, page_url.
+fn set_pagination_slots(
+  slots : Map[@template.TemplateSlot, String],
+  page_number : Int,
+  total_pages : Int,
+  prev_url : String?,
+  next_url : String?,
+  page_url : String,
+) -> Unit {
+  slots.set(@template.PageNum, page_number.to_string())
+  slots.set(@template.TotalPages, total_pages.to_string())
+  let prev = match prev_url {
+    Some(u) => u
+    None => ""
+  }
+  slots.set(@template.PrevPage, prev)
+  let next = match next_url {
+    Some(u) => u
+    None => ""
+  }
+  slots.set(@template.NextPage, next)
+  slots.set(
+    @template.IsFirstPage,
+    if page_number == 1 { "true" } else { "" },
+  )
+  slots.set(
+    @template.IsLastPage,
+    if page_number == total_pages { "true" } else { "" },
+  )
+  slots.set(@template.PageUrl, page_url)
+}
+
+///|
 fn collection_page_url(collection_name : String, slug : String) -> String {
   "/" + collection_name + "/" + slug + "/"
 }
@@ -1280,6 +1316,14 @@ fn render_tag_page_html(
         page.tag,
         page.pages.length().to_string(),
       )
+      set_pagination_slots(
+        slots,
+        pagination.page_number,
+        pagination.total_pages,
+        pagination.prev_url,
+        pagination.next_url,
+        url,
+      )
       match @template.render_template_with_data(tpl, slots, data_store) {
         Ok(html) => Ok(html)
         Err(e) => Err("tag page template: " + template_error_text(e))
@@ -1339,6 +1383,14 @@ fn render_tags_index_html(
         custom_css,
         "",
         index.tags.length().to_string(),
+      )
+      set_pagination_slots(
+        slots,
+        pagination.page_number,
+        pagination.total_pages,
+        pagination.prev_url,
+        pagination.next_url,
+        tags_index_page_url(pagination.page_number),
       )
       match @template.render_template_with_data(tpl, slots, data_store) {
         Ok(html) => Ok(html)
@@ -1487,6 +1539,14 @@ fn render_collection_index(
         custom_css,
         "",
         "",
+      )
+      set_pagination_slots(
+        slots,
+        pagination.page_number,
+        pagination.total_pages,
+        pagination.prev_url,
+        pagination.next_url,
+        page_url,
       )
       match @template.render_template_with_data(tpl, slots, data_store) {
         Ok(html) => return Ok(html)

@@ -152,3 +152,120 @@ test "build uses per-collection page template override" {
   assert_true(output.contains("override"))
   assert_true(not(output.contains("default")))
 }
+
+///|
+test "template total_pages slot parses and renders" {
+  let tpl = match
+    @template.parse_template("Page {{page_num}} of {{total_pages}}") {
+    Ok(t) => t
+    Err(_) => {
+      assert_true(false)
+      abort("template parse failed")
+    }
+  }
+  let slots : Map[@template.TemplateSlot, String] = Map::new()
+  slots.set(@template.PageNum, "2")
+  slots.set(@template.TotalPages, "5")
+  match @template.render_template(tpl, slots) {
+    Ok(html) => assert_eq(html, "Page 2 of 5")
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "build with paginated index template exposes page_num and total_pages" {
+  let root = "./_tmp_builder_pagination_template"
+  let content_root = root + "/content"
+  let posts_root = content_root + "/posts"
+  let data_root = content_root + "/data"
+  let templates_root = root + "/templates"
+  let output_root = root + "/dist"
+  ensure_dir_test(root)
+  ensure_dir_test(content_root)
+  ensure_dir_test(posts_root)
+  ensure_dir_test(data_root)
+  ensure_dir_test(templates_root)
+  ensure_dir_test(output_root)
+
+  // Create 3 posts so with page_size=2 we get 2 pages
+  let mut p = 0
+  while p < 3 {
+    let n = (p + 1).to_string()
+    assert_true(
+      write_file_test(
+        posts_root + "/post" + n + ".md",
+        "---\ntitle: Post " + n + "\ndate: 2026-0" + n + "-01\n---\nBody " + n + "\n",
+      ),
+    )
+    p = p + 1
+  }
+
+  // Index template that uses pagination slots
+  assert_true(
+    write_file_test(
+      templates_root + "/index.html",
+      "page={{page_num}} of={{total_pages}} prev={{prev_page}} next={{next_page}}\n",
+    ),
+  )
+
+  let collections_cfg = "[posts]\nschema = title:String,date:Date\ndir = " +
+    posts_root +
+    "\n"
+  assert_true(write_file_test(root + "/collections.cfg", collections_cfg))
+
+  let site_cfg = "title = PaginationTest\n" +
+    "base_url = /\n" +
+    "page_size = 2\n" +
+    "templates_dir = " +
+    templates_root +
+    "\n" +
+    "data_dir = " +
+    data_root +
+    "\n" +
+    "collections_file = " +
+    root +
+    "/collections.cfg\n" +
+    "output_dir = " +
+    output_root +
+    "\n"
+  assert_true(write_file_test(root + "/site.cfg", site_cfg))
+
+  let site = match @config.parse(site_cfg) {
+    Ok(parsed) => parsed
+    Err(_) => {
+      assert_true(false)
+      abort("site config parse failed")
+    }
+  }
+  let result = @builder.build(
+    {
+      content_dir: content_root,
+      output_dir: output_root,
+      config_path: root + "/site.cfg",
+      site,
+      collections_path: Some(root + "/collections.cfg"),
+      force_rebuild: true,
+      include_drafts: false,
+    },
+    @cache.empty(output_root),
+  )
+  assert_eq(result.errors, 0)
+
+  // Page 1 index: page=1 of=2, no prev, has next
+  let page1 = @fs.read_file_to_string(output_root + "/posts/index.html") catch {
+    @fs.IOError(_) => ""
+  }
+  assert_true(page1.contains("page=1"))
+  assert_true(page1.contains("of=2"))
+  assert_true(page1.contains("next=/posts/page/2/"))
+
+  // Page 2 index: page=2 of=2, has prev, no next
+  let page2 = @fs.read_file_to_string(
+    output_root + "/posts/page/2/index.html",
+  ) catch {
+    @fs.IOError(_) => ""
+  }
+  assert_true(page2.contains("page=2"))
+  assert_true(page2.contains("of=2"))
+  assert_true(page2.contains("prev=/posts/"))
+}
