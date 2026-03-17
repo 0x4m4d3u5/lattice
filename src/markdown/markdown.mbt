@@ -1184,11 +1184,11 @@ fn render_block_with_issues(
         merge_shortcode_errors(issues, rendered_item.shortcode_errors)
         buf.write_string("<li>")
         if is_task_list {
-          buf.write_string("<input type=\"checkbox\" disabled")
           if task_checked {
-            buf.write_string(" checked")
+            buf.write_string("<input type=\"checkbox\" checked disabled> ")
+          } else {
+            buf.write_string("<input type=\"checkbox\" disabled> ")
           }
-          buf.write_string(" /> ")
         }
         buf.write_string(rendered_item.html)
         buf.write_string("</li>\n")
