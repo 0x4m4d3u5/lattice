@@ -1116,6 +1116,7 @@ fn inline_text_builder(inline : @markdown.Inline) -> String {
     @markdown.Bold(inlines) => inlines_text_builder(inlines)
     @markdown.Italic(inlines) => inlines_text_builder(inlines)
     @markdown.BoldItalic(inlines) => inlines_text_builder(inlines)
+    @markdown.Strikethrough(inlines) => inlines_text_builder(inlines)
     @markdown.InlineCode(text) => text
     @markdown.Link(text, _) => text
     @markdown.Image(alt, _) => alt
