@@ -89,18 +89,6 @@ fn starts_with_at(s : String, pos : Int, prefix : String) -> Bool {
 }
 
 ///|
-fn contains_char(s : String, needle : Char) -> Bool {
-  let mut i = 0
-  while i < s.length() {
-    if char_at(s, i) == needle {
-      return true
-    }
-    i = i + 1
-  }
-  false
-}
-
-///|
 fn next_newline(s : String, from : Int) -> Int {
   let n = s.length()
   let mut i = from
@@ -470,19 +458,8 @@ fn parse_yaml_assignment(
 // ── public API ────────────────────────────────────────────────────────────────
 
 ///|
-/// Parse the leading `---`-delimited block from a file's content.
-/// Returns an error string if the delimiter is missing or malformed.
-///
-/// Format:
-/// ```
-/// ---
-/// key = "value"
-/// count = 42
-/// tags = ["a", "b"]
-/// ---
-/// body text here
-/// ```
-pub fn parse(content : String) -> Result[Frontmatter, String] {
+/// Parse YAML frontmatter (--- delimited).
+pub fn parse_yaml(content : String) -> Result[Frontmatter, String] {
   let n = content.length()
   if not(starts_with_at(content, 0, "---")) {
     return Err("missing opening '---' delimiter")
@@ -505,20 +482,12 @@ pub fn parse(content : String) -> Result[Frontmatter, String] {
       while j < lines.length() {
         let l = trim_ws(lines[j])
         if l.length() > 0 && char_at(l, 0) != '#' {
-          if contains_char(l, '=') {
-            match parse_assignment(l) {
-              Ok((key, val)) => fields.set(key, val)
-              Err(msg) => return Err("line " + (j + 1).to_string() + ": " + msg)
+          match parse_yaml_assignment(lines, j) {
+            Ok((key, val, next_j)) => {
+              fields.set(key, val)
+              j = next_j
             }
-            j = j + 1
-          } else {
-            match parse_yaml_assignment(lines, j) {
-              Ok((key, val, next_j)) => {
-                fields.set(key, val)
-                j = next_j
-              }
-              Err(msg) => return Err("line " + (j + 1).to_string() + ": " + msg)
-            }
+            Err(msg) => return Err("line " + (j + 1).to_string() + ": " + msg)
           }
         } else {
           j = j + 1
@@ -532,4 +501,85 @@ pub fn parse(content : String) -> Result[Frontmatter, String] {
     i = line_end + 1
   }
   Err("missing closing '---' delimiter")
+}
+
+///|
+/// Parse TOML frontmatter (+++ delimited).
+pub fn parse_toml(content : String) -> Result[Frontmatter, String] {
+  let n = content.length()
+  if not(starts_with_at(content, 0, "+++")) {
+    return Err("missing opening '+++' delimiter")
+  }
+  let first_nl = next_newline(content, 3)
+  if first_nl >= n {
+    return Err("no content after opening '+++'")
+  }
+  let fm_start = first_nl + 1
+  let mut i = fm_start
+  while i < n {
+    let line_end = next_newline(content, i)
+    let line = trim_ws(substr(content, i, line_end))
+    if line == "+++" {
+      let body_start = if line_end + 1 <= n { line_end + 1 } else { n }
+      let fields : Map[String, FrontmatterValue] = Map::new()
+      let fm_text = substr(content, fm_start, i)
+      let lines = split_lines(fm_text)
+      let mut j = 0
+      while j < lines.length() {
+        let l = trim_ws(lines[j])
+        if l.length() > 0 && char_at(l, 0) != '#' {
+          match parse_assignment(l) {
+            Ok((key, val)) => fields.set(key, val)
+            Err(msg) => return Err("line " + (j + 1).to_string() + ": " + msg)
+          }
+        }
+        j = j + 1
+      }
+      return Ok({ fields, body: substr(content, body_start, n) })
+    }
+    if line_end >= n {
+      break
+    }
+    i = line_end + 1
+  }
+  Err("missing closing '+++' delimiter")
+}
+
+///|
+/// Parse the leading frontmatter block from a file's content.
+/// Auto-detects format by delimiter:
+/// - `---` delimiters → YAML format (key: value, block arrays with -)
+/// - `+++` delimiters → TOML format (key = value)
+///
+/// Returns an error string if the delimiter is missing or malformed.
+///
+/// YAML format:
+/// ```
+/// ---
+/// title: "Hello"
+/// date: 2026-03-11
+/// tags:
+///   - moonbit
+///   - ssg
+/// ---
+/// body text here
+/// ```
+///
+/// TOML format:
+/// ```
+/// +++
+/// title = "Hello"
+/// date = 2026-03-11
+/// tags = ["moonbit", "ssg"]
+/// +++
+/// body text here
+/// ```
+pub fn parse(content : String) -> Result[Frontmatter, String] {
+  if starts_with_at(content, 0, "---") {
+    parse_yaml(content)
+  } else if starts_with_at(content, 0, "+++") {
+    parse_toml(content)
+  } else {
+    Err("missing opening frontmatter delimiter (expected '---' for YAML or '+++' for TOML)")
+  }
 }
