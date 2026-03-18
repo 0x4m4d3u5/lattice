@@ -1014,7 +1014,8 @@ fn collect_toc_entries_into(
           entries.push({ level, anchor, text })
         }
       }
-      BlockQuote(inner) => collect_toc_entries_into(inner, max_depth, counts, entries)
+      BlockQuote(inner) =>
+        collect_toc_entries_into(inner, max_depth, counts, entries)
       _ => ()
     }
     i = i + 1
@@ -1022,7 +1023,10 @@ fn collect_toc_entries_into(
 }
 
 ///|
-fn collect_toc_entries(blocks : Array[Block], max_depth : Int) -> Array[TocEntry] {
+fn collect_toc_entries(
+  blocks : Array[Block],
+  max_depth : Int,
+) -> Array[TocEntry] {
   let counts : Map[String, Int] = Map::new()
   let entries : Array[TocEntry] = []
   collect_toc_entries_into(blocks, max_depth, counts, entries)
@@ -1086,7 +1090,11 @@ fn render_blocks_with_issues(
             _ => break
           }
         }
-        let rendered = render_block_with_issues(OrderedList(merged), wl, heading_counts)
+        let rendered = render_block_with_issues(
+          OrderedList(merged),
+          wl,
+          heading_counts,
+        )
         buf.write_string(rendered.html)
         merge_shortcode_errors(issues, rendered.shortcode_errors)
       }
@@ -1257,7 +1265,10 @@ fn render_block_with_issues(
     Heading(level, inlines) => {
       let rendered = render_inlines_with_issues(inlines, wl)
       let tag = "h" + level.to_string()
-      let anchor = next_heading_anchor(plain_text_inlines(inlines), heading_counts)
+      let anchor = next_heading_anchor(
+        plain_text_inlines(inlines),
+        heading_counts,
+      )
       {
         html: "<" +
         tag +
@@ -1316,7 +1327,7 @@ fn render_block_with_issues(
         let mut task_prefix_stripped : Array[Inline] = items[i]
         if is_task_list {
           match items[i][0] {
-            Text(t) => {
+            Text(t) =>
               if t.has_prefix("[ ] ") {
                 task_checked = false
                 let stripped = t[4:].to_string()
@@ -1342,8 +1353,7 @@ fn render_block_with_issues(
               } else {
                 is_task_list = false
               }
-            }
-            _ => { is_task_list = false }
+            _ => is_task_list = false
           }
         }
         let rendered_item = render_inlines_with_issues(task_prefix_stripped, wl)
@@ -1459,7 +1469,10 @@ pub fn render_table_of_contents(entries : Array[TocEntry]) -> String {
 }
 
 ///|
-pub fn extract_table_of_contents(body : String, max_depth : Int) -> Array[TocEntry] {
+pub fn extract_table_of_contents(
+  body : String,
+  max_depth : Int,
+) -> Array[TocEntry] {
   let preprocessed = preprocess_callout_next_line(body)
   let ls = lines_of(preprocessed)
   let blocks = parse_blocks(ls)

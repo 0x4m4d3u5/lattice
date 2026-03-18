@@ -47,7 +47,10 @@ test "markdown toc html renders anchor links" {
 
 ///|
 test "markdown toc html empty for no headings" {
-  assert_eq(render_table_of_contents(extract_table_of_contents("Plain text only", 3)), "")
+  assert_eq(
+    render_table_of_contents(extract_table_of_contents("Plain text only", 3)),
+    "",
+  )
 }
 
 ///|
@@ -199,7 +202,6 @@ test "markdown bare exclamation not image" {
   assert_true(rendered.contains("Hello! World"))
   assert_true(not(rendered.contains("<img")))
 }
-
 
 ///|
 test "strikethrough basic" {

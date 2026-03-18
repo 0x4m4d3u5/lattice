@@ -96,7 +96,7 @@ test "frontmatter rejects malformed assignments with line context" {
   match @frontmatter.parse(src) {
     Ok(_) => assert_true(false)
     Err(msg) => {
-      assert_true(msg.contains("line 2"))
+      assert_true(msg.contains("line 3"))
       assert_true(msg.contains("expected ',' or ']' inside array"))
     }
   }
@@ -354,11 +354,11 @@ test "frontmatter parses YAML with flow arrays" {
             FArray(first) => {
               assert_eq(first.length(), 2)
               match first[0] {
-                FStr(v) => assert_eq(v, "1")
+                FInt(v) => assert_eq(v, 1)
                 _ => assert_true(false)
               }
               match first[1] {
-                FStr(v) => assert_eq(v, "2")
+                FInt(v) => assert_eq(v, 2)
                 _ => assert_true(false)
               }
             }

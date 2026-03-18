@@ -78,13 +78,28 @@ test "render_search_index empty excerpt" {
 ///|
 test "render_search_index multiple entries separated by commas" {
   let e1 = new_entry(
-    "First", "first", "/first/", ["a"], "posts", "Excerpt one.",
+    "First",
+    "first",
+    "/first/",
+    ["a"],
+    "posts",
+    "Excerpt one.",
   )
   let e2 = new_entry(
-    "Second", "second", "/second/", ["b"], "posts", "Excerpt two.",
+    "Second",
+    "second",
+    "/second/",
+    ["b"],
+    "posts",
+    "Excerpt two.",
   )
   let e3 = new_entry(
-    "Third", "third", "/third/", ["c"], "posts", "Excerpt three.",
+    "Third",
+    "third",
+    "/third/",
+    ["c"],
+    "posts",
+    "Excerpt three.",
   )
   let result = render_search_index([e1, e2, e3])
   inspect(result.contains("\"First\""), content="true")

@@ -504,12 +504,7 @@ pub fn parse(input : String) -> Result[CollectionsConfig, CollectionsError] {
         Some(CollectionSection(name)) =>
           match
             finalize_collection(
-              defs,
-              seen_collections,
-              name,
-              current_schema,
-              current_dir,
-              current_template,
+              defs, seen_collections, name, current_schema, current_dir, current_template,
               current_page_size,
             ) {
             Err(e) => return Err(e)
@@ -607,12 +602,7 @@ pub fn parse(input : String) -> Result[CollectionsConfig, CollectionsError] {
     Some(CollectionSection(name)) =>
       match
         finalize_collection(
-          defs,
-          seen_collections,
-          name,
-          current_schema,
-          current_dir,
-          current_template,
+          defs, seen_collections, name, current_schema, current_dir, current_template,
           current_page_size,
         ) {
         Err(e) => return Err(e)

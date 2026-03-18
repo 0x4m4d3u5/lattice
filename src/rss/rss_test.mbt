@@ -36,11 +36,20 @@ test "render_feed generates valid Atom feed XML" {
   let pages = test_pages()
   let feed = @rss.render_feed("Test Site", "https://example.com", pages, None)
 
-  inspect(feed.contains("<?xml version=\"1.0\" encoding=\"utf-8\"?>"), content="true")
-  inspect(feed.contains("<feed xmlns=\"http://www.w3.org/2005/Atom\">"), content="true")
+  inspect(
+    feed.contains("<?xml version=\"1.0\" encoding=\"utf-8\"?>"),
+    content="true",
+  )
+  inspect(
+    feed.contains("<feed xmlns=\"http://www.w3.org/2005/Atom\">"),
+    content="true",
+  )
   inspect(feed.contains("<title>Test Site</title>"), content="true")
   inspect(feed.contains("<id>https://example.com/</id>"), content="true")
-  inspect(feed.contains("<link href=\"https://example.com/\" />"), content="true")
+  inspect(
+    feed.contains("<link href=\"https://example.com/\" />"),
+    content="true",
+  )
   inspect(feed.contains("<updated>"), content="true")
   inspect(feed.contains("<entry>"), content="true")
 
@@ -66,10 +75,22 @@ test "render_feed includes entry details" {
   let feed = @rss.render_feed("Test", "https://example.com", pages, None)
 
   inspect(feed.contains("<title>Test Post Title</title>"), content="true")
-  inspect(feed.contains("<id>https://example.com/posts/test-post/</id>"), content="true")
-  inspect(feed.contains("<link href=\"https://example.com/posts/test-post/\" />"), content="true")
-  inspect(feed.contains("<updated>2024-03-01T00:00:00Z</updated>"), content="true")
-  inspect(feed.contains("<published>2024-03-01T00:00:00Z</published>"), content="true")
+  inspect(
+    feed.contains("<id>https://example.com/posts/test-post/</id>"),
+    content="true",
+  )
+  inspect(
+    feed.contains("<link href=\"https://example.com/posts/test-post/\" />"),
+    content="true",
+  )
+  inspect(
+    feed.contains("<updated>2024-03-01T00:00:00Z</updated>"),
+    content="true",
+  )
+  inspect(
+    feed.contains("<published>2024-03-01T00:00:00Z</published>"),
+    content="true",
+  )
   inspect(feed.contains("&lt;special&gt; &amp; chars"), content="true")
   inspect(feed.contains("<summary>"), content="true")
 }
@@ -88,7 +109,10 @@ test "render_feed handles pages without description" {
   ]
   let feed = @rss.render_feed("Test", "https://example.com", pages, None)
 
-  inspect(feed.contains("<title>Post Without Description</title>"), content="true")
+  inspect(
+    feed.contains("<title>Post Without Description</title>"),
+    content="true",
+  )
 }
 
 ///|
@@ -122,8 +146,14 @@ test "render_feed with RFC3339 date format" {
   ]
   let feed = @rss.render_feed("Test", "https://example.com", pages, None)
 
-  inspect(feed.contains("<updated>2024-03-15T14:30:00Z</updated>"), content="true")
-  inspect(feed.contains("<published>2024-03-15T14:30:00Z</published>"), content="true")
+  inspect(
+    feed.contains("<updated>2024-03-15T14:30:00Z</updated>"),
+    content="true",
+  )
+  inspect(
+    feed.contains("<published>2024-03-15T14:30:00Z</published>"),
+    content="true",
+  )
 }
 
 ///|
@@ -139,7 +169,9 @@ test "render_feed handles base URL variations" {
   let feed3 = @rss.render_feed("Test", "https://example.com/blog", pages, None)
   inspect(feed3.contains("<id>https://example.com/blog/</id>"), content="true")
   inspect(
-    feed3.contains("<link href=\"https://example.com/blog/posts/first-post/\" />"),
+    feed3.contains(
+      "<link href=\"https://example.com/blog/posts/first-post/\" />",
+    ),
     content="true",
   )
 }
@@ -149,8 +181,14 @@ test "render_feed handles empty pages array" {
   let pages : Array[@graph.GraphPage] = []
   let feed = @rss.render_feed("Empty Site", "https://example.com", pages, None)
 
-  inspect(feed.contains("<?xml version=\"1.0\" encoding=\"utf-8\"?>"), content="true")
-  inspect(feed.contains("<feed xmlns=\"http://www.w3.org/2005/Atom\">"), content="true")
+  inspect(
+    feed.contains("<?xml version=\"1.0\" encoding=\"utf-8\"?>"),
+    content="true",
+  )
+  inspect(
+    feed.contains("<feed xmlns=\"http://www.w3.org/2005/Atom\">"),
+    content="true",
+  )
   inspect(feed.contains("<title>Empty Site</title>"), content="true")
   inspect(not(feed.contains("<entry>")), content="true")
 }
@@ -206,7 +244,12 @@ test "render_feed respects limit parameter" {
     },
   ]
 
-  let limited_feed = @rss.render_feed("Test", "https://example.com", pages, Some(2))
+  let limited_feed = @rss.render_feed(
+    "Test",
+    "https://example.com",
+    pages,
+    Some(2),
+  )
   inspect(limited_feed.contains("<title>Post 3</title>"), content="true")
   inspect(limited_feed.contains("<title>Post 2</title>"), content="true")
   inspect(not(limited_feed.contains("<title>Post 1</title>")), content="true")
@@ -217,7 +260,10 @@ test "render_feed respects limit parameter" {
   inspect(full_feed.contains("<title>Post 1</title>"), content="true")
 
   let oversized_feed = @rss.render_feed(
-    "Test", "https://example.com", pages, Some(100),
+    "Test",
+    "https://example.com",
+    pages,
+    Some(100),
   )
   inspect(oversized_feed.contains("<title>Post 1</title>"), content="true")
   inspect(oversized_feed.contains("<title>Post 2</title>"), content="true")

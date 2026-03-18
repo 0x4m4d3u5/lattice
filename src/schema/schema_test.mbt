@@ -24,13 +24,13 @@ fn parse_frontmatter_or_fail(src : String) -> @frontmatter.Frontmatter {
 ///|
 test "schema accepts matching field types and optional absence" {
   let fm = parse_frontmatter_or_fail(
-    "---\n" +
+    "+++\n" +
     "title = \"Intro\"\n" +
     "date = 2026-03-11\n" +
     "published = true\n" +
     "order = 3\n" +
     "tags = [\"moonbit\", \"ssg\"]\n" +
-    "---\n" +
+    "+++\n" +
     "Body",
   )
   let errors = validate(fm, sample_schema())
@@ -40,7 +40,7 @@ test "schema accepts matching field types and optional absence" {
 ///|
 test "schema reports required field missing" {
   let fm = parse_frontmatter_or_fail(
-    "---\n" + "published = true\n" + "tags = [\"moonbit\"]\n" + "---\n",
+    "+++\n" + "published = true\n" + "tags = [\"moonbit\"]\n" + "+++\n",
   )
   let errors = validate(fm, sample_schema())
   assert_eq(errors.length(), 2)
@@ -53,12 +53,12 @@ test "schema reports required field missing" {
 ///|
 test "schema reports field type mismatches for scalars and arrays" {
   let fm = parse_frontmatter_or_fail(
-    "---\n" +
+    "+++\n" +
     "title = 10\n" +
     "date = 2026/03/11\n" +
     "published = true\n" +
     "tags = [\"ok\", 2]\n" +
-    "---\n",
+    "+++\n",
   )
   let errors = validate(fm, sample_schema())
   assert_eq(errors.length(), 3)
@@ -73,13 +73,13 @@ test "schema reports field type mismatches for scalars and arrays" {
 ///|
 test "schema optional field still validates inner type when present" {
   let fm = parse_frontmatter_or_fail(
-    "---\n" +
+    "+++\n" +
     "title = \"Intro\"\n" +
     "date = 2026-03-11\n" +
     "published = false\n" +
     "tags = [\"moonbit\"]\n" +
     "summary = true\n" +
-    "---\n",
+    "+++\n",
   )
   let errors = validate(fm, sample_schema())
   assert_eq(errors.length(), 1)
@@ -94,7 +94,7 @@ test "schema accepts valid date field" {
     fields: [{ name: "published_at", field_type: TDate, required: true }],
   }
   let fm = parse_frontmatter_or_fail(
-    "---\n" + "published_at = 2026-03-11\n" + "---\n",
+    "+++\n" + "published_at = 2026-03-11\n" + "+++\n",
   )
   let errors = validate(fm, schema)
   assert_eq(errors.length(), 0)
@@ -107,7 +107,7 @@ test "schema rejects invalid date string format with typed error" {
     fields: [{ name: "published_at", field_type: TDate, required: true }],
   }
   let fm = parse_frontmatter_or_fail(
-    "---\n" + "published_at = 2026/03/11\n" + "---\n",
+    "+++\n" + "published_at = 2026/03/11\n" + "+++\n",
   )
   let errors = validate(fm, schema)
   assert_eq(errors.length(), 1)
@@ -124,18 +124,18 @@ test "schema optional date field handles absence valid value and non-date error"
     ],
   }
 
-  let absent = parse_frontmatter_or_fail("---\n---\n")
+  let absent = parse_frontmatter_or_fail("+++\n+++\n")
   let absent_errors = validate(absent, schema)
   assert_eq(absent_errors.length(), 0)
 
   let present_valid = parse_frontmatter_or_fail(
-    "---\n" + "published_at = 2026-03-11\n" + "---\n",
+    "+++\n" + "published_at = 2026-03-11\n" + "+++\n",
   )
   let valid_errors = validate(present_valid, schema)
   assert_eq(valid_errors.length(), 0)
 
   let present_invalid = parse_frontmatter_or_fail(
-    "---\n" + "published_at = false\n" + "---\n",
+    "+++\n" + "published_at = false\n" + "+++\n",
   )
   let invalid_errors = validate(present_invalid, schema)
   assert_eq(invalid_errors.length(), 1)
