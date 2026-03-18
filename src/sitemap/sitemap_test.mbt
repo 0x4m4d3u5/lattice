@@ -36,9 +36,14 @@ test "render_sitemap produces valid XML envelope" {
   let pages = test_pages()
   let xml = @sitemap.render_sitemap("https://example.com", pages)
 
-  inspect(xml.contains("<?xml version=\"1.0\" encoding=\"utf-8\"?>"), content="true")
   inspect(
-    xml.contains("<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">"),
+    xml.contains("<?xml version=\"1.0\" encoding=\"utf-8\"?>"),
+    content="true",
+  )
+  inspect(
+    xml.contains(
+      "<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">",
+    ),
     content="true",
   )
   inspect(xml.contains("</urlset>"), content="true")
@@ -153,9 +158,14 @@ test "render_sitemap handles empty pages array" {
   let pages : Array[@graph.GraphPage] = []
   let xml = @sitemap.render_sitemap("https://example.com", pages)
 
-  inspect(xml.contains("<?xml version=\"1.0\" encoding=\"utf-8\"?>"), content="true")
   inspect(
-    xml.contains("<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">"),
+    xml.contains("<?xml version=\"1.0\" encoding=\"utf-8\"?>"),
+    content="true",
+  )
+  inspect(
+    xml.contains(
+      "<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">",
+    ),
     content="true",
   )
   inspect(not(xml.contains("<url>")), content="true")

@@ -288,8 +288,12 @@ fn print_help() -> Unit {
   println(
     "          [--force] [--watch] [--watch-interval ms] [--drafts] [--help] [--version]",
   )
-  println("  lattice serve [content-dir] [output-dir] [--port N] [--config path] [--drafts]")
-  println("  lattice dev   [content-dir] [output-dir] [--port N] [--config path] [--drafts]")
+  println(
+    "  lattice serve [content-dir] [output-dir] [--port N] [--config path] [--drafts]",
+  )
+  println(
+    "  lattice dev   [content-dir] [output-dir] [--port N] [--config path] [--drafts]",
+  )
   println("")
   println("Defaults:")
   println("  content-dir         ./content")
@@ -867,7 +871,9 @@ fn main {
   }
   if options.serve_mode {
     if not(@serve.is_valid_port(options.serve_port)) {
-      print_diagnostic_main(cli_error("invalid port: " + options.serve_port.to_string()))
+      print_diagnostic_main(
+        cli_error("invalid port: " + options.serve_port.to_string()),
+      )
       @sys.exit(1)
       return
     }

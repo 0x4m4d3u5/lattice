@@ -474,11 +474,10 @@ test "template nested includes" {
       let mut has_content_slot = false
       for part in tpl.parts {
         match part {
-          Text(s) => {
+          Text(s) =>
             if s.contains("Grandchild content") {
               has_grandchild = true
             }
-          }
           Slot(Content) => has_content_slot = true
           _ => ()
         }
@@ -541,7 +540,8 @@ test "template include in layout file" {
 
 ///|
 test "template parse reading_time and word_count slots" {
-  let tpl = match parse_template("{{reading_time}} read · {{word_count}} words") {
+  let tpl = match
+    parse_template("{{reading_time}} read · {{word_count}} words") {
     Ok(v) => v
     Err(_) => {
       assert_true(false)
@@ -632,10 +632,7 @@ test "template render description slot" {
     }
   }
   let slots : Map[TemplateSlot, String] = Map::new()
-  slots.set(
-    Description,
-    "A short intro extracted from the first paragraph.",
-  )
+  slots.set(Description, "A short intro extracted from the first paragraph.")
   match render_template(tpl, slots) {
     Ok(html) =>
       assert_true(

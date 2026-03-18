@@ -197,7 +197,13 @@ test "build with paginated index template exposes page_num and total_pages" {
     assert_true(
       write_file_test(
         posts_root + "/post" + n + ".md",
-        "---\ntitle: Post " + n + "\ndate: 2026-0" + n + "-01\n---\nBody " + n + "\n",
+        "---\ntitle: Post " +
+        n +
+        "\ndate: 2026-0" +
+        n +
+        "-01\n---\nBody " +
+        n +
+        "\n",
       ),
     )
     p = p + 1
@@ -263,9 +269,7 @@ test "build with paginated index template exposes page_num and total_pages" {
   assert_true(page1.contains("next=/posts/page/2/"))
 
   // Page 2 index: page=2 of=2, has prev, no next
-  let page2 = @fs.read_file_to_string(
-    output_root + "/posts/page/2/index.html",
-  ) catch {
+  let page2 = @fs.read_file_to_string(output_root + "/posts/page/2/index.html") catch {
     @fs.IOError(_) => ""
   }
   assert_true(page2.contains("page=2"))
@@ -296,13 +300,25 @@ test "build uses per-collection page_size override from inline collections" {
     assert_true(
       write_file_test(
         posts_root + "/post" + n + ".md",
-        "---\ntitle: Post " + n + "\ndate: 2026-03-0" + n + "\n---\nPost " + n + "\n",
+        "---\ntitle: Post " +
+        n +
+        "\ndate: 2026-03-0" +
+        n +
+        "\n---\nPost " +
+        n +
+        "\n",
       ),
     )
     assert_true(
       write_file_test(
         notes_root + "/note" + n + ".md",
-        "---\ntitle: Note " + n + "\ndate: 2026-03-0" + n + "\n---\nNote " + n + "\n",
+        "---\ntitle: Note " +
+        n +
+        "\ndate: 2026-03-0" +
+        n +
+        "\n---\nNote " +
+        n +
+        "\n",
       ),
     )
     i = i + 1
@@ -387,7 +403,13 @@ test "build inline collections fall back to global page_size" {
     assert_true(
       write_file_test(
         posts_root + "/post" + n + ".md",
-        "---\ntitle: Post " + n + "\ndate: 2026-03-0" + n + "\n---\nPost " + n + "\n",
+        "---\ntitle: Post " +
+        n +
+        "\ndate: 2026-03-0" +
+        n +
+        "\n---\nPost " +
+        n +
+        "\n",
       ),
     )
     i = i + 1
@@ -465,7 +487,13 @@ test "build inline collections without page_size does not paginate" {
     assert_true(
       write_file_test(
         posts_root + "/post" + n + ".md",
-        "---\ntitle: Post " + n + "\ndate: 2026-03-" + day + "\n---\nPost " + n + "\n",
+        "---\ntitle: Post " +
+        n +
+        "\ndate: 2026-03-" +
+        day +
+        "\n---\nPost " +
+        n +
+        "\n",
       ),
     )
     i = i + 1
@@ -529,8 +557,7 @@ test "count_words_markdown simple prose" {
 
 ///|
 test "count_words_markdown skips fenced code blocks" {
-  let body =
-    "Intro paragraph here.\n\n```\nlet x = 1;\nlet y = 2;\n```\n\nConclusion."
+  let body = "Intro paragraph here.\n\n```\nlet x = 1;\nlet y = 2;\n```\n\nConclusion."
   // "Intro paragraph here." = 3 words, "Conclusion." = 1 word → 4 total
   assert_eq(@builder.count_words_markdown(body), 4)
 }
@@ -685,7 +712,11 @@ test "build table_of_contents slot is empty when page has no headings" {
   assert_true(
     write_file_test(
       posts_root + "/plain.md",
-      "---\n" + "title: Plain\n" + "date: 2026-03-17\n" + "---\n\n" + "No headings here.\n",
+      "---\n" +
+      "title: Plain\n" +
+      "date: 2026-03-17\n" +
+      "---\n\n" +
+      "No headings here.\n",
     ),
   )
   assert_true(
@@ -924,7 +955,6 @@ test "build table_of_contents depth filters deeper headings" {
   assert_true(not(output.contains("href=\"#setup\"")))
 }
 
-
 ///|
 test "draft post is excluded from collection index when --drafts is false" {
   let root = "./_tmp_builder_draft_excluded"
@@ -956,7 +986,7 @@ test "draft post is excluded from collection index when --drafts is false" {
       "---\n" +
       "title: Draft Post\n" +
       "date: 2026-03-12\n" +
-      "draft = true\n" +
+      "draft: true\n" +
       "---\n\n" +
       "This is a draft.\n",
     ),
@@ -976,16 +1006,16 @@ test "draft post is excluded from collection index when --drafts is false" {
   assert_true(
     write_file_test(
       content_root + "/lattice.conf",
-      "title = \"Test\"\n" +
-      "base_url = \"/\"\n" +
-      "collections = []\n",
+      "title = \"Test\"\n" + "base_url = \"/\"\n" + "collections = []\n",
     ),
   )
   assert_true(
     write_file_test(
       content_root + "/collections.cfg",
       "[posts]\n" +
-      "dir = " + posts_root + "\n" +
+      "dir = " +
+      posts_root +
+      "\n" +
       "schema = title:String,date:Date\n",
     ),
   )
@@ -1030,7 +1060,10 @@ test "draft post is excluded from collection index when --drafts is false" {
   // Collection index should only contain published page
   assert_true(@fs.path_exists(output_root + "/posts/index.html"))
   let index_content = @fs.read_file_to_string(output_root + "/posts/index.html") catch {
-    @fs.IOError(_) => { assert_true(false); "" }
+    @fs.IOError(_) => {
+      assert_true(false)
+      ""
+    }
   }
   assert_true(index_content.contains("Published Post"))
   assert_false(index_content.contains("Draft Post"))
@@ -1069,7 +1102,7 @@ test "draft post is included when --drafts flag is true" {
       "---\n" +
       "title: Draft Post\n" +
       "date: 2026-03-12\n" +
-      "draft = true\n" +
+      "draft: true\n" +
       "---\n\n" +
       "This is a draft.\n",
     ),
@@ -1089,16 +1122,16 @@ test "draft post is included when --drafts flag is true" {
   assert_true(
     write_file_test(
       content_root + "/lattice.conf",
-      "title = \"Test\"\n" +
-      "base_url = \"/\"\n" +
-      "collections = []\n",
+      "title = \"Test\"\n" + "base_url = \"/\"\n" + "collections = []\n",
     ),
   )
   assert_true(
     write_file_test(
       content_root + "/collections.cfg",
       "[posts]\n" +
-      "dir = " + posts_root + "\n" +
+      "dir = " +
+      posts_root +
+      "\n" +
       "schema = title:String,date:Date\n",
     ),
   )
@@ -1142,7 +1175,10 @@ test "draft post is included when --drafts flag is true" {
   // Collection index should contain both pages
   assert_true(@fs.path_exists(output_root + "/posts/index.html"))
   let index_content = @fs.read_file_to_string(output_root + "/posts/index.html") catch {
-    @fs.IOError(_) => { assert_true(false); "" }
+    @fs.IOError(_) => {
+      assert_true(false)
+      ""
+    }
   }
   assert_true(index_content.contains("Published Post"))
   assert_true(index_content.contains("Draft Post"))
@@ -1190,16 +1226,16 @@ test "page without draft key is always included" {
   assert_true(
     write_file_test(
       content_root + "/lattice.conf",
-      "title = \"Test\"\n" +
-      "base_url = \"/\"\n" +
-      "collections = []\n",
+      "title = \"Test\"\n" + "base_url = \"/\"\n" + "collections = []\n",
     ),
   )
   assert_true(
     write_file_test(
       content_root + "/collections.cfg",
       "[posts]\n" +
-      "dir = " + posts_root + "\n" +
+      "dir = " +
+      posts_root +
+      "\n" +
       "schema = title:String,date:Date\n",
     ),
   )

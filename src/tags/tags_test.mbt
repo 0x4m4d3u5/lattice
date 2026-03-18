@@ -24,7 +24,7 @@ test "tag_url with special characters" {
 ///|
 test "extract tags from frontmatter with tags field" {
   let fm = parse_fm(
-    "---\ntitle = \"Test Post\"\ntags = [\"intro\", \"lattice\", \"demo\"]\n---\n",
+    "+++\ntitle = \"Test Post\"\ntags = [\"intro\", \"lattice\", \"demo\"]\n+++\n",
   )
   match @tags.extract(fm, "tags") {
     Ok(tag_refs) => {
@@ -42,11 +42,9 @@ test "extract tags from frontmatter with tags field" {
 
 ///|
 test "extract tags returns empty array when tags field missing" {
-  let fm = parse_fm("---\ntitle = \"Test Post\"\n---\n")
+  let fm = parse_fm("+++\ntitle = \"Test Post\"\n+++\n")
   match @tags.extract(fm, "tags") {
-    Ok(tag_refs) => {
-      inspect(tag_refs.length(), content="0")
-    }
+    Ok(tag_refs) => inspect(tag_refs.length(), content="0")
     Err(msg) => inspect(msg, content="unexpected error")
   }
 }
@@ -54,7 +52,7 @@ test "extract tags returns empty array when tags field missing" {
 ///|
 test "extract tags with duplicate tags deduplicates" {
   let fm = parse_fm(
-    "---\ntitle = \"Test Post\"\ntags = [\"intro\", \"intro\", \"lattice\"]\n---\n",
+    "+++\ntitle = \"Test Post\"\ntags = [\"intro\", \"intro\", \"lattice\"]\n+++\n",
   )
   match @tags.extract(fm, "tags") {
     Ok(tag_refs) => {
@@ -69,7 +67,7 @@ test "extract tags with duplicate tags deduplicates" {
 ///|
 test "extract tags trims whitespace" {
   let fm = parse_fm(
-    "---\ntitle = \"Test Post\"\ntags = [\"  intro  \", \"  lattice  \", \"  demo  \"]\n---\n",
+    "+++\ntitle = \"Test Post\"\ntags = [\"  intro  \", \"  lattice  \", \"  demo  \"]\n+++\n",
   )
   match @tags.extract(fm, "tags") {
     Ok(tag_refs) => {
@@ -85,7 +83,7 @@ test "extract tags trims whitespace" {
 ///|
 test "extract tags with empty strings skips empty tags" {
   let fm = parse_fm(
-    "---\ntitle = \"Test Post\"\ntags = [\"intro\", \"\", \"lattice\", \"  \", \"demo\"]\n---\n",
+    "+++\ntitle = \"Test Post\"\ntags = [\"intro\", \"\", \"lattice\", \"  \", \"demo\"]\n+++\n",
   )
   match @tags.extract(fm, "tags") {
     Ok(tag_refs) => {
@@ -101,26 +99,21 @@ test "extract tags with empty strings skips empty tags" {
 ///|
 test "extract tags from non-array field returns error" {
   let fm = parse_fm(
-    "---\ntitle = \"Test Post\"\ntags = \"intro,lattice,demo\"\n---\n",
+    "+++\ntitle = \"Test Post\"\ntags = \"intro,lattice,demo\"\n+++\n",
   )
   match @tags.extract(fm, "tags") {
     Ok(_) => inspect("expected error", content="")
-    Err(msg) => {
-      inspect(msg, content="expected Array[String]")
-    }
+    Err(msg) => inspect(msg, content="expected Array[String]")
   }
 }
 
 ///|
 test "extract tags with non-string element returns error" {
-  let fm = parse_fm(
-    "---\ntitle = \"Test Post\"\ntags = [\"intro\", 42]\n---\n",
-  )
+  let fm = parse_fm("+++\ntitle = \"Test Post\"\ntags = [\"intro\", 42]\n+++\n")
   match @tags.extract(fm, "tags") {
     Ok(_) => inspect("expected error", content="")
-    Err(msg) => {
+    Err(msg) =>
       inspect(msg, content="expected Array[String], found non-string element")
-    }
   }
 }
 
@@ -144,7 +137,10 @@ test "render_page_tags generates HTML links" {
   inspect(html.contains("<ul>"), content="true")
   inspect(html.contains("<li>"), content="true")
   inspect(html.contains("<a href=\"/tags/intro/\">intro</a>"), content="true")
-  inspect(html.contains("<a href=\"/tags/lattice/\">lattice</a>"), content="true")
+  inspect(
+    html.contains("<a href=\"/tags/lattice/\">lattice</a>"),
+    content="true",
+  )
   inspect(html.contains("<a href=\"/tags/demo/\">demo</a>"), content="true")
   inspect(html.contains("</ul>"), content="true")
   inspect(html.contains("</section>"), content="true")
@@ -165,8 +161,14 @@ test "render_tag_page generates correct HTML" {
   inspect(html.contains("<h1>Tag: lattice</h1>"), content="true")
   inspect(html.contains("<p>2 page(s)</p>"), content="true")
   inspect(html.contains("<ul>"), content="true")
-  inspect(html.contains("<a href=\"/posts/post-1/\">Post 1</a>"), content="true")
-  inspect(html.contains("<a href=\"/posts/post-2/\">Post 2</a>"), content="true")
+  inspect(
+    html.contains("<a href=\"/posts/post-1/\">Post 1</a>"),
+    content="true",
+  )
+  inspect(
+    html.contains("<a href=\"/posts/post-2/\">Post 2</a>"),
+    content="true",
+  )
   inspect(html.contains("<code>post-1</code>"), content="true")
   inspect(html.contains("<code>post-2</code>"), content="true")
   inspect(html.contains("</ul>"), content="true")
@@ -175,11 +177,7 @@ test "render_tag_page generates correct HTML" {
 
 ///|
 test "render_tag_page with no pages shows count" {
-  let page : @tags.TagPage = {
-    tag: "empty-tag",
-    slug: "empty-tag",
-    pages: [],
-  }
+  let page : @tags.TagPage = { tag: "empty-tag", slug: "empty-tag", pages: [] }
   let html = @tags.render_tag_page(page)
   inspect(html.contains("<h1>Tag: empty-tag</h1>"), content="true")
   inspect(html.contains("<p>0 page(s)</p>"), content="true")
@@ -198,8 +196,14 @@ test "render_tag_index generates correct HTML" {
   inspect(html.contains("<main>"), content="true")
   inspect(html.contains("<h1>Tags</h1>"), content="true")
   inspect(html.contains("<ul>"), content="true")
-  inspect(html.contains("<a href=\"/tags/lattice/\">lattice</a>"), content="true")
-  inspect(html.contains("<a href=\"/tags/moonbit/\">moonbit</a>"), content="true")
+  inspect(
+    html.contains("<a href=\"/tags/lattice/\">lattice</a>"),
+    content="true",
+  )
+  inspect(
+    html.contains("<a href=\"/tags/moonbit/\">moonbit</a>"),
+    content="true",
+  )
   inspect(html.contains("<a href=\"/tags/demo/\">demo</a>"), content="true")
   inspect(html.contains("(5)"), content="true")
   inspect(html.contains("(3)"), content="true")
@@ -221,7 +225,7 @@ test "render_tag_index with no tags shows message" {
 ///|
 test "tag extraction with slug normalization" {
   let fm = parse_fm(
-    "---\ntitle = \"Test Post\"\ntags = [\"C#\", \"C++\", \"WebAssembly\"]\n---\n",
+    "+++\ntitle = \"Test Post\"\ntags = [\"C#\", \"C++\", \"WebAssembly\"]\n+++\n",
   )
   match @tags.extract(fm, "tags") {
     Ok(tag_refs) => {
