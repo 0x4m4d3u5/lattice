@@ -26,8 +26,16 @@ pub enum Inline {
   Link(String, String) // display text, url
   Image(String, String) // alt text, url
   WikiRef(String, String?) // target slug, optional display text
+  FootnoteRef(String) // footnote label
   Shortcode(@shortcode.ShortcodeCall)
   HardBreak
+}
+
+///|
+/// A footnote definition collected during parsing.
+pub struct FootnoteDef {
+  label : String
+  text : String
 }
 
 ///|
@@ -55,12 +63,6 @@ pub enum Block {
 }
 
 ///|
-pub struct ShortcodeIssue {
-  call : @shortcode.ShortcodeCall?
-  error : @shortcode.ShortcodeError
-}
-
-///|
 pub struct TocEntry {
   level : Int
   anchor : String
@@ -68,10 +70,23 @@ pub struct TocEntry {
 }
 
 ///|
+pub fn parse_blocks(ls : Array[String]) -> Array[Block] {
+  let (blocks, _footnotes) = parse_blocks_with_footnotes(ls)
+  blocks
+}
+
+///|
+pub struct ShortcodeIssue {
+  call : @shortcode.ShortcodeCall?
+  error : @shortcode.ShortcodeError
+}
+
+///|
 pub struct RenderResult {
   html : String
   shortcode_errors : Array[ShortcodeIssue]
   toc : Array[TocEntry]
+  footnotes : Array[FootnoteDef]
 }
 
 // ── character helpers ─────────────────────────────────────────────────────────
@@ -275,6 +290,7 @@ fn plain_text_inline(inline : Inline) -> String {
         Some(text) => text
         None => target
       }
+    FootnoteRef(_) => ""
     Shortcode(_) => ""
     HardBreak => " "
   }
@@ -585,26 +601,66 @@ pub fn parse_inlines(s : String, from : Int, to : Int) -> Array[Inline] {
       }
       text_start = i
     } else if c == '[' {
-      // regular link: [text](url)
-      let bracket_close = find_char(s, i + 1, ']', to)
-      if bracket_close >= 0 &&
-        bracket_close + 1 < to &&
-        char_at(s, bracket_close + 1) == '(' {
-        let paren_close = find_char(s, bracket_close + 2, ')', to)
-        if paren_close >= 0 {
+      // Check for footnote reference: [^label]
+      if i + 2 < to && char_at(s, i + 1) == '^' {
+        let bracket_close = find_char(s, i + 2, ']', to)
+        if bracket_close >= 0 {
           if text_start < i {
             result.push(Text(substr(s, text_start, i)))
           }
-          let link_text = substr(s, i + 1, bracket_close)
-          let url = substr(s, bracket_close + 2, paren_close)
-          result.push(Link(link_text, url))
-          i = paren_close + 1
+          let label = substr(s, i + 2, bracket_close)
+          result.push(FootnoteRef(label))
+          i = bracket_close + 1
           text_start = i
+        } else {
+          // Unterminated footnote ref - treat as literal
+          i = i + 1
+        }
+      } else if i + 1 < to && char_at(s, i + 1) == '[' {
+        // wikilink: [[target]] or [[target|display]]
+        if text_start < i {
+          result.push(Text(substr(s, text_start, i)))
+        }
+        let close_j = find_str(s, i + 2, "]]", to)
+        if close_j >= 0 {
+          let inner = substr(s, i + 2, close_j)
+          let pipe = find_char_in_str(inner, '|')
+          if pipe >= 0 {
+            let target = trim(substr(inner, 0, pipe))
+            let display = trim(substr(inner, pipe + 1, inner.length()))
+            result.push(WikiRef(target, Some(display)))
+          } else {
+            result.push(WikiRef(trim(inner), None))
+          }
+          i = close_j + 2
+        } else {
+          // unterminated wikilink — emit as text
+          result.push(Text("[["))
+          i = i + 2
+        }
+        text_start = i
+      } else {
+        // regular link: [text](url)
+        let bracket_close = find_char(s, i + 1, ']', to)
+        if bracket_close >= 0 &&
+          bracket_close + 1 < to &&
+          char_at(s, bracket_close + 1) == '(' {
+          let paren_close = find_char(s, bracket_close + 2, ')', to)
+          if paren_close >= 0 {
+            if text_start < i {
+              result.push(Text(substr(s, text_start, i)))
+            }
+            let link_text = substr(s, i + 1, bracket_close)
+            let url = substr(s, bracket_close + 2, paren_close)
+            result.push(Link(link_text, url))
+            i = paren_close + 1
+            text_start = i
+          } else {
+            i = i + 1
+          }
         } else {
           i = i + 1
         }
-      } else {
-        i = i + 1
       }
     } else if c == '\n' {
       // soft line break: two trailing spaces before newline = hard break,
@@ -757,6 +813,61 @@ fn strip_blockquote_marker(line : String) -> String {
   substr(line, start, n)
 }
 
+///|
+fn is_footnote_def_line(line : String) -> Bool {
+  let n = line.length()
+  if n < 3 {
+    return false
+  }
+  // Footnote def starts with "[^" followed by label and ":"
+  if char_at(line, 0) == '[' && char_at(line, 1) == '^' {
+    let close_bracket = find_char(line, 2, ']', n)
+    if close_bracket >= 2 &&
+      close_bracket + 1 < n &&
+      char_at(line, close_bracket + 1) == ':' {
+      return true
+    }
+  }
+  false
+}
+
+///|
+fn footnote_label_from_def(line : String) -> String {
+  // Extract label between "[^" and "]"
+  let n = line.length()
+  if n < 3 {
+    return ""
+  }
+  let close_bracket = find_char(line, 2, ']', n)
+  if close_bracket >= 2 {
+    substr(line, 2, close_bracket)
+  } else {
+    ""
+  }
+}
+
+///|
+fn footnote_text_from_def(line : String) -> String {
+  // Extract text after ": " from definition line
+  let n = line.length()
+  if n < 3 {
+    return ""
+  }
+  let close_bracket = find_char(line, 2, ']', n)
+  if close_bracket >= 2 &&
+    close_bracket + 1 < n &&
+    char_at(line, close_bracket + 1) == ':' {
+    // Skip ": " (colon and space)
+    if close_bracket + 2 <= n {
+      trim(substr(line, close_bracket + 2, n))
+    } else {
+      ""
+    }
+  } else {
+    ""
+  }
+}
+
 // ── GFM table helpers ─────────────────────────────────────────────────────────
 
 ///|
@@ -868,19 +979,25 @@ fn is_block_starter(line : String) -> Bool {
 // ── block parsing ─────────────────────────────────────────────────────────────
 
 ///|
-/// Parse an array of line strings into block AST nodes.
-///
-/// Block types are identified by leading characters on the first line of
-/// each block. Paragraphs accumulate lines until a blank line or a block
-/// starter is encountered.
-pub fn parse_blocks(ls : Array[String]) -> Array[Block] {
+/// Parse blocks and return both the block structure and collected footnote
+/// definitions.
+pub fn parse_blocks_with_footnotes(
+  ls : Array[String],
+) -> (Array[Block], Array[FootnoteDef]) {
   let result : Array[Block] = []
+  let footnotes : Array[FootnoteDef] = []
   let mut i = 0
   let n = ls.length()
   while i < n {
     let line = ls[i]
     if is_blank(line) {
       // skip blank lines between blocks
+      i = i + 1
+    } else if is_footnote_def_line(line) {
+      // Collect footnote definition - exclude from flow
+      let label = footnote_label_from_def(line)
+      let text = footnote_text_from_def(line)
+      footnotes.push({ label, text })
       i = i + 1
     } else if is_heading_line(line) {
       let (level, text) = heading_level_and_text(line)
@@ -980,7 +1097,7 @@ pub fn parse_blocks(ls : Array[String]) -> Array[Block] {
       result.push(Paragraph(parse_inlines(para_text, 0, para_text.length())))
     }
   }
-  result
+  (result, footnotes)
 }
 
 // ── rendering ─────────────────────────────────────────────────────────────────
@@ -1037,17 +1154,18 @@ fn collect_toc_entries(
 fn render_inlines_with_issues(
   inlines : Array[Inline],
   wl : Map[String, String],
+  fn_map : Map[String, Int],
 ) -> RenderResult {
   let buf = StringBuilder::new()
   let issues : Array[ShortcodeIssue] = []
   let mut i = 0
   while i < inlines.length() {
-    let rendered = render_inline_with_issues(inlines[i], wl)
+    let rendered = render_inline_with_issues(inlines[i], wl, fn_map)
     buf.write_string(rendered.html)
     merge_shortcode_errors(issues, rendered.shortcode_errors)
     i = i + 1
   }
-  { html: buf.to_string(), shortcode_errors: issues, toc: [] }
+  { html: buf.to_string(), shortcode_errors: issues, toc: [], footnotes: [] }
 }
 
 ///|
@@ -1063,6 +1181,7 @@ fn render_blocks_with_issues(
   blocks : Array[Block],
   wl : Map[String, String],
   heading_counts : Map[String, Int],
+  fn_map : Map[String, Int],
 ) -> RenderResult {
   let buf = StringBuilder::new()
   let issues : Array[ShortcodeIssue] = []
@@ -1094,19 +1213,25 @@ fn render_blocks_with_issues(
           OrderedList(merged),
           wl,
           heading_counts,
+          fn_map,
         )
         buf.write_string(rendered.html)
         merge_shortcode_errors(issues, rendered.shortcode_errors)
       }
       _ => {
-        let rendered = render_block_with_issues(blocks[i], wl, heading_counts)
+        let rendered = render_block_with_issues(
+          blocks[i],
+          wl,
+          heading_counts,
+          fn_map,
+        )
         buf.write_string(rendered.html)
         merge_shortcode_errors(issues, rendered.shortcode_errors)
         i = i + 1
       }
     }
   }
-  { html: buf.to_string(), shortcode_errors: issues, toc: [] }
+  { html: buf.to_string(), shortcode_errors: issues, toc: [], footnotes: [] }
 }
 
 ///|
@@ -1133,6 +1258,28 @@ fn render_fenced_code(lang : String?, code : String) -> String {
 }
 
 ///|
+/// Build the footnotes section HTML for the end of the page.
+fn render_footnotes_section(footnotes : Array[FootnoteDef]) -> String {
+  let buf = StringBuilder::new()
+  buf.write_string("\n<section class=\"footnotes\">\n<ol>\n")
+  let mut i = 0
+  while i < footnotes.length() {
+    let footnote = footnotes[i]
+    buf.write_string("<li id=\"fn-")
+    buf.write_string(escape_html(footnote.label))
+    buf.write_string("\">")
+    buf.write_string(escape_html(footnote.text))
+    buf.write_string(" <a href=\"#fnref-")
+    buf.write_string(escape_html(footnote.label))
+    buf.write_string("\" class=\"footnote-backref\">↩</a>")
+    buf.write_string("</li>\n")
+    i = i + 1
+  }
+  buf.write_string("</ol>\n</section>\n")
+  buf.to_string()
+}
+
+///|
 /// Render a single inline element to an HTML string.
 ///
 /// Wikilinks are resolved against `wl` (target slug → url). A wikilink whose
@@ -1140,46 +1287,53 @@ fn render_fenced_code(lang : String?, code : String) -> String {
 /// defensive path; the build pipeline should have already aborted on missing
 /// targets.
 pub fn render_inline(inline : Inline, wl : Map[String, String]) -> String {
-  render_inline_with_issues(inline, wl).html
+  let fn_map : Map[String, Int] = Map::new()
+  render_inline_with_issues(inline, wl, fn_map).html
 }
 
 ///|
 fn render_inline_with_issues(
   inline : Inline,
   wl : Map[String, String],
+  fn_map : Map[String, Int],
 ) -> RenderResult {
   match inline {
-    Text(t) => { html: escape_html(t), shortcode_errors: [], toc: [] }
+    Text(t) =>
+      { html: escape_html(t), shortcode_errors: [], toc: [], footnotes: [] }
     Bold(inner) => {
-      let rendered = render_inlines_with_issues(inner, wl)
+      let rendered = render_inlines_with_issues(inner, wl, fn_map)
       {
         html: "<strong>" + rendered.html + "</strong>",
         shortcode_errors: rendered.shortcode_errors,
         toc: [],
+        footnotes: [],
       }
     }
     Italic(inner) => {
-      let rendered = render_inlines_with_issues(inner, wl)
+      let rendered = render_inlines_with_issues(inner, wl, fn_map)
       {
         html: "<em>" + rendered.html + "</em>",
         shortcode_errors: rendered.shortcode_errors,
         toc: [],
+        footnotes: [],
       }
     }
     BoldItalic(inner) => {
-      let rendered = render_inlines_with_issues(inner, wl)
+      let rendered = render_inlines_with_issues(inner, wl, fn_map)
       {
         html: "<strong><em>" + rendered.html + "</em></strong>",
         shortcode_errors: rendered.shortcode_errors,
         toc: [],
+        footnotes: [],
       }
     }
     Strikethrough(inner) => {
-      let rendered = render_inlines_with_issues(inner, wl)
+      let rendered = render_inlines_with_issues(inner, wl, fn_map)
       {
         html: "<del>" + rendered.html + "</del>",
         shortcode_errors: rendered.shortcode_errors,
         toc: [],
+        footnotes: [],
       }
     }
     InlineCode(code) =>
@@ -1187,6 +1341,7 @@ fn render_inline_with_issues(
         html: "<code>" + escape_html(code) + "</code>",
         shortcode_errors: [],
         toc: [],
+        footnotes: [],
       }
     Link(text, url) =>
       {
@@ -1197,6 +1352,7 @@ fn render_inline_with_issues(
         "</a>",
         shortcode_errors: [],
         toc: [],
+        footnotes: [],
       }
     Image(alt, url) =>
       {
@@ -1207,6 +1363,7 @@ fn render_inline_with_issues(
         "\" />",
         shortcode_errors: [],
         toc: [],
+        footnotes: [],
       }
     WikiRef(target, display) => {
       let text = match display {
@@ -1223,6 +1380,7 @@ fn render_inline_with_issues(
             "</a>",
             shortcode_errors: [],
             toc: [],
+            footnotes: [],
           }
         None =>
           {
@@ -1231,20 +1389,47 @@ fn render_inline_with_issues(
             "</a>",
             shortcode_errors: [],
             toc: [],
+            footnotes: [],
           }
       }
     }
+    FootnoteRef(label) =>
+      match fn_map.get(label) {
+        Some(ordinal) =>
+          {
+            html: "<sup><a href=\"#fn-" +
+            escape_html(label) +
+            "\" id=\"fnref-" +
+            escape_html(label) +
+            "\">[" +
+            ordinal.to_string() +
+            "]</a></sup>",
+            shortcode_errors: [],
+            toc: [],
+            footnotes: [],
+          }
+        None =>
+          {
+            // Unresolved footnote reference - render as plain text
+            html: "[^" + escape_html(label) + "]",
+            shortcode_errors: [],
+            toc: [],
+            footnotes: [],
+          }
+      }
     Shortcode(call) =>
       match @shortcode.render(call) {
-        Ok(html) => { html, shortcode_errors: [], toc: [] }
+        Ok(html) => { html, shortcode_errors: [], toc: [], footnotes: [] }
         Err(err) =>
           {
             html: "",
             shortcode_errors: [{ call: Some(call), error: err }],
             toc: [],
+            footnotes: [],
           }
       }
-    HardBreak => { html: "<br />\n", shortcode_errors: [], toc: [] }
+    HardBreak =>
+      { html: "<br />\n", shortcode_errors: [], toc: [], footnotes: [] }
   }
 }
 
@@ -1252,7 +1437,8 @@ fn render_inline_with_issues(
 /// Render a single block element to an HTML string.
 pub fn render_block(block : Block, wl : Map[String, String]) -> String {
   let counts : Map[String, Int] = Map::new()
-  render_block_with_issues(block, wl, counts).html
+  let fn_map : Map[String, Int] = Map::new()
+  render_block_with_issues(block, wl, counts, fn_map).html
 }
 
 ///|
@@ -1260,10 +1446,11 @@ fn render_block_with_issues(
   block : Block,
   wl : Map[String, String],
   heading_counts : Map[String, Int],
+  fn_map : Map[String, Int],
 ) -> RenderResult {
   match block {
     Heading(level, inlines) => {
-      let rendered = render_inlines_with_issues(inlines, wl)
+      let rendered = render_inlines_with_issues(inlines, wl, fn_map)
       let tag = "h" + level.to_string()
       let anchor = next_heading_anchor(
         plain_text_inlines(inlines),
@@ -1281,6 +1468,7 @@ fn render_block_with_issues(
         ">\n",
         shortcode_errors: rendered.shortcode_errors,
         toc: [],
+        footnotes: [],
       }
     }
     Paragraph(inlines) => {
@@ -1288,31 +1476,45 @@ fn render_block_with_issues(
         match inlines[0] {
           Shortcode(call) =>
             if shortcode_is_block(call) {
-              let rendered_inline = render_inline_with_issues(inlines[0], wl)
+              let rendered_inline = render_inline_with_issues(
+                inlines[0],
+                wl,
+                fn_map,
+              )
               return {
                 html: rendered_inline.html + "\n",
                 shortcode_errors: rendered_inline.shortcode_errors,
                 toc: [],
+                footnotes: [],
               }
             }
           _ => ()
         }
       }
-      let rendered = render_inlines_with_issues(inlines, wl)
+      let rendered = render_inlines_with_issues(inlines, wl, fn_map)
       {
         html: "<p>" + rendered.html + "</p>\n",
         shortcode_errors: rendered.shortcode_errors,
         toc: [],
+        footnotes: [],
       }
     }
     FencedCode(lang, code) =>
-      { html: render_fenced_code(lang, code), shortcode_errors: [], toc: [] }
+      {
+        html: render_fenced_code(lang, code),
+        shortcode_errors: [],
+        toc: [],
+        footnotes: [],
+      }
     BlockQuote(inner_blocks) => {
-      let rendered = render_blocks_with_issues(inner_blocks, wl, heading_counts)
+      let rendered = render_blocks_with_issues(
+        inner_blocks, wl, heading_counts, fn_map,
+      )
       {
         html: "<blockquote>\n" + rendered.html + "</blockquote>\n",
         shortcode_errors: rendered.shortcode_errors,
         toc: [],
+        footnotes: [],
       }
     }
     UnorderedList(items) => {
@@ -1356,7 +1558,9 @@ fn render_block_with_issues(
             _ => is_task_list = false
           }
         }
-        let rendered_item = render_inlines_with_issues(task_prefix_stripped, wl)
+        let rendered_item = render_inlines_with_issues(
+          task_prefix_stripped, wl, fn_map,
+        )
         merge_shortcode_errors(issues, rendered_item.shortcode_errors)
         buf.write_string("<li>")
         if is_task_list {
@@ -1371,7 +1575,12 @@ fn render_block_with_issues(
         i = i + 1
       }
       buf.write_string("</ul>\n")
-      { html: buf.to_string(), shortcode_errors: issues, toc: [] }
+      {
+        html: buf.to_string(),
+        shortcode_errors: issues,
+        toc: [],
+        footnotes: [],
+      }
     }
     OrderedList(items) => {
       let buf = StringBuilder::new()
@@ -1379,7 +1588,7 @@ fn render_block_with_issues(
       buf.write_string("<ol>\n")
       let mut i = 0
       while i < items.length() {
-        let rendered_item = render_inlines_with_issues(items[i], wl)
+        let rendered_item = render_inlines_with_issues(items[i], wl, fn_map)
         merge_shortcode_errors(issues, rendered_item.shortcode_errors)
         buf.write_string("<li>")
         buf.write_string(rendered_item.html)
@@ -1387,9 +1596,14 @@ fn render_block_with_issues(
         i = i + 1
       }
       buf.write_string("</ol>\n")
-      { html: buf.to_string(), shortcode_errors: issues, toc: [] }
+      {
+        html: buf.to_string(),
+        shortcode_errors: issues,
+        toc: [],
+        footnotes: [],
+      }
     }
-    HRule => { html: "<hr />\n", shortcode_errors: [], toc: [] }
+    HRule => { html: "<hr />\n", shortcode_errors: [], toc: [], footnotes: [] }
     Table(aligns, headers, rows) => {
       let buf = StringBuilder::new()
       let issues : Array[ShortcodeIssue] = []
@@ -1407,7 +1621,7 @@ fn render_block_with_issues(
           ""
         }
         buf.write_string("<th" + align_attr + ">")
-        let rendered = render_inlines_with_issues(headers[c], wl)
+        let rendered = render_inlines_with_issues(headers[c], wl, fn_map)
         buf.write_string(rendered.html)
         merge_shortcode_errors(issues, rendered.shortcode_errors)
         buf.write_string("</th>\n")
@@ -1430,7 +1644,7 @@ fn render_block_with_issues(
             ""
           }
           buf.write_string("<td" + align_attr + ">")
-          let rendered = render_inlines_with_issues(rows[r][c], wl)
+          let rendered = render_inlines_with_issues(rows[r][c], wl, fn_map)
           buf.write_string(rendered.html)
           merge_shortcode_errors(issues, rendered.shortcode_errors)
           buf.write_string("</td>\n")
@@ -1440,7 +1654,12 @@ fn render_block_with_issues(
         r = r + 1
       }
       buf.write_string("</tbody>\n</table>\n")
-      { html: buf.to_string(), shortcode_errors: issues, toc: [] }
+      {
+        html: buf.to_string(),
+        shortcode_errors: issues,
+        toc: [],
+        footnotes: [],
+      }
     }
   }
 }
@@ -1475,7 +1694,7 @@ pub fn extract_table_of_contents(
 ) -> Array[TocEntry] {
   let preprocessed = preprocess_callout_next_line(body)
   let ls = lines_of(preprocessed)
-  let blocks = parse_blocks(ls)
+  let (blocks, _footnotes) = parse_blocks_with_footnotes(ls)
   collect_toc_entries(blocks, max_depth)
 }
 
@@ -1486,13 +1705,30 @@ pub fn render_with_diagnostics(
 ) -> RenderResult {
   let preprocessed = preprocess_callout_next_line(body)
   let ls = lines_of(preprocessed)
-  let blocks = parse_blocks(ls)
+  let (blocks, footnotes) = parse_blocks_with_footnotes(ls)
   let heading_counts : Map[String, Int] = Map::new()
-  let rendered = render_blocks_with_issues(blocks, wikilinks, heading_counts)
+
+  // Build footnote label -> ordinal map
+  let fn_map : Map[String, Int] = Map::new()
+  let mut i = 0
+  while i < footnotes.length() {
+    fn_map.set(footnotes[i].label, i + 1)
+    i = i + 1
+  }
+
+  let rendered = render_blocks_with_issues(
+    blocks, wikilinks, heading_counts, fn_map,
+  )
+  let html_with_footnotes = if footnotes.length() > 0 {
+    rendered.html + render_footnotes_section(footnotes)
+  } else {
+    rendered.html
+  }
   {
-    html: rendered.html,
+    html: html_with_footnotes,
     shortcode_errors: rendered.shortcode_errors,
     toc: collect_toc_entries(blocks, 6),
+    footnotes,
   }
 }
 

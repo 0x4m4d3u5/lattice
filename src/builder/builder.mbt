@@ -1208,6 +1208,7 @@ fn inline_text_builder(inline : @markdown.Inline) -> String {
         Some(text) => text
         None => target
       }
+    @markdown.FootnoteRef(_) => ""
     @markdown.Shortcode(call) => call.name
     @markdown.HardBreak => " "
   }
