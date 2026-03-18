@@ -302,12 +302,12 @@ test "footnote multiple references" {
 test "footnote declaration order preserved" {
   let body = "Ref[^z] Ref[^a]\n\n[^a]: First defined\n[^z]: Later defined"
   let rendered = render(body, empty_wl())
-  // Ordinals should follow definition order, not reference order
-  assert_true(rendered.contains("id=\"fnref-z\">[1]</a></sup>"))
-  assert_true(rendered.contains("id=\"fnref-a\">[2]</a></sup>"))
-  // Footnotes should be in definition order - fn-z before fn-a
-  assert_true(rendered.contains("<li id=\"fn-z\">First defined"))
-  assert_true(rendered.contains("<li id=\"fn-a\">Later defined"))
+  // Ordinals follow definition order: [^a] is defined first → 1, [^z] second → 2
+  assert_true(rendered.contains("id=\"fnref-a\">[1]</a></sup>"))
+  assert_true(rendered.contains("id=\"fnref-z\">[2]</a></sup>"))
+  // Footnotes section in definition order: fn-a before fn-z
+  assert_true(rendered.contains("<li id=\"fn-a\">First defined"))
+  assert_true(rendered.contains("<li id=\"fn-z\">Later defined"))
   // Both footnotes should be in the footnotes section
   assert_true(rendered.contains("<section class=\"footnotes\">"))
 }
