@@ -11,6 +11,7 @@ import {
   "kurisu/lattice/src/graph" @graph,
   "kurisu/lattice/src/rss" @rss,
   "kurisu/lattice/src/sitemap" @sitemap,
+  "kurisu/lattice/src/robots" @robots,
   "kurisu/lattice/src/search" @search,
   "kurisu/lattice/src/tags" @tags,
   "kurisu/lattice/src/pagination" @pagination,

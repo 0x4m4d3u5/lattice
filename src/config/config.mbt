@@ -29,6 +29,7 @@ pub struct SiteConfig {
   static_dir : String?
   data_dir : String?
   root_page : String?
+  robots_txt : Bool?
   collections : Array[CollectionEntry]
   feed_limit : Int?
 }
@@ -170,6 +171,18 @@ fn parse_string_value_config(value : String) -> String {
 }
 
 ///|
+fn parse_bool_config(value : String) -> Bool? {
+  let v = trim_config(value).to_lower()
+  if v == "true" || v == "yes" || v == "1" || v == "on" {
+    Some(true)
+  } else if v == "false" || v == "no" || v == "0" || v == "off" {
+    Some(false)
+  } else {
+    None
+  }
+}
+
+///|
 /// Parse config text into a typed `SiteConfig`.
 ///
 /// Required keys:
@@ -188,6 +201,7 @@ fn parse_string_value_config(value : String) -> String {
 /// - `static_dir`
 /// - `data_dir`
 /// - `root_page`
+/// - `robots_txt`
 /// - `feed_limit`
 ///
 /// Inline collections via `[[collections]]` array-of-tables:
@@ -210,6 +224,7 @@ pub fn parse(input : String) -> Result[SiteConfig, ConfigError] {
   let mut static_dir : String? = None
   let mut data_dir : String? = None
   let mut root_page : String? = None
+  let mut robots_txt : Bool? = None
   let mut feed_limit : Int? = None
 
   let collections : Array[CollectionEntry] = []
@@ -374,6 +389,17 @@ pub fn parse(input : String) -> Result[SiteConfig, ConfigError] {
           } else {
             root_page = Some(string_value)
           }
+        } else if key == "robots_txt" {
+          match parse_bool_config(value) {
+            Some(parsed) => robots_txt = Some(parsed)
+            None =>
+              return Err(
+                InvalidValue(
+                  "robots_txt",
+                  "must be true/false, yes/no, 1/0, or on/off",
+                ),
+              )
+          }
         } else if key == "feed_limit" {
           match parse_positive_int_config(value) {
             Some(parsed) => feed_limit = Some(parsed)
@@ -433,6 +459,7 @@ pub fn parse(input : String) -> Result[SiteConfig, ConfigError] {
     static_dir,
     data_dir,
     root_page,
+    robots_txt,
     collections,
     feed_limit,
   })
