@@ -452,6 +452,76 @@ fn blog_posting_structured_data_builder(
 }
 
 ///|
+fn breadcrumb_item_builder(
+  name : String,
+  url : String,
+) -> @html.BreadcrumbItemData {
+  { name, item: url }
+}
+
+///|
+fn collection_breadcrumb_structured_data_builder(
+  site : @config.SiteConfig,
+  collection_name : String,
+  page_number : Int,
+) -> Array[@html.StructuredData] {
+  let items : Array[@html.BreadcrumbItemData] = []
+  items.push(
+    breadcrumb_item_builder(
+      site.title,
+      absolute_url_builder(site.base_url, "/"),
+    ),
+  )
+  items.push(
+    breadcrumb_item_builder(
+      collection_name,
+      absolute_url_builder(site.base_url, collection_index_url(collection_name)),
+    ),
+  )
+  if page_number > 1 {
+    items.push(
+      breadcrumb_item_builder(
+        "page " + page_number.to_string(),
+        absolute_url_builder(
+          site.base_url,
+          collection_index_page_url(collection_name, page_number),
+        ),
+      ),
+    )
+  }
+  [@html.BreadcrumbList({ items, })]
+}
+
+///|
+fn content_breadcrumb_structured_data_builder(
+  site : @config.SiteConfig,
+  collection_name : String,
+  page_title : String,
+  page_url : String,
+) -> Array[@html.StructuredData] {
+  let items : Array[@html.BreadcrumbItemData] = []
+  items.push(
+    breadcrumb_item_builder(
+      site.title,
+      absolute_url_builder(site.base_url, "/"),
+    ),
+  )
+  items.push(
+    breadcrumb_item_builder(
+      collection_name,
+      absolute_url_builder(site.base_url, collection_index_url(collection_name)),
+    ),
+  )
+  items.push(
+    breadcrumb_item_builder(
+      page_title,
+      absolute_url_builder(site.base_url, page_url),
+    ),
+  )
+  [@html.BreadcrumbList({ items, })]
+}
+
+///|
 fn website_structured_data_builder(
   site : @config.SiteConfig,
 ) -> Array[@html.StructuredData] {
@@ -1845,7 +1915,19 @@ fn render_collection_index(
         page_url,
       )
       match @template.render_template_with_data(tpl, slots, data_store) {
-        Ok(html) => return Ok(html)
+        Ok(html) =>
+          return Ok(
+            @html.inject_head_markup(
+              html,
+              @html.render_structured_data_script(
+                collection_breadcrumb_structured_data_builder(
+                  site,
+                  collection_name,
+                  pagination.page_number,
+                ),
+              ),
+            ),
+          )
         Err(e) =>
           return Err("collection index template: " + template_error_text(e))
       }
@@ -1864,7 +1946,11 @@ fn render_collection_index(
     stylesheet: Some(absolute_url_builder(site.base_url, "/style.css")),
     canonical_url: Some(canonical),
     og_image: site.og_image,
-    structured_data: [],
+    structured_data: collection_breadcrumb_structured_data_builder(
+      site,
+      collection_name,
+      pagination.page_number,
+    ),
   }
   Ok(@html.render_page(meta, body.to_string()))
 }
@@ -1993,6 +2079,7 @@ fn process_document(
   source : String,
   source_path : String,
   slug : String,
+  collection_name : String,
   url : String,
   page_index : Map[String, String],
   known_tags : Map[String, String],
@@ -2228,14 +2315,26 @@ fn process_document(
   let page_html = match render_variant(
     url,
     absolute_url_builder(site.base_url, url),
-    blog_posting_structured_data_builder(
-      title,
-      description_value,
-      absolute_url_builder(site.base_url, url),
-      date_value,
-      author_value,
-      page_og_image,
-    ),
+    {
+      let structured_data : Array[@html.StructuredData] =
+        content_breadcrumb_structured_data_builder(
+          site,
+          collection_name,
+          title,
+          url,
+        )
+      structured_data.push(
+        @html.BlogPosting({
+          headline: title,
+          description: description_value,
+          url: absolute_url_builder(site.base_url, url),
+          date_published: date_value,
+          author: author_value,
+          image: page_og_image,
+        }),
+      )
+      structured_data
+    },
   ) {
     Ok(html) => html
     Err(msg) => {
@@ -3193,6 +3292,7 @@ pub fn build(
         src.content,
         src.path,
         src.slug,
+        coll.definition.name,
         page_url,
         page_index,
         known_tags,

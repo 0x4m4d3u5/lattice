@@ -28,6 +28,17 @@ pub(all) struct BlogPostingData {
 }
 
 ///|
+pub(all) struct BreadcrumbItemData {
+  name : String
+  item : String
+}
+
+///|
+pub(all) struct BreadcrumbListData {
+  items : Array[BreadcrumbItemData]
+}
+
+///|
 pub(all) struct WebSiteData {
   name : String
   url : String
@@ -37,6 +48,7 @@ pub(all) struct WebSiteData {
 ///|
 pub(all) enum StructuredData {
   BlogPosting(BlogPostingData)
+  BreadcrumbList(BreadcrumbListData)
   WebSite(WebSiteData)
 }
 
@@ -183,6 +195,26 @@ fn begin_json_object_field_html(
 }
 
 ///|
+fn write_json_int_field_html(
+  buf : StringBuilder,
+  wrote_field : Bool,
+  indent : String,
+  key : String,
+  value : Int,
+) -> Bool {
+  if wrote_field {
+    buf.write_string(",\n")
+  } else {
+    buf.write_char('\n')
+  }
+  buf.write_string(indent)
+  write_json_string_html(buf, key)
+  buf.write_string(": ")
+  buf.write_string(value.to_string())
+  true
+}
+
+///|
 fn render_blog_posting_json_ld(data : BlogPostingData) -> String {
   let buf = StringBuilder::new()
   buf.write_string("{")
@@ -269,6 +301,86 @@ fn render_blog_posting_json_ld(data : BlogPostingData) -> String {
 }
 
 ///|
+fn render_breadcrumb_list_json_ld(data : BreadcrumbListData) -> String {
+  let buf = StringBuilder::new()
+  buf.write_string("{")
+  let mut wrote_field = false
+  wrote_field = write_json_field_html(
+    buf,
+    wrote_field,
+    "  ",
+    "@context",
+    "https://schema.org",
+  )
+  wrote_field = write_json_field_html(
+    buf,
+    wrote_field,
+    "  ",
+    "@type",
+    "BreadcrumbList",
+  )
+  wrote_field = begin_json_object_field_html(
+    buf,
+    wrote_field,
+    "  ",
+    "itemListElement",
+  )
+  if data.items.length() == 0 {
+    buf.write_string("[]")
+  } else {
+    buf.write_string("[\n")
+    let mut i = 0
+    while i < data.items.length() {
+      if i > 0 {
+        buf.write_string(",\n")
+      }
+      let item = data.items[i]
+      buf.write_string("    {\n")
+      let mut wrote_item_field = false
+      wrote_item_field = write_json_field_html(
+        buf,
+        wrote_item_field,
+        "      ",
+        "@type",
+        "ListItem",
+      )
+      wrote_item_field = write_json_int_field_html(
+        buf,
+        wrote_item_field,
+        "      ",
+        "position",
+        i + 1,
+      )
+      wrote_item_field = write_json_field_html(
+        buf,
+        wrote_item_field,
+        "      ",
+        "name",
+        item.name,
+      )
+      wrote_item_field = write_json_field_html(
+        buf,
+        wrote_item_field,
+        "      ",
+        "item",
+        item.item,
+      )
+      if wrote_item_field {
+        buf.write_char('\n')
+      }
+      buf.write_string("    }")
+      i = i + 1
+    }
+    buf.write_string("\n  ]")
+  }
+  if wrote_field {
+    buf.write_char('\n')
+  }
+  buf.write_string("}")
+  buf.to_string()
+}
+
+///|
 fn render_website_json_ld(data : WebSiteData) -> String {
   let buf = StringBuilder::new()
   buf.write_string("{")
@@ -305,6 +417,7 @@ fn render_website_json_ld(data : WebSiteData) -> String {
 fn render_structured_data_json(data : StructuredData) -> String {
   match data {
     BlogPosting(v) => render_blog_posting_json_ld(v)
+    BreadcrumbList(v) => render_breadcrumb_list_json_ld(v)
     WebSite(v) => render_website_json_ld(v)
   }
 }

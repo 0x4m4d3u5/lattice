@@ -213,7 +213,7 @@ test "build with paginated index template exposes page_num and total_pages" {
   assert_true(
     write_file_test(
       templates_root + "/index.html",
-      "page={{page_num}} of={{total_pages}} prev={{prev_page}} next={{next_page}}\n",
+      "<html><head></head><body>page={{page_num}} of={{total_pages}} prev={{prev_page}} next={{next_page}}</body></html>\n",
     ),
   )
 
@@ -275,6 +275,8 @@ test "build with paginated index template exposes page_num and total_pages" {
   assert_true(page2.contains("page=2"))
   assert_true(page2.contains("of=2"))
   assert_true(page2.contains("prev=/posts/"))
+  assert_true(page2.contains("\"@type\": \"BreadcrumbList\""))
+  assert_true(page2.contains("\"item\": \"/posts/page/2/\""))
 }
 
 ///|
@@ -1357,13 +1359,26 @@ test "build emits json ld for content pages and homepage root copy" {
     @fs.IOError(_) => ""
   }
   assert_true(post_output.contains("<script type=\"application/ld+json\">"))
+  assert_true(post_output.contains("\"@type\": \"BreadcrumbList\""))
   assert_true(post_output.contains("\"@type\": \"BlogPosting\""))
+  assert_true(post_output.contains("\"item\": \"https://example.test/\""))
+  assert_true(post_output.contains("\"item\": \"https://example.test/posts/\""))
+  assert_true(post_output.contains("\"item\": \"https://example.test/posts/home/\""))
   assert_true(post_output.contains("\"headline\": \"Home\""))
   assert_true(
     post_output.contains("\"url\": \"https://example.test/posts/home/\""),
   )
   assert_true(post_output.contains("\"datePublished\": \"2026-03-19\""))
   assert_true(post_output.contains("\"name\": \"Kurisu\""))
+
+  let collection_output = @fs.read_file_to_string(output_root + "/posts/index.html") catch {
+    @fs.IOError(_) => ""
+  }
+  assert_true(collection_output.contains("<script type=\"application/ld+json\">"))
+  assert_true(collection_output.contains("\"@type\": \"BreadcrumbList\""))
+  assert_true(collection_output.contains("\"item\": \"https://example.test/\""))
+  assert_true(collection_output.contains("\"item\": \"https://example.test/posts/\""))
+  assert_false(collection_output.contains("\"@type\": \"BlogPosting\""))
 
   let root_output = @fs.read_file_to_string(output_root + "/index.html") catch {
     @fs.IOError(_) => ""

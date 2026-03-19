@@ -202,6 +202,33 @@ test "render_page emits blog posting json ld in head" {
 }
 
 ///|
+test "render_structured_data_script emits breadcrumb list alongside blog posting" {
+  let script = @html.render_structured_data_script([
+    @html.BreadcrumbList({
+      items: [
+        { name: "Lattice", item: "https://example.com/" },
+        { name: "posts", item: "https://example.com/posts/" },
+        { name: "Test Page", item: "https://example.com/posts/test-page/" },
+      ],
+    }),
+    @html.BlogPosting({
+      headline: "Test Page",
+      description: Some("Test description"),
+      url: "https://example.com/posts/test-page/",
+      date_published: Some("2026-03-19"),
+      author: Some("A. Writer"),
+      image: None,
+    }),
+  ])
+  assert_true(script.contains("\"@type\": \"BreadcrumbList\""))
+  assert_true(script.contains("\"@type\": \"ListItem\""))
+  assert_true(script.contains("\"position\": 1"))
+  assert_true(script.contains("\"position\": 3"))
+  assert_true(script.contains("\"item\": \"https://example.com/posts/\""))
+  assert_true(script.contains("\"@type\": \"BlogPosting\""))
+}
+
+///|
 test "render_structured_data_script escapes script breaking content" {
   let script = @html.render_structured_data_script([
     @html.BlogPosting({
