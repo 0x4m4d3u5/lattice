@@ -139,7 +139,7 @@ test "render_page without description should skip og:description" {
   assert_eq(html.contains("<meta name=\"description\""), false)
   assert_eq(html.contains("og:description"), false)
   assert_eq(
-    html.contains("<meta property=\"og:title\" content=\"Test Page\" />"),
+    html.contains("<meta property=\"og:title\" content=\"Test &amp; Page\" />"),
     true,
   )
   assert_eq(
