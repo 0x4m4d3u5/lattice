@@ -132,6 +132,14 @@ fn extract_date(fm : @frontmatter.Frontmatter) -> String? {
 }
 
 ///|
+fn extract_author(fm : @frontmatter.Frontmatter) -> String? {
+  match fm.fields.get("author") {
+    Some(@frontmatter.FStr(author)) => Some(author)
+    _ => None
+  }
+}
+
+///|
 fn extract_toc_enabled(fm : @frontmatter.Frontmatter) -> Bool {
   match fm.fields.get("toc") {
     Some(@frontmatter.FBool(enabled)) => enabled
@@ -283,6 +291,7 @@ fn filter_toc_entries(
 /// A document that passed frontmatter/schema/wikilink validation.
 priv struct ProcessedDocument {
   html : String
+  root_html : String?
   title : String
   url : String
   description : String?
@@ -419,6 +428,40 @@ fn page_title_builder(page_title : String, site_title : String) -> String {
   } else {
     page_title + " | " + site_title
   }
+}
+
+///|
+fn blog_posting_structured_data_builder(
+  title : String,
+  description : String?,
+  url : String,
+  date : String?,
+  author : String?,
+  image : String?,
+) -> Array[@html.StructuredData] {
+  [
+    @html.BlogPosting({
+      headline: title,
+      description,
+      url,
+      date_published: date,
+      author,
+      image,
+    }),
+  ]
+}
+
+///|
+fn website_structured_data_builder(
+  site : @config.SiteConfig,
+) -> Array[@html.StructuredData] {
+  [
+    @html.WebSite({
+      name: site.title,
+      url: absolute_url_builder(site.base_url, "/"),
+      description: site.description,
+    }),
+  ]
 }
 
 ///|
@@ -1497,6 +1540,7 @@ fn render_tag_page_html(
         stylesheet: Some(absolute_url_builder(site.base_url, "/style.css")),
         canonical_url: Some(canonical),
         og_image: site.og_image,
+        structured_data: [],
       }
       Ok(@html.render_page(meta, body))
     }
@@ -1571,6 +1615,7 @@ fn render_tags_index_html(
         stylesheet: Some(absolute_url_builder(site.base_url, "/style.css")),
         canonical_url: Some(canonical),
         og_image: site.og_image,
+        structured_data: [],
       }
       Ok(@html.render_page(meta, body))
     }
@@ -1653,6 +1698,7 @@ fn render_404_page(
         stylesheet: Some(absolute_url_builder(config.site.base_url, "/style.css")),
         canonical_url: Some(canonical),
         og_image: config.site.og_image,
+        structured_data: [],
       }
       Ok(@html.render_page(meta, body_html))
     }
@@ -1818,6 +1864,7 @@ fn render_collection_index(
     stylesheet: Some(absolute_url_builder(site.base_url, "/style.css")),
     canonical_url: Some(canonical),
     og_image: site.og_image,
+    structured_data: [],
   }
   Ok(@html.render_page(meta, body.to_string()))
 }
@@ -2065,11 +2112,13 @@ fn process_document(
   let title = extract_title(fm)
   let description_value = extract_description(fm)
   let date_value = extract_date(fm)
+  let author_value = extract_author(fm)
   let og_image_value = extract_og_image(fm)
   if not(render_page_html) {
     return {
       document: Some({
         html: "",
+        root_html: None,
         title,
         url,
         description: description_value,
@@ -2118,66 +2167,101 @@ fn process_document(
     Some(v) => v
     None => ""
   }
-
-  let page_html = match page_template {
-    Some(tpl) => {
-      let slots = build_template_slots(
-        full_title,
-        body_html,
-        date_text,
-        description_text,
-        url,
-        site.title,
-        nav_links_html,
-        custom_css,
-        "",
-        "",
-      )
-      slots.set(@template.Backlinks, backlinks_html)
-      slots.set(@template.TableOfContents, toc_html)
-      let wc = count_words_markdown(fm.body)
-      slots.set(@template.WordCount, wc.to_string())
-      slots.set(@template.ReadingTime, reading_time_str(wc))
-      match @template.render_template_with_data(tpl, slots, data_store) {
-        Ok(html) => html
-        Err(e) => {
-          diagnostics.push(
-            build_error(
-              Some(source_path),
-              None,
-              None,
-              "page template: " + template_error_text(e),
-            ),
-          )
-          return { document: None, diagnostics }
+  let page_og_image = match og_image_value {
+    Some(img) => Some(img)
+    None => site.og_image
+  }
+  let page_body = if backlinks_html.length() > 0 {
+    toc_html + body_html + backlinks_html
+  } else {
+    toc_html + body_html
+  }
+  let wc = count_words_markdown(fm.body)
+  let render_variant = fn(
+    render_url : String,
+    canonical : String,
+    structured_data : Array[@html.StructuredData],
+  ) -> Result[String, String] {
+    match page_template {
+      Some(tpl) => {
+        let slots = build_template_slots(
+          full_title,
+          body_html,
+          date_text,
+          description_text,
+          render_url,
+          site.title,
+          nav_links_html,
+          custom_css,
+          "",
+          "",
+        )
+        slots.set(@template.Backlinks, backlinks_html)
+        slots.set(@template.TableOfContents, toc_html)
+        slots.set(@template.WordCount, wc.to_string())
+        slots.set(@template.ReadingTime, reading_time_str(wc))
+        match @template.render_template_with_data(tpl, slots, data_store) {
+          Ok(html) =>
+            Ok(
+              @html.inject_head_markup(
+                html,
+                @html.render_structured_data_script(structured_data),
+              ),
+            )
+          Err(e) => Err("page template: " + template_error_text(e))
         }
       }
+      None => {
+        let meta : @html.PageMeta = {
+          title: full_title,
+          description: description_value,
+          lang: "en",
+          stylesheet: Some(absolute_url_builder(site.base_url, "/style.css")),
+          canonical_url: Some(canonical),
+          og_image: page_og_image,
+          structured_data,
+        }
+        Ok(@html.render_page(meta, page_body))
+      }
     }
-    None => {
-      let canonical = absolute_url_builder(site.base_url, url)
-      let page_og_image = match og_image_value {
-        Some(img) => Some(img)
-        None => site.og_image
-      }
-      let meta : @html.PageMeta = {
-        title: full_title,
-        description: description_value,
-        lang: "en",
-        stylesheet: Some(absolute_url_builder(site.base_url, "/style.css")),
-        canonical_url: Some(canonical),
-        og_image: page_og_image,
-      }
-      let page_body = if backlinks_html.length() > 0 {
-        toc_html + body_html + backlinks_html
-      } else {
-        toc_html + body_html
-      }
-      @html.render_page(meta, page_body)
+  }
+  let page_html = match render_variant(
+    url,
+    absolute_url_builder(site.base_url, url),
+    blog_posting_structured_data_builder(
+      title,
+      description_value,
+      absolute_url_builder(site.base_url, url),
+      date_value,
+      author_value,
+      page_og_image,
+    ),
+  ) {
+    Ok(html) => html
+    Err(msg) => {
+      diagnostics.push(build_error(Some(source_path), None, None, msg))
+      return { document: None, diagnostics }
     }
+  }
+  let root_html = if is_root_page_for_site(site, slug) {
+    match render_variant(
+      "/",
+      absolute_url_builder(site.base_url, "/"),
+      website_structured_data_builder(site),
+    ) {
+      Ok(html) => Some(html)
+      Err(msg) => {
+        diagnostics.push(build_error(Some(source_path), None, None, msg))
+        return { document: None, diagnostics }
+      }
+    }
+  } else {
+    None
   }
   {
     document: Some({
       html: page_html,
+      root_html,
       title,
       url,
       description: description_value,
@@ -2342,6 +2426,7 @@ fn process_document_for_lint(
   let full_title = page_title_builder(title, site.title)
   let description_value = extract_description(fm)
   let date_value = extract_date(fm)
+  let author_value = extract_author(fm)
   let og_image_value = extract_og_image(fm)
   let description_text = match description_value {
     Some(v) => v
@@ -2398,6 +2483,14 @@ fn process_document_for_lint(
         stylesheet: Some(absolute_url_builder(site.base_url, "/style.css")),
         canonical_url: Some(canonical),
         og_image: page_og_image,
+        structured_data: blog_posting_structured_data_builder(
+          title,
+          description_value,
+          canonical,
+          date_value,
+          author_value,
+          page_og_image,
+        ),
       }
       let page_body = if backlinks_html.length() > 0 {
         toc_html + body_html + backlinks_html
@@ -2410,6 +2503,7 @@ fn process_document_for_lint(
   {
     document: Some({
       html: page_html,
+      root_html: None,
       title,
       url,
       description: description_value,
@@ -3145,7 +3239,11 @@ pub fn build(
               ensure_dir(page_dir)
               @fs.write_string_to_file(out_path, doc.html)
               if is_root_page_for_site(config.site, src.slug) {
-                @fs.write_string_to_file(root_out_path, doc.html)
+                match doc.root_html {
+                  Some(root_html) =>
+                    @fs.write_string_to_file(root_out_path, root_html)
+                  None => @fs.write_string_to_file(root_out_path, doc.html)
+                }
               }
               Some(out_path)
             } catch {
