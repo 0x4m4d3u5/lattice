@@ -1,0 +1,138 @@
+:root {
+  --bg: #f5efe3;
+  --surface: #fffaf2;
+  --border: #d9ccb4;
+  --ink: #1f1a14;
+  --muted: #6b5c48;
+  --accent: #0f766e;
+  --accent-soft: #d6f0ea;
+  --code-bg: #fbf6ec;
+  --max: 72rem;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: Georgia, "Iowan Old Style", serif;
+  color: var(--ink);
+  background:
+    radial-gradient(circle at top right, #efe2c5 0, transparent 30rem),
+    linear-gradient(180deg, #f8f1e6 0%, #f2ebde 100%);
+}
+
+a {
+  color: var(--accent);
+}
+
+.site-header,
+.site-footer,
+.site-main {
+  width: min(calc(100% - 2rem), var(--max));
+  margin: 0 auto;
+}
+
+.site-header {
+  padding: 2.5rem 0 1.5rem;
+}
+
+.site-header h1 {
+  margin: 0;
+  font-size: clamp(2rem, 5vw, 3.4rem);
+}
+
+.site-header p {
+  margin: 0.35rem 0 0;
+  color: var(--muted);
+}
+
+.site-header nav {
+  margin-top: 1rem;
+}
+
+.site-header nav a {
+  margin-right: 1rem;
+  font-weight: 700;
+}
+
+.site-main {
+  padding-bottom: 3rem;
+}
+
+.panel,
+.prose,
+.listing {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 1.25rem;
+  box-shadow: 0 1rem 2.5rem rgba(31, 26, 20, 0.08);
+}
+
+.panel,
+.listing {
+  padding: 1.5rem;
+}
+
+.prose {
+  padding: 2rem;
+}
+
+.eyebrow,
+.meta,
+.site-footer,
+.pagination {
+  color: var(--muted);
+}
+
+.tag-list,
+.pagination {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-top: 1.5rem;
+}
+
+.tag-list a,
+.pagination a {
+  text-decoration: none;
+  background: var(--accent-soft);
+  border-radius: 999px;
+  padding: 0.35rem 0.8rem;
+}
+
+.toc {
+  margin: 1.5rem 0;
+  padding: 1rem 1.25rem;
+  border-left: 4px solid var(--border);
+  background: #fcf7ef;
+}
+
+.toc .table-of-contents {
+  margin: 0;
+}
+
+pre,
+code {
+  font-family: "Berkeley Mono", "SFMono-Regular", Consolas, monospace;
+}
+
+pre {
+  overflow-x: auto;
+  padding: 1rem;
+  border-radius: 0.9rem;
+  background: var(--code-bg);
+}
+
+.site-footer {
+  padding: 0 0 2rem;
+}
+
+@media (max-width: 720px) {
+  .prose,
+  .panel,
+  .listing {
+    padding: 1.25rem;
+  }
+}

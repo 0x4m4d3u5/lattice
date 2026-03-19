@@ -99,19 +99,18 @@ moon run cmd/main -- ./content ./dist --watch --watch-interval 1000
 
 ## Example Site
 
-The `example/` directory is a full sample site:
+The `example/` directory is a compact feature demo site:
 
 - content: `example/content/`
 - templates: `example/templates/`
-- static assets: `example/static/`
+- static assets: `example/content/static/`
 - config: `example/site.cfg`
-- collections config: `example/collections.cfg`
-- data files: `example/data/`
+- notes: `example/README.md`
 
 Run it with:
 
 ```bash
-moon run cmd/main -- ./example/content ./dist --config ./example/site.cfg --collections ./example/collections.cfg
+moon run cmd/main -- ./example/content ./example/dist --config ./example/site.cfg
 ```
 
 For local preview, pair `--watch` with a static file server such as `simple-http-server`:

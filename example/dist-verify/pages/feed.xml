@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Lattice Example Site (pages)</title>
+  <id>https://example.lattice.test/</id>
+  <link href="https://example.lattice.test/" />
+  <updated>1970-01-01T00:00:00Z</updated>
+  <author><name>Lattice Example Site (pages)</name></author>
+  <entry>
+    <title>Home</title>
+    <id>https://example.lattice.test/pages/home/</id>
+    <link href="https://example.lattice.test/pages/home/" />
+    <updated>1970-01-01T00:00:00Z</updated>
+    <summary>Landing page for the lattice example site and its feature tour.</summary>
+  </entry>
+  <entry>
+    <title>About</title>
+    <id>https://example.lattice.test/pages/about/</id>
+    <link href="https://example.lattice.test/pages/about/" />
+    <updated>1970-01-01T00:00:00Z</updated>
+    <summary>Notes on what the example site demonstrates.</summary>
+  </entry>
+</feed>

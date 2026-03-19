@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Typed Content Tour | Lattice Example Site</title>
+<meta name="description" content="One post that exercises YAML frontmatter, code fences, footnotes, TOC output, tags, and internal links." />
+<link rel="stylesheet" href="/static/style.css" />
+<style>
+/* lattice default styles */
+*, *::before, *::after { box-sizing: border-box; }
+body {
+  font-family: system-ui, -apple-system, sans-serif;
+  max-width: 780px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem;
+  line-height: 1.7;
+  color: #1a1a2e;
+  background: #fafafa;
+}
+h1, h2, h3 { line-height: 1.3; margin-top: 2rem; }
+a { color: #2563eb; text-decoration-thickness: 1px; }
+a:hover { text-decoration-thickness: 2px; }
+code {
+  background: #f1f5f9;
+  padding: 0.15em 0.35em;
+  border-radius: 3px;
+  font-family: ui-monospace, monospace;
+  font-size: 0.9em;
+}
+pre { background: #f1f5f9; padding: 1.25rem; border-radius: 6px; overflow-x: auto; }
+pre code { background: none; padding: 0; font-size: 1em; }
+blockquote {
+  border-left: 3px solid #cbd5e1;
+  margin: 0;
+  padding: 0.5rem 1.25rem;
+  color: #475569;
+}
+nav { margin-bottom: 2.5rem; padding-bottom: 1rem; border-bottom: 1px solid #e2e8f0; }
+nav a { margin-right: 1.25rem; font-weight: 500; text-decoration: none; }
+nav a:hover { text-decoration: underline; }
+
+/* lattice highlight defaults */
+pre.highlight { background: #0f172a; color: #e2e8f0; }
+.hl-keyword { color: #93c5fd; font-weight: 600; }
+.hl-type { color: #fca5a5; }
+.hl-string { color: #86efac; }
+.hl-char { color: #bef264; }
+.hl-number { color: #fcd34d; }
+.hl-comment { color: #94a3b8; font-style: italic; }
+.hl-operator { color: #c4b5fd; }
+.hl-punct { color: #e2e8f0; }
+.hl-identifier { color: #e2e8f0; }
+.hl-builtin { color: #67e8f9; }
+.hl-unknown { color: #fda4af; }
+
+</style>
+
+  <script type="application/ld+json">
+[
+  {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+      {
+  
+        "@type": "ListItem",
+        "position": 1,
+        "name": "Lattice Example Site",
+        "item": "https://example.lattice.test/"
+      },
+      {
+  
+        "@type": "ListItem",
+        "position": 2,
+        "name": "posts",
+        "item": "https://example.lattice.test/posts/"
+      },
+      {
+  
+        "@type": "ListItem",
+        "position": 3,
+        "name": "Typed Content Tour",
+        "item": "https://example.lattice.test/posts/typed-content-tour/"
+      }
+    ]
+  },
+  {
+    "@context": "https://schema.org",
+    "@type": "BlogPosting",
+    "headline": "Typed Content Tour",
+    "url": "https://example.lattice.test/posts/typed-content-tour/",
+    "mainEntityOfPage": {
+      "@type": "WebPage",
+      "@id": "https://example.lattice.test/posts/typed-content-tour/"
+    },
+    "description": "One post that exercises YAML frontmatter, code fences, footnotes, TOC output, tags, and internal links.",
+    "datePublished": "2026-03-18",
+    "image": "https://example.lattice.test/static/social-card.png",
+    "author": {
+      "@type": "Person",
+      "name": "Lattice Team"
+    }
+  }
+]
+  </script>
+</head>
+<body>
+  <header class="site-header">
+  <p>lattice example</p>
+  <h1><a href="/">Lattice Example Site</a></h1>
+  <p>Reference implementation for the SCC demo.</p>
+  <nav><nav>
+<ul>
+<li><a href="/tags/">tags</a></li>
+<li><a href="/posts/">posts</a></li>
+<li><a href="/pages/">pages</a></li>
+</ul>
+</nav>
+</nav>
+</header>
+
+  <main class="site-main">
+    
+<article class="prose">
+  <h1>Typed Content Tour | Lattice Example Site</h1>
+  <p>One post that exercises YAML frontmatter, code fences, footnotes, TOC output, tags, and internal links.</p>
+  <p class="meta">2026-03-18 · 1 min · 166 words</p>
+  <aside class="toc"><nav class="table-of-contents">
+<ul>
+<li class="toc-level-2"><a href="#yaml-frontmatter">YAML Frontmatter</a></li>
+<li class="toc-level-2"><a href="#syntax-highlighting">Syntax Highlighting</a></li>
+<li class="toc-level-2"><a href="#table-of-contents">Table Of Contents</a></li>
+<li class="toc-level-3"><a href="#structural-metadata">Structural Metadata</a></li>
+<li class="toc-level-3"><a href="#cross-references">Cross-References</a></li>
+<li class="toc-level-2"><a href="#footnotes">Footnotes</a></li>
+</ul>
+</nav>
+</aside>
+  <div class="content"><h1 id="typed-content-tour">Typed Content Tour</h1>
+<p>This post is the main inspection target for the example site. It links to <a href="/posts/template-composition/">template-composition</a> and <a href="/posts/release-checkpoint/">release-checkpoint</a> so the generated internal graph is easy to verify.<sup><a href="#fn-graph" id="fnref-graph">[1]</a></sup></p>
+<h2 id="yaml-frontmatter">YAML Frontmatter</h2>
+<p>The frontmatter above uses YAML syntax rather than TOML syntax. That keeps the demo honest about mixed authoring styles.</p>
+<h2 id="syntax-highlighting">Syntax Highlighting</h2>
+<p>MoonBit fences should be highlighted:</p>
+<pre class="highlight language-moonbit"><code><span class="hl-keyword">fn</span> <span class="hl-identifier">build_site</span><span class="hl-punct">(</span><span class="hl-identifier">title</span> <span class="hl-punct">:</span> <span class="hl-type">String</span><span class="hl-punct">)</span> <span class="hl-operator">-&gt;</span> <span class="hl-type">String</span> <span class="hl-punct">{</span>
+  <span class="hl-string">&quot;building &quot;</span> <span class="hl-operator">+</span> <span class="hl-identifier">title</span>
+<span class="hl-punct">}</span></code></pre>
+<p>TypeScript fences should be highlighted too:</p>
+<pre class="highlight language-typescript"><code><span class="hl-keyword">export</span> <span class="hl-keyword">function</span> <span class="hl-identifier">breadcrumb</span><span class="hl-punct">(</span><span class="hl-identifier">label</span><span class="hl-punct">:</span> <span class="hl-identifier">string</span><span class="hl-punct">,</span> <span class="hl-identifier">href</span><span class="hl-punct">:</span> <span class="hl-identifier">string</span><span class="hl-punct">)</span> <span class="hl-punct">{</span>
+  <span class="hl-keyword">return</span> <span class="hl-punct">{</span> <span class="hl-identifier">label</span><span class="hl-punct">,</span> <span class="hl-identifier">href</span> <span class="hl-punct">}</span>
+<span class="hl-punct">}</span></code></pre>
+<h2 id="table-of-contents">Table Of Contents</h2>
+<p>This document has enough heading depth for the <code>{{table_of_contents}}</code> slot in the page template to render a useful outline.</p>
+<h3 id="structural-metadata">Structural Metadata</h3>
+<p><code>title</code>, <code>date</code>, <code>description</code>, <code>tags</code>, and <code>author</code> flow into templates, feeds, and structured data.</p>
+<h3 id="cross-references">Cross-References</h3>
+<p>Wikilinks such as <a href="/pages/about/">about</a> and <a href="/posts/template-composition/">template-composition</a> are resolved against the full site index.</p>
+<h2 id="footnotes">Footnotes</h2>
+<p>Footnotes render at the end of the page and backlink to the reference site of the citation.<sup><a href="#fn-foot" id="fnref-foot">[2]</a></sup></p>
+
+<section class="footnotes">
+<ol>
+<li id="fn-graph">That helps the example demonstrate internal link validation instead of only isolated pages. <a href="#fnref-graph" class="footnote-backref">↩</a></li>
+<li id="fn-foot">This note exists purely to prove the renderer emits the footnotes section. <a href="#fnref-foot" class="footnote-backref">↩</a></li>
+</ol>
+</section>
+<section>
+<h2>Tags</h2>
+<ul>
+<li><a href="/tags/demo/">demo</a></li>
+<li><a href="/tags/moonbit/">moonbit</a></li>
+</ul>
+</section>
+</div>
+</article>
+
+
+  </main>
+  <footer class="site-footer">
+  <p>Built to demonstrate structural frontmatter, content collections, and typed site output.</p>
+</footer>
+
+</body>
+</html>

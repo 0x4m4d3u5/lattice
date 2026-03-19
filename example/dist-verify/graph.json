@@ -1,0 +1,24 @@
+{
+  "nodes": [
+    {"slug": "typed-content-tour", "title": "Typed Content Tour", "url": "/posts/typed-content-tour/"},
+    {"slug": "template-composition", "title": "Template Composition", "url": "/posts/template-composition/"},
+    {"slug": "release-checkpoint", "title": "Release Checkpoint", "url": "/posts/release-checkpoint/"},
+    {"slug": "home", "title": "Home", "url": "/pages/home/"},
+    {"slug": "about", "title": "About", "url": "/pages/about/"}
+  ],
+  "edges": [
+    {"source": "typed-content-tour", "target": "template-composition"},
+    {"source": "typed-content-tour", "target": "release-checkpoint"},
+    {"source": "typed-content-tour", "target": "about"},
+    {"source": "typed-content-tour", "target": "template-composition"},
+    {"source": "template-composition", "target": "typed-content-tour"},
+    {"source": "template-composition", "target": "release-checkpoint"},
+    {"source": "release-checkpoint", "target": "typed-content-tour"},
+    {"source": "home", "target": "typed-content-tour"},
+    {"source": "home", "target": "template-composition"},
+    {"source": "home", "target": "about"},
+    {"source": "home", "target": "future-work"},
+    {"source": "about", "target": "release-checkpoint"},
+    {"source": "about", "target": "typed-content-tour"}
+  ]
+}

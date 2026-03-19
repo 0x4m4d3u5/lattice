@@ -1,22 +1,7 @@
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Tag: {{tag_name}} | {{site_name}}</title>
-  <meta name="description" content="Pages tagged with '{{tag_name}}' in {{site_name}}." />
-  <link rel="icon" href="/static/favicon.ico" />
-  <link rel="stylesheet" href="/static/style.css" />
-</head>
-<body>
-  <header>
-    <h1>{{data.nav.title}}</h1>
-    <p>{{data.nav.subtitle}}</p>
-    <nav>{{nav_links}}</nav>
-  </header>
-  {{content}}
-  <footer>
-    <p>{{data.site.owner}} · {{data.site.footer}}</p>
-  </footer>
-</body>
-</html>
+{{layout: base.html}}
+<section class="listing">
+  <p class="eyebrow">tag</p>
+  <h1>{{tag_name}}</h1>
+  <p>{{tag_count}} page(s) match this tag.</p>
+  <div>{{content}}</div>
+</section>

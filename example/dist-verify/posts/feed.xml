@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Lattice Example Site (posts)</title>
+  <id>https://example.lattice.test/</id>
+  <link href="https://example.lattice.test/" />
+  <updated>2026-03-18T00:00:00Z</updated>
+  <author><name>Lattice Example Site (posts)</name></author>
+  <entry>
+    <title>Typed Content Tour</title>
+    <id>https://example.lattice.test/posts/typed-content-tour/</id>
+    <link href="https://example.lattice.test/posts/typed-content-tour/" />
+    <updated>2026-03-18T00:00:00Z</updated>
+    <published>2026-03-18T00:00:00Z</published>
+    <summary>One post that exercises YAML frontmatter, code fences, footnotes, TOC output, tags, and internal links.</summary>
+  </entry>
+  <entry>
+    <title>Template Composition</title>
+    <id>https://example.lattice.test/posts/template-composition/</id>
+    <link href="https://example.lattice.test/posts/template-composition/" />
+    <updated>2026-03-17T00:00:00Z</updated>
+    <published>2026-03-17T00:00:00Z</published>
+    <summary>How the example site uses a base layout plus reusable partial templates.</summary>
+  </entry>
+  <entry>
+    <title>Release Checkpoint</title>
+    <id>https://example.lattice.test/posts/release-checkpoint/</id>
+    <link href="https://example.lattice.test/posts/release-checkpoint/" />
+    <updated>2026-03-16T00:00:00Z</updated>
+    <published>2026-03-16T00:00:00Z</published>
+    <summary>Short release-style entry used to populate pagination, tags, RSS, and the sitemap.</summary>
+  </entry>
+</feed>

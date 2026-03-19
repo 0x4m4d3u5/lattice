@@ -1,0 +1,42 @@
+[
+  {
+    "title": "Typed Content Tour",
+    "slug": "typed-content-tour",
+    "url": "/posts/typed-content-tour/",
+    "tags": ["demo", "moonbit"],
+    "collection": "posts",
+    "excerpt": "This post is the main inspection target for the example site. It links to template-composition and release-checkpoint so the generated internal graph is easy to verify."
+  },
+  {
+    "title": "Template Composition",
+    "slug": "template-composition",
+    "url": "/posts/template-composition/",
+    "tags": ["demo", "templates"],
+    "collection": "posts",
+    "excerpt": "The example templates are deliberately small:"
+  },
+  {
+    "title": "Release Checkpoint",
+    "slug": "release-checkpoint",
+    "url": "/posts/release-checkpoint/",
+    "tags": ["demo", "moonbit"],
+    "collection": "posts",
+    "excerpt": "This post is intentionally brief. Its job is to ensure the posts collection has enough published entries to paginate while sharing tags with typed-content-tour."
+  },
+  {
+    "title": "Home",
+    "slug": "home",
+    "url": "/pages/home/",
+    "tags": [],
+    "collection": "pages",
+    "excerpt": "This example is intentionally compact, but it covers the full feature breadth needed for a hackathon demo."
+  },
+  {
+    "title": "About",
+    "slug": "about",
+    "url": "/pages/about/",
+    "tags": [],
+    "collection": "pages",
+    "excerpt": "The purpose of this site is breadth, not depth."
+  }
+]
