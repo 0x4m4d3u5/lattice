@@ -1578,6 +1578,88 @@ fn render_tags_index_html(
 }
 
 ///|
+/// Render a 404 page using either a custom 404.md or a default fallback.
+///
+/// If 404.md exists in the content root, it's rendered through the full
+/// frontmatter/markdown/template pipeline. Otherwise, a minimal default
+/// 404 page is generated.
+///
+/// Template priority:
+///   1. templates/404.html (if present)
+///   2. templates/page.html (if present)
+///   3. Default HTML fallback
+fn render_404_page(
+  config : BuildConfig,
+  templates : BuildTemplates,
+  nav_links_html : String,
+  custom_css : String,
+  data_store : @data.DataStore,
+) -> Result[String, String] {
+  let page_path = config.content_dir + "/404.md"
+  let has_custom_404 = @fs.path_exists(page_path)
+  let url = "/404.html"
+
+  let (title, body_html, description) = if has_custom_404 {
+    let source = @fs.read_file_to_string(page_path) catch {
+      @fs.IOError(msg) => return Err("cannot read 404.md: " + msg)
+    }
+    match @frontmatter.parse(source) {
+      Err(e) => return Err("404.md frontmatter: " + e)
+      Ok(fm) => {
+        let wl_map = build_wikilink_map([])
+        let markdown_result = @markdown.render_with_diagnostics(fm.body, wl_map)
+        if markdown_result.shortcode_errors.length() > 0 {
+          return Err("404.md shortcode error: " + @shortcode.error_text(markdown_result.shortcode_errors[0].error))
+        }
+        let description = match extract_description(fm) {
+          Some(d) => d
+          None => "Page not found"
+        }
+        (extract_title(fm), markdown_result.html, description)
+      }
+    }
+  } else {
+    ("Page Not Found", "<h1>Page Not Found</h1>\n<p>The page you are looking for does not exist.</p>\n", "Page not found")
+  }
+
+  let full_title = page_title_builder(title, config.site.title)
+
+  // Template priority: 404.html → page.html → default
+  match templates.page {
+    Some(tpl) => {
+      let slots = build_template_slots(
+        full_title,
+        body_html,
+        "",
+        description,
+        url,
+        config.site.title,
+        nav_links_html,
+        custom_css,
+        "",
+        "",
+      )
+      match @template.render_template_with_data(tpl, slots, data_store) {
+        Ok(html) => Ok(html)
+        Err(e) => Err("404 page template: " + template_error_text(e))
+      }
+    }
+    None => {
+      let canonical = absolute_url_builder(config.site.base_url, url)
+      let meta : @html.PageMeta = {
+        title: full_title,
+        description: Some(description),
+        lang: "en",
+        stylesheet: Some(absolute_url_builder(config.site.base_url, "/style.css")),
+        canonical_url: Some(canonical),
+        og_image: config.site.og_image,
+      }
+      Ok(@html.render_page(meta, body_html))
+    }
+  }
+}
+
+///|
 /// Render a per-collection index page from successful pages + wikilinks.
 fn render_collection_index(
   collection_name : String,
@@ -3623,6 +3705,57 @@ pub fn build(
           diagnostics.push(asset_error_diagnostic(e))
           error_count = error_count + 1
         }
+      }
+    }
+    if error_count == 0 {
+      let page_path = config.content_dir + "/404.md"
+      let has_custom_404 = @fs.path_exists(page_path)
+      let fortyfour_html = match render_404_page(
+        config,
+        templates,
+        nav_links_html,
+        custom_css,
+        data_store,
+      ) {
+        Ok(html) => Some(html)
+        Err(msg) => {
+          diagnostics.push(
+            build_error(
+              Some(page_path),
+              None,
+              None,
+              "404 page: " + msg,
+            ),
+          )
+          None
+        }
+      }
+      match fortyfour_html {
+        Some(html) =>
+          try {
+            let out_path = config.output_dir + "/404.html"
+            @fs.write_string_to_file(out_path, html)
+            let source_type = if has_custom_404 {
+              "custom"
+            } else {
+              "default"
+            }
+            println("[lattice] wrote 404.html (" + source_type + ")")
+            ()
+          } catch {
+            @fs.IOError(msg) => {
+              diagnostics.push(
+                build_error(
+                  Some(config.output_dir + "/404.html"),
+                  None,
+                  None,
+                  "404 page: write failed: " + msg,
+                ),
+              )
+              error_count = error_count + 1
+            }
+          }
+        None => error_count = error_count + 1
       }
     }
     if error_count == 0 {
