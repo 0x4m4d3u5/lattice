@@ -1610,6 +1610,7 @@ fn render_tag_page_html(
         stylesheet: Some(absolute_url_builder(site.base_url, "/style.css")),
         canonical_url: Some(canonical),
         og_image: site.og_image,
+        feed_url: None,
         structured_data: [],
       }
       Ok(@html.render_page(meta, body))
@@ -1674,10 +1675,7 @@ fn render_tags_index_html(
       }
     }
     None => {
-      let canonical = absolute_url_builder(
-        site.base_url,
-        tags_index_page_url(pagination.page_number),
-      )
+      let canonical = absolute_url_builder(site.base_url, tags_index_page_url(pagination.page_number))
       let meta : @html.PageMeta = {
         title: full_title,
         description: Some(description),
@@ -1685,6 +1683,7 @@ fn render_tags_index_html(
         stylesheet: Some(absolute_url_builder(site.base_url, "/style.css")),
         canonical_url: Some(canonical),
         og_image: site.og_image,
+        feed_url: None,
         structured_data: [],
       }
       Ok(@html.render_page(meta, body))
@@ -1768,6 +1767,7 @@ fn render_404_page(
         stylesheet: Some(absolute_url_builder(config.site.base_url, "/style.css")),
         canonical_url: Some(canonical),
         og_image: config.site.og_image,
+        feed_url: None,
         structured_data: [],
       }
       Ok(@html.render_page(meta, body_html))
@@ -1939,6 +1939,10 @@ fn render_collection_index(
     site.base_url,
     collection_index_page_url(collection_name, pagination.page_number),
   )
+  let feed_url = absolute_url_builder(
+    site.base_url,
+    collection_index_url(collection_name) + "feed.xml",
+  )
   let meta : @html.PageMeta = {
     title: full_title,
     description: Some(description),
@@ -1946,6 +1950,7 @@ fn render_collection_index(
     stylesheet: Some(absolute_url_builder(site.base_url, "/style.css")),
     canonical_url: Some(canonical),
     og_image: site.og_image,
+    feed_url: Some(feed_url),
     structured_data: collection_breadcrumb_structured_data_builder(
       site,
       collection_name,
@@ -2306,6 +2311,7 @@ fn process_document(
           stylesheet: Some(absolute_url_builder(site.base_url, "/style.css")),
           canonical_url: Some(canonical),
           og_image: page_og_image,
+          feed_url: None,
           structured_data,
         }
         Ok(@html.render_page(meta, page_body))
@@ -2582,6 +2588,7 @@ fn process_document_for_lint(
         stylesheet: Some(absolute_url_builder(site.base_url, "/style.css")),
         canonical_url: Some(canonical),
         og_image: page_og_image,
+        feed_url: None,
         structured_data: blog_posting_structured_data_builder(
           title,
           description_value,

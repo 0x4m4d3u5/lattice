@@ -7,6 +7,7 @@ test "render_page without canonical_url or og_image" {
     stylesheet: Some("/style.css"),
     canonical_url: None,
     og_image: None,
+    feed_url: None,
     structured_data: [],
   }
   let html = @html.render_page(meta, "<p>Body content</p>")
@@ -16,6 +17,7 @@ test "render_page without canonical_url or og_image" {
   assert_eq(html.contains("og:type"), false)
   assert_eq(html.contains("og:url"), false)
   assert_eq(html.contains("og:image"), false)
+  assert_eq(html.contains("alternate.*atom"), false)
   // Should contain basic meta tags
   assert_eq(
     html.contains("<meta name=\"description\" content=\"Test description\""),
@@ -33,6 +35,7 @@ test "render_page with canonical_url only" {
     stylesheet: Some("/style.css"),
     canonical_url: Some("https://example.com/test-page/"),
     og_image: None,
+    feed_url: None,
     structured_data: [],
   }
   let html = @html.render_page(meta, "<p>Body content</p>")
@@ -65,6 +68,8 @@ test "render_page with canonical_url only" {
   )
   // Should NOT contain og:image when it's None
   assert_eq(html.contains("og:image"), false)
+  // Should NOT contain feed discovery when feed_url is None
+  assert_eq(html.contains("alternate.*atom"), false)
 }
 
 ///|
@@ -76,6 +81,7 @@ test "render_page with canonical_url and og_image" {
     stylesheet: Some("/style.css"),
     canonical_url: Some("https://example.com/test-page/"),
     og_image: Some("https://example.com/images/og.png"),
+    feed_url: None,
     structured_data: [],
   }
   let html = @html.render_page(meta, "<p>Body content</p>")
@@ -112,17 +118,20 @@ test "render_page with canonical_url and og_image" {
     ),
     true,
   )
+  // Should NOT contain feed discovery when feed_url is None
+  assert_eq(html.contains("alternate.*atom"), false)
 }
 
 ///|
 test "render_page without description should skip og:description" {
   let meta : @html.PageMeta = {
-    title: "Test Page",
+    title: "Test & Page",
     description: None,
     lang: "en",
     stylesheet: Some("/style.css"),
     canonical_url: Some("https://example.com/test-page/"),
     og_image: None,
+    feed_url: None,
     structured_data: [],
   }
   let html = @html.render_page(meta, "<p>Body content</p>")
@@ -139,6 +148,8 @@ test "render_page without description should skip og:description" {
     ),
     true,
   )
+  // Should NOT contain feed discovery when feed_url is None
+  assert_eq(html.contains("alternate.*atom"), false)
 }
 
 ///|
@@ -150,6 +161,7 @@ test "render_page escapes special characters in canonical_url and og_image" {
     stylesheet: Some("/style.css"),
     canonical_url: Some("https://example.com/test-page/?q=1&lang=en"),
     og_image: Some("https://example.com/img/og.png?v=1&x=2"),
+    feed_url: None,
     structured_data: [],
   }
   let html = @html.render_page(meta, "<p>Body content</p>")
@@ -176,6 +188,7 @@ test "render_page emits blog posting json ld in head" {
     stylesheet: Some("/style.css"),
     canonical_url: Some("https://example.com/test-page/"),
     og_image: Some("https://example.com/images/og.png"),
+    feed_url: None,
     structured_data: [
       @html.BlogPosting({
         headline: "Test Page",
@@ -252,4 +265,29 @@ test "inject_head_markup inserts before closing head" {
     out,
     "<html><head><title>X</title><meta name=\"x\" content=\"1\" /></head><body></body></html>",
   )
+}
+
+
+///|
+test "render_page with feed_url includes atom discovery link" {
+  let meta : @html.PageMeta = {
+    title: "Posts",
+    description: Some("All posts"),
+    lang: "en",
+    stylesheet: Some("/style.css"),
+    canonical_url: Some("https://example.com/posts/"),
+    og_image: None,
+    feed_url: Some("https://example.com/posts/feed.xml"),
+    structured_data: [],
+  }
+  let html = @html.render_page(meta, "<p>Body content</p>")
+  // Should contain feed discovery link
+  assert_true(
+    html.contains(
+      "<link rel=\"alternate\" type=\"application/atom+xml\" title=\"Posts\" href=\"https://example.com/posts/feed.xml\" />",
+    ),
+  )
+  // Should also contain OG tags when canonical_url is Some
+  assert_true(html.contains("<link rel=\"canonical\""))
+  assert_true(html.contains("<meta property=\"og:title\""))
 }

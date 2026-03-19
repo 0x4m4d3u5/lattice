@@ -14,6 +14,7 @@ pub(all) struct PageMeta {
   stylesheet : String? // optional <link rel="stylesheet"> href
   canonical_url : String? // absolute URL, renders as <link rel="canonical"> + og:url
   og_image : String? // absolute image URL, renders as og:image
+  feed_url : String? // absolute Atom feed URL, renders as <link rel="alternate" type="application/atom+xml">
   structured_data : Array[StructuredData] // optional JSON-LD objects
 }
 
@@ -534,6 +535,15 @@ pub fn render_page(meta : PageMeta, body_html : String) -> String {
           "\" />\n"
         None => ""
       }
+      let feed_tag = match meta.feed_url {
+        Some(feed) =>
+          "  <link rel=\"alternate\" type=\"application/atom+xml\" title=\"" +
+          escape_html_attr(meta.title) +
+          "\" href=\"" +
+          escape_html_attr(feed) +
+          "\" />\n"
+        None => ""
+      }
       "  <link rel=\"canonical\" href=\"" +
       escape_html_attr(url) +
       "\" />\n" +
@@ -545,7 +555,8 @@ pub fn render_page(meta : PageMeta, body_html : String) -> String {
       "  <meta property=\"og:url\" content=\"" +
       escape_html_attr(url) +
       "\" />\n" +
-      og_img
+      og_img +
+      feed_tag
     }
     None => ""
   }
