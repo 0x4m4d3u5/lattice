@@ -251,9 +251,28 @@ dist/
 ├── graph.json
 ├── search-index.json
 ├── sitemap.xml
+├── robots.txt
 └── style.css
 ```
 
 If `static_dir` exists, lattice also copies those files into `dist/static/`.
+
+## robots.txt and sitemap
+
+Lattice automatically generates `robots.txt` during build. By default, it allows all crawlers and includes a sitemap reference:
+
+```text
+User-agent: *
+Allow: /
+Sitemap: https://example.com/sitemap.xml
+```
+
+The sitemap directive is only included when `base_url` is set. To disable robots.txt generation, add this to your site config:
+
+```cfg
+robots_txt = false
+```
+
+Accepted boolean values: `true/false`, `yes/no`, `1/0`, or `on/off`. When disabled, lattice logs "robots.txt skipped (disabled)" instead of writing the file.
 
 The important constraint is that output only happens after the structural checks pass: frontmatter, schema, data slots, template slots, and wikilinks are validated first. That keeps bad content from silently leaking into generated pages.

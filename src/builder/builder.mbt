@@ -3834,6 +3834,41 @@ pub fn build(
       }
     }
     if error_count == 0 {
+      let robots_txt_enabled = match config.site.robots_txt {
+        Some(enabled) => enabled
+        None => true
+      }
+      let robots_txt_content = @robots.render_robots_txt(
+        config.site.base_url,
+        robots_txt_enabled,
+      )
+      if robots_txt_content.length() > 0 {
+        let robots_write_ok = try {
+          let out_path = config.output_dir + "/robots.txt"
+          @fs.write_string_to_file(out_path, robots_txt_content)
+          println("[lattice] wrote " + out_path)
+          true
+        } catch {
+          @fs.IOError(msg) => {
+            diagnostics.push(
+              build_error(
+                Some(config.output_dir + "/robots.txt"),
+                None,
+                None,
+                "robots.txt: write failed: " + msg,
+              ),
+            )
+            false
+          }
+        }
+        if not(robots_write_ok) {
+          error_count = error_count + 1
+        }
+      } else {
+        println("[lattice] robots.txt skipped (disabled)")
+      }
+    }
+    if error_count == 0 {
       let search_write_ok = try {
         let search_json = @search.render_search_index(search_entries)
         let out_path = config.output_dir +
