@@ -1278,3 +1278,99 @@ test "page without draft key is always included" {
   // Should report 0 skipped drafts
   assert_eq(result.skipped_drafts, 0)
 }
+
+///|
+test "build emits json ld for content pages and homepage root copy" {
+  let root = "./_tmp_builder_json_ld"
+  let content_root = root + "/content"
+  let posts_root = content_root + "/posts"
+  let data_root = content_root + "/data"
+  let output_root = root + "/dist"
+  ensure_dir_test(root)
+  ensure_dir_test(content_root)
+  ensure_dir_test(posts_root)
+  ensure_dir_test(data_root)
+  ensure_dir_test(output_root)
+
+  assert_true(
+    write_file_test(
+      posts_root + "/home.md",
+      "---\n" +
+      "title: Home\n" +
+      "description: Site entrypoint\n" +
+      "date: 2026-03-19\n" +
+      "author: Kurisu\n" +
+      "og_image: https://example.test/images/home.png\n" +
+      "---\n\n" +
+      "Hello home page.\n",
+    ),
+  )
+  assert_true(
+    write_file_test(
+      root + "/collections.cfg",
+      "[posts]\n" +
+      "schema = title:String,description:String,date:Date,author:String,og_image:String\n" +
+      "dir = " +
+      posts_root +
+      "\n",
+    ),
+  )
+
+  let site_cfg = "title = Lattice\n" +
+    "base_url = https://example.test\n" +
+    "description = Typed site\n" +
+    "data_dir = " +
+    data_root +
+    "\n" +
+    "collections_file = " +
+    root +
+    "/collections.cfg\n" +
+    "root_page = \"home\"\n" +
+    "output_dir = " +
+    output_root +
+    "\n"
+  assert_true(write_file_test(root + "/site.cfg", site_cfg))
+
+  let site = match @config.parse(site_cfg) {
+    Ok(parsed) => parsed
+    Err(_) => {
+      assert_true(false)
+      abort("site config parse failed")
+    }
+  }
+
+  let result = @builder.build(
+    {
+      content_dir: content_root,
+      output_dir: output_root,
+      config_path: root + "/site.cfg",
+      site,
+      collections_path: Some(root + "/collections.cfg"),
+      force_rebuild: true,
+      include_drafts: false,
+    },
+    @cache.empty(output_root),
+  )
+  assert_eq(result.errors, 0)
+
+  let post_output = @fs.read_file_to_string(output_root + "/posts/home/index.html") catch {
+    @fs.IOError(_) => ""
+  }
+  assert_true(post_output.contains("<script type=\"application/ld+json\">"))
+  assert_true(post_output.contains("\"@type\": \"BlogPosting\""))
+  assert_true(post_output.contains("\"headline\": \"Home\""))
+  assert_true(
+    post_output.contains("\"url\": \"https://example.test/posts/home/\""),
+  )
+  assert_true(post_output.contains("\"datePublished\": \"2026-03-19\""))
+  assert_true(post_output.contains("\"name\": \"Kurisu\""))
+
+  let root_output = @fs.read_file_to_string(output_root + "/index.html") catch {
+    @fs.IOError(_) => ""
+  }
+  assert_true(root_output.contains("<script type=\"application/ld+json\">"))
+  assert_true(root_output.contains("\"@type\": \"WebSite\""))
+  assert_true(root_output.contains("\"name\": \"Lattice\""))
+  assert_true(root_output.contains("\"url\": \"https://example.test/\""))
+  assert_false(root_output.contains("\"@type\": \"BlogPosting\""))
+}

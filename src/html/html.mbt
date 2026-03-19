@@ -14,6 +14,30 @@ pub(all) struct PageMeta {
   stylesheet : String? // optional <link rel="stylesheet"> href
   canonical_url : String? // absolute URL, renders as <link rel="canonical"> + og:url
   og_image : String? // absolute image URL, renders as og:image
+  structured_data : Array[StructuredData] // optional JSON-LD objects
+}
+
+///|
+pub(all) struct BlogPostingData {
+  headline : String
+  description : String?
+  url : String
+  date_published : String?
+  author : String?
+  image : String?
+}
+
+///|
+pub(all) struct WebSiteData {
+  name : String
+  url : String
+  description : String?
+}
+
+///|
+pub(all) enum StructuredData {
+  BlogPosting(BlogPostingData)
+  WebSite(WebSiteData)
 }
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -64,6 +88,295 @@ fn escape_html_attr(s : String) -> String {
     } else {
       buf.write_char(c)
     }
+    i = i + 1
+  }
+  buf.to_string()
+}
+
+///|
+fn hex_nibble_html(n : Int) -> Char {
+  if n < 10 {
+    ('0'.to_int() + n).unsafe_to_char()
+  } else {
+    ('a'.to_int() + (n - 10)).unsafe_to_char()
+  }
+}
+
+///|
+fn write_json_escape_html(buf : StringBuilder, code : Int) -> Unit {
+  buf.write_string("\\u")
+  buf.write_char(hex_nibble_html((code >> 12) & 0xF))
+  buf.write_char(hex_nibble_html((code >> 8) & 0xF))
+  buf.write_char(hex_nibble_html((code >> 4) & 0xF))
+  buf.write_char(hex_nibble_html(code & 0xF))
+}
+
+///|
+fn write_json_string_html(buf : StringBuilder, s : String) -> Unit {
+  buf.write_char('"')
+  let n = s.length()
+  let mut i = 0
+  while i < n {
+    let c = char_at_html(s, i)
+    if c == '\\' {
+      buf.write_string("\\\\")
+    } else if c == '"' {
+      buf.write_string("\\\"")
+    } else if c == '\n' {
+      buf.write_string("\\n")
+    } else if c == '\r' {
+      buf.write_string("\\r")
+    } else if c == '\t' {
+      buf.write_string("\\t")
+    } else if c == '<' {
+      buf.write_string("\\u003c")
+    } else if c == '>' {
+      buf.write_string("\\u003e")
+    } else if c == '&' {
+      buf.write_string("\\u0026")
+    } else if c.to_int() < 0x20 {
+      write_json_escape_html(buf, c.to_int())
+    } else {
+      buf.write_char(c)
+    }
+    i = i + 1
+  }
+  buf.write_char('"')
+}
+
+///|
+fn write_json_field_html(
+  buf : StringBuilder,
+  wrote_field : Bool,
+  indent : String,
+  key : String,
+  value : String,
+) -> Bool {
+  if wrote_field {
+    buf.write_string(",\n")
+  } else {
+    buf.write_char('\n')
+  }
+  buf.write_string(indent)
+  write_json_string_html(buf, key)
+  buf.write_string(": ")
+  write_json_string_html(buf, value)
+  true
+}
+
+///|
+fn begin_json_object_field_html(
+  buf : StringBuilder,
+  wrote_field : Bool,
+  indent : String,
+  key : String,
+) -> Bool {
+  if wrote_field {
+    buf.write_string(",\n")
+  } else {
+    buf.write_char('\n')
+  }
+  buf.write_string(indent)
+  write_json_string_html(buf, key)
+  buf.write_string(": ")
+  true
+}
+
+///|
+fn render_blog_posting_json_ld(data : BlogPostingData) -> String {
+  let buf = StringBuilder::new()
+  buf.write_string("{")
+  let mut wrote_field = false
+  wrote_field = write_json_field_html(
+    buf,
+    wrote_field,
+    "  ",
+    "@context",
+    "https://schema.org",
+  )
+  wrote_field = write_json_field_html(buf, wrote_field, "  ", "@type", "BlogPosting")
+  wrote_field = write_json_field_html(buf, wrote_field, "  ", "headline", data.headline)
+  wrote_field = write_json_field_html(buf, wrote_field, "  ", "url", data.url)
+  wrote_field = begin_json_object_field_html(
+    buf,
+    wrote_field,
+    "  ",
+    "mainEntityOfPage",
+  )
+  buf.write_string("{\n    ")
+  write_json_string_html(buf, "@type")
+  buf.write_string(": ")
+  write_json_string_html(buf, "WebPage")
+  buf.write_string(",\n    ")
+  write_json_string_html(buf, "@id")
+  buf.write_string(": ")
+  write_json_string_html(buf, data.url)
+  buf.write_string("\n  }")
+  match data.description {
+    Some(description) =>
+      wrote_field = write_json_field_html(
+        buf,
+        true,
+        "  ",
+        "description",
+        description,
+      )
+    None => ()
+  }
+  match data.date_published {
+    Some(date) =>
+      wrote_field = write_json_field_html(
+        buf,
+        true,
+        "  ",
+        "datePublished",
+        date,
+      )
+    None => ()
+  }
+  match data.image {
+    Some(image) =>
+      wrote_field = write_json_field_html(buf, true, "  ", "image", image)
+    None => ()
+  }
+  match data.author {
+    Some(author) => {
+      if wrote_field {
+        buf.write_string(",\n")
+      } else {
+        buf.write_char('\n')
+      }
+      buf.write_string("  ")
+      write_json_string_html(buf, "author")
+      buf.write_string(": {\n    ")
+      write_json_string_html(buf, "@type")
+      buf.write_string(": ")
+      write_json_string_html(buf, "Person")
+      buf.write_string(",\n    ")
+      write_json_string_html(buf, "name")
+      buf.write_string(": ")
+      write_json_string_html(buf, author)
+      buf.write_string("\n  }")
+      wrote_field = true
+    }
+    None => ()
+  }
+  if wrote_field {
+    buf.write_char('\n')
+  }
+  buf.write_string("}")
+  buf.to_string()
+}
+
+///|
+fn render_website_json_ld(data : WebSiteData) -> String {
+  let buf = StringBuilder::new()
+  buf.write_string("{")
+  let mut wrote_field = false
+  wrote_field = write_json_field_html(
+    buf,
+    wrote_field,
+    "  ",
+    "@context",
+    "https://schema.org",
+  )
+  wrote_field = write_json_field_html(buf, wrote_field, "  ", "@type", "WebSite")
+  wrote_field = write_json_field_html(buf, wrote_field, "  ", "name", data.name)
+  wrote_field = write_json_field_html(buf, wrote_field, "  ", "url", data.url)
+  match data.description {
+    Some(description) =>
+      wrote_field = write_json_field_html(
+        buf,
+        wrote_field,
+        "  ",
+        "description",
+        description,
+      )
+    None => ()
+  }
+  if wrote_field {
+    buf.write_char('\n')
+  }
+  buf.write_string("}")
+  buf.to_string()
+}
+
+///|
+fn render_structured_data_json(data : StructuredData) -> String {
+  match data {
+    BlogPosting(v) => render_blog_posting_json_ld(v)
+    WebSite(v) => render_website_json_ld(v)
+  }
+}
+
+///|
+pub fn render_structured_data_script(items : Array[StructuredData]) -> String {
+  if items.length() == 0 {
+    return ""
+  }
+  let buf = StringBuilder::new()
+  buf.write_string("  <script type=\"application/ld+json\">\n")
+  if items.length() == 1 {
+    buf.write_string(render_structured_data_json(items[0]))
+  } else {
+    buf.write_string("[\n")
+    let mut i = 0
+    while i < items.length() {
+      if i > 0 {
+        buf.write_string(",\n")
+      }
+      let json = render_structured_data_json(items[i])
+      let mut j = 0
+      while j < json.length() {
+        if j == 0 || char_at_html(json, j - 1) == '\n' {
+          buf.write_string("  ")
+        }
+        buf.write_char(char_at_html(json, j))
+        j = j + 1
+      }
+      i = i + 1
+    }
+    buf.write_string("\n]")
+  }
+  buf.write_string("\n  </script>\n")
+  buf.to_string()
+}
+
+///|
+pub fn inject_head_markup(document_html : String, markup : String) -> String {
+  if markup.length() == 0 {
+    return document_html
+  }
+  let needle = "</head>"
+  let mut i = 0
+  while i + needle.length() <= document_html.length() {
+    let mut matched = true
+    let mut j = 0
+    while j < needle.length() {
+      if char_at_html(document_html, i + j) != char_at_html(needle, j) {
+        matched = false
+        j = needle.length()
+      } else {
+        j = j + 1
+      }
+    }
+    if matched {
+      return (
+        substr(document_html, 0, i) + markup +
+        substr(document_html, i, document_html.length())
+      )
+    }
+    i = i + 1
+  }
+  document_html
+}
+
+///|
+fn substr(s : String, start : Int, end_pos : Int) -> String {
+  let buf = StringBuilder::new()
+  let mut i = start
+  while i < end_pos {
+    buf.write_char(char_at_html(s, i))
     i = i + 1
   }
   buf.to_string()
@@ -123,6 +436,7 @@ pub fn render_page(meta : PageMeta, body_html : String) -> String {
     }
     None => ""
   }
+  let structured_data_script = render_structured_data_script(meta.structured_data)
   "<!doctype html>\n" +
   "<html lang=\"" +
   escape_html_attr(lang) +
@@ -135,6 +449,7 @@ pub fn render_page(meta : PageMeta, body_html : String) -> String {
   "</title>\n" +
   desc_tag +
   og_tags +
+  structured_data_script +
   style_tag +
   "</head>\n" +
   "<body>\n" +
