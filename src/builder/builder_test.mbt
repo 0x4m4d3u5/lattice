@@ -1404,3 +1404,288 @@ test "build emits json ld for content pages and homepage root copy" {
 }
 
 ///|
+
+///|
+test "template tags slot renders space-separated tag links" {
+  let root = "./_tmp_template_tags_slot"
+  let content_root = root + "/content"
+  let posts_root = content_root + "/posts"
+  let data_root = content_root + "/data"
+  let templates_root = root + "/templates"
+  let output_root = root + "/dist"
+  ensure_dir_test(root)
+  ensure_dir_test(content_root)
+  ensure_dir_test(posts_root)
+  ensure_dir_test(data_root)
+  ensure_dir_test(templates_root)
+  ensure_dir_test(output_root)
+
+  // Create site.cfg
+  assert_true(
+    write_file_test(
+      root + "/site.cfg",
+      "site:\n  title: Test Site\n  base_url: https://example.test/\n",
+    ),
+  )
+
+  // Create collections.cfg with tags index
+  assert_true(
+    write_file_test(
+      root + "/collections.cfg",
+      "collection posts:\n  schema:\n    title: string\n    date: string\n    tags: [string]\nindex tags:\n",
+    ),
+  )
+
+  // Create post with tags
+  assert_true(
+    write_file_test(
+      posts_root + "/post1.md",
+      "---\ntitle: Post With Tags\ndate: 2026-03-19\ntags: [foo, bar]\n---\nContent\n",
+    ),
+  )
+
+  // Create page template that uses tags slot
+  assert_true(
+    write_file_test(
+      templates_root + "/page.html",
+      "<html><body>tags={{tags}} collection={{collection}} year={{year}} month={{month}} day={{day}}</body></html>\n",
+    ),
+  )
+
+  // Build
+  let collections_cfg = "collection posts:\n  schema:\n    title: string\n    date: string\n    tags: [string]\n    dir = " + posts_root + "\nindex tags:\n"
+  assert_true(write_file_test(root + "/collections.cfg", collections_cfg))
+
+  let site_cfg = "title = Test Site\n" +
+    "base_url = https://example.test/\n" +
+    "templates_dir = " +
+    templates_root +
+    "\n" +
+    "data_dir = " +
+    data_root +
+    "\n" +
+    "collections_file = " +
+    root +
+    "/collections.cfg\n" +
+    "output_dir = " +
+    output_root +
+    "\n"
+  assert_true(write_file_test(root + "/site.cfg", site_cfg))
+
+  let site = match @config.parse(site_cfg) {
+    Ok(parsed) => parsed
+    Err(_) => {
+      assert_true(false)
+      abort("site config parse failed")
+    }
+  }
+  let result = @builder.build(
+    {
+      content_dir: content_root,
+      output_dir: output_root,
+      config_path: root + "/site.cfg",
+      site,
+      collections_path: Some(root + "/collections.cfg"),
+      force_rebuild: true,
+      include_drafts: false,
+    },
+    @cache.empty(output_root),
+  )
+  assert_eq(result.errors, 0)
+
+  let post_output = @fs.read_file_to_string(
+    output_root + "/posts/post1/index.html",
+  ) catch {
+    @fs.IOError(_) => ""
+  }
+  // Tags slot should have space-separated links
+  assert_true(post_output.contains("<a href=\"/tags/foo/\">foo</a>"))
+  assert_true(post_output.contains("<a href=\"/tags/bar/\">bar</a>"))
+  // Collection slot should be "posts"
+  assert_true(post_output.contains("collection=posts"))
+  // Date components should be split
+  assert_true(post_output.contains("year=2026"))
+  assert_true(post_output.contains("month=03"))
+  assert_true(post_output.contains("day=19"))
+}
+
+///|
+test "template tags slot is empty for pages without tags" {
+  let root = "./_tmp_template_tags_empty"
+  let content_root = root + "/content"
+  let posts_root = content_root + "/posts"
+  let data_root = content_root + "/data"
+  let templates_root = root + "/templates"
+  let output_root = root + "/dist"
+  ensure_dir_test(root)
+  ensure_dir_test(content_root)
+  ensure_dir_test(posts_root)
+  ensure_dir_test(data_root)
+  ensure_dir_test(templates_root)
+  ensure_dir_test(output_root)
+
+  // Create collections.cfg
+  assert_true(
+    write_file_test(
+      root + "/collections.cfg",
+      "collection posts:\n  schema:\n    title: string\n    date: string\n    tags: [string]\nindex tags:\n",
+    ),
+  )
+
+  // Create post without tags
+  assert_true(
+    write_file_test(
+      posts_root + "/post1.md",
+      "---\ntitle: Post Without Tags\ndate: 2026-03-19\ntags: []\n---\nContent\n",
+    ),
+  )
+
+  // Create page template that uses tags slot
+  assert_true(
+    write_file_test(
+      templates_root + "/page.html",
+      "<html><body>tags={{tags}}</body></html>\n",
+    ),
+  )
+
+  // Build
+  let collections_cfg = "collection posts:\n  schema:\n    title: string\n    date: string\n    tags: [string]\n    dir = " + posts_root + "\nindex tags:\n"
+  assert_true(write_file_test(root + "/collections.cfg", collections_cfg))
+
+  let site_cfg = "title = Test Site\n" +
+    "base_url = https://example.test/\n" +
+    "templates_dir = " +
+    templates_root +
+    "\n" +
+    "data_dir = " +
+    data_root +
+    "\n" +
+    "collections_file = " +
+    root +
+    "/collections.cfg\n" +
+    "output_dir = " +
+    output_root +
+    "\n"
+  assert_true(write_file_test(root + "/site.cfg", site_cfg))
+
+  let site = match @config.parse(site_cfg) {
+    Ok(parsed) => parsed
+    Err(_) => {
+      assert_true(false)
+      abort("site config parse failed")
+    }
+  }
+  let result = @builder.build(
+    {
+      content_dir: content_root,
+      output_dir: output_root,
+      config_path: root + "/site.cfg",
+      site,
+      collections_path: Some(root + "/collections.cfg"),
+      force_rebuild: true,
+      include_drafts: false,
+    },
+    @cache.empty(output_root),
+  )
+  assert_eq(result.errors, 0)
+
+  let post_output = @fs.read_file_to_string(
+    output_root + "/posts/post1/index.html",
+  ) catch {
+    @fs.IOError(_) => ""
+  }
+  // Tags slot should be empty
+  assert_true(post_output.contains("tags="))
+}
+
+///|
+test "template year/month/day slots are empty for pages without date" {
+  let root = "./_tmp_template_date_empty"
+  let content_root = root + "/content"
+  let posts_root = content_root + "/posts"
+  let data_root = content_root + "/data"
+  let templates_root = root + "/templates"
+  let output_root = root + "/dist"
+  ensure_dir_test(root)
+  ensure_dir_test(content_root)
+  ensure_dir_test(posts_root)
+  ensure_dir_test(data_root)
+  ensure_dir_test(templates_root)
+  ensure_dir_test(output_root)
+
+  // Create collections.cfg without date field (optional)
+  assert_true(
+    write_file_test(
+      root + "/collections.cfg",
+      "collection posts:\n  schema:\n    title: string\n    date?: string\n    tags: [string]\nindex tags:\n",
+    ),
+  )
+
+  // Create post without date
+  assert_true(
+    write_file_test(
+      posts_root + "/post1.md",
+      "---\ntitle: Post Without Date\ntags: []\n---\nContent\n",
+    ),
+  )
+
+  // Create page template that uses date slots
+  assert_true(
+    write_file_test(
+      templates_root + "/page.html",
+      "<html><body>year={{year}} month={{month}} day={{day}}</body></html>\n",
+    ),
+  )
+
+  // Build
+  let collections_cfg = "collection posts:\n  schema:\n    title: string\n    date: string\n    tags: [string]\n    dir = " + posts_root + "\nindex tags:\n"
+  assert_true(write_file_test(root + "/collections.cfg", collections_cfg))
+
+  let site_cfg = "title = Test Site\n" +
+    "base_url = https://example.test/\n" +
+    "templates_dir = " +
+    templates_root +
+    "\n" +
+    "data_dir = " +
+    data_root +
+    "\n" +
+    "collections_file = " +
+    root +
+    "/collections.cfg\n" +
+    "output_dir = " +
+    output_root +
+    "\n"
+  assert_true(write_file_test(root + "/site.cfg", site_cfg))
+
+  let site = match @config.parse(site_cfg) {
+    Ok(parsed) => parsed
+    Err(_) => {
+      assert_true(false)
+      abort("site config parse failed")
+    }
+  }
+  let result = @builder.build(
+    {
+      content_dir: content_root,
+      output_dir: output_root,
+      config_path: root + "/site.cfg",
+      site,
+      collections_path: Some(root + "/collections.cfg"),
+      force_rebuild: true,
+      include_drafts: false,
+    },
+    @cache.empty(output_root),
+  )
+  assert_eq(result.errors, 0)
+
+  let post_output = @fs.read_file_to_string(
+    output_root + "/posts/post1/index.html",
+  ) catch {
+    @fs.IOError(_) => ""
+  }
+  // Date slots should be empty
+  assert_true(post_output.contains("year="))
+  assert_true(post_output.contains("month="))
+  assert_true(post_output.contains("day="))
+}
+
