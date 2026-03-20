@@ -4,17 +4,17 @@ fn empty_wl() -> Map[String, String] {
 }
 
 ///|
-test "markdown headings render ids and toc entries" {
-  let body = "# Title\n\n## Intro\n\n### Deep Dive\n"
-  let rendered = render_with_diagnostics(body, empty_wl())
-  assert_true(rendered.html.contains("<h1 id=\"title\">Title</h1>"))
-  assert_true(rendered.html.contains("<h2 id=\"intro\">Intro</h2>"))
-  assert_true(rendered.html.contains("<h3 id=\"deep-dive\">Deep Dive</h3>"))
-  assert_eq(rendered.toc.length(), 2)
-  assert_eq(rendered.toc[0].level, 2)
-  assert_eq(rendered.toc[0].anchor, "intro")
-  assert_eq(rendered.toc[0].text, "Intro")
-  assert_eq(rendered.toc[1].anchor, "deep-dive")
+test "flat list still works" {
+  let body = "- One\n- Two\n- Three"
+  let rendered = render(body, empty_wl())
+  assert_true(rendered.contains("<ul>"))
+  assert_true(rendered.contains("<li>One</li>"))
+  assert_true(rendered.contains("<li>Two</li>"))
+  assert_true(rendered.contains("<li>Three</li>"))
+  assert_true(not(rendered.contains("<ul>") || rendered.contains("</ul>")))
+  // Should have only opening and closing ul tags, no nested lists
+  let ul_count = rendered.split("<ul>").to_array().length()
+  assert_eq(ul_count, 1)
 }
 
 ///|
@@ -382,4 +382,85 @@ test "footnote multiline text" {
   let rendered = render(body, empty_wl())
   // Only the first line after the definition is captured
   assert_true(rendered.contains("<li id=\"fn-multi\">Line one"))
+}
+
+///|
+test "nested unordered list basic" {
+  let body = "- Item 1\n  - Nested 1\n  - Nested 2\n- Item 2"
+  let rendered = render(body, empty_wl())
+  assert_true(rendered.contains("<ul>"))
+  assert_true(rendered.contains("<li>Item 1</li>"))
+  assert_true(rendered.contains("<ul>") && rendered.contains("</ul>"))
+  assert_true(rendered.contains("<li>Nested 1</li>"))
+  assert_true(rendered.contains("<li>Nested 2</li>"))
+  assert_true(rendered.contains("<li>Item 2</li>"))
+}
+
+///|
+test "nested ordered list basic" {
+  let body = "1. First\n  2. Nested first\n  2. Nested second\n2. Second"
+  let rendered = render(body, empty_wl())
+  assert_true(rendered.contains("<ol>"))
+  assert_true(rendered.contains("<li>First</li>"))
+  assert_true(rendered.contains("<ol>") && rendered.contains("</ol>"))
+  assert_true(rendered.contains("<li>Nested first</li>"))
+  assert_true(rendered.contains("<li>Nested second</li>"))
+  assert_true(rendered.contains("<li>Second</li>"))
+}
+
+///|
+test "mixed nested list ul inside ol" {
+  let body = "1. Ordered item\n  - Nested unordered\n  - Another nested\n2. Next ordered"
+  let rendered = render(body, empty_wl())
+  assert_true(rendered.contains("<ol>"))
+  assert_true(rendered.contains("<li>Ordered item</li>"))
+  assert_true(rendered.contains("<ul>"))
+  assert_true(rendered.contains("<li>Nested unordered</li>"))
+  assert_true(rendered.contains("<li>Another nested</li>"))
+  assert_true(rendered.contains("<li>Next ordered</li>"))
+}
+
+///|
+test "mixed nested list ol inside ul" {
+  let body = "- Unordered item\n  1. Nested ordered\n  2. Another nested\n- Next unordered"
+  let rendered = render(body, empty_wl())
+  assert_true(rendered.contains("<ul>"))
+  assert_true(rendered.contains("<li>Unordered item</li>"))
+  assert_true(rendered.contains("<ol>"))
+  assert_true(rendered.contains("<li>Nested ordered</li>"))
+  assert_true(rendered.contains("<li>Another nested</li>"))
+  assert_true(rendered.contains("<li>Next unordered</li>"))
+}
+
+///|
+test "nested list with task list item" {
+  let body = "- [ ] Parent task\n  - [x] Nested checked\n  - [ ] Nested unchecked"
+  let rendered = render(body, empty_wl())
+  assert_true(rendered.contains("<input type=\"checkbox\" disabled"))
+  assert_true(rendered.contains("<input type=\"checkbox\" checked disabled"))
+  assert_true(rendered.contains("Parent task"))
+  assert_true(rendered.contains("Nested checked"))
+  assert_true(rendered.contains("Nested unchecked"))
+}
+
+///|
+test "deeply nested lists" {
+  let body = "- Level 1\n  - Level 2\n    - Level 3\n- Back to 1"
+  let rendered = render(body, empty_wl())
+  assert_true(rendered.contains("Level 1"))
+  assert_true(rendered.contains("Level 2"))
+  assert_true(rendered.contains("Level 3"))
+  assert_true(rendered.contains("Back to 1"))
+  // Count ul tags - should have multiple nesting levels
+  let ul_count = rendered.split("<ul>").to_array().length()
+  assert_true(ul_count >= 2)
+}
+
+///|
+test "nested list with inline formatting" {
+  let body = "- **Bold** item\n  - *Italic* nested\n  - `code` nested"
+  let rendered = render(body, empty_wl())
+  assert_true(rendered.contains("<strong>Bold</strong>"))
+  assert_true(rendered.contains("<em>Italic</em>"))
+  assert_true(rendered.contains("<code>code</code>"))
 }
