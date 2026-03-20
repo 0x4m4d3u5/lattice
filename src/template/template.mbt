@@ -16,6 +16,10 @@ pub(all) enum TemplateSlot {
   Year
   Month
   Day
+  PrevPostUrl
+  PrevPostTitle
+  NextPostUrl
+  NextPostTitle
   NextPage
   PrevPage
   PageNum
@@ -174,6 +178,18 @@ fn slot_from_name(name : String) -> Result[TemplateSlot, TemplateError] {
   }
   if name == "day" {
     return Ok(Day)
+  }
+  if name == "prev_post_url" {
+    return Ok(PrevPostUrl)
+  }
+  if name == "prev_post_title" {
+    return Ok(PrevPostTitle)
+  }
+  if name == "next_post_url" {
+    return Ok(NextPostUrl)
+  }
+  if name == "next_post_title" {
+    return Ok(NextPostTitle)
   }
   if name == "next_page" {
     return Ok(NextPage)

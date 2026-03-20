@@ -1445,7 +1445,9 @@ test "template tags slot renders space-separated tag links" {
   )
 
   // Build
-  let collections_cfg = "[posts]\nschema = title:String,date:Date,tags:Array[String]\ndir = " + posts_root + "\n"
+  let collections_cfg = "[posts]\nschema = title:String,date:Date,tags:Array[String]\ndir = " +
+    posts_root +
+    "\n"
   assert_true(write_file_test(root + "/collections.cfg", collections_cfg))
 
   let site_cfg = "title = Test Site\n" +
@@ -1533,7 +1535,9 @@ test "template tags slot is empty for pages without tags" {
   )
 
   // Build
-  let collections_cfg = "[posts]\nschema = title:String,date:Date,tags:Array[String]\ndir = " + posts_root + "\n"
+  let collections_cfg = "[posts]\nschema = title:String,date:Date,tags:Array[String]\ndir = " +
+    posts_root +
+    "\n"
   assert_true(write_file_test(root + "/collections.cfg", collections_cfg))
 
   let site_cfg = "title = Test Site\n" +
@@ -1614,7 +1618,9 @@ test "template year/month/day slots are empty for pages without date" {
   )
 
   // Build — date is optional so the post without a date must not fail schema validation
-  let collections_cfg = "[posts]\nschema = title:String,date:Optional[Date],tags:Optional[Array[String]]\ndir = " + posts_root + "\n"
+  let collections_cfg = "[posts]\nschema = title:String,date:Optional[Date],tags:Optional[Array[String]]\ndir = " +
+    posts_root +
+    "\n"
   assert_true(write_file_test(root + "/collections.cfg", collections_cfg))
 
   let site_cfg = "title = Test Site\n" +
@@ -1665,3 +1671,123 @@ test "template year/month/day slots are empty for pages without date" {
   assert_true(post_output.contains("day="))
 }
 
+///|
+test "prev/next post slots populated in collection" {
+  let root = "./_tmp_prev_next_navigation_slots"
+  let content_root = root + "/content"
+  let posts_root = content_root + "/posts"
+  let data_root = content_root + "/data"
+  let templates_root = root + "/templates"
+  let output_root = root + "/dist"
+  ensure_dir_test(root)
+  ensure_dir_test(content_root)
+  ensure_dir_test(posts_root)
+  ensure_dir_test(data_root)
+  ensure_dir_test(templates_root)
+  ensure_dir_test(output_root)
+
+  // Create site.cfg
+  assert_true(
+    write_file_test(
+      root + "/site.cfg",
+      "site:\n  title: Test Site\n  base_url: https://example.test/\n",
+    ),
+  )
+
+  // Create three posts with dates (sorted desc: post3 > post2 > post1)
+  assert_true(
+    write_file_test(
+      posts_root + "/post3.md",
+      "---\ntitle: Post 3\ndate: 2026-03-21\n---\nContent 3\n",
+    ),
+  )
+  assert_true(
+    write_file_test(
+      posts_root + "/post2.md",
+      "---\ntitle: Post 2\ndate: 2026-03-20\n---\nContent 2\n",
+    ),
+  )
+  assert_true(
+    write_file_test(
+      posts_root + "/post1.md",
+      "---\ntitle: Post 1\ndate: 2026-03-19\n---\nContent 1\n",
+    ),
+  )
+
+  // Create page template that uses prev/next slots
+  assert_true(
+    write_file_test(
+      templates_root + "/page.html",
+      "<html><body>{{prev_post_url}}|{{prev_post_title}}|{{next_post_url}}|{{next_post_title}}</body></html>\n",
+    ),
+  )
+
+  // Build
+  let collections_cfg = "[posts]\nschema = title:String,date:Date\ndir = " +
+    posts_root +
+    "\n"
+  assert_true(write_file_test(root + "/collections.cfg", collections_cfg))
+
+  let site_cfg = "title = Test Site\n" +
+    "base_url = https://example.test/\n" +
+    "templates_dir = " +
+    templates_root +
+    "\n" +
+    "data_dir = " +
+    data_root +
+    "\n" +
+    "collections_file = " +
+    root +
+    "/collections.cfg\n" +
+    "output_dir = " +
+    output_root +
+    "\n"
+  assert_true(write_file_test(root + "/site.cfg", site_cfg))
+
+  let site = match @config.parse(site_cfg) {
+    Ok(parsed) => parsed
+    Err(_) => {
+      assert_true(false)
+      abort("site config parse failed")
+    }
+  }
+  let result = @builder.build(
+    {
+      content_dir: content_root,
+      output_dir: output_root,
+      config_path: root + "/site.cfg",
+      site,
+      collections_path: Some(root + "/collections.cfg"),
+      force_rebuild: true,
+      include_drafts: false,
+    },
+    @cache.empty(output_root),
+  )
+  assert_eq(result.errors, 0)
+
+  // Check first post (post3) - should have empty prev, post2 as next
+  let post3_output = @fs.read_file_to_string(
+    output_root + "/posts/post3/index.html",
+  ) catch {
+    @fs.IOError(_) => ""
+  }
+  assert_true(post3_output.contains("||/posts/post2/|Post 2"))
+
+  // Check middle post (post2) - should have post3 as prev, post1 as next
+  let post2_output = @fs.read_file_to_string(
+    output_root + "/posts/post2/index.html",
+  ) catch {
+    @fs.IOError(_) => ""
+  }
+  assert_true(
+    post2_output.contains("/posts/post3/|Post 3|/posts/post1/|Post 1"),
+  )
+
+  // Check last post (post1) - should have post2 as prev, empty next
+  let post1_output = @fs.read_file_to_string(
+    output_root + "/posts/post1/index.html",
+  ) catch {
+    @fs.IOError(_) => ""
+  }
+  assert_true(post1_output.contains("/posts/post2/|Post 2||"))
+}

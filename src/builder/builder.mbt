@@ -1860,12 +1860,16 @@ fn render_404_page(
         "",
         "",
       )
-      // 404 pages have no tags, collection, or date components
+      // 404 pages have no tags, collection, date, or prev/next components
       slots.set(@template.Tags, "")
       slots.set(@template.Collection, "")
       slots.set(@template.Year, "")
       slots.set(@template.Month, "")
       slots.set(@template.Day, "")
+      slots.set(@template.PrevPostUrl, "")
+      slots.set(@template.PrevPostTitle, "")
+      slots.set(@template.NextPostUrl, "")
+      slots.set(@template.NextPostTitle, "")
       match @template.render_template_with_data(tpl, slots, data_store) {
         Ok(html) => Ok(html)
         Err(e) => Err("404 page template: " + template_error_text(e))
@@ -2213,6 +2217,10 @@ fn process_document(
   custom_css : String,
   backlinks_html : String,
   render_page_html : Bool,
+  prev_post_url : String,
+  prev_post_title : String,
+  next_post_url : String,
+  next_post_title : String,
 ) -> BuildDocOutcome {
   let diagnostics : Array[@diagnostic.Diagnostic] = []
   // Step 1: parse frontmatter
@@ -2438,6 +2446,10 @@ fn process_document(
         slots.set(@template.Year, year_val)
         slots.set(@template.Month, month_val)
         slots.set(@template.Day, day_val)
+        slots.set(@template.PrevPostUrl, prev_post_url)
+        slots.set(@template.PrevPostTitle, prev_post_title)
+        slots.set(@template.NextPostUrl, next_post_url)
+        slots.set(@template.NextPostTitle, next_post_title)
         match @template.render_template_with_data(tpl, slots, data_store) {
           Ok(html) =>
             Ok(
@@ -2507,7 +2519,7 @@ fn process_document(
   } else {
     None
   }
-  {
+  return {
     document: Some({
       html: page_html,
       root_html,
@@ -2520,6 +2532,150 @@ fn process_document(
       tags: page_tags,
     }),
     diagnostics,
+  }
+}
+
+///|
+/// Metadata for a page in sorted order (used for prev/next navigation).
+priv struct SortedCollectionPages {
+  sorted_slugs : Array[String]
+  slug_to_title : Map[String, String]
+  slug_to_url : Map[String, String]
+}
+
+///|
+/// Build a sorted index of pages in a collection for prev/next navigation.
+///
+/// Returns a structure mapping slugs to their titles and URLs, with slugs
+/// sorted according to collection's sort order.
+fn build_sorted_collection_pages(
+  sources : Array[SourceFile],
+  collection_name : String,
+  sort_order : @collections.SortOrder,
+) -> SortedCollectionPages {
+  // Parse each source to get title and date for sorting
+  let pages : Array[(String, String, String?)] = [] // (slug, title, date)
+  let slug_to_title : Map[String, String] = Map::new()
+  let slug_to_url : Map[String, String] = Map::new()
+  let mut i = 0
+  while i < sources.length() {
+    let src = sources[i]
+    let (title, date_opt) = match @frontmatter.parse(src.content) {
+      Ok(fm) => (extract_title(fm), extract_date(fm))
+      Err(_) => (src.slug, None)
+    }
+    slug_to_title.set(src.slug, title)
+    slug_to_url.set(src.slug, collection_page_url(collection_name, src.slug))
+    pages.push((src.slug, title, date_opt))
+    i = i + 1
+  }
+
+  // Sort pages by date/title according to sort order using insertion sort
+  let sorted = pages
+  let mut i = 1
+  while i < sorted.length() {
+    let mut j = i
+    while j > 0 {
+      // Convert tuples to GraphPage for comparison
+      let prev_slug = sorted[j - 1].0
+      let prev_title = sorted[j - 1].1
+      let prev_date = sorted[j - 1].2
+      let curr_slug = sorted[j].0
+      let curr_title = sorted[j].1
+      let curr_date = sorted[j].2
+
+      let page_a : @graph.GraphPage = {
+        slug: prev_slug,
+        title: prev_title,
+        url: "",
+        description: None,
+        date: prev_date,
+        outgoing: [],
+      }
+      let page_b : @graph.GraphPage = {
+        slug: curr_slug,
+        title: curr_title,
+        url: "",
+        description: None,
+        date: curr_date,
+        outgoing: [],
+      }
+
+      if compare_pages_by_order(page_a, page_b, sort_order) <= 0 {
+        break
+      }
+      let tmp = sorted[j - 1]
+      sorted[j - 1] = sorted[j]
+      sorted[j] = tmp
+      j = j - 1
+    }
+    i = i + 1
+  }
+
+  // Extract sorted slugs
+  let sorted_slugs : Array[String] = []
+  i = 0
+  while i < sorted.length() {
+    sorted_slugs.push(sorted[i].0)
+    i = i + 1
+  }
+
+  { sorted_slugs, slug_to_title, slug_to_url }
+}
+
+///|
+/// Get prev/next page info for a slug from sorted collection pages.
+///
+/// Returns (prev_url, prev_title, next_url, next_title).
+/// Empty string if no prev/next exists.
+fn get_adjacent_pages(
+  sorted : SortedCollectionPages,
+  slug : String,
+) -> (String, String, String, String) {
+  let mut i = 0
+  let mut index : Int? = None
+  while i < sorted.sorted_slugs.length() {
+    if sorted.sorted_slugs[i] == slug {
+      index = Some(i)
+      break
+    }
+    i = i + 1
+  }
+  match index {
+    Some(idx) => {
+      let (prev_url, prev_title) = if idx > 0 {
+        let prev_slug = sorted.sorted_slugs[idx - 1]
+        (
+          match sorted.slug_to_url.get(prev_slug) {
+            Some(u) => u
+            None => ""
+          },
+          match sorted.slug_to_title.get(prev_slug) {
+            Some(t) => t
+            None => ""
+          },
+        )
+      } else {
+        ("", "")
+      }
+      let (next_url, next_title) = if idx < sorted.sorted_slugs.length() - 1 {
+        let next_slug = sorted.sorted_slugs[idx + 1]
+        (
+          match sorted.slug_to_url.get(next_slug) {
+            Some(u) => u
+            None => ""
+          },
+          match sorted.slug_to_title.get(next_slug) {
+            Some(t) => t
+            None => ""
+          },
+        )
+      } else {
+        ("", "")
+      }
+      (prev_url, prev_title, next_url, next_title)
+    }
+    None => ("", "", "", "")
   }
 }
 
@@ -2552,6 +2708,10 @@ fn process_document_for_lint(
   nav_links_html : String,
   custom_css : String,
   backlinks_html : String,
+  prev_post_url : String,
+  prev_post_title : String,
+  next_post_url : String,
+  next_post_title : String,
 ) -> LintDocOutcome {
   let violations : Array[@lint.LintViolation] = []
   let fm = match @frontmatter.parse(source) {
@@ -2736,6 +2896,10 @@ fn process_document_for_lint(
       slots.set(@template.Year, year_val)
       slots.set(@template.Month, month_val)
       slots.set(@template.Day, day_val)
+      slots.set(@template.PrevPostUrl, prev_post_url)
+      slots.set(@template.PrevPostTitle, prev_post_title)
+      slots.set(@template.NextPostUrl, next_post_url)
+      slots.set(@template.NextPostTitle, next_post_title)
       match @template.render_template_with_data(tpl, slots, data_store) {
         Ok(html) => html
         Err(e) => {
@@ -3443,6 +3607,13 @@ pub fn build(
       continue
     }
 
+    // Build sorted pages for prev/next navigation
+    let sorted_coll_pages = build_sorted_collection_pages(
+      coll.sources,
+      coll.definition.name,
+      coll.definition.sort_order,
+    )
+
     let mut j = 0
     while j < coll.sources.length() {
       let src = coll.sources[j]
@@ -3465,6 +3636,10 @@ pub fn build(
         Some(refs) => render_backlinks_html(refs)
         None => ""
       }
+      let (prev_post_url, prev_post_title, next_post_url, next_post_title) = get_adjacent_pages(
+        sorted_coll_pages,
+        src.slug,
+      )
       let doc_outcome = process_document(
         src.content,
         src.path,
@@ -3482,6 +3657,10 @@ pub fn build(
         custom_css,
         page_backlinks_html,
         should_rebuild,
+        prev_post_url,
+        prev_post_title,
+        next_post_url,
+        next_post_title,
       )
       let mut diag_idx = 0
       while diag_idx < doc_outcome.diagnostics.length() {
@@ -4362,6 +4541,12 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
       violations,
     )
     let coll_pages : Array[@graph.GraphPage] = []
+    // Build sorted pages for prev/next navigation
+    let sorted_coll_pages = build_sorted_collection_pages(
+      coll.sources,
+      coll.definition.name,
+      coll.definition.sort_order,
+    )
     let mut j = 0
     while j < coll.sources.length() {
       let src = coll.sources[j]
@@ -4370,6 +4555,10 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
         Some(refs) => render_backlinks_html(refs)
         None => ""
       }
+      let (prev_post_url, prev_post_title, next_post_url, next_post_title) = get_adjacent_pages(
+        sorted_coll_pages,
+        src.slug,
+      )
       let lint_outcome = process_document_for_lint(
         src.content,
         src.path,
@@ -4386,6 +4575,10 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
         nav_links_html,
         custom_css,
         lint_backlinks_html,
+        prev_post_url,
+        prev_post_title,
+        next_post_url,
+        next_post_title,
       )
       let mut k = 0
       while k < lint_outcome.violations.length() {
