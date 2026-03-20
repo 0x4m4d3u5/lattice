@@ -2402,6 +2402,36 @@ fn process_document(
         slots.set(@template.TableOfContents, toc_html)
         slots.set(@template.WordCount, wc.to_string())
         slots.set(@template.ReadingTime, reading_time_str(wc))
+        // Populate Tags slot with space-separated tag links
+        let tags_html = StringBuilder::new()
+        let mut tag_idx = 0
+        while tag_idx < page_tags.length() {
+          let tag = page_tags[tag_idx]
+          let tag_url = @tags.tag_url(tag.slug)
+          tags_html.write_string(@html.anchor(tag_url, tag.value))
+          if tag_idx < page_tags.length() - 1 {
+            tags_html.write_string(" ")
+          }
+          tag_idx = tag_idx + 1
+        }
+        slots.set(@template.Tags, tags_html.to_string())
+        // Populate Collection slot
+        slots.set(@template.Collection, collection_name)
+        // Populate Year/Month/Day slots from date
+        let mut year_val = ""
+        let mut month_val = ""
+        let mut day_val = ""
+        if date_text.length() > 0 {
+          let date_parts = date_text.split("-").to_array()
+          if date_parts.length() == 3 {
+            year_val = date_parts[0].to_string()
+            month_val = date_parts[1].to_string()
+            day_val = date_parts[2].to_string()
+          }
+        }
+        slots.set(@template.Year, year_val)
+        slots.set(@template.Month, month_val)
+        slots.set(@template.Day, day_val)
         match @template.render_template_with_data(tpl, slots, data_store) {
           Ok(html) =>
             Ok(
@@ -2504,6 +2534,7 @@ fn process_document_for_lint(
   source : String,
   source_path : String,
   slug : String,
+  collection_name : String,
   url : String,
   page_index : Map[String, String],
   known_tags : Map[String, String],
@@ -2669,6 +2700,36 @@ fn process_document_for_lint(
       let wc = count_words_markdown(fm.body)
       slots.set(@template.WordCount, wc.to_string())
       slots.set(@template.ReadingTime, reading_time_str(wc))
+      // Populate Tags slot with space-separated tag links
+      let tags_html = StringBuilder::new()
+      let mut tag_idx = 0
+      while tag_idx < page_tags.length() {
+        let tag = page_tags[tag_idx]
+        let tag_url = @tags.tag_url(tag.slug)
+        tags_html.write_string(@html.anchor(tag_url, tag.value))
+        if tag_idx < page_tags.length() - 1 {
+          tags_html.write_string(" ")
+        }
+        tag_idx = tag_idx + 1
+      }
+      slots.set(@template.Tags, tags_html.to_string())
+      // Populate Collection slot
+      slots.set(@template.Collection, collection_name)
+      // Populate Year/Month/Day slots from date
+      let mut year_val = ""
+      let mut month_val = ""
+      let mut day_val = ""
+      if date_text.length() > 0 {
+        let date_parts = date_text.split("-").to_array()
+        if date_parts.length() == 3 {
+          year_val = date_parts[0].to_string()
+          month_val = date_parts[1].to_string()
+          day_val = date_parts[2].to_string()
+        }
+      }
+      slots.set(@template.Year, year_val)
+      slots.set(@template.Month, month_val)
+      slots.set(@template.Day, day_val)
       match @template.render_template_with_data(tpl, slots, data_store) {
         Ok(html) => html
         Err(e) => {
@@ -4307,6 +4368,7 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
         src.content,
         src.path,
         src.slug,
+        coll.definition.name,
         page_url,
         page_index,
         known_tags,
