@@ -221,20 +221,21 @@ fn render_blog_posting_json_ld(data : BlogPostingData) -> String {
   buf.write_string("{")
   let mut wrote_field = false
   wrote_field = write_json_field_html(
+    buf, wrote_field, "  ", "@context", "https://schema.org",
+  )
+  wrote_field = write_json_field_html(
+    buf, wrote_field, "  ", "@type", "BlogPosting",
+  )
+  wrote_field = write_json_field_html(
     buf,
     wrote_field,
     "  ",
-    "@context",
-    "https://schema.org",
+    "headline",
+    data.headline,
   )
-  wrote_field = write_json_field_html(buf, wrote_field, "  ", "@type", "BlogPosting")
-  wrote_field = write_json_field_html(buf, wrote_field, "  ", "headline", data.headline)
   wrote_field = write_json_field_html(buf, wrote_field, "  ", "url", data.url)
   wrote_field = begin_json_object_field_html(
-    buf,
-    wrote_field,
-    "  ",
-    "mainEntityOfPage",
+    buf, wrote_field, "  ", "mainEntityOfPage",
   )
   buf.write_string("{\n    ")
   write_json_string_html(buf, "@type")
@@ -248,22 +249,14 @@ fn render_blog_posting_json_ld(data : BlogPostingData) -> String {
   match data.description {
     Some(description) =>
       wrote_field = write_json_field_html(
-        buf,
-        true,
-        "  ",
-        "description",
-        description,
+        buf, true, "  ", "description", description,
       )
     None => ()
   }
   match data.date_published {
     Some(date) =>
       wrote_field = write_json_field_html(
-        buf,
-        true,
-        "  ",
-        "datePublished",
-        date,
+        buf, true, "  ", "datePublished", date,
       )
     None => ()
   }
@@ -307,24 +300,13 @@ fn render_breadcrumb_list_json_ld(data : BreadcrumbListData) -> String {
   buf.write_string("{")
   let mut wrote_field = false
   wrote_field = write_json_field_html(
-    buf,
-    wrote_field,
-    "  ",
-    "@context",
-    "https://schema.org",
+    buf, wrote_field, "  ", "@context", "https://schema.org",
   )
   wrote_field = write_json_field_html(
-    buf,
-    wrote_field,
-    "  ",
-    "@type",
-    "BreadcrumbList",
+    buf, wrote_field, "  ", "@type", "BreadcrumbList",
   )
   wrote_field = begin_json_object_field_html(
-    buf,
-    wrote_field,
-    "  ",
-    "itemListElement",
+    buf, wrote_field, "  ", "itemListElement",
   )
   if data.items.length() == 0 {
     buf.write_string("[]")
@@ -339,11 +321,7 @@ fn render_breadcrumb_list_json_ld(data : BreadcrumbListData) -> String {
       buf.write_string("    {\n")
       let mut wrote_item_field = false
       wrote_item_field = write_json_field_html(
-        buf,
-        wrote_item_field,
-        "      ",
-        "@type",
-        "ListItem",
+        buf, wrote_item_field, "      ", "@type", "ListItem",
       )
       wrote_item_field = write_json_int_field_html(
         buf,
@@ -387,23 +365,17 @@ fn render_website_json_ld(data : WebSiteData) -> String {
   buf.write_string("{")
   let mut wrote_field = false
   wrote_field = write_json_field_html(
-    buf,
-    wrote_field,
-    "  ",
-    "@context",
-    "https://schema.org",
+    buf, wrote_field, "  ", "@context", "https://schema.org",
   )
-  wrote_field = write_json_field_html(buf, wrote_field, "  ", "@type", "WebSite")
+  wrote_field = write_json_field_html(
+    buf, wrote_field, "  ", "@type", "WebSite",
+  )
   wrote_field = write_json_field_html(buf, wrote_field, "  ", "name", data.name)
   wrote_field = write_json_field_html(buf, wrote_field, "  ", "url", data.url)
   match data.description {
     Some(description) =>
       wrote_field = write_json_field_html(
-        buf,
-        wrote_field,
-        "  ",
-        "description",
-        description,
+        buf, wrote_field, "  ", "description", description,
       )
     None => ()
   }
@@ -475,10 +447,9 @@ pub fn inject_head_markup(document_html : String, markup : String) -> String {
       }
     }
     if matched {
-      return (
-        substr(document_html, 0, i) + markup +
+      return substr(document_html, 0, i) +
+        markup +
         substr(document_html, i, document_html.length())
-      )
     }
     i = i + 1
   }
@@ -560,7 +531,9 @@ pub fn render_page(meta : PageMeta, body_html : String) -> String {
     }
     None => ""
   }
-  let structured_data_script = render_structured_data_script(meta.structured_data)
+  let structured_data_script = render_structured_data_script(
+    meta.structured_data,
+  )
   "<!doctype html>\n" +
   "<html lang=\"" +
   escape_html_attr(lang) +

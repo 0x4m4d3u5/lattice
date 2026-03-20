@@ -395,8 +395,7 @@ pub fn parse(input : String) -> Result[SiteConfig, ConfigError] {
             None =>
               return Err(
                 InvalidValue(
-                  "robots_txt",
-                  "must be true/false, yes/no, 1/0, or on/off",
+                  "robots_txt", "must be true/false, yes/no, 1/0, or on/off",
                 ),
               )
           }

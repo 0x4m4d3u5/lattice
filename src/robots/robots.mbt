@@ -32,11 +32,11 @@ pub fn render_robots_txt(
   }
 
   let buf = StringBuilder::new()
-  
+
   // Standard robots.txt header - allow all crawlers
   buf.write_string("User-agent: *\n")
   buf.write_string("Allow: /\n")
-  
+
   // Add Sitemap directive only if base_url is present and non-trivial
   if base_url.length() > 0 {
     let normalized = normalize_base_url_robots(base_url)
@@ -46,7 +46,7 @@ pub fn render_robots_txt(
       buf.write_string("/sitemap.xml\n")
     }
   }
-  
+
   buf.to_string()
 }
 

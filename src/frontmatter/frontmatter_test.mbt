@@ -92,7 +92,11 @@ test "frontmatter parses nested arrays and escapes in strings" {
 
 ///|
 test "frontmatter rejects malformed assignments with line context" {
-  let src = "+++\n" + "# comment\n" + "title = \"ok\"\n" + "broken = [1 2]\n" + "+++\n"
+  let src = "+++\n" +
+    "# comment\n" +
+    "title = \"ok\"\n" +
+    "broken = [1 2]\n" +
+    "+++\n"
   match @frontmatter.parse(src) {
     Ok(_) => assert_true(false)
     Err(msg) => {
@@ -238,7 +242,6 @@ test "frontmatter validates date format strictly" {
   }
 }
 
-
 ///|
 test "frontmatter parses YAML format with --- delimiters" {
   let src = "---\n" +
@@ -381,7 +384,7 @@ test "frontmatter parses YAML with block arrays" {
     "  - third\n" +
     "---\n"
   match @frontmatter.parse(src) {
-    Ok(fm) => {
+    Ok(fm) =>
       match fm.fields.get("tags") {
         Some(FArray(items)) => {
           assert_eq(items.length(), 3)
@@ -400,7 +403,6 @@ test "frontmatter parses YAML with block arrays" {
         }
         _ => assert_true(false)
       }
-    }
     Err(_) => assert_true(false)
   }
 }

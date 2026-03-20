@@ -580,6 +580,8 @@ pub fn parse(content : String) -> Result[Frontmatter, String] {
   } else if starts_with_at(content, 0, "+++") {
     parse_toml(content)
   } else {
-    Err("missing opening frontmatter delimiter (expected '---' for YAML or '+++' for TOML)")
+    Err(
+      "missing opening frontmatter delimiter (expected '---' for YAML or '+++' for TOML)",
+    )
   }
 }

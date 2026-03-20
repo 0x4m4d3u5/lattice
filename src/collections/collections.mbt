@@ -12,12 +12,21 @@
 ///
 /// [data.nav]
 /// required = "title,links"
+pub(all) enum SortOrder {
+  DateDesc // default: newest first
+  DateAsc // oldest first
+  TitleAsc // alphabetical
+  TitleDesc // reverse alphabetical
+}
+
+///|
 pub(all) struct CollectionDef {
   name : String
   schema : @schema.Schema
   content_dir : String
   template : String?
   page_size : Int?
+  sort_order : SortOrder
 }
 
 ///|
@@ -422,6 +431,7 @@ fn finalize_collection(
   dir_text : String?,
   template_text : String?,
   page_size : Int?,
+  sort_order : SortOrder,
 ) -> Result[Unit, CollectionsError] {
   if seen.get(name) != None {
     return Err(DuplicateCollection(name))
@@ -445,6 +455,7 @@ fn finalize_collection(
     content_dir: dir_value,
     template: template_text,
     page_size,
+    sort_order,
   })
   seen.set(name, true)
   Ok(())
@@ -488,6 +499,7 @@ pub fn parse(input : String) -> Result[CollectionsConfig, CollectionsError] {
   let mut current_dir : String? = None
   let mut current_template : String? = None
   let mut current_page_size : Int? = None
+  let mut current_sort_order : SortOrder = DateDesc
   let mut current_required : String? = None
 
   let mut i = 0
@@ -505,7 +517,7 @@ pub fn parse(input : String) -> Result[CollectionsConfig, CollectionsError] {
           match
             finalize_collection(
               defs, seen_collections, name, current_schema, current_dir, current_template,
-              current_page_size,
+              current_page_size, current_sort_order,
             ) {
             Err(e) => return Err(e)
             Ok(_) => ()
@@ -524,6 +536,7 @@ pub fn parse(input : String) -> Result[CollectionsConfig, CollectionsError] {
       current_dir = None
       current_template = None
       current_page_size = None
+      current_sort_order = DateDesc
       current_required = None
       match parse_section_header(raw, line_no) {
         Ok(section) => current_section = Some(section)
@@ -574,6 +587,19 @@ pub fn parse(input : String) -> Result[CollectionsConfig, CollectionsError] {
                 InvalidLine(line_no, "page_size must be a positive integer"),
               )
           }
+        } else if key == "sort" {
+          match parse_sort_order(value) {
+            Some(order) => current_sort_order = order
+            None =>
+              return Err(
+                InvalidLine(
+                  line_no,
+                  "invalid sort value: '" +
+                  value +
+                  "' (expected: date:desc, date:asc, title:asc, title:desc)",
+                ),
+              )
+          }
         } else {
           return Err(
             InvalidLine(
@@ -603,7 +629,7 @@ pub fn parse(input : String) -> Result[CollectionsConfig, CollectionsError] {
       match
         finalize_collection(
           defs, seen_collections, name, current_schema, current_dir, current_template,
-          current_page_size,
+          current_page_size, current_sort_order,
         ) {
         Err(e) => return Err(e)
         Ok(_) => ()
@@ -624,6 +650,23 @@ pub fn parse(input : String) -> Result[CollectionsConfig, CollectionsError] {
   }
 
   Ok({ definitions: defs, data_schemas, data_schema_list })
+}
+
+///|
+/// Parse sort order from config string (e.g., "date:desc").
+/// Returns None for invalid values.
+fn parse_sort_order(value : String) -> SortOrder? {
+  if value == "date:desc" {
+    Some(DateDesc)
+  } else if value == "date:asc" {
+    Some(DateAsc)
+  } else if value == "title:asc" {
+    Some(TitleAsc)
+  } else if value == "title:desc" {
+    Some(TitleDesc)
+  } else {
+    None
+  }
 }
 
 ///|
@@ -656,6 +699,7 @@ pub fn default_posts_collection(content_dir : String) -> CollectionDef {
     content_dir,
     template: None,
     page_size: None,
+    sort_order: DateDesc,
   }
 }
 

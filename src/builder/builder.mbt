@@ -171,6 +171,104 @@ fn is_draft(fm : @frontmatter.Frontmatter) -> Bool {
 }
 
 ///|
+/// Extract YYYY-MM-DD prefix from date string for comparison.
+/// Pages without dates get empty string (sorts last/first depending on order).
+fn extract_iso_date_prefix(date : String?) -> String {
+  match date {
+    Some(d) => if d.length() >= 10 { substr_builder(d, 0, 10) } else { "" }
+    None => ""
+  }
+}
+
+///|
+/// Compare two pages by date (descending or ascending).
+/// Returns negative if a should come before b, positive if after, 0 if equal.
+/// Pages without dates sort to end (DateDesc) or beginning (DateAsc).
+fn compare_pages_by_date(
+  a : @graph.GraphPage,
+  b : @graph.GraphPage,
+  desc : Bool,
+) -> Int {
+  let ad = extract_iso_date_prefix(a.date)
+  let bd = extract_iso_date_prefix(b.date)
+  // For DateDesc: pages with dates come first (desc order), then no-date pages
+  // For DateAsc: pages with dates come first (asc order), then no-date pages
+  let has_date_a = ad.length() == 10
+  let has_date_b = bd.length() == 10
+  if has_date_a && has_date_b {
+    let cmp = if ad == bd { 0 } else if ad > bd { 1 } else { -1 }
+    if desc {
+      -cmp
+    } else {
+      cmp
+    }
+  } else if has_date_a {
+    -1 // a has date, b doesn't: a comes first
+  } else if has_date_b {
+    1 // b has date, a doesn't: b comes first
+  } else {
+    0 // neither has date: equal
+  }
+}
+
+///|
+/// Compare two pages by title (ascending or descending).
+/// Returns negative if a should come before b, positive if after, 0 if equal.
+fn compare_pages_by_title(
+  a : @graph.GraphPage,
+  b : @graph.GraphPage,
+  desc : Bool,
+) -> Int {
+  let cmp = if a.title == b.title {
+    0
+  } else if a.title < b.title {
+    -1
+  } else {
+    1
+  }
+  if desc {
+    -cmp
+  } else {
+    cmp
+  }
+}
+
+///|
+/// Compare two pages according to the specified sort order.
+fn compare_pages_by_order(
+  a : @graph.GraphPage,
+  b : @graph.GraphPage,
+  order : @collections.SortOrder,
+) -> Int {
+  match order {
+    @collections.DateDesc => compare_pages_by_date(a, b, true)
+    @collections.DateAsc => compare_pages_by_date(a, b, false)
+    @collections.TitleAsc => compare_pages_by_title(a, b, false)
+    @collections.TitleDesc => compare_pages_by_title(a, b, true)
+  }
+}
+
+///|
+/// Sort collection pages in-place using insertion sort.
+/// Matches the pattern used in rss.mbt's sort_pages_for_feed.
+pub fn sort_collection_pages(
+  pages : Array[@graph.GraphPage],
+  order : @collections.SortOrder,
+) -> Unit {
+  let mut i = 1
+  while i < pages.length() {
+    let mut j = i
+    while j > 0 && compare_pages_by_order(pages[j - 1], pages[j], order) > 0 {
+      let tmp = pages[j - 1]
+      pages[j - 1] = pages[j]
+      pages[j] = tmp
+      j = j - 1
+    }
+    i = i + 1
+  }
+}
+
+///|
 fn build_wikilink_map(
   resolved : Array[@wikilink.ResolvedWikilink],
 ) -> Map[String, String] {
@@ -1675,7 +1773,10 @@ fn render_tags_index_html(
       }
     }
     None => {
-      let canonical = absolute_url_builder(site.base_url, tags_index_page_url(pagination.page_number))
+      let canonical = absolute_url_builder(
+        site.base_url,
+        tags_index_page_url(pagination.page_number),
+      )
       let meta : @html.PageMeta = {
         title: full_title,
         description: Some(description),
@@ -1723,7 +1824,10 @@ fn render_404_page(
         let wl_map = build_wikilink_map([])
         let markdown_result = @markdown.render_with_diagnostics(fm.body, wl_map)
         if markdown_result.shortcode_errors.length() > 0 {
-          return Err("404.md shortcode error: " + @shortcode.error_text(markdown_result.shortcode_errors[0].error))
+          return Err(
+            "404.md shortcode error: " +
+            @shortcode.error_text(markdown_result.shortcode_errors[0].error),
+          )
         }
         let description = match extract_description(fm) {
           Some(d) => d
@@ -1733,7 +1837,10 @@ fn render_404_page(
       }
     }
   } else {
-    ("Page Not Found", "<h1>Page Not Found</h1>\n<p>The page you are looking for does not exist.</p>\n", "Page not found")
+    (
+      "Page Not Found", "<h1>Page Not Found</h1>\n<p>The page you are looking for does not exist.</p>\n",
+      "Page not found",
+    )
   }
 
   let full_title = page_title_builder(title, config.site.title)
@@ -1764,7 +1871,9 @@ fn render_404_page(
         title: full_title,
         description: Some(description),
         lang: "en",
-        stylesheet: Some(absolute_url_builder(config.site.base_url, "/style.css")),
+        stylesheet: Some(
+          absolute_url_builder(config.site.base_url, "/style.css"),
+        ),
         canonical_url: Some(canonical),
         og_image: config.site.og_image,
         feed_url: None,
@@ -2018,6 +2127,7 @@ fn load_project_layout(config : BuildConfig) -> Result[ProjectLayout, String] {
         content_dir: entry.dir,
         template: entry.template,
         page_size: entry.page_size,
+        sort_order: @collections.DateDesc,
       })
       i = i + 1
     }
@@ -2318,30 +2428,27 @@ fn process_document(
       }
     }
   }
-  let page_html = match render_variant(
-    url,
-    absolute_url_builder(site.base_url, url),
-    {
-      let structured_data : Array[@html.StructuredData] =
-        content_breadcrumb_structured_data_builder(
-          site,
-          collection_name,
-          title,
-          url,
+  let page_html = match
+    render_variant(
+      url,
+      absolute_url_builder(site.base_url, url),
+      {
+        let structured_data : Array[@html.StructuredData] = content_breadcrumb_structured_data_builder(
+          site, collection_name, title, url,
         )
-      structured_data.push(
-        @html.BlogPosting({
-          headline: title,
-          description: description_value,
-          url: absolute_url_builder(site.base_url, url),
-          date_published: date_value,
-          author: author_value,
-          image: page_og_image,
-        }),
-      )
-      structured_data
-    },
-  ) {
+        structured_data.push(
+          @html.BlogPosting({
+            headline: title,
+            description: description_value,
+            url: absolute_url_builder(site.base_url, url),
+            date_published: date_value,
+            author: author_value,
+            image: page_og_image,
+          }),
+        )
+        structured_data
+      },
+    ) {
     Ok(html) => html
     Err(msg) => {
       diagnostics.push(build_error(Some(source_path), None, None, msg))
@@ -2349,11 +2456,12 @@ fn process_document(
     }
   }
   let root_html = if is_root_page_for_site(site, slug) {
-    match render_variant(
-      "/",
-      absolute_url_builder(site.base_url, "/"),
-      website_structured_data_builder(site),
-    ) {
+    match
+      render_variant(
+        "/",
+        absolute_url_builder(site.base_url, "/"),
+        website_structured_data_builder(site),
+      ) {
       Ok(html) => Some(html)
       Err(msg) => {
         diagnostics.push(build_error(Some(source_path), None, None, msg))
@@ -2590,12 +2698,7 @@ fn process_document_for_lint(
         og_image: page_og_image,
         feed_url: None,
         structured_data: blog_posting_structured_data_builder(
-          title,
-          description_value,
-          canonical,
-          date_value,
-          author_value,
-          page_og_image,
+          title, description_value, canonical, date_value, author_value, page_og_image,
         ),
       }
       let page_body = if backlinks_html.length() > 0 {
@@ -3441,6 +3544,8 @@ pub fn build(
       }
       j = j + 1
     }
+    // Sort collection pages according to sort_order
+    sort_collection_pages(coll_pages, coll.definition.sort_order)
     rendered_collections.push({
       name: coll.definition.name,
       pages: coll_pages,
@@ -3950,22 +4055,14 @@ pub fn build(
     if error_count == 0 {
       let page_path = config.content_dir + "/404.md"
       let has_custom_404 = @fs.path_exists(page_path)
-      let fortyfour_html = match render_404_page(
-        config,
-        templates,
-        nav_links_html,
-        custom_css,
-        data_store,
-      ) {
+      let fortyfour_html = match
+        render_404_page(
+          config, templates, nav_links_html, custom_css, data_store,
+        ) {
         Ok(html) => Some(html)
         Err(msg) => {
           diagnostics.push(
-            build_error(
-              Some(page_path),
-              None,
-              None,
-              "404 page: " + msg,
-            ),
+            build_error(Some(page_path), None, None, "404 page: " + msg),
           )
           None
         }
@@ -3975,11 +4072,7 @@ pub fn build(
           try {
             let out_path = config.output_dir + "/404.html"
             @fs.write_string_to_file(out_path, html)
-            let source_type = if has_custom_404 {
-              "custom"
-            } else {
-              "default"
-            }
+            let source_type = if has_custom_404 { "custom" } else { "default" }
             println("[lattice] wrote 404.html (" + source_type + ")")
             ()
           } catch {

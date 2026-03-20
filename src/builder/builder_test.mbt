@@ -25,6 +25,7 @@ test "collection index lookup alias uses numeric prefix directory basename" {
     content_dir: "/vault/10 - Projects",
     template: None,
     page_size: None,
+    sort_order: @collections.DateDesc,
   }
   match @builder.collection_index_lookup_alias(collection) {
     Some(lookup_key) => assert_eq(lookup_key, "10---projects")
@@ -40,6 +41,7 @@ test "collection index lookup alias skips matching directory names" {
     content_dir: "/vault/posts",
     template: None,
     page_size: None,
+    sort_order: @collections.DateDesc,
   }
   match @builder.collection_index_lookup_alias(collection) {
     Some(_) => assert_true(false)
@@ -55,6 +57,7 @@ test "collection index lookup alias skips basename that normalizes to collection
     content_dir: "/vault/Posts",
     template: None,
     page_size: None,
+    sort_order: @collections.DateDesc,
   }
   match @builder.collection_index_lookup_alias(collection) {
     Some(_) => assert_true(false)
@@ -1355,7 +1358,9 @@ test "build emits json ld for content pages and homepage root copy" {
   )
   assert_eq(result.errors, 0)
 
-  let post_output = @fs.read_file_to_string(output_root + "/posts/home/index.html") catch {
+  let post_output = @fs.read_file_to_string(
+    output_root + "/posts/home/index.html",
+  ) catch {
     @fs.IOError(_) => ""
   }
   assert_true(post_output.contains("<script type=\"application/ld+json\">"))
@@ -1363,7 +1368,9 @@ test "build emits json ld for content pages and homepage root copy" {
   assert_true(post_output.contains("\"@type\": \"BlogPosting\""))
   assert_true(post_output.contains("\"item\": \"https://example.test/\""))
   assert_true(post_output.contains("\"item\": \"https://example.test/posts/\""))
-  assert_true(post_output.contains("\"item\": \"https://example.test/posts/home/\""))
+  assert_true(
+    post_output.contains("\"item\": \"https://example.test/posts/home/\""),
+  )
   assert_true(post_output.contains("\"headline\": \"Home\""))
   assert_true(
     post_output.contains("\"url\": \"https://example.test/posts/home/\""),
@@ -1371,13 +1378,19 @@ test "build emits json ld for content pages and homepage root copy" {
   assert_true(post_output.contains("\"datePublished\": \"2026-03-19\""))
   assert_true(post_output.contains("\"name\": \"Kurisu\""))
 
-  let collection_output = @fs.read_file_to_string(output_root + "/posts/index.html") catch {
+  let collection_output = @fs.read_file_to_string(
+    output_root + "/posts/index.html",
+  ) catch {
     @fs.IOError(_) => ""
   }
-  assert_true(collection_output.contains("<script type=\"application/ld+json\">"))
+  assert_true(
+    collection_output.contains("<script type=\"application/ld+json\">"),
+  )
   assert_true(collection_output.contains("\"@type\": \"BreadcrumbList\""))
   assert_true(collection_output.contains("\"item\": \"https://example.test/\""))
-  assert_true(collection_output.contains("\"item\": \"https://example.test/posts/\""))
+  assert_true(
+    collection_output.contains("\"item\": \"https://example.test/posts/\""),
+  )
   assert_false(collection_output.contains("\"@type\": \"BlogPosting\""))
 
   let root_output = @fs.read_file_to_string(output_root + "/index.html") catch {
@@ -1389,3 +1402,5 @@ test "build emits json ld for content pages and homepage root copy" {
   assert_true(root_output.contains("\"url\": \"https://example.test/\""))
   assert_false(root_output.contains("\"@type\": \"BlogPosting\""))
 }
+
+///|

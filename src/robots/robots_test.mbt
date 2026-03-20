@@ -74,7 +74,10 @@ test "render_robots_txt returns empty string when disabled even with base_url" {
 test "render_robots_txt preserves newlines in correct order" {
   let robots = @robots.render_robots_txt("https://example.com", true)
 
-  inspect(robots, content="User-agent: *\nAllow: /\nSitemap: https://example.com/sitemap.xml\n")
+  inspect(
+    robots,
+    content="User-agent: *\nAllow: /\nSitemap: https://example.com/sitemap.xml\n",
+  )
 }
 
 ///|

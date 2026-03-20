@@ -210,7 +210,9 @@ test "render_page emits blog posting json ld in head" {
     html.contains("\"mainEntityOfPage\": {\n    \"@type\": \"WebPage\""),
   )
   assert_true(
-    html.contains("</script>\n  <link rel=\"stylesheet\" href=\"/style.css\" />"),
+    html.contains(
+      "</script>\n  <link rel=\"stylesheet\" href=\"/style.css\" />",
+    ),
   )
 }
 
@@ -262,11 +264,9 @@ test "inject_head_markup inserts before closing head" {
   let html = "<html><head><title>X</title></head><body></body></html>"
   let out = @html.inject_head_markup(html, "<meta name=\"x\" content=\"1\" />")
   assert_eq(
-    out,
-    "<html><head><title>X</title><meta name=\"x\" content=\"1\" /></head><body></body></html>",
+    out, "<html><head><title>X</title><meta name=\"x\" content=\"1\" /></head><body></body></html>",
   )
 }
-
 
 ///|
 test "render_page with feed_url includes atom discovery link" {
