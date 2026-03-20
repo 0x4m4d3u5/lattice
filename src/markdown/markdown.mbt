@@ -1062,78 +1062,46 @@ pub fn parse_blocks_with_footnotes(
       result.push(BlockQuote(parse_blocks(bq_lines)))
     } else if is_unordered_item(line) {
       let items : Array[ListItem] = []
-      let start_index = i
-      // Parse list items
+      // Single-pass: consume each item line then immediately consume its
+      // indented continuation lines before moving to the next item.
       while i < n && is_unordered_item(ls[i]) {
+        let text = substr(ls[i], 2, ls[i].length())
         i = i + 1
-      }
-      // Build list items with nested children
-      let mut j = start_index
-      while j < i {
-        let text = substr(ls[j], 2, ls[j].length())
-        let children : Array[Block] = []
-        // Check for nested content (indented lines)
-        let mut k = j + 1
-        while k < i && is_nested_indent(ls[k]) {
-          // If it's a nested list item, collect all consecutive nested items
-          if is_nested_list_item(ls[k]) {
-            let nested_lines : Array[String] = []
-            while k < i && is_nested_indent(ls[k]) {
-              // Strip the leading indentation (2 spaces) to get the raw nested line
-              let stripped = substr(ls[k], 2, ls[k].length())
-              nested_lines.push(stripped)
-              k = k + 1
-            }
-            // Parse the nested block
-            let (nested_blocks, _nested_notes) = parse_blocks_with_footnotes(nested_lines)
-            if nested_blocks.length() > 0 {
-              children.push(nested_blocks[0])
-            }
-          } else {
-            // Indented paragraph or other content
-            k = k + 1
-          }
+        // Collect indented continuation lines belonging to this item.
+        let nested_lines : Array[String] = []
+        while i < n && is_nested_indent(ls[i]) {
+          nested_lines.push(substr(ls[i], 2, ls[i].length()))
+          i = i + 1
+        }
+        let children : Array[Block] = if nested_lines.length() > 0 {
+          let (nested_blocks, _) = parse_blocks_with_footnotes(nested_lines)
+          nested_blocks
+        } else {
+          []
         }
         items.push({ inlines: parse_inlines(text, 0, text.length()), children })
-        j = j + 1
       }
       result.push(UnorderedList(items))
     } else if is_ordered_item(line) {
       let items : Array[ListItem] = []
-      let start_index = i
-      // Parse list items
+      // Single-pass: consume each item line then immediately consume its
+      // indented continuation lines before moving to the next item.
       while i < n && is_ordered_item(ls[i]) {
+        let text = ordered_item_text(ls[i])
         i = i + 1
-      }
-      // Build list items with nested children
-      let mut j = start_index
-      while j < i {
-        let text = ordered_item_text(ls[j])
-        let children : Array[Block] = []
-        // Check for nested content (indented lines)
-        let mut k = j + 1
-        while k < i && is_nested_indent(ls[k]) {
-          // If it's a nested list item, collect all consecutive nested items
-          if is_nested_list_item(ls[k]) {
-            let nested_lines : Array[String] = []
-            while k < i && is_nested_indent(ls[k]) {
-              // Strip the leading indentation (2 spaces) to get the raw nested line
-              let stripped = substr(ls[k], 2, ls[k].length())
-              nested_lines.push(stripped)
-              k = k + 1
-            }
-            // Parse the nested block
-            let (nested_blocks, _nested_notes) = parse_blocks_with_footnotes(nested_lines)
-            if nested_blocks.length() > 0 {
-              children.push(nested_blocks[0])
-            }
-          } else {
-            // Indented paragraph or other content
-            k = k + 1
-          }
+        // Collect indented continuation lines belonging to this item.
+        let nested_lines : Array[String] = []
+        while i < n && is_nested_indent(ls[i]) {
+          nested_lines.push(substr(ls[i], 2, ls[i].length()))
+          i = i + 1
+        }
+        let children : Array[Block] = if nested_lines.length() > 0 {
+          let (nested_blocks, _) = parse_blocks_with_footnotes(nested_lines)
+          nested_blocks
+        } else {
+          []
         }
         items.push({ inlines: parse_inlines(text, 0, text.length()), children })
-        j = j + 1
       }
       result.push(OrderedList(items))
     } else if is_table_row_line(line) &&
