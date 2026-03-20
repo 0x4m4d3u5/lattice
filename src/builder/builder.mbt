@@ -163,6 +163,14 @@ fn extract_toc_depth(fm : @frontmatter.Frontmatter) -> Int {
 }
 
 ///|
+fn extract_template(fm : @frontmatter.Frontmatter) -> String? {
+  match fm.fields.get("template") {
+    Some(@frontmatter.FStr(t)) => Some(t)
+    _ => None
+  }
+}
+
+///|
 fn is_draft(fm : @frontmatter.Frontmatter) -> Bool {
   match fm.fields.get("draft") {
     Some(@frontmatter.FBool(true)) => true
@@ -2213,6 +2221,7 @@ fn process_document(
   site : @config.SiteConfig,
   data_store : @data.DataStore,
   page_template : @template.Template?,
+  templates_dir : String,
   nav_links_html : String,
   custom_css : String,
   backlinks_html : String,
@@ -2237,6 +2246,48 @@ fn process_document(
       return { document: None, diagnostics }
     }
     Ok(fm) => fm
+  }
+  // Step 1b: check for per-page template override
+  let custom_template = match extract_template(fm) {
+    Some(template_name) => {
+      let template_path = templates_dir + "/" + template_name
+      match load_template_file(template_path) {
+        Ok(Some(tpl)) => Some(tpl)
+        Ok(None) => {
+          // Template file doesn't exist, warn and fall back to default
+          diagnostics.push(
+            build_warning(
+              Some(source_path),
+              frontmatter_field_line(source, "template"),
+              None,
+              "template file '" +
+              template_name +
+              "' not found in " +
+              templates_dir +
+              ", using default page template",
+            ),
+          )
+          page_template
+        }
+        Err(msg) => {
+          // Template file exists but failed to load, warn and fall back to default
+          diagnostics.push(
+            build_warning(
+              Some(source_path),
+              frontmatter_field_line(source, "template"),
+              None,
+              "failed to load template '" +
+              template_name +
+              "': " +
+              msg +
+              ", using default page template",
+            ),
+          )
+          page_template
+        }
+      }
+    }
+    None => page_template
   }
   // Step 2: validate against schema — collect all errors before aborting
   let schema_errors = @schema.validate(fm, schema)
@@ -2398,7 +2449,7 @@ fn process_document(
     canonical : String,
     structured_data : Array[@html.StructuredData],
   ) -> Result[String, String] {
-    match page_template {
+    match custom_template {
       Some(tpl) => {
         let slots = build_template_slots(
           full_title,
@@ -2705,6 +2756,7 @@ fn process_document_for_lint(
   site : @config.SiteConfig,
   data_store : @data.DataStore,
   page_template : @template.Template?,
+  templates_dir : String,
   nav_links_html : String,
   custom_css : String,
   backlinks_html : String,
@@ -2727,6 +2779,47 @@ fn process_document_for_lint(
       return { document: None, violations }
     }
     Ok(parsed) => parsed
+  }
+
+  // Check for per-page template override
+  let custom_template = match extract_template(fm) {
+    Some(template_name) => {
+      let template_path = templates_dir + "/" + template_name
+      match load_template_file(template_path) {
+        Ok(Some(tpl)) => Some(tpl)
+        Ok(None) => {
+          // Template file doesn't exist, warn and fall back to default
+          violations.push({
+            path: source_path,
+            line: frontmatter_field_line(source, "template"),
+            column: None,
+            kind: @lint.TemplateSlotError,
+            message: "template file '" +
+            template_name +
+            "' not found in " +
+            templates_dir +
+            ", using default page template",
+          })
+          page_template
+        }
+        Err(msg) => {
+          // Template file exists but failed to load, warn and fall back to default
+          violations.push({
+            path: source_path,
+            line: frontmatter_field_line(source, "template"),
+            column: None,
+            kind: @lint.TemplateSlotError,
+            message: "failed to load template '" +
+            template_name +
+            "': " +
+            msg +
+            ", using default page template",
+          })
+          page_template
+        }
+      }
+    }
+    None => page_template
   }
 
   let schema_errors = @schema.validate(fm, schema)
@@ -2847,7 +2940,7 @@ fn process_document_for_lint(
     None => ""
   }
 
-  let page_html = match page_template {
+  let page_html = match custom_template {
     Some(tpl) => {
       let slots = build_template_slots(
         full_title,
@@ -3653,6 +3746,7 @@ pub fn build(
         config.site,
         data_store,
         page_template,
+        templates_dir_for_build(config),
         nav_links_html,
         custom_css,
         page_backlinks_html,
@@ -4572,6 +4666,7 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
         config.site,
         data_store,
         page_template,
+        templates_dir_for_build(config),
         nav_links_html,
         custom_css,
         lint_backlinks_html,

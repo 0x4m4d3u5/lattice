@@ -1791,3 +1791,243 @@ test "prev/next post slots populated in collection" {
   }
   assert_true(post1_output.contains("/posts/post2/|Post 2||"))
 }
+
+///|
+test "per-page template override via frontmatter" {
+  let root = "./_tmp_per_page_template_override"
+  let content_root = root + "/content"
+  let posts_root = content_root + "/posts"
+  let data_root = content_root + "/data"
+  let templates_root = root + "/templates"
+  let output_root = root + "/dist"
+  ensure_dir_test(root)
+  ensure_dir_test(content_root)
+  ensure_dir_test(posts_root)
+  ensure_dir_test(data_root)
+  ensure_dir_test(templates_root)
+  ensure_dir_test(output_root)
+
+  // Create site.cfg
+  assert_true(
+    write_file_test(
+      root + "/site.cfg",
+      "site:\n  title: Test Site\n  base_url: https://example.test/\n",
+    ),
+  )
+
+  // Create two posts - one with custom template, one without
+  assert_true(
+    write_file_test(
+      posts_root + "/custom.md",
+      "---\n" +
+      "title: Custom Template Page\n" +
+      "template: landing.html\n" +
+      "---\n\n" +
+      "This uses a custom template.\n",
+    ),
+  )
+  assert_true(
+    write_file_test(
+      posts_root + "/default.md",
+      "---\n" +
+      "title: Default Template Page\n" +
+      "---\n\n" +
+      "This uses the default template.\n",
+    ),
+  )
+
+  // Create default page template
+  assert_true(
+    write_file_test(
+      templates_root + "/page.html",
+      "<html><body>DEFAULT: {{content}}</body></html>\n",
+    ),
+  )
+
+  // Create custom landing template
+  assert_true(
+    write_file_test(
+      templates_root + "/landing.html",
+      "<html><body>LANDING PAGE: {{content}}</body></html>\n",
+    ),
+  )
+
+  // Create collections.cfg
+  assert_true(
+    write_file_test(
+      root + "/collections.cfg",
+      "[posts]\n" + "schema = title:String\n" + "dir = " + posts_root + "\n",
+    ),
+  )
+
+  // Build
+  let config : @builder.BuildConfig = {
+    content_dir: content_root,
+    output_dir: output_root,
+    config_path: root + "/site.cfg",
+    site: match
+      @config.parse(
+        "title = Test Site\n" +
+        "base_url = https://example.test/\n" +
+        "templates_dir = " +
+        templates_root +
+        "\n" +
+        "data_dir = " +
+        data_root +
+        "\n" +
+        "collections_file = " +
+        root +
+        "/collections.cfg\n" +
+        "output_dir = " +
+        output_root +
+        "\n",
+      ) {
+      Ok(parsed) => parsed
+      Err(_) => {
+        assert_true(false)
+        abort("site config parse failed")
+      }
+    },
+    collections_path: Some(root + "/collections.cfg"),
+    force_rebuild: false,
+    include_drafts: false,
+  }
+  let cache = @cache.empty(output_root)
+  let result = @builder.build(config, cache)
+  assert_eq(result.errors, 0)
+
+  // Check custom template page
+  let custom_output = @fs.read_file_to_string(
+    output_root + "/posts/custom/index.html",
+  ) catch {
+    @fs.IOError(_) => ""
+  }
+  assert_true(custom_output.contains("LANDING PAGE:"))
+  assert_true(custom_output.contains("This uses a custom template."))
+
+  // Check default template page
+  let default_output = @fs.read_file_to_string(
+    output_root + "/posts/default/index.html",
+  ) catch {
+    @fs.IOError(_) => ""
+  }
+  assert_true(default_output.contains("DEFAULT:"))
+  assert_true(default_output.contains("This uses the default template."))
+}
+
+///|
+test "per-page template override warns on missing template file" {
+  let root = "./_tmp_per_page_template_missing"
+  let content_root = root + "/content"
+  let posts_root = content_root + "/posts"
+  let data_root = content_root + "/data"
+  let templates_root = root + "/templates"
+  let output_root = root + "/dist"
+  ensure_dir_test(root)
+  ensure_dir_test(content_root)
+  ensure_dir_test(posts_root)
+  ensure_dir_test(data_root)
+  ensure_dir_test(templates_root)
+  ensure_dir_test(output_root)
+
+  // Create site.cfg
+  assert_true(
+    write_file_test(
+      root + "/site.cfg",
+      "site:\n  title: Test Site\n  base_url: https://example.test/\n",
+    ),
+  )
+
+  // Create post with missing custom template
+  assert_true(
+    write_file_test(
+      posts_root + "/missing.md",
+      "---\n" +
+      "title: Missing Template Page\n" +
+      "template: missing_template.html\n" +
+      "---\n\n" +
+      "This falls back to default template.\n",
+    ),
+  )
+
+  // Create default page template only
+  assert_true(
+    write_file_test(
+      templates_root + "/page.html",
+      "<html><body>DEFAULT: {{content}}</body></html>\n",
+    ),
+  )
+
+  // Create collections.cfg
+  assert_true(
+    write_file_test(
+      root + "/collections.cfg",
+      "[posts]\n" + "schema = title:String\n" + "dir = " + posts_root + "\n",
+    ),
+  )
+
+  // Build
+  let config : @builder.BuildConfig = {
+    content_dir: content_root,
+    output_dir: output_root,
+    config_path: root + "/site.cfg",
+    site: match
+      @config.parse(
+        "title = Test Site\n" +
+        "base_url = https://example.test/\n" +
+        "templates_dir = " +
+        templates_root +
+        "\n" +
+        "data_dir = " +
+        data_root +
+        "\n" +
+        "collections_file = " +
+        root +
+        "/collections.cfg\n" +
+        "output_dir = " +
+        output_root +
+        "\n",
+      ) {
+      Ok(parsed) => parsed
+      Err(_) => {
+        assert_true(false)
+        abort("site config parse failed")
+      }
+    },
+    collections_path: Some(root + "/collections.cfg"),
+    force_rebuild: false,
+    include_drafts: false,
+  }
+  let cache = @cache.empty(output_root)
+  let result = @builder.build(config, cache)
+
+  // Build should still succeed
+  assert_eq(result.errors, 0)
+
+  // Should have a warning about missing template
+  let mut has_warning = false
+  let mut i = 0
+  while i < result.diagnostics.length() {
+    let diag = result.diagnostics[i]
+    match diag {
+      { severity: @diagnostic.Warning, message: msg, .. } =>
+        if msg.contains("missing_template.html") &&
+          msg.contains("not found") &&
+          msg.contains("using default page template") {
+          has_warning = true
+        }
+      _ => ()
+    }
+    i = i + 1
+  }
+  assert_true(has_warning)
+
+  // Check that page still renders with default template
+  let output = @fs.read_file_to_string(
+    output_root + "/posts/missing/index.html",
+  ) catch {
+    @fs.IOError(_) => ""
+  }
+  assert_true(output.contains("DEFAULT:"))
+  assert_true(output.contains("This falls back to default template."))
+}
