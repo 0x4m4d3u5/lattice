@@ -49,13 +49,22 @@ pub enum ColAlign {
 
 ///|
 /// A block element in the markdown AST.
+///|
+/// A list item that can contain inline content and nested blocks.
+pub(all) struct ListItem {
+  inlines : Array[Inline]
+  children : Array[Block]
+}
+
+///|
+/// A block element in the markdown AST.
 pub enum Block {
   Heading(Int, Array[Inline])
   Paragraph(Array[Inline])
   FencedCode(String?, String) // optional language tag, code text
   BlockQuote(Array[Block])
-  UnorderedList(Array[Array[Inline]]) // each item is inline content
-  OrderedList(Array[Array[Inline]]) // each item is inline content
+  UnorderedList(Array[ListItem]) // each item can have nested blocks
+  OrderedList(Array[ListItem]) // each item can have nested blocks
   HRule
   // GFM table: column alignments, header cells, data rows.
   // Each cell is an Array[Inline] so inline formatting works inside cells.
@@ -762,6 +771,7 @@ fn is_fence_end(line : String, fence_char : Char) -> Bool {
 }
 
 ///|
+///|
 fn is_unordered_item(line : String) -> Bool {
   let n = line.length()
   n >= 2 &&
@@ -783,6 +793,29 @@ fn is_ordered_item(line : String) -> Bool {
 }
 
 ///|
+/// Count leading spaces (2 or 4 spaces indicate nested list)
+fn count_leading_spaces(line : String) -> Int {
+  let n = line.length()
+  let mut count = 0
+  while count < n && (char_at(line, count) == ' ') {
+    count = count + 1
+  }
+  count
+}
+
+///|
+/// Check if a line is indented for a nested list (2 or 4 spaces)
+fn is_nested_indent(line : String) -> Bool {
+  let spaces = count_leading_spaces(line)
+  spaces == 2 || spaces == 4
+}
+
+///|
+/// Check if a line is a nested list continuation (indented list item)
+fn is_nested_list_item(line : String) -> Bool {
+  let trimmed = trim_start(line)
+  is_unordered_item(trimmed) || is_ordered_item(trimmed)
+}
 fn ordered_item_text(line : String) -> String {
   let n = line.length()
   let mut i = 0
@@ -1028,19 +1061,79 @@ pub fn parse_blocks_with_footnotes(
       // blockquotes recurse: the stripped lines form their own block structure
       result.push(BlockQuote(parse_blocks(bq_lines)))
     } else if is_unordered_item(line) {
-      let items : Array[Array[Inline]] = []
+      let items : Array[ListItem] = []
+      let start_index = i
+      // Parse list items
       while i < n && is_unordered_item(ls[i]) {
-        let text = substr(ls[i], 2, ls[i].length())
-        items.push(parse_inlines(text, 0, text.length()))
         i = i + 1
+      }
+      // Build list items with nested children
+      let mut j = start_index
+      while j < i {
+        let text = substr(ls[j], 2, ls[j].length())
+        let children : Array[Block] = []
+        // Check for nested content (indented lines)
+        let mut k = j + 1
+        while k < i && is_nested_indent(ls[k]) {
+          // If it's a nested list item, collect all consecutive nested items
+          if is_nested_list_item(ls[k]) {
+            let nested_lines : Array[String] = []
+            while k < i && is_nested_indent(ls[k]) {
+              // Strip the leading indentation (2 spaces) to get the raw nested line
+              let stripped = substr(ls[k], 2, ls[k].length())
+              nested_lines.push(stripped)
+              k = k + 1
+            }
+            // Parse the nested block
+            let (nested_blocks, _nested_notes) = parse_blocks_with_footnotes(nested_lines)
+            if nested_blocks.length() > 0 {
+              children.push(nested_blocks[0])
+            }
+          } else {
+            // Indented paragraph or other content
+            k = k + 1
+          }
+        }
+        items.push({ inlines: parse_inlines(text, 0, text.length()), children })
+        j = j + 1
       }
       result.push(UnorderedList(items))
     } else if is_ordered_item(line) {
-      let items : Array[Array[Inline]] = []
+      let items : Array[ListItem] = []
+      let start_index = i
+      // Parse list items
       while i < n && is_ordered_item(ls[i]) {
-        let text = ordered_item_text(ls[i])
-        items.push(parse_inlines(text, 0, text.length()))
         i = i + 1
+      }
+      // Build list items with nested children
+      let mut j = start_index
+      while j < i {
+        let text = ordered_item_text(ls[j])
+        let children : Array[Block] = []
+        // Check for nested content (indented lines)
+        let mut k = j + 1
+        while k < i && is_nested_indent(ls[k]) {
+          // If it's a nested list item, collect all consecutive nested items
+          if is_nested_list_item(ls[k]) {
+            let nested_lines : Array[String] = []
+            while k < i && is_nested_indent(ls[k]) {
+              // Strip the leading indentation (2 spaces) to get the raw nested line
+              let stripped = substr(ls[k], 2, ls[k].length())
+              nested_lines.push(stripped)
+              k = k + 1
+            }
+            // Parse the nested block
+            let (nested_blocks, _nested_notes) = parse_blocks_with_footnotes(nested_lines)
+            if nested_blocks.length() > 0 {
+              children.push(nested_blocks[0])
+            }
+          } else {
+            // Indented paragraph or other content
+            k = k + 1
+          }
+        }
+        items.push({ inlines: parse_inlines(text, 0, text.length()), children })
+        j = j + 1
       }
       result.push(OrderedList(items))
     } else if is_table_row_line(line) &&
@@ -1189,7 +1282,7 @@ fn render_blocks_with_issues(
   while i < blocks.length() {
     match blocks[i] {
       OrderedList(items) => {
-        let merged : Array[Array[Inline]] = []
+        let merged : Array[ListItem] = []
         let mut k = 0
         while k < items.length() {
           merged.push(items[k])
@@ -1530,12 +1623,13 @@ fn render_block_with_issues(
       buf.write_string("<ul>\n")
       let mut i = 0
       while i < items.length() {
+        let item = items[i]
         // Check if this is a task list item
-        let mut is_task_list = items[i].length() > 0
+        let mut is_task_list = item.inlines.length() > 0
         let mut task_checked = false
-        let mut task_prefix_stripped : Array[Inline] = items[i]
+        let mut task_prefix_stripped : Array[Inline] = item.inlines
         if is_task_list {
-          match items[i][0] {
+          match item.inlines[0] {
             Text(t) =>
               if t.has_prefix("[ ] ") {
                 task_checked = false
@@ -1543,8 +1637,8 @@ fn render_block_with_issues(
                 // Build new array with stripped text and remaining inlines
                 let new_inlines : Array[Inline] = [Text(stripped)]
                 let mut j = 1
-                while j < items[i].length() {
-                  new_inlines.push(items[i][j])
+                while j < item.inlines.length() {
+                  new_inlines.push(item.inlines[j])
                   j = j + 1
                 }
                 task_prefix_stripped = new_inlines
@@ -1554,8 +1648,8 @@ fn render_block_with_issues(
                 // Build new array with stripped text and remaining inlines
                 let new_inlines : Array[Inline] = [Text(stripped)]
                 let mut j = 1
-                while j < items[i].length() {
-                  new_inlines.push(items[i][j])
+                while j < item.inlines.length() {
+                  new_inlines.push(item.inlines[j])
                   j = j + 1
                 }
                 task_prefix_stripped = new_inlines
@@ -1578,6 +1672,14 @@ fn render_block_with_issues(
           }
         }
         buf.write_string(rendered_item.html)
+        // Render nested blocks (lists, paragraphs, etc.)
+        if item.children.length() > 0 {
+          let rendered_children = render_blocks_with_issues(
+            item.children, wl, heading_counts, fn_map,
+          )
+          merge_shortcode_errors(issues, rendered_children.shortcode_errors)
+          buf.write_string(rendered_children.html)
+        }
         buf.write_string("</li>\n")
         i = i + 1
       }
@@ -1595,10 +1697,19 @@ fn render_block_with_issues(
       buf.write_string("<ol>\n")
       let mut i = 0
       while i < items.length() {
-        let rendered_item = render_inlines_with_issues(items[i], wl, fn_map)
+        let item = items[i]
+        let rendered_item = render_inlines_with_issues(item.inlines, wl, fn_map)
         merge_shortcode_errors(issues, rendered_item.shortcode_errors)
         buf.write_string("<li>")
         buf.write_string(rendered_item.html)
+        // Render nested blocks (lists, paragraphs, etc.)
+        if item.children.length() > 0 {
+          let rendered_children = render_blocks_with_issues(
+            item.children, wl, heading_counts, fn_map,
+          )
+          merge_shortcode_errors(issues, rendered_children.shortcode_errors)
+          buf.write_string(rendered_children.html)
+        }
         buf.write_string("</li>\n")
         i = i + 1
       }
