@@ -1860,6 +1860,12 @@ fn render_404_page(
         "",
         "",
       )
+      // 404 pages have no tags, collection, or date components
+      slots.set(@template.Tags, "")
+      slots.set(@template.Collection, "")
+      slots.set(@template.Year, "")
+      slots.set(@template.Month, "")
+      slots.set(@template.Day, "")
       match @template.render_template_with_data(tpl, slots, data_store) {
         Ok(html) => Ok(html)
         Err(e) => Err("404 page template: " + template_error_text(e))

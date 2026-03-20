@@ -1428,14 +1428,6 @@ test "template tags slot renders space-separated tag links" {
     ),
   )
 
-  // Create collections.cfg with tags index
-  assert_true(
-    write_file_test(
-      root + "/collections.cfg",
-      "collection posts:\n  schema:\n    title: string\n    date: string\n    tags: [string]\nindex tags:\n",
-    ),
-  )
-
   // Create post with tags
   assert_true(
     write_file_test(
@@ -1453,7 +1445,7 @@ test "template tags slot renders space-separated tag links" {
   )
 
   // Build
-  let collections_cfg = "collection posts:\n  schema:\n    title: string\n    date: string\n    tags: [string]\n    dir = " + posts_root + "\nindex tags:\n"
+  let collections_cfg = "[posts]\nschema = title:String,date:Date,tags:Array[String]\ndir = " + posts_root + "\n"
   assert_true(write_file_test(root + "/collections.cfg", collections_cfg))
 
   let site_cfg = "title = Test Site\n" +
@@ -1524,14 +1516,6 @@ test "template tags slot is empty for pages without tags" {
   ensure_dir_test(templates_root)
   ensure_dir_test(output_root)
 
-  // Create collections.cfg
-  assert_true(
-    write_file_test(
-      root + "/collections.cfg",
-      "collection posts:\n  schema:\n    title: string\n    date: string\n    tags: [string]\nindex tags:\n",
-    ),
-  )
-
   // Create post without tags
   assert_true(
     write_file_test(
@@ -1549,7 +1533,7 @@ test "template tags slot is empty for pages without tags" {
   )
 
   // Build
-  let collections_cfg = "collection posts:\n  schema:\n    title: string\n    date: string\n    tags: [string]\n    dir = " + posts_root + "\nindex tags:\n"
+  let collections_cfg = "[posts]\nschema = title:String,date:Date,tags:Array[String]\ndir = " + posts_root + "\n"
   assert_true(write_file_test(root + "/collections.cfg", collections_cfg))
 
   let site_cfg = "title = Test Site\n" +
@@ -1613,14 +1597,6 @@ test "template year/month/day slots are empty for pages without date" {
   ensure_dir_test(templates_root)
   ensure_dir_test(output_root)
 
-  // Create collections.cfg without date field (optional)
-  assert_true(
-    write_file_test(
-      root + "/collections.cfg",
-      "collection posts:\n  schema:\n    title: string\n    date?: string\n    tags: [string]\nindex tags:\n",
-    ),
-  )
-
   // Create post without date
   assert_true(
     write_file_test(
@@ -1637,8 +1613,8 @@ test "template year/month/day slots are empty for pages without date" {
     ),
   )
 
-  // Build
-  let collections_cfg = "collection posts:\n  schema:\n    title: string\n    date: string\n    tags: [string]\n    dir = " + posts_root + "\nindex tags:\n"
+  // Build — date is optional so the post without a date must not fail schema validation
+  let collections_cfg = "[posts]\nschema = title:String,date:Optional[Date],tags:Optional[Array[String]]\ndir = " + posts_root + "\n"
   assert_true(write_file_test(root + "/collections.cfg", collections_cfg))
 
   let site_cfg = "title = Test Site\n" +
