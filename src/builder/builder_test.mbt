@@ -18,6 +18,29 @@ fn write_file_test(path : String, content : String) -> Bool {
 }
 
 ///|
+test "redirect_url_to_output_path converts trailing slash URLs to index.html" {
+  assert_eq(@builder.redirect_url_to_output_path("/old-url/"), "old-url/index.html")
+  assert_eq(@builder.redirect_url_to_output_path("/old/path/"), "old/path/index.html")
+}
+
+///|
+test "redirect_url_to_output_path converts URLs without trailing slash to index.html" {
+  assert_eq(@builder.redirect_url_to_output_path("/old-url"), "old-url/index.html")
+  assert_eq(@builder.redirect_url_to_output_path("/old/path"), "old/path/index.html")
+}
+
+///|
+test "redirect_url_to_output_path preserves .html extension" {
+  assert_eq(@builder.redirect_url_to_output_path("/old.html"), "old.html")
+  assert_eq(@builder.redirect_url_to_output_path("/old/path.html"), "old/path.html")
+}
+
+///|
+test "redirect_url_to_output_path handles root path" {
+  assert_eq(@builder.redirect_url_to_output_path("/"), "index.html")
+}
+
+///|
 test "collection index lookup alias uses numeric prefix directory basename" {
   let collection : @collections.CollectionDef = {
     name: "projects",
@@ -2183,4 +2206,118 @@ test "per-page template override warns on missing template file" {
   }
   assert_true(output.contains("DEFAULT:"))
   assert_true(output.contains("This falls back to default template."))
+}
+
+///|
+test "redirect pages generated from redirect_from frontmatter" {
+  let root = "./_tmp_builder_redirects"
+  let content_root = root + "/content"
+  let posts_root = content_root + "/posts"
+  let data_root = content_root + "/data"
+  let templates_root = root + "/templates"
+  let output_root = root + "/dist"
+  ensure_dir_test(root)
+  ensure_dir_test(content_root)
+  ensure_dir_test(posts_root)
+  ensure_dir_test(data_root)
+  ensure_dir_test(templates_root)
+  ensure_dir_test(output_root)
+
+  assert_true(
+    write_file_test(
+      posts_root + "/new-post.md",
+      "---\n" +
+      "title: New Post\n" +
+      "date: 2026-03-11\n" +
+      "redirect_from:\n" +
+      "  - \"/old-path/\"\n" +
+      "  - \"/another/old.html\"\n" +
+      "---\n\n" +
+      "This is the new location.\n",
+    ),
+  )
+  
+  assert_true(
+    write_file_test(
+      templates_root + "/page.html",
+      "<html><body>{{content}}</body></html>\n",
+    ),
+  )
+
+  let site_cfg = "title = Test\n" +
+    "base_url = https://example.com\n" +
+    "templates_dir = " +
+    templates_root +
+    "\n" +
+    "data_dir = " +
+    data_root +
+    "\n" +
+    "collections_file = " +
+    root +
+    "/collections.cfg\n" +
+    "output_dir = " +
+    output_root +
+    "\n"
+  assert_true(write_file_test(root + "/site.cfg", site_cfg))
+  assert_true(
+    write_file_test(
+      root + "/collections.cfg",
+      "[posts]\n" +
+      "schema = title:String,date:Date\n" +
+      "dir = " +
+      posts_root +
+      "\n",
+    ),
+  )
+
+  let site = match @config.parse(site_cfg) {
+    Ok(parsed) => parsed
+    Err(_) => {
+      assert_true(false)
+      abort("site config parse failed")
+    }
+  }
+  let result = @builder.build(
+    {
+      content_dir: content_root,
+      output_dir: output_root,
+      config_path: root + "/site.cfg",
+      site,
+      collections_path: Some(root + "/collections.cfg"),
+      force_rebuild: false,
+      include_drafts: false,
+    },
+    @cache.empty(output_root),
+  )
+
+  // Build should succeed
+  assert_eq(result.errors, 0)
+  // Should report 2 redirects
+  assert_eq(result.redirect_count, 2)
+  
+  // Check redirect for /old-path/
+  let redirect1 = @fs.read_file_to_string(
+    output_root + "/old-path/index.html",
+  ) catch {
+    @fs.IOError(_) => {
+      assert_true(false)
+      ""
+    }
+  }
+  assert_true(redirect1.contains("<meta http-equiv=\"refresh\""))
+  assert_true(redirect1.contains("https://example.com/posts/new-post"))
+  assert_true(redirect1.contains("<link rel=\"canonical\""))
+  
+  // Check redirect for /another/old.html
+  let redirect2 = @fs.read_file_to_string(
+    output_root + "/another/old.html",
+  ) catch {
+    @fs.IOError(_) => {
+      assert_true(false)
+      ""
+    }
+  }
+  assert_true(redirect2.contains("<meta http-equiv=\"refresh\""))
+  assert_true(redirect2.contains("https://example.com/posts/new-post"))
+  assert_true(redirect2.contains("<link rel=\"canonical\""))
 }

@@ -457,6 +457,16 @@ pub fn inject_head_markup(document_html : String, markup : String) -> String {
 }
 
 ///|
+/// Render an Atom feed autodiscovery link tag.
+pub fn render_feed_link_tag(title : String, feed_url : String) -> String {
+  "  <link rel=\"alternate\" type=\"application/atom+xml\" title=\"" +
+  escape_html_attr(title) +
+  "\" href=\"" +
+  escape_html_attr(feed_url) +
+  "\" />\n"
+}
+
+///|
 fn substr(s : String, start : Int, end_pos : Int) -> String {
   let buf = StringBuilder::new()
   let mut i = start

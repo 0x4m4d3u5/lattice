@@ -41,6 +41,7 @@ pub(all) struct BuildResult {
   rebuilt_pages : Int
   unchanged_pages : Int
   skipped_drafts : Int
+  redirect_count : Int
 }
 
 ///|
@@ -790,6 +791,57 @@ fn path_basename_builder(path : String) -> String {
     start = start - 1
   }
   substr_builder(path, start, end_pos)
+}
+
+///|
+/// Convert a redirect URL to an output file path.
+/// `/old/url/` → `old/url/index.html`
+/// `/old/url.html` → `old/url.html`
+pub fn redirect_url_to_output_path(url : String) -> String {
+  let mut clean_url = url
+  // Strip leading slash (including the root "/" case → empty string)
+  if clean_url.has_prefix("/") {
+    clean_url = if clean_url.length() > 1 {
+      substr_builder(clean_url, 1, clean_url.length())
+    } else {
+      ""
+    }
+  }
+  // If URL ends with .html, write directly; otherwise add /index.html
+  if clean_url.has_suffix(".html") {
+    clean_url
+  } else {
+    // Strip trailing slash if present
+    let stripped = if clean_url.has_suffix("/") && clean_url.length() > 1 {
+      substr_builder(clean_url, 0, clean_url.length() - 1)
+    } else {
+      clean_url
+    }
+    if stripped.length() == 0 {
+      "index.html"
+    } else {
+      stripped + "/index.html"
+    }
+  }
+}
+
+///|
+/// Render a minimal HTML redirect page.
+/// Generates a page with meta-refresh pointing to the canonical URL.
+pub fn render_redirect_page(canonical_url : String) -> String {
+  let esc_url = escape_html_builder(canonical_url)
+  "<!DOCTYPE html>\n" +
+  "<html>\n" +
+  "<head>\n" +
+  "  <meta charset=\"utf-8\">\n" +
+  "  <meta http-equiv=\"refresh\" content=\"0; url=" + esc_url + "\">\n" +
+  "  <link rel=\"canonical\" href=\"" + esc_url + "\">\n" +
+  "  <title>Redirecting...</title>\n" +
+  "</head>\n" +
+  "<body>\n" +
+  "  <p>Redirecting to <a href=\"" + esc_url + "\">" + esc_url + "</a>&#8230;</p>\n" +
+  "</body>\n" +
+  "</html>\n"
 }
 
 ///|
@@ -2405,19 +2457,25 @@ fn render_collection_index(
         page_url,
       )
       match @template.render_template_with_data(tpl, slots, data_store) {
-        Ok(html) =>
-          return Ok(
-            @html.inject_head_markup(
-              html,
-              @html.render_structured_data_script(
-                collection_breadcrumb_structured_data_builder(
-                  site,
-                  collection_name,
-                  pagination.page_number,
-                ),
-              ),
+        Ok(html) => {
+          let structured_data_markup = @html.render_structured_data_script(
+            collection_breadcrumb_structured_data_builder(
+              site,
+              collection_name,
+              pagination.page_number,
             ),
           )
+          let feed_url = absolute_url_builder(
+            site.base_url,
+            collection_index_url(collection_name) + "feed.xml",
+          )
+          let feed_link_markup = @html.render_feed_link_tag(
+            full_title,
+            feed_url,
+          )
+          let combined_markup = structured_data_markup + feed_link_markup
+          return Ok(@html.inject_head_markup(html, combined_markup))
+        }
         Err(e) =>
           return Err("collection index template: " + template_error_text(e))
       }
@@ -3801,6 +3859,7 @@ pub fn build(
         rebuilt_pages: 0,
         unchanged_pages: 0,
         skipped_drafts: 0,
+        redirect_count: 0,
       }
     }
   }
@@ -3818,6 +3877,7 @@ pub fn build(
         rebuilt_pages: 0,
         unchanged_pages: 0,
         skipped_drafts: 0,
+        redirect_count: 0,
       }
     }
   }
@@ -3842,6 +3902,7 @@ pub fn build(
         rebuilt_pages: 0,
         unchanged_pages: 0,
         skipped_drafts: 0,
+        redirect_count: 0,
       }
     }
   }
@@ -3872,6 +3933,7 @@ pub fn build(
           rebuilt_pages: 0,
           unchanged_pages: 0,
           skipped_drafts: 0,
+          redirect_count: 0,
         }
       }
     }
@@ -3912,6 +3974,7 @@ pub fn build(
             rebuilt_pages: 0,
             unchanged_pages: 0,
             skipped_drafts: 0,
+            redirect_count: 0,
           }
         }
         None => {
@@ -3965,6 +4028,7 @@ pub fn build(
       rebuilt_pages: 0,
       unchanged_pages: 0,
       skipped_drafts: 0,
+      redirect_count: 0,
     }
   }
 
@@ -3997,6 +4061,7 @@ pub fn build(
   let mut rebuilt = 0
   let mut unchanged = 0
   let mut skipped_drafts = 0
+  let mut redirect_count = 0
   let graph_pages : Array[@graph.GraphPage] = []
   let search_entries : Array[@search.SearchEntry] = []
   let tag_pages_by_slug : Map[String, Array[@tags.TaggedPage]] = Map::new()
@@ -4187,6 +4252,66 @@ pub fn build(
                 unchanged = unchanged + 1
               }
               @cache.remember(next_cache_store, src.slug, src.fingerprint)
+              
+              // Generate redirect pages if redirect_from is specified
+              let redirects_generated = match @frontmatter.parse(src.content) {
+                Ok(fm) => match fm.fields.get("redirect_from") {
+                  Some(@frontmatter.FArray(urls)) => {
+                    let mut rd_count = 0
+                    let mut k = 0
+                    while k < urls.length() {
+                      match urls[k] {
+                        @frontmatter.FStr(redirect_url) => {
+                          let canonical = absolute_url_builder(
+                            config.site.base_url,
+                            doc.url,
+                          )
+                          let redirect_html = render_redirect_page(canonical)
+                          let redirect_out_path = config.output_dir + "/" +
+                            redirect_url_to_output_path(redirect_url)
+                          try {
+                            // Ensure parent directory exists
+                            let redirect_dir = if redirect_out_path.contains("/") {
+                              let mut last_slash = 0
+                              let mut idx = 0
+                              while idx < redirect_out_path.length() {
+                                if char_at_builder(redirect_out_path, idx) == '/' {
+                                  last_slash = idx
+                                }
+                                idx = idx + 1
+                              }
+                              substr_builder(redirect_out_path, 0, last_slash)
+                            } else {
+                              "."
+                            }
+                            ensure_dir(redirect_dir)
+                            @fs.write_string_to_file(redirect_out_path, redirect_html)
+                            rd_count = rd_count + 1
+                          } catch {
+                            @fs.IOError(msg) => {
+                              diagnostics.push(
+                                build_error(
+                                  Some(redirect_out_path),
+                                  None,
+                                  None,
+                                  "redirect write failed: " + msg,
+                                ),
+                              )
+                            }
+                          }
+                        }
+                        _ => ()
+                      }
+                      k = k + 1
+                    }
+                    rd_count
+                  }
+                  _ => 0
+                }
+                Err(_) => 0
+              }
+              redirect_count = redirect_count + redirects_generated
+              
               // Only include non-draft posts in indexes
               if not(should_skip_draft) {
                 let page : @graph.GraphPage = {
@@ -4860,6 +4985,8 @@ pub fn build(
     " pages (" +
     unchanged.to_string() +
     " unchanged), " +
+    redirect_count.to_string() +
+    " redirects, " +
     error_count.to_string() +
     " errors",
   )
@@ -4876,6 +5003,7 @@ pub fn build(
     rebuilt_pages: rebuilt,
     unchanged_pages: unchanged,
     skipped_drafts,
+    redirect_count,
   }
 }
 
