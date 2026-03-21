@@ -62,6 +62,7 @@ priv struct BuildTemplates {
   index : @template.Template?
   tag_page : @template.Template?
   tag_index : @template.Template?
+  archive : @template.Template?
 }
 
 ///|
@@ -408,6 +409,352 @@ priv struct ProcessedDocument {
 }
 
 ///|
+/// Group of pages for archive generation.
+pub(all) struct ArchiveGroup {
+  year : String
+  month : String
+  pages : Array[@graph.GraphPage]
+}
+
+///|
+/// Extract year and month from a date string (ISO format YYYY-MM-DD).
+pub fn extract_year_month(date : String) -> (String, String)? {
+  if date.length() < 7 {
+    return None
+  }
+  let year = substr_builder(date, 0, 7)
+  let month = if date.length() >= 10 {
+    substr_builder(date, 5, 7)
+  } else {
+    "01"
+  }
+  Some((year, month))
+}
+
+///|
+/// Group pages by year and month for archive generation.
+/// Returns sorted groups with newest year/month first.
+pub fn group_pages_by_year_month(pages : Array[@graph.GraphPage]) -> Array[ArchiveGroup] {
+  let groups_map : Map[String, Array[@graph.GraphPage]] = Map::new()
+  let mut i = 0
+  while i < pages.length() {
+    let page = pages[i]
+    match page.date {
+      Some(date_str) => {
+        match extract_year_month(date_str) {
+          Some((year, month)) => {
+            let key = year + "-" + month
+            match groups_map.get(key) {
+              Some(existing) => {
+                existing.push(page)
+                groups_map.set(key, existing)
+              }
+              None => groups_map.set(key, [page])
+            }
+          }
+          None => ()
+        }
+      }
+      None => ()
+    }
+    i = i + 1
+  }
+
+  let groups : Array[ArchiveGroup] = []
+  for key, page_list in groups_map {
+    let year = substr_builder(key, 0, 4)
+    let month = substr_builder(key, 5, 7)
+    groups.push({ year: year, month: month, pages: page_list })
+  }
+
+  // Sort groups by year descending, then month descending
+  let mut i = 0
+  while i < groups.length() {
+    let mut j = i + 1
+    while j < groups.length() {
+      if groups[i].year < groups[j].year ||
+         (groups[i].year == groups[j].year && groups[i].month < groups[j].month) {
+        let temp = groups[i]
+        groups[i] = groups[j]
+        groups[j] = temp
+      }
+      j = j + 1
+    }
+    i = i + 1
+  }
+
+  // Sort pages within each group by date descending
+  i = 0
+  while i < groups.length() {
+    let mut j = 0
+    while j < groups[i].pages.length() {
+      let mut k = j + 1
+      while k < groups[i].pages.length() {
+        let date_j = match groups[i].pages[j].date {
+          Some(d) => d
+          None => ""
+        }
+        let date_k = match groups[i].pages[k].date {
+          Some(d) => d
+          None => ""
+        }
+        if date_j < date_k {
+          let temp = groups[i].pages[j]
+          groups[i].pages[j] = groups[i].pages[k]
+          groups[i].pages[k] = temp
+        }
+        k = k + 1
+      }
+      j = j + 1
+    }
+    i = i + 1
+  }
+
+  groups
+}
+
+///|
+/// Render HTML content for an archive page - list of page links.
+pub fn render_archive_page_content(pages : Array[@graph.GraphPage]) -> String {
+  let buf = StringBuilder::new()
+  buf.write_string("<ul>\n")
+  let mut i = 0
+  while i < pages.length() {
+    let page = pages[i]
+    buf.write_string("<li>")
+    buf.write_string(@html.anchor(page.url, page.title))
+    match page.date {
+      Some(date_str) => {
+        buf.write_string(" <small>(")
+        buf.write_string(escape_html_builder(date_str))
+        buf.write_string(")</small>")
+      }
+      None => ()
+    }
+    buf.write_string("</li>\n")
+    i = i + 1
+  }
+  buf.write_string("</ul>\n")
+  buf.to_string()
+}
+
+///|
+/// Render an archive page for a specific year or year+month.
+fn render_archive_page(
+  collection_name : String,
+  year : String,
+  month : String,
+  pages : Array[@graph.GraphPage],
+  site : @config.SiteConfig,
+  archive_template : @template.Template?,
+  index_template : @template.Template?,
+  nav_links_html : String,
+  custom_css : String,
+  data_store : @data.DataStore,
+) -> Result[String, String] {
+  let content = render_archive_page_content(pages)
+  let title = if month == "" {
+    collection_name + " — " + year
+  } else {
+    collection_name + " — " + year + "-" + month
+  }
+
+  let slots = Map::new()
+  slots.set(@template.Title, title)
+  slots.set(@template.Content, content)
+  slots.set(@template.SiteName, site.title)
+  slots.set(@template.Url, site.base_url + "/" + collection_name)
+  slots.set(@template.NavLinks, nav_links_html)
+  slots.set(@template.CustomCss, custom_css)
+  slots.set(@template.Collection, collection_name)
+  slots.set(@template.Year, year)
+  if month == "" {
+    slots.set(@template.Month, "")
+  } else {
+    slots.set(@template.Month, month)
+  }
+  slots.set(@template.Day, "")
+
+  // Collect all tags from pages
+  let tags_html = ""
+  slots.set(@template.Tags, tags_html)
+
+  match archive_template {
+    Some(tpl) =>
+      match @template.render_template_with_data(tpl, slots, data_store) {
+        Ok(html) => Ok(html)
+        Err(e) => Err(template_error_text(e))
+      }
+    None =>
+      match index_template {
+        Some(tpl) =>
+          match @template.render_template_with_data(tpl, slots, data_store) {
+            Ok(html) => Ok(html)
+            Err(e) => Err(template_error_text(e))
+          }
+        None => Ok(content)
+      }
+  }
+}
+
+///|
+/// Build all archive pages for a collection.
+fn build_archive_pages(
+  collection_name : String,
+  pages : Array[@graph.GraphPage],
+  config : BuildConfig,
+  archive_template : @template.Template?,
+  index_template : @template.Template?,
+  nav_links_html : String,
+  custom_css : String,
+  data_store : @data.DataStore,
+) -> (Int, Int) {
+  // Only build if collection has dated pages
+  let has_dates = {
+    let mut i = 0
+    let mut found = false
+    while i < pages.length() {
+      match pages[i].date {
+        Some(_) => {
+          found = true
+          break
+        }
+        None => ()
+      }
+      i = i + 1
+    }
+    found
+  }
+
+  if not(has_dates) {
+    return (0, 0)
+  }
+
+  let groups = group_pages_by_year_month(pages)
+  let mut pages_written = 0
+  let mut errors = 0
+
+  let coll_dir = config.output_dir + "/" + collection_name
+
+  let mut i = 0
+  while i < groups.length() {
+    let group = groups[i]
+
+    // Build year archive (month = "")
+    let year_archive_html = match
+      render_archive_page(
+        collection_name,
+        group.year,
+        "",
+        group.pages,
+        config.site,
+        archive_template,
+        index_template,
+        nav_links_html,
+        custom_css,
+        data_store,
+      ) {
+      Ok(html) => html
+      Err(msg) => {
+        println(
+          "[error] archive page " +
+          collection_name +
+          "/" +
+          group.year +
+          ": " +
+          msg,
+        )
+        errors = errors + 1
+        i = i + 1
+        continue
+      }
+    }
+
+    let year_out_path = coll_dir + "/" + group.year + "/index.html"
+    let year_write_ok = try {
+      ensure_dir(coll_dir + "/" + group.year)
+      @fs.write_string_to_file(year_out_path, year_archive_html)
+      println("[lattice] wrote " + year_out_path)
+      true
+    } catch {
+      @fs.IOError(msg) => {
+        println(
+          "[error] cannot write archive page " +
+          year_out_path +
+          ": " +
+          msg,
+        )
+        false
+      }
+    }
+    if year_write_ok {
+      pages_written = pages_written + 1
+    } else {
+      errors = errors + 1
+    }
+
+    // Build month archive
+    let month_archive_html = match
+      render_archive_page(
+        collection_name,
+        group.year,
+        group.month,
+        group.pages,
+        config.site,
+        archive_template,
+        index_template,
+        nav_links_html,
+        custom_css,
+        data_store,
+      ) {
+      Ok(html) => html
+      Err(msg) => {
+        println(
+          "[error] archive page " +
+          collection_name +
+          "/" +
+          group.year +
+          "/" +
+          group.month +
+          ": " +
+          msg,
+        )
+        errors = errors + 1
+        i = i + 1
+        continue
+      }
+    }
+
+    let month_out_path = coll_dir + "/" + group.year + "/" + group.month + "/index.html"
+    let month_write_ok = try {
+      ensure_dir(coll_dir + "/" + group.year + "/" + group.month)
+      @fs.write_string_to_file(month_out_path, month_archive_html)
+      println("[lattice] wrote " + month_out_path)
+      true
+    } catch {
+      @fs.IOError(msg) => {
+        println(
+          "[error] cannot write archive page " +
+          month_out_path +
+          ": " +
+          msg,
+        )
+        false
+      }
+    }
+    if month_write_ok {
+      pages_written = pages_written + 1
+    } else {
+      errors = errors + 1
+    }
+
+    i = i + 1
+  }
+
+  (pages_written, errors)
+}
+
+///|
 fn char_at_builder(s : String, i : Int) -> Char {
   s[i].to_int().unsafe_to_char()
 }
@@ -710,7 +1057,7 @@ fn load_template_file(path : String) -> Result[@template.Template?, String] {
 fn load_templates(config : BuildConfig) -> Result[BuildTemplates, String] {
   let base = templates_dir_for_build(config)
   if not(@fs.path_exists(base)) {
-    return Ok({ page: None, index: None, tag_page: None, tag_index: None })
+    return Ok({ page: None, index: None, tag_page: None, tag_index: None, archive: None })
   }
   let page = match load_template_file(base + "/page.html") {
     Ok(t) => t
@@ -728,7 +1075,11 @@ fn load_templates(config : BuildConfig) -> Result[BuildTemplates, String] {
     Ok(t) => t
     Err(msg) => return Err(msg)
   }
-  Ok({ page, index, tag_page, tag_index })
+  let archive = match load_template_file(base + "/archive.html") {
+    Ok(t) => t
+    Err(msg) => return Err(msg)
+  }
+  Ok({ page, index, tag_page, tag_index, archive })
 }
 
 ///|
@@ -925,7 +1276,7 @@ fn load_templates_for_lint(config : BuildConfig) -> TemplateLoadResult {
   let base = templates_dir_for_build(config)
   if not(@fs.path_exists(base)) {
     return {
-      templates: { page: None, index: None, tag_page: None, tag_index: None },
+      templates: { page: None, index: None, tag_page: None, tag_index: None, archive: None },
       violations,
     }
   }
@@ -934,6 +1285,7 @@ fn load_templates_for_lint(config : BuildConfig) -> TemplateLoadResult {
   let mut index : @template.Template? = None
   let mut tag_page : @template.Template? = None
   let mut tag_index : @template.Template? = None
+  let mut archive : @template.Template? = None
 
   let page_path = base + "/page.html"
   match load_template_file(page_path) {
@@ -955,7 +1307,12 @@ fn load_templates_for_lint(config : BuildConfig) -> TemplateLoadResult {
     Ok(t) => tag_index = t
     Err(msg) => violations.push(template_violation(tags_path, msg))
   }
-  { templates: { page, index, tag_page, tag_index }, violations }
+  let archive_path = base + "/archive.html"
+  match load_template_file(archive_path) {
+    Ok(t) => archive = t
+    Err(msg) => violations.push(template_violation(archive_path, msg))
+  }
+  { templates: { page, index, tag_page, tag_index, archive }, violations }
 }
 
 ///|
@@ -4011,6 +4368,21 @@ pub fn build(
           error_count = error_count + 1
         }
         page_idx = page_idx + 1
+      }
+
+      // Build archive pages for this collection
+      let (_, archive_errors) = build_archive_pages(
+        coll.name,
+        coll.pages,
+        config,
+        templates.archive,
+        templates.index,
+        nav_links_html,
+        custom_css,
+        data_store,
+      )
+      if archive_errors > 0 {
+        error_count = error_count + archive_errors
       }
 
       i = i + 1

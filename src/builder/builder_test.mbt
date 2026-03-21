@@ -66,6 +66,159 @@ test "collection index lookup alias skips basename that normalizes to collection
 }
 
 ///|
+test "group_pages_by_year_month groups pages correctly" {
+  let pages : Array[@graph.GraphPage] = [
+    {
+      slug: "post1",
+      title: "Post 1",
+      url: "/posts/post1",
+      description: None,
+      date: Some("2024-03-15"),
+      outgoing: [],
+    },
+    {
+      slug: "post2",
+      title: "Post 2",
+      url: "/posts/post2",
+      description: None,
+      date: Some("2024-01-10"),
+      outgoing: [],
+    },
+    {
+      slug: "post3",
+      title: "Post 3",
+      url: "/posts/post3",
+      description: None,
+      date: Some("2023-12-05"),
+      outgoing: [],
+    },
+    {
+      slug: "post4",
+      title: "Post 4",
+      url: "/posts/post4",
+      description: None,
+      date: Some("2024-03-20"),
+      outgoing: [],
+    },
+    {
+      slug: "post5",
+      title: "Post 5",
+      url: "/posts/post5",
+      description: None,
+      date: None,
+      outgoing: [],
+    },
+  ]
+
+  let groups = @builder.group_pages_by_year_month(pages)
+
+  // Should have 3 groups: 2024-03, 2024-01, 2023-12
+  // (sorted newest first)
+  assert_eq(groups.length(), 3)
+
+  // First group should be 2024-03
+  assert_eq(groups[0].year, "2024")
+  assert_eq(groups[0].month, "03")
+  assert_eq(groups[0].pages.length(), 2)
+
+  // Second group should be 2024-01
+  assert_eq(groups[1].year, "2024")
+  assert_eq(groups[1].month, "01")
+  assert_eq(groups[1].pages.length(), 1)
+
+  // Third group should be 2023-12
+  assert_eq(groups[2].year, "2023")
+  assert_eq(groups[2].month, "12")
+  assert_eq(groups[2].pages.length(), 1)
+
+  // Pages within groups should be sorted by date descending
+  assert_eq(groups[0].pages[0].slug, "post4")
+  assert_eq(groups[0].pages[1].slug, "post1")
+}
+
+///|
+test "extract_year_month extracts year and month from date string" {
+  match @builder.extract_year_month("2024-03-15") {
+    Some((year, month)) => {
+      assert_eq(year, "2024")
+      assert_eq(month, "03")
+    }
+    None => assert_true(false)
+  }
+
+  match @builder.extract_year_month("2023-12") {
+    Some((year, month)) => {
+      assert_eq(year, "2023")
+      assert_eq(month, "12")
+    }
+    None => assert_true(false)
+  }
+
+  match @builder.extract_year_month("2024-1") {
+    Some((year, month)) => {
+      assert_eq(year, "2024")
+      assert_eq(month, "01")
+    }
+    None => assert_true(false)
+  }
+
+  // Invalid dates should return None
+  match @builder.extract_year_month("2024") {
+    Some(_) => assert_true(false)
+    None => ()
+  }
+
+  match @builder.extract_year_month("invalid") {
+    Some(_) => assert_true(false)
+    None => ()
+  }
+}
+
+///|
+test "render_archive_page_content generates HTML list of page links" {
+  let pages : Array[@graph.GraphPage] = [
+    {
+      slug: "post1",
+      title: "First Post",
+      url: "/posts/post1",
+      description: None,
+      date: Some("2024-03-15"),
+      outgoing: [],
+    },
+    {
+      slug: "post2",
+      title: "Second Post",
+      url: "/posts/post2",
+      description: None,
+      date: Some("2024-01-10"),
+      outgoing: [],
+    },
+  ]
+
+  let html = @builder.render_archive_page_content(pages)
+
+  // Should contain ul tags
+  assert_true(html.contains("<ul>"))
+  assert_true(html.contains("</ul>"))
+
+  // Should contain li tags
+  assert_true(html.contains("<li>"))
+  assert_true(html.contains("</li>"))
+
+  // Should contain page titles
+  assert_true(html.contains("First Post"))
+  assert_true(html.contains("Second Post"))
+
+  // Should contain dates
+  assert_true(html.contains("(2024-03-15)"))
+  assert_true(html.contains("(2024-01-10)"))
+
+  // Should contain links
+  assert_true(html.contains("href=\"/posts/post1\""))
+  assert_true(html.contains("href=\"/posts/post2\""))
+}
+
+///|
 test "build uses per-collection page template override" {
   let root = "./_tmp_builder_collection_template"
   let content_root = root + "/content"

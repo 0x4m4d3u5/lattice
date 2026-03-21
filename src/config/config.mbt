@@ -30,6 +30,7 @@ pub struct SiteConfig {
   data_dir : String?
   root_page : String?
   robots_txt : Bool?
+  archive_pages : Bool?
   collections : Array[CollectionEntry]
   feed_limit : Int?
 }
@@ -202,6 +203,7 @@ fn parse_bool_config(value : String) -> Bool? {
 /// - `data_dir`
 /// - `root_page`
 /// - `robots_txt`
+/// - `archive_pages`
 /// - `feed_limit`
 ///
 /// Inline collections via `[[collections]]` array-of-tables:
@@ -225,6 +227,7 @@ pub fn parse(input : String) -> Result[SiteConfig, ConfigError] {
   let mut data_dir : String? = None
   let mut root_page : String? = None
   let mut robots_txt : Bool? = None
+  let mut archive_pages : Bool? = None
   let mut feed_limit : Int? = None
 
   let collections : Array[CollectionEntry] = []
@@ -399,6 +402,16 @@ pub fn parse(input : String) -> Result[SiteConfig, ConfigError] {
                 ),
               )
           }
+        } else if key == "archive_pages" {
+          match parse_bool_config(value) {
+            Some(parsed) => archive_pages = Some(parsed)
+            None =>
+              return Err(
+                InvalidValue(
+                  "archive_pages", "must be true/false, yes/no, 1/0, or on/off",
+                ),
+              )
+          }
         } else if key == "feed_limit" {
           match parse_positive_int_config(value) {
             Some(parsed) => feed_limit = Some(parsed)
@@ -459,6 +472,7 @@ pub fn parse(input : String) -> Result[SiteConfig, ConfigError] {
     data_dir,
     root_page,
     robots_txt,
+    archive_pages,
     collections,
     feed_limit,
   })
