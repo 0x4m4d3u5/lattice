@@ -467,3 +467,71 @@ test "nested list with inline formatting" {
   assert_true(rendered.contains("<em>Italic</em>"))
   assert_true(rendered.contains("<code>code</code>"))
 }
+
+///|
+test "definition list basic" {
+  let body = "Apple\n:   A fruit that grows on trees."
+  let rendered = render(body, empty_wl())
+  assert_true(rendered.contains("<dl>"))
+  assert_true(rendered.contains("<dt>Apple</dt>"))
+  assert_true(rendered.contains("<dd>A fruit that grows on trees.</dd>"))
+  assert_true(rendered.contains("</dl>"))
+}
+
+///|
+test "definition list multiple definitions per term" {
+  let body = "Orange\n:   A citrus fruit.\n:   Also a color."
+  let rendered = render(body, empty_wl())
+  assert_true(rendered.contains("<dl>"))
+  assert_true(rendered.contains("<dt>Orange</dt>"))
+  assert_true(rendered.contains("<dd>A citrus fruit.</dd>"))
+  assert_true(rendered.contains("<dd>Also a color.</dd>"))
+  assert_true(rendered.contains("</dl>"))
+}
+
+///|
+test "definition list multiple terms" {
+  let body = "Apple\n:   A fruit.\nOrange\n:   A citrus."
+  let rendered = render(body, empty_wl())
+  assert_true(rendered.contains("<dl>"))
+  assert_true(rendered.contains("<dt>Apple</dt>"))
+  assert_true(rendered.contains("<dd>A fruit.</dd>"))
+  assert_true(rendered.contains("<dt>Orange</dt>"))
+  assert_true(rendered.contains("<dd>A citrus.</dd>"))
+  assert_true(rendered.contains("</dl>"))
+}
+
+///|
+test "definition list followed by paragraph" {
+  let body = "Apple\n:   A fruit.\n\nThis is a paragraph."
+  let rendered = render(body, empty_wl())
+  // Definition list should be complete
+  assert_true(rendered.contains("<dl>"))
+  assert_true(rendered.contains("<dt>Apple</dt>"))
+  assert_true(rendered.contains("</dl>"))
+  // Paragraph should follow
+  assert_true(rendered.contains("<p>This is a paragraph.</p>"))
+}
+
+///|
+test "definition list html escaping" {
+  let body = "Apple & Banana\n:   A <b>fruit</b> that grows on trees."
+  let rendered = render(body, empty_wl())
+  assert_true(rendered.contains("<dt>Apple &amp; Banana</dt>"))
+  assert_true(rendered.contains("<dd>A &lt;b&gt;fruit&lt;/b&gt; that grows on trees.</dd>"))
+}
+
+///|
+test "definition list complex" {
+  let body = "Apple\n:   A fruit.\n:   Sweet and crunchy.\n\nOrange\n:   A citrus fruit.\n\nThis is a paragraph."
+  let rendered = render(body, empty_wl())
+  assert_true(rendered.contains("<dl>"))
+  assert_true(rendered.contains("<dt>Apple</dt>"))
+  assert_true(rendered.contains("<dd>A fruit.</dd>"))
+  assert_true(rendered.contains("<dd>Sweet and crunchy.</dd>"))
+  assert_true(rendered.contains("<dt>Orange</dt>"))
+  assert_true(rendered.contains("<dd>A citrus fruit.</dd>"))
+  assert_true(rendered.contains("</dl>"))
+  assert_true(rendered.contains("<p>This is a paragraph.</p>"))
+}
+
