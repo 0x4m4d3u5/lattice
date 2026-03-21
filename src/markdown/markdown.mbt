@@ -1127,8 +1127,8 @@ pub fn parse_blocks_with_footnotes(
         // Collect all : definition lines for this term
         let defs : Array[String] = []
         while i < n && is_definition_line(ls[i]) {
-          // Strip ": " prefix
-          let def_text = substr(ls[i], 2, ls[i].length())
+          // Strip ": " prefix and any extra leading whitespace (e.g. ":   ")
+          let def_text = trim_start(substr(ls[i], 2, ls[i].length()))
           defs.push(def_text)
           i = i + 1
         }
