@@ -419,14 +419,20 @@ pub(all) struct ArchiveGroup {
 ///|
 /// Extract year and month from a date string (ISO format YYYY-MM-DD).
 pub fn extract_year_month(date : String) -> (String, String)? {
-  if date.length() < 7 {
+  let n = date.length()
+  // Need at least "YYYY-M" (6 chars) with a dash at position 4
+  if n < 6 {
     return None
   }
-  let year = substr_builder(date, 0, 7)
-  let month = if date.length() >= 10 {
+  if char_at_builder(date, 4) != '-' {
+    return None
+  }
+  let year = substr_builder(date, 0, 4)
+  // Month is two digits starting at index 5; pad single-digit months
+  let month = if n >= 7 {
     substr_builder(date, 5, 7)
   } else {
-    "01"
+    "0" + substr_builder(date, 5, 6)
   }
   Some((year, month))
 }
