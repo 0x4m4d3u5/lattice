@@ -294,3 +294,75 @@ test "css classes include keyword rule" {
   assert_true(css.contains("hl-string"))
   assert_true(css.contains("pre.highlight"))
 }
+
+///|
+test "highlight rust tokenization covers keywords strings lifetimes comments and types" {
+  let src = "fn main() {\n" +
+    "  let mut count: i32 = 42;\n" +
+    "  let name: String = String::from(\"hello\");\n" +
+    "  let lifetime: &'static str = \"static\";\n" +
+    "  // line comment\n" +
+    "  /* block comment */\n" +
+    "  #[derive(Debug)]\n" +
+    "  let ch = 'x';\n" +
+    "  if true { return; }\n" +
+    "}\n"
+  let tokens = tokenize_rust(src)
+  inspect(tokens, content=(
+    #|[{kind: Keyword, text: "fn"}, {kind: Whitespace, text: " "}, {kind: Identifier, text: "main"}, {kind: Punct, text: "("}, {kind: Punct, text: ")"}, {kind: Whitespace, text: " "}, {kind: Punct, text: "{"}, {kind: Whitespace, text: "\n  "}, {kind: Keyword, text: "let"}, {kind: Whitespace, text: " "}, {kind: Keyword, text: "mut"}, {kind: Whitespace, text: " "}, {kind: Identifier, text: "count"}, {kind: Punct, text: ":"}, {kind: Whitespace, text: " "}, {kind: Identifier, text: "i32"}, {kind: Whitespace, text: " "}, {kind: Operator, text: "="}, {kind: Whitespace, text: " "}, {kind: Number, text: "42"}, {kind: Punct, text: ";"}, {kind: Whitespace, text: "\n  "}, {kind: Keyword, text: "let"}, {kind: Whitespace, text: " "}, {kind: Identifier, text: "name"}, {kind: Punct, text: ":"}, {kind: Whitespace, text: " "}, {kind: Type, text: "String"}, {kind: Whitespace, text: " "}, {kind: Operator, text: "="}, {kind: Whitespace, text: " "}, {kind: Type, text: "String"}, {kind: Punct, text: ":"}, {kind: Punct, text: ":"}, {kind: Identifier, text: "from"}, {kind: Punct, text: "("}, {kind: StringLit, text: "\"hello\""}, {kind: Punct, text: ")"}, {kind: Punct, text: ";"}, {kind: Whitespace, text: "\n  "}, {kind: Keyword, text: "let"}, {kind: Whitespace, text: " "}, {kind: Identifier, text: "lifetime"}, {kind: Punct, text: ":"}, {kind: Whitespace, text: " "}, {kind: Operator, text: "&"}, {kind: Keyword, text: "'static"}, {kind: Whitespace, text: " "}, {kind: Identifier, text: "str"}, {kind: Whitespace, text: " "}, {kind: Operator, text: "="}, {kind: Whitespace, text: " "}, {kind: StringLit, text: "\"static\""}, {kind: Punct, text: ";"}, {kind: Whitespace, text: "\n  "}, {kind: Comment, text: "// line comment"}, {kind: Whitespace, text: "\n  "}, {kind: Comment, text: "/* block comment */"}, {kind: Whitespace, text: "\n  "}, {kind: Comment, text: "#[derive(Debug)]"}, {kind: Whitespace, text: "\n  "}, {kind: Keyword, text: "let"}, {kind: Whitespace, text: " "}, {kind: Identifier, text: "ch"}, {kind: Whitespace, text: " "}, {kind: Operator, text: "="}, {kind: Whitespace, text: " "}, {kind: CharLit, text: "'x'"}, {kind: Punct, text: ";"}, {kind: Whitespace, text: "\n  "}, {kind: Keyword, text: "if"}, {kind: Whitespace, text: " "}, {kind: Keyword, text: "true"}, {kind: Whitespace, text: " "}, {kind: Punct, text: "{"}, {kind: Whitespace, text: " "}, {kind: Keyword, text: "return"}, {kind: Punct, text: ";"}, {kind: Whitespace, text: " "}, {kind: Punct, text: "}"}, {kind: Whitespace, text: "\n"}, {kind: Punct, text: "}"}, {kind: Whitespace, text: "\n"}]
+
+  ))
+  assert_eq(flatten_text(tokens), src)
+  assert_true(has_token(tokens, "fn", Keyword))
+  assert_true(has_token(tokens, "let", Keyword))
+  assert_true(has_token(tokens, "mut", Keyword))
+  assert_true(has_token(tokens, "if", Keyword))
+  assert_true(has_token(tokens, "true", Keyword))
+  assert_true(has_token(tokens, "return", Keyword))
+  assert_true(has_token(tokens, "String", Type))
+  assert_true(has_token(tokens, "\"hello\"", StringLit))
+  assert_true(has_token(tokens, "'static", Keyword))
+  assert_true(has_token(tokens, "// line comment", Comment))
+  assert_true(has_token(tokens, "/* block comment */", Comment))
+  assert_true(has_token(tokens, "#[derive(Debug)]", Comment))
+  assert_true(has_token(tokens, "'x'", CharLit))
+  assert_true(has_token(tokens, "42", Number))
+}
+
+///|
+test "highlight sql tokenization covers keywords strings comments and numbers" {
+  let src = "SELECT id, name FROM users\n" +
+    "WHERE age > 25 AND active = true\n" +
+    "ORDER BY name ASC\n" +
+    "LIMIT 10;\n" +
+    "-- single line comment\n" +
+    "/* block comment */\n" +
+    "INSERT INTO users VALUES ('Alice', 30);\n"
+  let tokens = tokenize_sql(src)
+  assert_eq(flatten_text(tokens), src)
+  assert_true(has_token(tokens, "SELECT", Keyword))
+  assert_true(has_token(tokens, "FROM", Keyword))
+  assert_true(has_token(tokens, "WHERE", Keyword))
+  assert_true(has_token(tokens, "AND", Keyword))
+  assert_true(has_token(tokens, "ORDER", Keyword))
+  assert_true(has_token(tokens, "BY", Keyword))
+  assert_true(has_token(tokens, "LIMIT", Keyword))
+  assert_true(has_token(tokens, "INSERT", Keyword))
+  assert_true(has_token(tokens, "INTO", Keyword))
+  assert_true(has_token(tokens, "VALUES", Keyword))
+  assert_true(has_token(tokens, "-- single line comment", Comment))
+  assert_true(has_token(tokens, "/* block comment */", Comment))
+  assert_true(has_token(tokens, "'Alice'", StringLit))
+  assert_true(has_token(tokens, "10", Number))
+  assert_true(has_token(tokens, "30", Number))
+}
+
+///|
+test "highlight dispatch includes rust and sql" {
+  let rust = highlight("rust", "fn main() { let x = 1; }")
+  let rs = highlight("rs", "fn main() { let x = 1; }")
+  let sql = highlight("sql", "SELECT * FROM users")
+  assert_true(has_kind(rust, Keyword))
+  assert_true(has_kind(rs, Keyword))
+  assert_true(has_kind(sql, Keyword))
+}

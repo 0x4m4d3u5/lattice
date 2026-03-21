@@ -13,13 +13,13 @@ pub(all) enum TokenKind {
   Builtin
   Whitespace
   Unknown
-}
+} derive(Show, Eq, ToJson)
 
 ///|
 pub(all) struct Token {
   kind : TokenKind
   text : String
-}
+} derive(Show, Eq, ToJson)
 
 ///|
 fn char_at(s : String, i : Int) -> Char {
@@ -84,6 +84,33 @@ fn is_pascal_case_ident(s : String) -> Bool {
   }
   let first = char_at(s, 0)
   first >= 'A' && first <= 'Z'
+}
+
+///|
+fn equals_case_insensitive(a : String, b : String) -> Bool {
+  if a.length() != b.length() {
+    return false
+  }
+  let mut i = 0
+  while i < a.length() {
+    let ca = char_at(a, i)
+    let cb = char_at(b, i)
+    let ca_lower = if ca >= 'A' && ca <= 'Z' {
+      ca.to_int() + 32
+    } else {
+      ca.to_int()
+    }
+    let cb_lower = if cb >= 'A' && cb <= 'Z' {
+      cb.to_int() + 32
+    } else {
+      cb.to_int()
+    }
+    if ca_lower != cb_lower {
+      return false
+    }
+    i = i + 1
+  }
+  true
 }
 
 ///|
@@ -1101,6 +1128,332 @@ pub fn tokenize_json(source : String) -> Array[Token] {
 }
 
 ///|
+pub fn tokenize_rust(source : String) -> Array[Token] {
+  let tokens : Array[Token] = []
+  let keywords = [
+    "if", "else", "while", "for", "loop", "break", "continue", "return", "match",
+    "fn", "let", "mut", "const", "static", "struct", "enum", "trait", "impl", "type",
+    "use", "mod", "pub", "crate", "super", "self", "Self", "async", "await", "move",
+    "where", "in", "ref", "box", "dyn", "unsafe", "extern", "as", "true", "false",
+  ]
+  let n = source.length()
+  let mut i = 0
+  while i < n {
+    let c = char_at(source, i)
+    if is_whitespace(c) {
+      let buf = StringBuilder::new()
+      i = read_while(source, i, fn(ch) { is_whitespace(ch) }, buf)
+      push_token(tokens, TokenKind::Whitespace, buf)
+      continue
+    }
+    if starts_with_at(source, i, "//") {
+      let buf = StringBuilder::new()
+      while i < n && char_at(source, i) != '\n' {
+        buf.write_char(char_at(source, i))
+        i = i + 1
+      }
+      push_token(tokens, TokenKind::Comment, buf)
+      continue
+    }
+    if starts_with_at(source, i, "/*") {
+      let buf = StringBuilder::new()
+      while i < n {
+        if starts_with_at(source, i, "*/") {
+          buf.write_string("*/")
+          i = i + 2
+          break
+        }
+        buf.write_char(char_at(source, i))
+        i = i + 1
+      }
+      push_token(tokens, TokenKind::Comment, buf)
+      continue
+    }
+    if starts_with_at(source, i, "#[") {
+      let buf = StringBuilder::new()
+      while i < n {
+        buf.write_char(char_at(source, i))
+        i = i + 1
+        if char_at(source, i - 1) == ']' {
+          break
+        }
+      }
+      push_token(tokens, TokenKind::Comment, buf)
+      continue
+    }
+    if starts_with_at(source, i, "r#") {
+      let buf = StringBuilder::new()
+      let mut hash_count = 0
+      buf.write_char('r')
+      buf.write_char('#')
+      i = i + 2
+      while i < n && char_at(source, i) == '#' {
+        buf.write_char('#')
+        hash_count = hash_count + 1
+        i = i + 1
+      }
+      if i < n && char_at(source, i) == '"' {
+        buf.write_char('"')
+        i = i + 1
+        while i < n {
+          let ch = char_at(source, i)
+          buf.write_char(ch)
+          i = i + 1
+          if ch == '"' {
+            let mut found_end = true
+            let mut j = 0
+            while j < hash_count {
+              if i + j >= n || char_at(source, i + j) != '#' {
+                found_end = false
+                break
+              }
+              j = j + 1
+            }
+            if found_end {
+              let mut k = 0
+              while k < hash_count {
+                buf.write_char('#')
+                k = k + 1
+              }
+              i = i + hash_count
+              break
+            }
+          }
+        }
+        push_token(tokens, TokenKind::StringLit, buf)
+        continue
+      }
+    }
+    if c == '"' {
+      let buf = StringBuilder::new()
+      buf.write_char('"')
+      i = i + 1
+      while i < n {
+        let ch = char_at(source, i)
+        buf.write_char(ch)
+        i = i + 1
+        if ch == '\\' && i < n {
+          buf.write_char(char_at(source, i))
+          i = i + 1
+        } else if ch == '"' {
+          break
+        }
+      }
+      push_token(tokens, TokenKind::StringLit, buf)
+      continue
+    }
+    if c == '\'' && i + 1 < n && is_ident_start(char_at(source, i + 1)) {
+      let ident_start = i + 1
+      let mut j = ident_start
+      while j < n && is_ident_part(char_at(source, j)) {
+        j = j + 1
+      }
+      if j >= n || char_at(source, j) != '\'' {
+        let buf = StringBuilder::new()
+        buf.write_char('\'')
+        i = read_while(source, i + 1, fn(ch) { is_ident_part(ch) }, buf)
+        push_token(tokens, TokenKind::Keyword, buf)
+        continue
+      }
+    }
+    if c == '\'' {
+      let buf = StringBuilder::new()
+      buf.write_char('\'')
+      i = i + 1
+      if i < n && char_at(source, i) != '\'' {
+        let ch = char_at(source, i)
+        buf.write_char(ch)
+        i = i + 1
+        if ch == '\\' && i < n {
+          buf.write_char(char_at(source, i))
+          i = i + 1
+        }
+      }
+      if i < n && char_at(source, i) == '\'' {
+        buf.write_char('\'')
+        i = i + 1
+      }
+      push_token(tokens, TokenKind::CharLit, buf)
+      continue
+    }
+    if is_digit(c) {
+      let (token, next_i) = tokenize_number_general(
+        source, i, true, true, true,
+      )
+      tokens.push(token)
+      i = next_i
+      continue
+    }
+    if is_ident_start(c) {
+      let buf = StringBuilder::new()
+      i = read_while(source, i, fn(ch) { is_ident_part(ch) }, buf)
+      let word = buf.to_string()
+      if is_member(word, keywords) {
+        tokens.push({ kind: TokenKind::Keyword, text: word })
+      } else if is_pascal_case_ident(word) {
+        tokens.push({ kind: TokenKind::Type, text: word })
+      } else {
+        tokens.push({ kind: TokenKind::Identifier, text: word })
+      }
+      continue
+    }
+    if is_operator_char(c) {
+      let buf = StringBuilder::new()
+      i = read_while(source, i, fn(ch) { is_operator_char(ch) }, buf)
+      push_token(tokens, TokenKind::Operator, buf)
+      continue
+    }
+    if is_punct_char(c) {
+      let buf = StringBuilder::new()
+      buf.write_char(c)
+      i = i + 1
+      push_token(tokens, TokenKind::Punct, buf)
+      continue
+    }
+    let buf = StringBuilder::new()
+    buf.write_char(c)
+    i = i + 1
+    push_token(tokens, TokenKind::Unknown, buf)
+  }
+  tokens
+}
+
+///|
+pub fn tokenize_sql(source : String) -> Array[Token] {
+  let tokens : Array[Token] = []
+  let keywords = [
+    "SELECT", "FROM", "WHERE", "INSERT", "INTO", "VALUES", "UPDATE", "SET",
+    "DELETE", "MERGE", "CREATE", "ALTER", "DROP", "TABLE", "INDEX", "VIEW",
+    "DATABASE", "SCHEMA", "JOIN", "INNER", "LEFT", "RIGHT", "FULL", "OUTER",
+    "CROSS", "ON", "USING", "AND", "OR", "NOT", "IN", "LIKE", "BETWEEN",
+    "IS", "NULL", "EXISTS", "GROUP", "BY", "ORDER", "HAVING", "LIMIT",
+    "OFFSET", "DISTINCT", "BEGIN", "COMMIT", "ROLLBACK", "TRANSACTION",
+    "COUNT", "SUM", "AVG", "MIN", "MAX", "COALESCE", "CASE", "WHEN", "THEN",
+    "ELSE", "END",
+  ]
+  let n = source.length()
+  let mut i = 0
+  while i < n {
+    let c = char_at(source, i)
+    if is_whitespace(c) {
+      let buf = StringBuilder::new()
+      i = read_while(source, i, fn(ch) { is_whitespace(ch) }, buf)
+      push_token(tokens, TokenKind::Whitespace, buf)
+      continue
+    }
+    if starts_with_at(source, i, "--") {
+      let buf = StringBuilder::new()
+      while i < n && char_at(source, i) != '\n' {
+        buf.write_char(char_at(source, i))
+        i = i + 1
+      }
+      push_token(tokens, TokenKind::Comment, buf)
+      continue
+    }
+    if starts_with_at(source, i, "/*") {
+      let buf = StringBuilder::new()
+      while i < n {
+        if starts_with_at(source, i, "*/") {
+          buf.write_string("*/")
+          i = i + 2
+          break
+        }
+        buf.write_char(char_at(source, i))
+        i = i + 1
+      }
+      push_token(tokens, TokenKind::Comment, buf)
+      continue
+    }
+    if c == '\'' {
+      let buf = StringBuilder::new()
+      buf.write_char('\'')
+      i = i + 1
+      while i < n {
+        let ch = char_at(source, i)
+        buf.write_char(ch)
+        i = i + 1
+        if ch == '\\' && i < n {
+          buf.write_char(char_at(source, i))
+          i = i + 1
+        } else if ch == '\'' {
+          break
+        }
+      }
+      push_token(tokens, TokenKind::StringLit, buf)
+      continue
+    }
+    if c == '`' || c == '"' {
+      let quote = c
+      let buf = StringBuilder::new()
+      buf.write_char(quote)
+      i = i + 1
+      while i < n {
+        let ch = char_at(source, i)
+        buf.write_char(ch)
+        i = i + 1
+        if ch == '\\' && i < n {
+          buf.write_char(char_at(source, i))
+          i = i + 1
+        } else if ch == quote {
+          break
+        }
+      }
+      push_token(tokens, TokenKind::StringLit, buf)
+      continue
+    }
+    if is_digit(c) {
+      let buf = StringBuilder::new()
+      i = read_while(source, i, fn(ch) { is_digit(ch) }, buf)
+      if i < n && char_at(source, i) == '.' {
+        buf.write_char('.')
+        i = i + 1
+        i = read_while(source, i, fn(ch) { is_digit(ch) }, buf)
+      }
+      push_token(tokens, TokenKind::Number, buf)
+      continue
+    }
+    if is_ident_start(c) {
+      let buf = StringBuilder::new()
+      i = read_while(source, i, fn(ch) { is_ident_part(ch) }, buf)
+      let word = buf.to_string()
+      let mut found_keyword = false
+      let mut j = 0
+      while j < keywords.length() {
+        if equals_case_insensitive(word, keywords[j]) {
+          found_keyword = true
+          break
+        }
+        j = j + 1
+      }
+      if found_keyword {
+        tokens.push({ kind: TokenKind::Keyword, text: word })
+      } else {
+        tokens.push({ kind: TokenKind::Identifier, text: word })
+      }
+      continue
+    }
+    if is_operator_char(c) {
+      let buf = StringBuilder::new()
+      i = read_while(source, i, fn(ch) { is_operator_char(ch) }, buf)
+      push_token(tokens, TokenKind::Operator, buf)
+      continue
+    }
+    if is_punct_char(c) {
+      let buf = StringBuilder::new()
+      buf.write_char(c)
+      i = i + 1
+      push_token(tokens, TokenKind::Punct, buf)
+      continue
+    }
+    let buf = StringBuilder::new()
+    buf.write_char(c)
+    i = i + 1
+    push_token(tokens, TokenKind::Unknown, buf)
+  }
+  tokens
+}
+
+///|
 pub fn tokenize_plain(source : String) -> Array[Token] {
   let tokens : Array[Token] = []
   let mut i = 0
@@ -1129,6 +1482,9 @@ fn normalize_lang(lang : String) -> String {
   if l == "sh" || l == "shell" || l == "zsh" {
     return "bash"
   }
+  if l == "rs" {
+    return "rust"
+  }
   l
 }
 
@@ -1145,6 +1501,8 @@ pub fn highlight(lang : String, source : String) -> Array[Token] {
     "html" => tokenize_html(source)
     "css" => tokenize_css(source)
     "json" => tokenize_json(source)
+    "rust" => tokenize_rust(source)
+    "sql" => tokenize_sql(source)
     _ => tokenize_plain(source)
   }
 }
@@ -1162,6 +1520,8 @@ pub fn language_supported(lang : String) -> Bool {
     "html" => true
     "css" => true
     "json" => true
+    "rust" => true
+    "sql" => true
     _ => false
   }
 }
