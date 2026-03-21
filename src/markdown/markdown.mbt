@@ -69,6 +69,7 @@ pub enum Block {
   // GFM table: column alignments, header cells, data rows.
   // Each cell is an Array[Inline] so inline formatting works inside cells.
   Table(Array[ColAlign], Array[Array[Inline]], Array[Array[Array[Inline]]])
+  DefinitionList(Array[(String, Array[String])]) // (term, [definitions])
 }
 
 ///|
@@ -810,12 +811,6 @@ fn is_nested_indent(line : String) -> Bool {
   spaces == 2 || spaces == 4
 }
 
-///|
-/// Check if a line is a nested list continuation (indented list item)
-fn is_nested_list_item(line : String) -> Bool {
-  let trimmed = trim_start(line)
-  is_unordered_item(trimmed) || is_ordered_item(trimmed)
-}
 fn ordered_item_text(line : String) -> String {
   let n = line.length()
   let mut i = 0
@@ -1000,13 +995,32 @@ fn parse_col_align(cell : String) -> ColAlign {
 }
 
 ///|
+///|
+/// Check if a line starts with ": " (definition prefix)
+fn is_definition_line(line : String) -> Bool {
+  let n = line.length()
+  n >= 2 && char_at(line, 0) == ':' && char_at(line, 1) == ' '
+}
+
+///|
+/// Check if this position starts a definition list term
+/// (a non-blank line followed by a definition line)
+fn is_definition_term_start(ls : Array[String], i : Int) -> Bool {
+  i < ls.length() &&
+  not(is_blank(ls[i])) &&
+  i + 1 < ls.length() &&
+  is_definition_line(ls[i + 1])
+}
+
+///|
 fn is_block_starter(line : String) -> Bool {
   is_heading_line(line) ||
   is_hrule(line) ||
   is_fence_start(line) ||
   is_unordered_item(line) ||
   is_ordered_item(line) ||
-  is_blockquote_line(line)
+  is_blockquote_line(line) ||
+  is_definition_line(line)
 }
 
 // ── block parsing ─────────────────────────────────────────────────────────────
@@ -1104,6 +1118,23 @@ pub fn parse_blocks_with_footnotes(
         items.push({ inlines: parse_inlines(text, 0, text.length()), children })
       }
       result.push(OrderedList(items))
+    } else if is_definition_term_start(ls, i) {
+      // Definition list: term followed by one or more : definition lines
+      let items : Array[(String, Array[String])] = []
+      while i < n && is_definition_term_start(ls, i) {
+        let term = ls[i]
+        i = i + 1
+        // Collect all : definition lines for this term
+        let defs : Array[String] = []
+        while i < n && is_definition_line(ls[i]) {
+          // Strip ": " prefix
+          let def_text = substr(ls[i], 2, ls[i].length())
+          defs.push(def_text)
+          i = i + 1
+        }
+        items.push((term, defs))
+      }
+      result.push(DefinitionList(items))
     } else if is_table_row_line(line) &&
       i + 1 < n &&
       is_separator_row(ls[i + 1]) {
@@ -1743,6 +1774,28 @@ fn render_block_with_issues(
       {
         html: buf.to_string(),
         shortcode_errors: issues,
+        toc: [],
+        footnotes: [],
+      }
+    }
+    DefinitionList(items) => {
+      let buf = StringBuilder::new()
+      buf.write_string("<dl>\n")
+      let mut j = 0
+      while j < items.length() {
+        let (term, defs) = items[j]
+        buf.write_string("<dt>" + escape_html(term) + "</dt>\n")
+        let mut k = 0
+        while k < defs.length() {
+          buf.write_string("<dd>" + escape_html(defs[k]) + "</dd>\n")
+          k = k + 1
+        }
+        j = j + 1
+      }
+      buf.write_string("</dl>\n")
+      {
+        html: buf.to_string(),
+        shortcode_errors: [],
         toc: [],
         footnotes: [],
       }
