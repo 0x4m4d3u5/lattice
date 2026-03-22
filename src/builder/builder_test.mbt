@@ -348,7 +348,7 @@ test "template total_pages slot parses and renders" {
   let slots : Map[@template.TemplateSlot, String] = Map::new()
   slots.set(@template.PageNum, "2")
   slots.set(@template.TotalPages, "5")
-  match @template.render_template(tpl, slots) {
+  match @template.render_template(tpl, slots, Map::new()) {
     Ok(html) => assert_eq(html, "Page 2 of 5")
     Err(_) => assert_true(false)
   }

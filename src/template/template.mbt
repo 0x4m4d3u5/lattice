@@ -40,6 +40,7 @@ pub(all) enum TemplatePart {
   Text(String)
   Slot(TemplateSlot)
   DataSlot(String, Array[String]) // file name, key path
+  FrontmatterSlot(String) // {{page.field_name}} — key into validated frontmatter
   Include(String) // filename to include, resolved at load time
   Layout(String) // layout filename, resolved at load time
   ConditionalBlock(TemplateSlot, Array[TemplatePart]) // {{?slot}} body {{/?slot}}
@@ -328,6 +329,12 @@ fn parse_template_recursive(
       if char_at_template(slot_name, 0) == '?' {
         // Parse conditional block
         let cond_slot_name = trim_template(substr_template(slot_name, 1, slot_name.length()))
+        
+        // Check if this is a page.field conditional (not supported yet)
+        if starts_with_template(cond_slot_name, "page.") {
+          return Err(ParseError("conditional blocks do not support page fields: {{?page.field}}"))
+        }
+        
         let cond_slot = match slot_from_name(cond_slot_name) {
           Ok(s) => s
           Err(e) => return Err(e)
@@ -402,6 +409,12 @@ fn parse_template_recursive(
           Ok((file, key_path)) => parts.push(DataSlot(file, key_path))
           Err(e) => return Err(e)
         }
+      } else if starts_with_template(slot_name, "page.") {
+        let field = trim_template(substr_template(slot_name, 5, slot_name.length()))
+        if field.length() == 0 {
+          return Err(ParseError("invalid page slot '" + slot_name + "'"))
+        }
+        parts.push(FrontmatterSlot(field))
       } else {
         let slot = match slot_from_name(slot_name) {
           Ok(s) => s
@@ -436,6 +449,7 @@ fn render_parts(
   template : Template,
   slots : Map[TemplateSlot, String],
   data_store : @data.DataStore?,
+  page_fields : Map[String, String],
 ) -> Result[String, TemplateError] {
   let mut i = 0
   while i < template.required_slots.length() {
@@ -488,6 +502,11 @@ fn render_parts(
             return Err(MissingDataSlot(path.to_string()))
           }
         }
+      FrontmatterSlot(field) =>
+        match page_fields.get(field) {
+          Some(value) => out.write_string(value)
+          None => () // Missing frontmatter field renders as empty string
+        }
       ConditionalBlock(slot, body_parts) => {
         // Render body only if slot is non-empty
         match slots.get(slot) {
@@ -512,6 +531,11 @@ fn render_parts(
                         }
                       None => () // Missing data store renders as empty in conditional
                     }
+                  FrontmatterSlot(field) =>
+                    match page_fields.get(field) {
+                      Some(v) => out.write_string(v)
+                      None => () // Missing frontmatter field renders as empty in conditional
+                    }
                   _ =>
                     // Include and Layout should not appear in conditional bodies
                     return Err(ParseError("include/layout not allowed in conditional"))
@@ -535,15 +559,18 @@ fn render_parts(
 
 ///|
 /// Render a parsed template by substituting non-data slots.
+///|
+/// Render a parsed template by substituting non-data slots.
 pub fn render_template(
   template : Template,
   slots : Map[TemplateSlot, String],
+  page_fields : Map[String, String],
 ) -> Result[String, TemplateError] {
   // If template has a layout, render child first, then render layout with body
   match template.layout {
     Some(layout) => {
       // Render the child template
-      let child_output = match render_parts(template, slots, None) {
+      let child_output = match render_parts(template, slots, None, page_fields) {
         Ok(output) => output
         Err(e) => return Err(e)
       }
@@ -556,9 +583,9 @@ pub fn render_template(
       layout_slots.set(Body, child_output)
 
       // Render layout with all slots including body
-      render_parts(layout, layout_slots, None)
+      render_parts(layout, layout_slots, None, page_fields)
     }
-    None => render_parts(template, slots, None)
+    None => render_parts(template, slots, None, page_fields)
   }
 }
 
@@ -568,12 +595,13 @@ pub fn render_template_with_data(
   template : Template,
   slots : Map[TemplateSlot, String],
   data_store : @data.DataStore,
+  page_fields : Map[String, String],
 ) -> Result[String, TemplateError] {
   // If template has a layout, render child first, then render layout with body
   match template.layout {
     Some(layout) => {
       // Render the child template
-      let child_output = match render_parts(template, slots, Some(data_store)) {
+      let child_output = match render_parts(template, slots, Some(data_store), page_fields) {
         Ok(output) => output
         Err(e) => return Err(e)
       }
@@ -586,9 +614,9 @@ pub fn render_template_with_data(
       layout_slots.set(Body, child_output)
 
       // Render layout with all slots including body
-      render_parts(layout, layout_slots, Some(data_store))
+      render_parts(layout, layout_slots, Some(data_store), page_fields)
     }
-    None => render_parts(template, slots, Some(data_store))
+    None => render_parts(template, slots, Some(data_store), page_fields)
   }
 }
 
@@ -625,6 +653,7 @@ pub fn parse_template_with_includes(
         Text(s) => result.push(Text(s))
         Slot(slot) => result.push(Slot(slot))
         DataSlot(file, keys) => result.push(DataSlot(file, keys))
+        FrontmatterSlot(field) => result.push(FrontmatterSlot(field))
         Layout(path) => result.push(Layout(path))
         ConditionalBlock(slot, body_parts) => {
           // Recursively flatten body parts
