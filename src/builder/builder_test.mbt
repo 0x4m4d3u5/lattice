@@ -19,20 +19,35 @@ fn write_file_test(path : String, content : String) -> Bool {
 
 ///|
 test "redirect_url_to_output_path converts trailing slash URLs to index.html" {
-  assert_eq(@builder.redirect_url_to_output_path("/old-url/"), "old-url/index.html")
-  assert_eq(@builder.redirect_url_to_output_path("/old/path/"), "old/path/index.html")
+  assert_eq(
+    @builder.redirect_url_to_output_path("/old-url/"),
+    "old-url/index.html",
+  )
+  assert_eq(
+    @builder.redirect_url_to_output_path("/old/path/"),
+    "old/path/index.html",
+  )
 }
 
 ///|
 test "redirect_url_to_output_path converts URLs without trailing slash to index.html" {
-  assert_eq(@builder.redirect_url_to_output_path("/old-url"), "old-url/index.html")
-  assert_eq(@builder.redirect_url_to_output_path("/old/path"), "old/path/index.html")
+  assert_eq(
+    @builder.redirect_url_to_output_path("/old-url"),
+    "old-url/index.html",
+  )
+  assert_eq(
+    @builder.redirect_url_to_output_path("/old/path"),
+    "old/path/index.html",
+  )
 }
 
 ///|
 test "redirect_url_to_output_path preserves .html extension" {
   assert_eq(@builder.redirect_url_to_output_path("/old.html"), "old.html")
-  assert_eq(@builder.redirect_url_to_output_path("/old/path.html"), "old/path.html")
+  assert_eq(
+    @builder.redirect_url_to_output_path("/old/path.html"),
+    "old/path.html",
+  )
 }
 
 ///|
@@ -2236,7 +2251,7 @@ test "redirect pages generated from redirect_from frontmatter" {
       "This is the new location.\n",
     ),
   )
-  
+
   assert_true(
     write_file_test(
       templates_root + "/page.html",
@@ -2294,11 +2309,9 @@ test "redirect pages generated from redirect_from frontmatter" {
   assert_eq(result.errors, 0)
   // Should report 2 redirects
   assert_eq(result.redirect_count, 2)
-  
+
   // Check redirect for /old-path/
-  let redirect1 = @fs.read_file_to_string(
-    output_root + "/old-path/index.html",
-  ) catch {
+  let redirect1 = @fs.read_file_to_string(output_root + "/old-path/index.html") catch {
     @fs.IOError(_) => {
       assert_true(false)
       ""
@@ -2307,11 +2320,9 @@ test "redirect pages generated from redirect_from frontmatter" {
   assert_true(redirect1.contains("<meta http-equiv=\"refresh\""))
   assert_true(redirect1.contains("https://example.com/posts/new-post"))
   assert_true(redirect1.contains("<link rel=\"canonical\""))
-  
+
   // Check redirect for /another/old.html
-  let redirect2 = @fs.read_file_to_string(
-    output_root + "/another/old.html",
-  ) catch {
+  let redirect2 = @fs.read_file_to_string(output_root + "/another/old.html") catch {
     @fs.IOError(_) => {
       assert_true(false)
       ""

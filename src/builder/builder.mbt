@@ -183,7 +183,9 @@ fn is_draft(fm : @frontmatter.Frontmatter) -> Bool {
 ///|
 /// Convert frontmatter fields to a map of string values for template rendering.
 /// This enables templates to access any validated frontmatter field using {{page.field}}.
-pub fn frontmatter_to_strings(fm : @frontmatter.Frontmatter) -> Map[String, String] {
+pub fn frontmatter_to_strings(
+  fm : @frontmatter.Frontmatter,
+) -> Map[String, String] {
   let result : Map[String, String] = Map::new()
   fn convert_value(val : @frontmatter.FrontmatterValue) -> String {
     match val {
@@ -481,13 +483,15 @@ pub fn extract_year_month(date : String) -> (String, String)? {
 ///|
 /// Group pages by year and month for archive generation.
 /// Returns sorted groups with newest year/month first.
-pub fn group_pages_by_year_month(pages : Array[@graph.GraphPage]) -> Array[ArchiveGroup] {
+pub fn group_pages_by_year_month(
+  pages : Array[@graph.GraphPage],
+) -> Array[ArchiveGroup] {
   let groups_map : Map[String, Array[@graph.GraphPage]] = Map::new()
   let mut i = 0
   while i < pages.length() {
     let page = pages[i]
     match page.date {
-      Some(date_str) => {
+      Some(date_str) =>
         match extract_year_month(date_str) {
           Some((year, month)) => {
             let key = year + "-" + month
@@ -501,7 +505,6 @@ pub fn group_pages_by_year_month(pages : Array[@graph.GraphPage]) -> Array[Archi
           }
           None => ()
         }
-      }
       None => ()
     }
     i = i + 1
@@ -511,7 +514,7 @@ pub fn group_pages_by_year_month(pages : Array[@graph.GraphPage]) -> Array[Archi
   for key, page_list in groups_map {
     let year = substr_builder(key, 0, 4)
     let month = substr_builder(key, 5, 7)
-    groups.push({ year: year, month: month, pages: page_list })
+    groups.push({ year, month, pages: page_list })
   }
 
   // Sort groups by year descending, then month descending
@@ -520,7 +523,7 @@ pub fn group_pages_by_year_month(pages : Array[@graph.GraphPage]) -> Array[Archi
     let mut j = i + 1
     while j < groups.length() {
       if groups[i].year < groups[j].year ||
-         (groups[i].year == groups[j].year && groups[i].month < groups[j].month) {
+        (groups[i].year == groups[j].year && groups[i].month < groups[j].month) {
         let temp = groups[i]
         groups[i] = groups[j]
         groups[j] = temp
@@ -628,14 +631,21 @@ fn render_archive_page(
 
   match archive_template {
     Some(tpl) =>
-      match @template.render_template_with_data(tpl, slots, data_store, Map::new()) {
+      match
+        @template.render_template_with_data(tpl, slots, data_store, Map::new()) {
         Ok(html) => Ok(html)
         Err(e) => Err(template_error_text(e))
       }
     None =>
       match index_template {
         Some(tpl) =>
-          match @template.render_template_with_data(tpl, slots, data_store, Map::new()) {
+          match
+            @template.render_template_with_data(
+              tpl,
+              slots,
+              data_store,
+              Map::new(),
+            ) {
             Ok(html) => Ok(html)
             Err(e) => Err(template_error_text(e))
           }
@@ -726,10 +736,7 @@ fn build_archive_pages(
     } catch {
       @fs.IOError(msg) => {
         println(
-          "[error] cannot write archive page " +
-          year_out_path +
-          ": " +
-          msg,
+          "[error] cannot write archive page " + year_out_path + ": " + msg,
         )
         false
       }
@@ -772,7 +779,12 @@ fn build_archive_pages(
       }
     }
 
-    let month_out_path = coll_dir + "/" + group.year + "/" + group.month + "/index.html"
+    let month_out_path = coll_dir +
+      "/" +
+      group.year +
+      "/" +
+      group.month +
+      "/index.html"
     let month_write_ok = try {
       ensure_dir(coll_dir + "/" + group.year + "/" + group.month)
       @fs.write_string_to_file(month_out_path, month_archive_html)
@@ -781,10 +793,7 @@ fn build_archive_pages(
     } catch {
       @fs.IOError(msg) => {
         println(
-          "[error] cannot write archive page " +
-          month_out_path +
-          ": " +
-          msg,
+          "[error] cannot write archive page " + month_out_path + ": " + msg,
         )
         false
       }
@@ -874,12 +883,20 @@ pub fn render_redirect_page(canonical_url : String) -> String {
   "<html>\n" +
   "<head>\n" +
   "  <meta charset=\"utf-8\">\n" +
-  "  <meta http-equiv=\"refresh\" content=\"0; url=" + esc_url + "\">\n" +
-  "  <link rel=\"canonical\" href=\"" + esc_url + "\">\n" +
+  "  <meta http-equiv=\"refresh\" content=\"0; url=" +
+  esc_url +
+  "\">\n" +
+  "  <link rel=\"canonical\" href=\"" +
+  esc_url +
+  "\">\n" +
   "  <title>Redirecting...</title>\n" +
   "</head>\n" +
   "<body>\n" +
-  "  <p>Redirecting to <a href=\"" + esc_url + "\">" + esc_url + "</a>&#8230;</p>\n" +
+  "  <p>Redirecting to <a href=\"" +
+  esc_url +
+  "\">" +
+  esc_url +
+  "</a>&#8230;</p>\n" +
   "</body>\n" +
   "</html>\n"
 }
@@ -1155,7 +1172,13 @@ fn load_template_file(path : String) -> Result[@template.Template?, String] {
 fn load_templates(config : BuildConfig) -> Result[BuildTemplates, String] {
   let base = templates_dir_for_build(config)
   if not(@fs.path_exists(base)) {
-    return Ok({ page: None, index: None, tag_page: None, tag_index: None, archive: None })
+    return Ok({
+      page: None,
+      index: None,
+      tag_page: None,
+      tag_index: None,
+      archive: None,
+    })
   }
   let page = match load_template_file(base + "/page.html") {
     Ok(t) => t
@@ -1374,7 +1397,13 @@ fn load_templates_for_lint(config : BuildConfig) -> TemplateLoadResult {
   let base = templates_dir_for_build(config)
   if not(@fs.path_exists(base)) {
     return {
-      templates: { page: None, index: None, tag_page: None, tag_index: None, archive: None },
+      templates: {
+        page: None,
+        index: None,
+        tag_page: None,
+        tag_index: None,
+        archive: None,
+      },
       violations,
     }
   }
@@ -2156,7 +2185,8 @@ fn render_tag_page_html(
         pagination.next_url,
         url,
       )
-      match @template.render_template_with_data(tpl, slots, data_store, Map::new()) {
+      match
+        @template.render_template_with_data(tpl, slots, data_store, Map::new()) {
         Ok(html) => Ok(html)
         Err(e) => Err("tag page template: " + template_error_text(e))
       }
@@ -2232,7 +2262,8 @@ fn render_tags_index_html(
         pagination.next_url,
         tags_index_page_url(pagination.page_number),
       )
-      match @template.render_template_with_data(tpl, slots, data_store, Map::new()) {
+      match
+        @template.render_template_with_data(tpl, slots, data_store, Map::new()) {
         Ok(html) => Ok(html)
         Err(e) => Err("tags index template: " + template_error_text(e))
       }
@@ -2335,7 +2366,8 @@ fn render_404_page(
       slots.set(@template.PrevPostTitle, "")
       slots.set(@template.NextPostUrl, "")
       slots.set(@template.NextPostTitle, "")
-      match @template.render_template_with_data(tpl, slots, data_store, Map::new()) {
+      match
+        @template.render_template_with_data(tpl, slots, data_store, Map::new()) {
         Ok(html) => Ok(html)
         Err(e) => Err("404 page template: " + template_error_text(e))
       }
@@ -2498,7 +2530,8 @@ fn render_collection_index(
         pagination.next_url,
         page_url,
       )
-      match @template.render_template_with_data(tpl, slots, data_store, Map::new()) {
+      match
+        @template.render_template_with_data(tpl, slots, data_store, Map::new()) {
         Ok(html) => {
           let structured_data_markup = @html.render_structured_data_script(
             collection_breadcrumb_structured_data_builder(
@@ -2512,8 +2545,7 @@ fn render_collection_index(
             collection_index_url(collection_name) + "feed.xml",
           )
           let feed_link_markup = @html.render_feed_link_tag(
-            full_title,
-            feed_url,
+            full_title, feed_url,
           )
           let combined_markup = structured_data_markup + feed_link_markup
           return Ok(@html.inject_head_markup(html, combined_markup))
@@ -2930,10 +2962,13 @@ fn process_document(
         slots.set(@template.TableOfContents, toc_html)
         slots.set(@template.WordCount, wc.to_string())
         slots.set(@template.ReadingTime, reading_time_str(wc))
-        slots.set(@template.Author, match author_value {
-          Some(v) => v
-          None => ""
-        })
+        slots.set(
+          @template.Author,
+          match author_value {
+            Some(v) => v
+            None => ""
+          },
+        )
         slots.set(@template.Excerpt, excerpt)
         // Populate Tags slot with space-separated tag links
         let tags_html = StringBuilder::new()
@@ -2970,7 +3005,10 @@ fn process_document(
         slots.set(@template.NextPostUrl, next_post_url)
         slots.set(@template.NextPostTitle, next_post_title)
         let page_fields = frontmatter_to_strings(fm)
-        match @template.render_template_with_data(tpl, slots, data_store, page_fields) {
+        match
+          @template.render_template_with_data(
+            tpl, slots, data_store, page_fields,
+          ) {
           Ok(html) =>
             Ok(
               @html.inject_head_markup(
@@ -3428,10 +3466,13 @@ fn process_document_for_lint(
       let wc = count_words_markdown(fm.body)
       slots.set(@template.WordCount, wc.to_string())
       slots.set(@template.ReadingTime, reading_time_str(wc))
-      slots.set(@template.Author, match author_value {
-        Some(v) => v
-        None => ""
-      })
+      slots.set(
+        @template.Author,
+        match author_value {
+          Some(v) => v
+          None => ""
+        },
+      )
       slots.set(@template.Excerpt, excerpt)
       // Populate Tags slot with space-separated tag links
       let tags_html = StringBuilder::new()
@@ -3468,7 +3509,8 @@ fn process_document_for_lint(
       slots.set(@template.NextPostUrl, next_post_url)
       slots.set(@template.NextPostTitle, next_post_title)
       let page_fields = frontmatter_to_strings(fm)
-      match @template.render_template_with_data(tpl, slots, data_store, page_fields) {
+      match
+        @template.render_template_with_data(tpl, slots, data_store, page_fields) {
         Ok(html) => html
         Err(e) => {
           violations.push({
@@ -4306,66 +4348,72 @@ pub fn build(
                 unchanged = unchanged + 1
               }
               @cache.remember(next_cache_store, src.slug, src.fingerprint)
-              
+
               // Generate redirect pages if redirect_from is specified
               let redirects_generated = match @frontmatter.parse(src.content) {
-                Ok(fm) => match fm.fields.get("redirect_from") {
-                  Some(@frontmatter.FArray(urls)) => {
-                    let mut rd_count = 0
-                    let mut k = 0
-                    while k < urls.length() {
-                      match urls[k] {
-                        @frontmatter.FStr(redirect_url) => {
-                          let canonical = absolute_url_builder(
-                            config.site.base_url,
-                            doc.url,
-                          )
-                          let redirect_html = render_redirect_page(canonical)
-                          let redirect_out_path = config.output_dir + "/" +
-                            redirect_url_to_output_path(redirect_url)
-                          try {
-                            // Ensure parent directory exists
-                            let redirect_dir = if redirect_out_path.contains("/") {
-                              let mut last_slash = 0
-                              let mut idx = 0
-                              while idx < redirect_out_path.length() {
-                                if char_at_builder(redirect_out_path, idx) == '/' {
-                                  last_slash = idx
+                Ok(fm) =>
+                  match fm.fields.get("redirect_from") {
+                    Some(@frontmatter.FArray(urls)) => {
+                      let mut rd_count = 0
+                      let mut k = 0
+                      while k < urls.length() {
+                        match urls[k] {
+                          @frontmatter.FStr(redirect_url) => {
+                            let canonical = absolute_url_builder(
+                              config.site.base_url,
+                              doc.url,
+                            )
+                            let redirect_html = render_redirect_page(canonical)
+                            let redirect_out_path = config.output_dir +
+                              "/" +
+                              redirect_url_to_output_path(redirect_url)
+                            try {
+                              // Ensure parent directory exists
+                              let redirect_dir = if redirect_out_path.contains(
+                                  "/",
+                                ) {
+                                let mut last_slash = 0
+                                let mut idx = 0
+                                while idx < redirect_out_path.length() {
+                                  if char_at_builder(redirect_out_path, idx) ==
+                                    '/' {
+                                    last_slash = idx
+                                  }
+                                  idx = idx + 1
                                 }
-                                idx = idx + 1
+                                substr_builder(redirect_out_path, 0, last_slash)
+                              } else {
+                                "."
                               }
-                              substr_builder(redirect_out_path, 0, last_slash)
-                            } else {
-                              "."
-                            }
-                            ensure_dir(redirect_dir)
-                            @fs.write_string_to_file(redirect_out_path, redirect_html)
-                            rd_count = rd_count + 1
-                          } catch {
-                            @fs.IOError(msg) => {
-                              diagnostics.push(
-                                build_error(
-                                  Some(redirect_out_path),
-                                  None,
-                                  None,
-                                  "redirect write failed: " + msg,
-                                ),
+                              ensure_dir(redirect_dir)
+                              @fs.write_string_to_file(
+                                redirect_out_path, redirect_html,
                               )
+                              rd_count = rd_count + 1
+                            } catch {
+                              @fs.IOError(msg) =>
+                                diagnostics.push(
+                                  build_error(
+                                    Some(redirect_out_path),
+                                    None,
+                                    None,
+                                    "redirect write failed: " + msg,
+                                  ),
+                                )
                             }
                           }
+                          _ => ()
                         }
-                        _ => ()
+                        k = k + 1
                       }
-                      k = k + 1
+                      rd_count
                     }
-                    rd_count
+                    _ => 0
                   }
-                  _ => 0
-                }
                 Err(_) => 0
               }
               redirect_count = redirect_count + redirects_generated
-              
+
               // Only include non-draft posts in indexes
               if not(should_skip_draft) {
                 let page : @graph.GraphPage = {

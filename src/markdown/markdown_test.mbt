@@ -518,7 +518,11 @@ test "definition list html escaping" {
   let body = "Apple & Banana\n:   A <b>fruit</b> that grows on trees."
   let rendered = render(body, empty_wl())
   assert_true(rendered.contains("<dt>Apple &amp; Banana</dt>"))
-  assert_true(rendered.contains("<dd>A &lt;b&gt;fruit&lt;/b&gt; that grows on trees.</dd>"))
+  assert_true(
+    rendered.contains(
+      "<dd>A &lt;b&gt;fruit&lt;/b&gt; that grows on trees.</dd>",
+    ),
+  )
 }
 
 ///|
@@ -534,4 +538,3 @@ test "definition list complex" {
   assert_true(rendered.contains("</dl>"))
   assert_true(rendered.contains("<p>This is a paragraph.</p>"))
 }
-

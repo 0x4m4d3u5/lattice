@@ -1277,9 +1277,7 @@ pub fn tokenize_rust(source : String) -> Array[Token] {
       continue
     }
     if is_digit(c) {
-      let (token, next_i) = tokenize_number_general(
-        source, i, true, true, true,
-      )
+      let (token, next_i) = tokenize_number_general(source, i, true, true, true)
       tokens.push(token)
       i = next_i
       continue
@@ -1322,14 +1320,13 @@ pub fn tokenize_rust(source : String) -> Array[Token] {
 pub fn tokenize_sql(source : String) -> Array[Token] {
   let tokens : Array[Token] = []
   let keywords = [
-    "SELECT", "FROM", "WHERE", "INSERT", "INTO", "VALUES", "UPDATE", "SET",
-    "DELETE", "MERGE", "CREATE", "ALTER", "DROP", "TABLE", "INDEX", "VIEW",
-    "DATABASE", "SCHEMA", "JOIN", "INNER", "LEFT", "RIGHT", "FULL", "OUTER",
-    "CROSS", "ON", "USING", "AND", "OR", "NOT", "IN", "LIKE", "BETWEEN",
-    "IS", "NULL", "EXISTS", "GROUP", "BY", "ORDER", "HAVING", "LIMIT",
-    "OFFSET", "DISTINCT", "BEGIN", "COMMIT", "ROLLBACK", "TRANSACTION",
-    "COUNT", "SUM", "AVG", "MIN", "MAX", "COALESCE", "CASE", "WHEN", "THEN",
-    "ELSE", "END",
+    "SELECT", "FROM", "WHERE", "INSERT", "INTO", "VALUES", "UPDATE", "SET", "DELETE",
+    "MERGE", "CREATE", "ALTER", "DROP", "TABLE", "INDEX", "VIEW", "DATABASE", "SCHEMA",
+    "JOIN", "INNER", "LEFT", "RIGHT", "FULL", "OUTER", "CROSS", "ON", "USING", "AND",
+    "OR", "NOT", "IN", "LIKE", "BETWEEN", "IS", "NULL", "EXISTS", "GROUP", "BY",
+    "ORDER", "HAVING", "LIMIT", "OFFSET", "DISTINCT", "BEGIN", "COMMIT", "ROLLBACK",
+    "TRANSACTION", "COUNT", "SUM", "AVG", "MIN", "MAX", "COALESCE", "CASE", "WHEN",
+    "THEN", "ELSE", "END",
   ]
   let n = source.length()
   let mut i = 0
@@ -1515,8 +1512,12 @@ pub fn tokenize_toml(source : String) -> Array[Token] {
       }
       let text = buf.to_string()
       if text.contains("-") &&
-        (text.contains("T") || text.contains(" ") || text.contains("Z") ||
-         (text.contains("+") && text.length() > 3)) {
+        (
+          text.contains("T") ||
+          text.contains(" ") ||
+          text.contains("Z") ||
+          (text.contains("+") && text.length() > 3)
+        ) {
         push_token(tokens, TokenKind::StringLit, buf)
       } else {
         push_token(tokens, TokenKind::Number, buf)
@@ -1557,7 +1558,12 @@ pub fn tokenize_toml(source : String) -> Array[Token] {
     }
     if is_ident_start(c) {
       let buf = StringBuilder::new()
-      i = read_while(source, i, fn(ch) { is_ident_part(ch) || ch == '-' || ch == '_' }, buf)
+      i = read_while(
+        source,
+        i,
+        fn(ch) { is_ident_part(ch) || ch == '-' || ch == '_' },
+        buf,
+      )
       let word = buf.to_string()
       if is_member(word, keywords) {
         tokens.push({ kind: TokenKind::Keyword, text: word })
@@ -1693,7 +1699,12 @@ pub fn tokenize_yaml(source : String) -> Array[Token] {
     }
     if is_ident_start(c) {
       let buf = StringBuilder::new()
-      i = read_while(source, i, fn(ch) { is_ident_part(ch) || ch == '-' || ch == '_' }, buf)
+      i = read_while(
+        source,
+        i,
+        fn(ch) { is_ident_part(ch) || ch == '-' || ch == '_' },
+        buf,
+      )
       let word = buf.to_string()
       if is_member(word, keywords) {
         tokens.push({ kind: TokenKind::Keyword, text: word })

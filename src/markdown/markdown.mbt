@@ -49,6 +49,7 @@ pub enum ColAlign {
 
 ///|
 /// A block element in the markdown AST.
+
 ///|
 /// A list item that can contain inline content and nested blocks.
 pub(all) struct ListItem {
@@ -772,6 +773,7 @@ fn is_fence_end(line : String, fence_char : Char) -> Bool {
 }
 
 ///|
+
 ///|
 fn is_unordered_item(line : String) -> Bool {
   let n = line.length()
@@ -798,7 +800,7 @@ fn is_ordered_item(line : String) -> Bool {
 fn count_leading_spaces(line : String) -> Int {
   let n = line.length()
   let mut count = 0
-  while count < n && (char_at(line, count) == ' ') {
+  while count < n && char_at(line, count) == ' ' {
     count = count + 1
   }
   count
@@ -811,6 +813,7 @@ fn is_nested_indent(line : String) -> Bool {
   spaces == 2 || spaces == 4
 }
 
+///|
 fn ordered_item_text(line : String) -> String {
   let n = line.length()
   let mut i = 0
@@ -995,6 +998,7 @@ fn parse_col_align(cell : String) -> ColAlign {
 }
 
 ///|
+
 ///|
 /// Check if a line starts with ": " (definition prefix)
 fn is_definition_line(line : String) -> Bool {
@@ -1674,7 +1678,10 @@ fn render_block_with_issues(
         // Render nested blocks (lists, paragraphs, etc.)
         if item.children.length() > 0 {
           let rendered_children = render_blocks_with_issues(
-            item.children, wl, heading_counts, fn_map,
+            item.children,
+            wl,
+            heading_counts,
+            fn_map,
           )
           merge_shortcode_errors(issues, rendered_children.shortcode_errors)
           buf.write_string(rendered_children.html)
@@ -1704,7 +1711,10 @@ fn render_block_with_issues(
         // Render nested blocks (lists, paragraphs, etc.)
         if item.children.length() > 0 {
           let rendered_children = render_blocks_with_issues(
-            item.children, wl, heading_counts, fn_map,
+            item.children,
+            wl,
+            heading_counts,
+            fn_map,
           )
           merge_shortcode_errors(issues, rendered_children.shortcode_errors)
           buf.write_string(rendered_children.html)
@@ -1793,12 +1803,7 @@ fn render_block_with_issues(
         j = j + 1
       }
       buf.write_string("</dl>\n")
-      {
-        html: buf.to_string(),
-        shortcode_errors: [],
-        toc: [],
-        footnotes: [],
-      }
+      { html: buf.to_string(), shortcode_errors: [], toc: [], footnotes: [] }
     }
   }
 }
