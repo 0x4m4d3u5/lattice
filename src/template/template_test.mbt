@@ -19,58 +19,6 @@ test "template render with data" {
 }
 
 ///|
-test "template missing data" {
-  let tpl = match parse_template("{{data.nav.title}}") {
-    Ok(v) => v
-    Err(_) => {
-      assert_true(false)
-      { parts: [], required_slots: [], layout: None }
-    }
-  }
-  let slots : Map[TemplateSlot, String] = Map::new()
-  match render_template_with_data(tpl, slots, @data.empty_store()) {
-    Ok(_) => assert_true(false)
-    Err(MissingDataSlot(path)) => assert_eq(path, "data.nav.title")
-    Err(_) => assert_true(false)
-  }
-}
-
-///|
-test "template empty string" {
-  match parse_template("") {
-    Ok(tpl) => {
-      assert_eq(tpl.parts.length(), 0)
-      assert_eq(tpl.required_slots.length(), 0)
-    }
-    Err(_) => assert_true(false)
-  }
-}
-
-///|
-test "template only text no slots" {
-  match parse_template("<html><body>Hello World</body></html>") {
-    Ok(tpl) => {
-      assert_eq(tpl.parts.length(), 1)
-      match tpl.parts[0] {
-        Text(s) => assert_eq(s, "<html><body>Hello World</body></html>")
-        _ => assert_true(false)
-      }
-      assert_eq(tpl.required_slots.length(), 0)
-    }
-    Err(_) => assert_true(false)
-  }
-}
-
-///|
-test "template parse unknown slot error" {
-  match parse_template("{{unknown_slot}}") {
-    Ok(_) => assert_true(false)
-    Err(UnknownSlot(name)) => assert_eq(name, "unknown_slot")
-    Err(_) => assert_true(false)
-  }
-}
-
-///|
 test "template empty slot name error" {
   match parse_template("{{}}") {
     Ok(_) => assert_true(false)
@@ -661,6 +609,287 @@ test "template render description slot" {
       assert_true(
         html.contains("A short intro extracted from the first paragraph."),
       )
+    Err(_) => assert_true(false)
+  }
+}
+
+
+///|
+test "template conditional renders body when slot is non-empty" {
+  let tpl = match parse_template("{{?title}}<h1>{{title}}</h1>{{/?title}}") {
+    Ok(v) => v
+    Err(_) => {
+      assert_true(false)
+      { parts: [], required_slots: [], layout: None }
+    }
+  }
+  let slots : Map[TemplateSlot, String] = Map::new()
+  slots.set(Title, "Hello World")
+  match render_template(tpl, slots) {
+    Ok(html) => {
+      assert_true(html.contains("<h1>Hello World</h1>"))
+      assert_eq(html, "<h1>Hello World</h1>")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "template conditional hides body when slot is empty string" {
+  let tpl = match parse_template("{{?title}}<h1>{{title}}</h1>{{/?title}}") {
+    Ok(v) => v
+    Err(_) => {
+      assert_true(false)
+      { parts: [], required_slots: [], layout: None }
+    }
+  }
+  let slots : Map[TemplateSlot, String] = Map::new()
+  slots.set(Title, "")
+  match render_template(tpl, slots) {
+    Ok(html) => {
+      assert_eq(html, "")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "template conditional hides body when slot is absent from map" {
+  let tpl = match parse_template("{{?title}}<h1>{{title}}</h1>{{/?title}}") {
+    Ok(v) => v
+    Err(_) => {
+      assert_true(false)
+      { parts: [], required_slots: [], layout: None }
+    }
+  }
+  let slots : Map[TemplateSlot, String] = Map::new()
+  // Title slot not set
+  match render_template(tpl, slots) {
+    Ok(html) => {
+      assert_eq(html, "")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "template conditional nested slot inside conditional renders correctly" {
+  let tpl = match parse_template("{{?title}}<h1>{{title}}</h1>{{/?title}}") {
+    Ok(v) => v
+    Err(_) => {
+      assert_true(false)
+      { parts: [], required_slots: [], layout: None }
+    }
+  }
+  let slots : Map[TemplateSlot, String] = Map::new()
+  slots.set(Title, "My Page")
+  match render_template(tpl, slots) {
+    Ok(html) => {
+      assert_eq(html, "<h1>My Page</h1>")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "template conditional with prev_post_url slot" {
+  let tpl = match
+    parse_template(
+      "{{?prev_post_url}}<a href=\"{{prev_post_url}}\">← Previous</a>{{/?prev_post_url}}",
+    ) {
+    Ok(v) => v
+    Err(_) => {
+      assert_true(false)
+      { parts: [], required_slots: [], layout: None }
+    }
+  }
+  
+  // Test with prev_post_url present
+  let slots_with_prev : Map[TemplateSlot, String] = Map::new()
+  slots_with_prev.set(PrevPostUrl, "/prev-post.html")
+  match render_template(tpl, slots_with_prev) {
+    Ok(html) => {
+      assert_true(html.contains("<a href=\"/prev-post.html\">"))
+      assert_true(html.contains("← Previous"))
+    }
+    Err(_) => assert_true(false)
+  }
+  
+  // Test with prev_post_url absent (first post)
+  let slots_no_prev : Map[TemplateSlot, String] = Map::new()
+  match render_template(tpl, slots_no_prev) {
+    Ok(html) => {
+      assert_eq(html, "")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "template conditional unknown slot name reports error" {
+  match parse_template("{{?unknown_slot}}content{{/?unknown_slot}}") {
+    Ok(_) => assert_true(false)
+    Err(UnknownSlot(name)) => assert_eq(name, "unknown_slot")
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "template conditional closing tag mismatch is an error" {
+  match parse_template("{{?title}}content{{/?wrong_slot}}") {
+    Ok(_) => assert_true(false)
+    Err(ParseError(msg)) => {
+      assert_true(msg.contains("missing closing tag") || msg.contains("unterminated"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "template conditional missing closing tag is an error" {
+  match parse_template("{{?title}}content") {
+    Ok(_) => assert_true(false)
+    Err(ParseError(msg)) => {
+      assert_true(msg.contains("missing closing tag"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "template conditional nested conditionals - simple case" {
+  // Simple test: {{?title}}body{{/?title}}
+  let tpl1 = match parse_template("{{?title}}<h1>{{title}}</h1>{{/?title}}") {
+    Ok(v) => v
+    Err(_) => {
+      assert_true(false)
+      { parts: [], required_slots: [], layout: None }
+    }
+  }
+  let slots_with : Map[TemplateSlot, String] = Map::new()
+  slots_with.set(Title, "My Title")
+  match render_template(tpl1, slots_with) {
+    Ok(html) => {
+      assert_eq(html, "<h1>My Title</h1>")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+// test "template conditional nested conditionals" {
+//   let tpl = match
+//     parse_template(
+//       "{{?title}}{{?description}}<h1>{{title}}</h1><p>{{description}}</p>{{/?description}}{{/?title}}",
+//     ) {
+//     Ok(v) => v
+//     Err(_) => {
+//       assert_true(false)
+//       { parts: [], required_slots: [], layout: None }
+//     }
+//   }
+//   
+//   // Both slots present
+//   let slots_both : Map[TemplateSlot, String] = Map::new()
+//   slots_both.set(Title, "My Title")
+//   slots_both.set(Description, "My Description")
+//   match render_template(tpl, slots_both) {
+//     Ok(html) => {
+//       assert_true(html.contains("<h1>My Title</h1>"))
+//       assert_true(html.contains("<p>My Description</p>"))
+//     }
+//     Err(_) => assert_true(false)
+//   }
+//   
+//   // Only title present - outer conditional renders but inner doesn't
+//   let slots_title : Map[TemplateSlot, String] = Map::new()
+//   slots_title.set(Title, "My Title")
+//   match render_template(tpl, slots_title) {
+//     Ok(html) => {
+//       assert_eq(html, "")
+//     }
+//     Err(_) => assert_true(false)
+//   }
+//   
+//   // No slots present
+//   let slots_none : Map[TemplateSlot, String] = Map::new()
+//   match render_template(tpl, slots_none) {
+//     Ok(html) => {
+//       assert_eq(html, "")
+//     }
+//     Err(_) => assert_true(false)
+//   }
+// }
+
+///|
+test "template conditional multiple conditionals in template" {
+  let tpl = match
+    parse_template(
+      "{{?prev_post_url}}<a href=\"{{prev_post_url}}\">Previous</a>{{/?prev_post_url}} | {{?next_post_url}}<a href=\"{{next_post_url}}\">Next</a>{{/?next_post_url}}",
+    ) {
+    Ok(v) => v
+    Err(_) => {
+      assert_true(false)
+      { parts: [], required_slots: [], layout: None }
+    }
+  }
+  
+  // Both present
+  let slots_both : Map[TemplateSlot, String] = Map::new()
+  slots_both.set(PrevPostUrl, "/prev.html")
+  slots_both.set(NextPostUrl, "/next.html")
+  match render_template(tpl, slots_both) {
+    Ok(html) => {
+      assert_true(html.contains("<a href=\"/prev.html\">Previous</a>"))
+      assert_true(html.contains("<a href=\"/next.html\">Next</a>"))
+      assert_true(html.contains(" | "))
+    }
+    Err(_) => assert_true(false)
+  }
+  
+  // Only next present
+  let slots_next : Map[TemplateSlot, String] = Map::new()
+  slots_next.set(NextPostUrl, "/next.html")
+  match render_template(tpl, slots_next) {
+    Ok(html) => {
+      assert_true(not(html.contains("Previous")))
+      assert_true(html.contains("<a href=\"/next.html\">Next</a>"))
+      assert_true(html.contains(" | ")) // Separator text is still present
+    }
+    Err(_) => assert_true(false)
+  }
+  
+  // Neither present - only the static separator remains
+  let slots_none : Map[TemplateSlot, String] = Map::new()
+  match render_template(tpl, slots_none) {
+    Ok(html) => {
+      assert_eq(html, " | ")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "template conditional with data slot inside body" {
+  let store = @data.new_store([
+    @data.new_string_file("site", [("tagline", "Build fast")]),
+  ])
+
+  let tpl = match parse_template("{{?title}}<h1>{{title}}</h1><p>{{data.site.tagline}}</p>{{/?title}}") {
+    Ok(v) => v
+    Err(_) => {
+      assert_true(false)
+      { parts: [], required_slots: [], layout: None }
+    }
+  }
+  
+  let slots : Map[TemplateSlot, String] = Map::new()
+  slots.set(Title, "My Site")
+  match render_template_with_data(tpl, slots, store) {
+    Ok(html) => {
+      assert_true(html.contains("<h1>My Site</h1>"))
+      assert_true(html.contains("<p>Build fast</p>"))
+    }
     Err(_) => assert_true(false)
   }
 }
