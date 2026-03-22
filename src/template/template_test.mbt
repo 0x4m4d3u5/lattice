@@ -12,7 +12,7 @@ test "template render with data" {
     }
   }
   let slots : Map[TemplateSlot, String] = Map::new()
-  match render_template_with_data(tpl, slots, store) {
+  match render_template_with_data(tpl, slots, store, Map::new()) {
     Ok(html) => assert_true(html.contains("<h1>Demo</h1>"))
     Err(_) => assert_true(false)
   }
@@ -55,7 +55,7 @@ test "template missing required slot at render" {
     }
   }
   let slots : Map[TemplateSlot, String] = Map::new()
-  match render_template(tpl, slots) {
+  match render_template(tpl, slots, Map::new()) {
     Ok(_) => assert_true(false)
     Err(MissingRequiredSlot(Title)) => ()
     Err(_) => assert_true(false)
@@ -83,7 +83,7 @@ test "template multiple data slots" {
     }
   }
   let slots : Map[TemplateSlot, String] = Map::new()
-  match render_template_with_data(tpl, slots, store) {
+  match render_template_with_data(tpl, slots, store, Map::new()) {
     Ok(html) => {
       assert_true(html.contains("<h1>My Blog</h1>"))
       assert_true(html.contains("<p>John Doe</p>"))
@@ -107,7 +107,7 @@ test "template nested data path" {
     }
   }
   let slots : Map[TemplateSlot, String] = Map::new()
-  match render_template_with_data(tpl, slots, store) {
+  match render_template_with_data(tpl, slots, store, Map::new()) {
     Ok(html) => assert_eq(html, "Theme: dark")
     Err(_) => assert_true(false)
   }
@@ -131,7 +131,7 @@ test "template mixed data and standard slots" {
   }
   let slots : Map[TemplateSlot, String] = Map::new()
   slots.set(Title, "My Site")
-  match render_template_with_data(tpl, slots, store) {
+  match render_template_with_data(tpl, slots, store, Map::new()) {
     Ok(html) => {
       assert_true(html.contains("<title>My Site - Build fast</title>"))
       assert_true(html.contains("<h1>My Site</h1>"))
@@ -292,7 +292,7 @@ test "template render missing new slot" {
     }
   }
   let slots : Map[TemplateSlot, String] = Map::new()
-  match render_template(tpl, slots) {
+  match render_template(tpl, slots, Map::new()) {
     Ok(_) => assert_true(false)
     Err(MissingRequiredSlot(Tags)) => ()
     Err(_) => assert_true(false)
@@ -379,7 +379,7 @@ test "template render with layout" {
       slots.set(Title, "My Page")
       slots.set(Content, "Page content")
 
-      match render_template(tpl, slots) {
+      match render_template(tpl, slots, Map::new()) {
         Ok(html) => {
           // Verify child is rendered and injected into layout's body slot
           assert_true(html.contains("<html>"))
@@ -563,7 +563,7 @@ test "template render reading_time and word_count slots" {
   let slots : Map[TemplateSlot, String] = Map::new()
   slots.set(ReadingTime, "3 min")
   slots.set(WordCount, "612")
-  match render_template(tpl, slots) {
+  match render_template(tpl, slots, Map::new()) {
     Ok(html) => {
       assert_true(html.contains("3 min"))
       assert_true(html.contains("612 words"))
@@ -586,7 +586,7 @@ test "template render table_of_contents slot" {
     TableOfContents,
     "<nav class=\"table-of-contents\"><ul><li>Intro</li></ul></nav>",
   )
-  match render_template(tpl, slots) {
+  match render_template(tpl, slots, Map::new()) {
     Ok(html) => assert_true(html.contains("table-of-contents"))
     Err(_) => assert_true(false)
   }
@@ -604,7 +604,7 @@ test "template render description slot" {
   }
   let slots : Map[TemplateSlot, String] = Map::new()
   slots.set(Description, "A short intro extracted from the first paragraph.")
-  match render_template(tpl, slots) {
+  match render_template(tpl, slots, Map::new()) {
     Ok(html) =>
       assert_true(
         html.contains("A short intro extracted from the first paragraph."),
@@ -625,7 +625,7 @@ test "template conditional renders body when slot is non-empty" {
   }
   let slots : Map[TemplateSlot, String] = Map::new()
   slots.set(Title, "Hello World")
-  match render_template(tpl, slots) {
+  match render_template(tpl, slots, Map::new()) {
     Ok(html) => {
       assert_true(html.contains("<h1>Hello World</h1>"))
       assert_eq(html, "<h1>Hello World</h1>")
@@ -645,7 +645,7 @@ test "template conditional hides body when slot is empty string" {
   }
   let slots : Map[TemplateSlot, String] = Map::new()
   slots.set(Title, "")
-  match render_template(tpl, slots) {
+  match render_template(tpl, slots, Map::new()) {
     Ok(html) => {
       assert_eq(html, "")
     }
@@ -664,7 +664,7 @@ test "template conditional hides body when slot is absent from map" {
   }
   let slots : Map[TemplateSlot, String] = Map::new()
   // Title slot not set
-  match render_template(tpl, slots) {
+  match render_template(tpl, slots, Map::new()) {
     Ok(html) => {
       assert_eq(html, "")
     }
@@ -683,7 +683,7 @@ test "template conditional nested slot inside conditional renders correctly" {
   }
   let slots : Map[TemplateSlot, String] = Map::new()
   slots.set(Title, "My Page")
-  match render_template(tpl, slots) {
+  match render_template(tpl, slots, Map::new()) {
     Ok(html) => {
       assert_eq(html, "<h1>My Page</h1>")
     }
@@ -707,7 +707,7 @@ test "template conditional with prev_post_url slot" {
   // Test with prev_post_url present
   let slots_with_prev : Map[TemplateSlot, String] = Map::new()
   slots_with_prev.set(PrevPostUrl, "/prev-post.html")
-  match render_template(tpl, slots_with_prev) {
+  match render_template(tpl, slots_with_prev, Map::new()) {
     Ok(html) => {
       assert_true(html.contains("<a href=\"/prev-post.html\">"))
       assert_true(html.contains("← Previous"))
@@ -717,7 +717,7 @@ test "template conditional with prev_post_url slot" {
   
   // Test with prev_post_url absent (first post)
   let slots_no_prev : Map[TemplateSlot, String] = Map::new()
-  match render_template(tpl, slots_no_prev) {
+  match render_template(tpl, slots_no_prev, Map::new()) {
     Ok(html) => {
       assert_eq(html, "")
     }
@@ -768,7 +768,7 @@ test "template conditional nested conditionals - simple case" {
   }
   let slots_with : Map[TemplateSlot, String] = Map::new()
   slots_with.set(Title, "My Title")
-  match render_template(tpl1, slots_with) {
+  match render_template(tpl1, slots_with, Map::new()) {
     Ok(html) => {
       assert_eq(html, "<h1>My Title</h1>")
     }
@@ -793,7 +793,7 @@ test "template conditional nested conditionals - simple case" {
 //   let slots_both : Map[TemplateSlot, String] = Map::new()
 //   slots_both.set(Title, "My Title")
 //   slots_both.set(Description, "My Description")
-//   match render_template(tpl, slots_both) {
+//   match render_template(tpl, slots_both, Map::new()) {
 //     Ok(html) => {
 //       assert_true(html.contains("<h1>My Title</h1>"))
 //       assert_true(html.contains("<p>My Description</p>"))
@@ -813,7 +813,7 @@ test "template conditional nested conditionals - simple case" {
 //   
 //   // No slots present
 //   let slots_none : Map[TemplateSlot, String] = Map::new()
-//   match render_template(tpl, slots_none) {
+//   match render_template(tpl, slots_none, Map::new()) {
 //     Ok(html) => {
 //       assert_eq(html, "")
 //     }
@@ -838,7 +838,7 @@ test "template conditional multiple conditionals in template" {
   let slots_both : Map[TemplateSlot, String] = Map::new()
   slots_both.set(PrevPostUrl, "/prev.html")
   slots_both.set(NextPostUrl, "/next.html")
-  match render_template(tpl, slots_both) {
+  match render_template(tpl, slots_both, Map::new()) {
     Ok(html) => {
       assert_true(html.contains("<a href=\"/prev.html\">Previous</a>"))
       assert_true(html.contains("<a href=\"/next.html\">Next</a>"))
@@ -850,7 +850,7 @@ test "template conditional multiple conditionals in template" {
   // Only next present
   let slots_next : Map[TemplateSlot, String] = Map::new()
   slots_next.set(NextPostUrl, "/next.html")
-  match render_template(tpl, slots_next) {
+  match render_template(tpl, slots_next, Map::new()) {
     Ok(html) => {
       assert_true(not(html.contains("Previous")))
       assert_true(html.contains("<a href=\"/next.html\">Next</a>"))
@@ -861,7 +861,7 @@ test "template conditional multiple conditionals in template" {
   
   // Neither present - only the static separator remains
   let slots_none : Map[TemplateSlot, String] = Map::new()
-  match render_template(tpl, slots_none) {
+  match render_template(tpl, slots_none, Map::new()) {
     Ok(html) => {
       assert_eq(html, " | ")
     }
@@ -885,11 +885,112 @@ test "template conditional with data slot inside body" {
   
   let slots : Map[TemplateSlot, String] = Map::new()
   slots.set(Title, "My Site")
-  match render_template_with_data(tpl, slots, store) {
+  match render_template_with_data(tpl, slots, store, Map::new()) {
     Ok(html) => {
       assert_true(html.contains("<h1>My Site</h1>"))
       assert_true(html.contains("<p>Build fast</p>"))
     }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse {{page.field}} frontmatter slot" {
+  let tpl = match parse_template("Series: {{page.series}}") {
+    Ok(v) => v
+    Err(_) => {
+      assert_true(false)
+      { parts: [], required_slots: [], layout: None }
+    }
+  }
+  // Should have two parts: Text and FrontmatterSlot
+  assert_eq(tpl.parts.length(), 2)
+  match tpl.parts[0] {
+    Text(s) => assert_eq(s, "Series: ")
+    _ => assert_true(false)
+  }
+  match tpl.parts[1] {
+    FrontmatterSlot(field) => assert_eq(field, "series")
+    _ => assert_true(false)
+  }
+  // FrontmatterSlot should NOT be in required_slots
+  assert_eq(tpl.required_slots.length(), 0)
+}
+
+///|
+test "render {{page.field}} with field present" {
+  let tpl = match parse_template("Series: {{page.series}}") {
+    Ok(v) => v
+    Err(_) => {
+      assert_true(false)
+      { parts: [], required_slots: [], layout: None }
+    }
+  }
+  let slots : Map[TemplateSlot, String] = Map::new()
+  let page_fields : Map[String, String] = Map::new()
+  page_fields.set("series", "MoonBit Deep Dive")
+  match render_template(tpl, slots, page_fields) {
+    Ok(html) => assert_eq(html, "Series: MoonBit Deep Dive")
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "render {{page.field}} with missing field" {
+  let tpl = match parse_template("Series: {{page.series}}") {
+    Ok(v) => v
+    Err(_) => {
+      assert_true(false)
+      { parts: [], required_slots: [], layout: None }
+    }
+  }
+  let slots : Map[TemplateSlot, String] = Map::new()
+  let page_fields : Map[String, String] = Map::new()
+  // No "series" field in page_fields
+  match render_template(tpl, slots, page_fields) {
+    Ok(html) => assert_eq(html, "Series: ")
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "render {{page.field}} with empty key fails to parse" {
+  match parse_template("{{page.}}") {
+    Ok(_) => assert_true(false) // Should fail to parse
+    Err(ParseError(msg)) => {
+      assert_true(msg.contains("invalid page slot"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "{{?page.field}} conditional produces clear parse error" {
+  match parse_template("{{?page.series}}Show this{{/?page.series}}") {
+    Ok(_) => assert_true(false) // Should fail to parse
+    Err(ParseError(msg)) => {
+      assert_true(msg.contains("conditional blocks do not support page fields"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "render {{page.field}} in conditional body with data store" {
+  let tpl = match parse_template("{{?title}}Series: {{page.series}}{{/?title}}") {
+    Ok(v) => v
+    Err(_) => {
+      assert_true(false)
+      { parts: [], required_slots: [], layout: None }
+    }
+  }
+  let store = @data.new_store([@data.new_string_file("test", [("name", "Lattice")])])
+  let slots : Map[TemplateSlot, String] = Map::new()
+  slots.set(Title, "My Post")
+  let page_fields : Map[String, String] = Map::new()
+  page_fields.set("series", "MoonBit Series")
+  match render_template_with_data(tpl, slots, store, page_fields) {
+    Ok(html) => assert_eq(html, "Series: MoonBit Series")
     Err(_) => assert_true(false)
   }
 }
