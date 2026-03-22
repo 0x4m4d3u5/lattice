@@ -42,8 +42,22 @@ The explainability rubric (25%) scores the retrospective on architectural decisi
 - **Push frequently.** The project must be open-sourced on GitHub — work that lives only locally doesn't count toward the submission. Push after each meaningful unit of work.
 - **Annotate AI usage honestly.** The rubric explicitly scores AI tool retrospective. Where a type signature came from a suggestion, where a design was revised after feedback, where the agent spotted a footgun — note it. Sanitized retrospectives read as sanitized.
 
+## MoonBit stdlib — check before handrolling
+
+LLMs tend to ignore the MoonBit stdlib and implement things from scratch. Don't. Before writing a utility function, check https://mooncakes.io/docs/moonbitlang/core first.
+
+The stdlib has high velocity — things get added frequently. Areas most likely to already exist:
+- String: split, trim, contains, starts_with, ends_with, to_upper, to_lower
+- Array/Iter: map, filter, fold, zip, flatten, find, any, all
+- Option/Result: map, bind, or_else, unwrap_or
+- Math utilities
+- HashMap, HashSet (in core)
+
+If something genuinely isn't in stdlib, note it explicitly in the commit rather than silently handrolling.
+
 ## Reference sources
 
 - Challenge page: https://www.moonbitlang.com/2026-scc
 - MoonBit docs: https://www.moonbitlang.com/docs
+- MoonBit stdlib: https://mooncakes.io/docs/moonbitlang/core
 - MoonBit async lib: https://github.com/moonbitlang/async
