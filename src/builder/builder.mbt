@@ -1423,6 +1423,8 @@ fn build_template_slots(
   slots.set(@template.ReadingTime, "")
   slots.set(@template.WordCount, "")
   slots.set(@template.TableOfContents, "")
+  slots.set(@template.Author, "")
+  slots.set(@template.Excerpt, "")
   slots
 }
 
@@ -2888,6 +2890,11 @@ fn process_document(
         slots.set(@template.TableOfContents, toc_html)
         slots.set(@template.WordCount, wc.to_string())
         slots.set(@template.ReadingTime, reading_time_str(wc))
+        slots.set(@template.Author, match author_value {
+          Some(v) => v
+          None => ""
+        })
+        slots.set(@template.Excerpt, excerpt)
         // Populate Tags slot with space-separated tag links
         let tags_html = StringBuilder::new()
         let mut tag_idx = 0
@@ -3380,6 +3387,11 @@ fn process_document_for_lint(
       let wc = count_words_markdown(fm.body)
       slots.set(@template.WordCount, wc.to_string())
       slots.set(@template.ReadingTime, reading_time_str(wc))
+      slots.set(@template.Author, match author_value {
+        Some(v) => v
+        None => ""
+      })
+      slots.set(@template.Excerpt, excerpt)
       // Populate Tags slot with space-separated tag links
       let tags_html = StringBuilder::new()
       let mut tag_idx = 0

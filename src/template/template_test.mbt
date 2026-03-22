@@ -581,6 +581,29 @@ test "template parse table_of_contents slot" {
 }
 
 ///|
+test "template parse author and excerpt slots" {
+  let tpl = match
+    parse_template("By {{author}}<p>{{excerpt}}</p>") {
+    Ok(v) => v
+    Err(_) => {
+      assert_true(false)
+      { parts: [], required_slots: [], layout: None }
+    }
+  }
+  let mut has_author = false
+  let mut has_excerpt = false
+  for part in tpl.parts {
+    match part {
+      Slot(Author) => has_author = true
+      Slot(Excerpt) => has_excerpt = true
+      _ => ()
+    }
+  }
+  assert_true(has_author)
+  assert_true(has_excerpt)
+}
+
+///|
 test "template render reading_time and word_count slots" {
   let tpl = match parse_template("{{reading_time}} · {{word_count}} words") {
     Ok(v) => v
