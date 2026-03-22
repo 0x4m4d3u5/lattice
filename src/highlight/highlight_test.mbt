@@ -366,3 +366,48 @@ test "highlight dispatch includes rust and sql" {
   assert_true(has_kind(rs, Keyword))
   assert_true(has_kind(sql, Keyword))
 }
+
+///|
+test "highlight toml tokenization covers tables keys comments and booleans" {
+  let src = "# Config\n" +
+    "[server]\n" +
+    "host = \"localhost\"\n" +
+    "port = 8080\n" +
+    "debug = true\n" +
+    "\n" +
+    "[[items]]\n" +
+    "name = 'first'\n"
+  let tokens = tokenize_toml(src)
+  assert_true(has_kind(tokens, Keyword))
+  assert_true(has_kind(tokens, Identifier))
+  assert_true(has_kind(tokens, StringLit))
+  assert_true(has_kind(tokens, Number))
+  assert_true(has_kind(tokens, Comment))
+}
+
+///|
+test "highlight yaml tokenization covers document markers anchors and scalars" {
+  let src = "---\n" +
+    "name: test\n" +
+    "enabled: true\n" +
+    "items:\n" +
+    "  - one\n" +
+    "  - two\n" +
+    "ref: &anchor\n" +
+    "alias: *anchor\n" +
+    "value: null\n"
+  let tokens = tokenize_yaml(src)
+  assert_true(has_kind(tokens, Keyword))
+  assert_true(has_kind(tokens, Identifier))
+  assert_true(has_kind(tokens, Punct))
+}
+
+///|
+test "highlight dispatch includes toml and yaml" {
+  let toml = highlight("toml", "[section]\nkey = 'value'")
+  let yaml = highlight("yaml", "key: value\nflag: true")
+  let yml = highlight("yml", "key: value")
+  assert_true(has_kind(toml, Keyword))
+  assert_true(has_kind(yaml, Identifier))
+  assert_true(has_kind(yml, Identifier))
+}

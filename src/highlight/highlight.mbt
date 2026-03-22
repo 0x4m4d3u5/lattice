@@ -1454,6 +1454,270 @@ pub fn tokenize_sql(source : String) -> Array[Token] {
 }
 
 ///|
+pub fn tokenize_toml(source : String) -> Array[Token] {
+  let tokens : Array[Token] = []
+  let keywords = ["true", "false"]
+  let n = source.length()
+  let mut i = 0
+  while i < n {
+    let c = char_at(source, i)
+    if is_whitespace(c) {
+      let buf = StringBuilder::new()
+      i = read_while(source, i, fn(ch) { is_whitespace(ch) }, buf)
+      push_token(tokens, TokenKind::Whitespace, buf)
+      continue
+    }
+    if c == '#' {
+      let buf = StringBuilder::new()
+      while i < n && char_at(source, i) != '\n' {
+        buf.write_char(char_at(source, i))
+        i = i + 1
+      }
+      push_token(tokens, TokenKind::Comment, buf)
+      continue
+    }
+    if c == '\'' || c == '"' {
+      let quote = c
+      let buf = StringBuilder::new()
+      buf.write_char(quote)
+      i = i + 1
+      while i < n {
+        let ch = char_at(source, i)
+        buf.write_char(ch)
+        i = i + 1
+        if ch == '\\' && i < n {
+          buf.write_char(char_at(source, i))
+          i = i + 1
+        } else if ch == quote {
+          break
+        }
+      }
+      push_token(tokens, TokenKind::StringLit, buf)
+      continue
+    }
+    if is_digit(c) ||
+      (c == '-' && i + 1 < n && is_digit(char_at(source, i + 1))) {
+      let buf = StringBuilder::new()
+      i = read_while(source, i, fn(ch) { is_digit(ch) || ch == '_' }, buf)
+      if i < n && char_at(source, i) == '.' {
+        buf.write_char('.')
+        i = i + 1
+        i = read_while(source, i, fn(ch) { is_digit(ch) || ch == '_' }, buf)
+      }
+      if i < n && (char_at(source, i) == 'e' || char_at(source, i) == 'E') {
+        buf.write_char(char_at(source, i))
+        i = i + 1
+        if i < n && (char_at(source, i) == '+' || char_at(source, i) == '-') {
+          buf.write_char(char_at(source, i))
+          i = i + 1
+        }
+        i = read_while(source, i, fn(ch) { is_digit(ch) || ch == '_' }, buf)
+      }
+      let text = buf.to_string()
+      if text.contains("-") &&
+        (text.contains("T") || text.contains(" ") || text.contains("Z") ||
+         (text.contains("+") && text.length() > 3)) {
+        push_token(tokens, TokenKind::StringLit, buf)
+      } else {
+        push_token(tokens, TokenKind::Number, buf)
+      }
+      continue
+    }
+    if c == '[' {
+      let buf = StringBuilder::new()
+      buf.write_char('[')
+      i = i + 1
+      if i < n && char_at(source, i) == '[' {
+        buf.write_char('[')
+        i = i + 1
+        while i < n && char_at(source, i) != ']' {
+          buf.write_char(char_at(source, i))
+          i = i + 1
+        }
+        if i < n {
+          buf.write_char(']')
+          i = i + 1
+        }
+        if i < n && char_at(source, i) == ']' {
+          buf.write_char(']')
+          i = i + 1
+        }
+      } else {
+        while i < n && char_at(source, i) != ']' {
+          buf.write_char(char_at(source, i))
+          i = i + 1
+        }
+        if i < n {
+          buf.write_char(']')
+          i = i + 1
+        }
+      }
+      push_token(tokens, TokenKind::Keyword, buf)
+      continue
+    }
+    if is_ident_start(c) {
+      let buf = StringBuilder::new()
+      i = read_while(source, i, fn(ch) { is_ident_part(ch) || ch == '-' || ch == '_' }, buf)
+      let word = buf.to_string()
+      if is_member(word, keywords) {
+        tokens.push({ kind: TokenKind::Keyword, text: word })
+      } else {
+        tokens.push({ kind: TokenKind::Identifier, text: word })
+      }
+      continue
+    }
+    if c == '=' || c == '.' {
+      let buf = StringBuilder::new()
+      buf.write_char(c)
+      i = i + 1
+      push_token(tokens, TokenKind::Operator, buf)
+      continue
+    }
+    if c == '{' || c == '}' || c == ',' {
+      let buf = StringBuilder::new()
+      buf.write_char(c)
+      i = i + 1
+      push_token(tokens, TokenKind::Punct, buf)
+      continue
+    }
+    let buf = StringBuilder::new()
+    buf.write_char(c)
+    i = i + 1
+    push_token(tokens, TokenKind::Unknown, buf)
+  }
+  tokens
+}
+
+///|
+pub fn tokenize_yaml(source : String) -> Array[Token] {
+  let tokens : Array[Token] = []
+  let keywords = ["true", "false", "yes", "no", "on", "off", "null", "~"]
+  let n = source.length()
+  let mut i = 0
+  while i < n {
+    let c = char_at(source, i)
+    if is_whitespace(c) {
+      let buf = StringBuilder::new()
+      i = read_while(source, i, fn(ch) { is_whitespace(ch) }, buf)
+      push_token(tokens, TokenKind::Whitespace, buf)
+      continue
+    }
+    if c == '#' {
+      let buf = StringBuilder::new()
+      while i < n && char_at(source, i) != '\n' {
+        buf.write_char(char_at(source, i))
+        i = i + 1
+      }
+      push_token(tokens, TokenKind::Comment, buf)
+      continue
+    }
+    if starts_with_at(source, i, "---") {
+      let buf = StringBuilder::new()
+      buf.write_string("---")
+      i = i + 3
+      push_token(tokens, TokenKind::Keyword, buf)
+      continue
+    }
+    if starts_with_at(source, i, "...") {
+      let buf = StringBuilder::new()
+      buf.write_string("...")
+      i = i + 3
+      push_token(tokens, TokenKind::Keyword, buf)
+      continue
+    }
+    if c == '\'' || c == '"' {
+      let quote = c
+      let buf = StringBuilder::new()
+      buf.write_char(quote)
+      i = i + 1
+      while i < n {
+        let ch = char_at(source, i)
+        buf.write_char(ch)
+        i = i + 1
+        if ch == '\\' && i < n {
+          buf.write_char(char_at(source, i))
+          i = i + 1
+        } else if ch == quote {
+          break
+        }
+      }
+      push_token(tokens, TokenKind::StringLit, buf)
+      continue
+    }
+    if c == '-' && i + 1 < n && is_whitespace(char_at(source, i + 1)) {
+      let buf = StringBuilder::new()
+      buf.write_char('-')
+      i = i + 1
+      push_token(tokens, TokenKind::Punct, buf)
+      continue
+    }
+    if c == '|' || c == '>' {
+      let buf = StringBuilder::new()
+      buf.write_char(c)
+      i = i + 1
+      push_token(tokens, TokenKind::Punct, buf)
+      continue
+    }
+    if c == '&' || c == '*' {
+      let buf = StringBuilder::new()
+      buf.write_char(c)
+      i = i + 1
+      i = read_while(source, i, fn(ch) { is_ident_part(ch) }, buf)
+      push_token(tokens, TokenKind::Identifier, buf)
+      continue
+    }
+    if is_digit(c) ||
+      (c == '-' && i + 1 < n && is_digit(char_at(source, i + 1))) {
+      let buf = StringBuilder::new()
+      if c == '-' {
+        buf.write_char('-')
+        i = i + 1
+      }
+      i = read_while(source, i, fn(ch) { is_digit(ch) || ch == '_' }, buf)
+      if i < n && char_at(source, i) == '.' {
+        buf.write_char('.')
+        i = i + 1
+        i = read_while(source, i, fn(ch) { is_digit(ch) || ch == '_' }, buf)
+      }
+      if i < n && (char_at(source, i) == 'e' || char_at(source, i) == 'E') {
+        buf.write_char(char_at(source, i))
+        i = i + 1
+        if i < n && (char_at(source, i) == '+' || char_at(source, i) == '-') {
+          buf.write_char(char_at(source, i))
+          i = i + 1
+        }
+        i = read_while(source, i, fn(ch) { is_digit(ch) || ch == '_' }, buf)
+      }
+      push_token(tokens, TokenKind::Number, buf)
+      continue
+    }
+    if is_ident_start(c) {
+      let buf = StringBuilder::new()
+      i = read_while(source, i, fn(ch) { is_ident_part(ch) || ch == '-' || ch == '_' }, buf)
+      let word = buf.to_string()
+      if is_member(word, keywords) {
+        tokens.push({ kind: TokenKind::Keyword, text: word })
+      } else {
+        tokens.push({ kind: TokenKind::Identifier, text: word })
+      }
+      continue
+    }
+    if c == ':' {
+      let buf = StringBuilder::new()
+      buf.write_char(':')
+      i = i + 1
+      push_token(tokens, TokenKind::Punct, buf)
+      continue
+    }
+    let buf = StringBuilder::new()
+    buf.write_char(c)
+    i = i + 1
+    push_token(tokens, TokenKind::Unknown, buf)
+  }
+  tokens
+}
+
+///|
 pub fn tokenize_plain(source : String) -> Array[Token] {
   let tokens : Array[Token] = []
   let mut i = 0
@@ -1503,6 +1767,9 @@ pub fn highlight(lang : String, source : String) -> Array[Token] {
     "json" => tokenize_json(source)
     "rust" => tokenize_rust(source)
     "sql" => tokenize_sql(source)
+    "toml" => tokenize_toml(source)
+    "yaml" => tokenize_yaml(source)
+    "yml" => tokenize_yaml(source)
     _ => tokenize_plain(source)
   }
 }
@@ -1522,6 +1789,9 @@ pub fn language_supported(lang : String) -> Bool {
     "json" => true
     "rust" => true
     "sql" => true
+    "toml" => true
+    "yaml" => true
+    "yml" => true
     _ => false
   }
 }
