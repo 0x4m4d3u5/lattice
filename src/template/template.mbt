@@ -42,6 +42,7 @@ pub(all) enum TemplatePart {
   DataSlot(String, Array[String]) // file name, key path
   Include(String) // filename to include, resolved at load time
   Layout(String) // layout filename, resolved at load time
+  ConditionalBlock(TemplateSlot, Array[TemplatePart]) // {{?slot}} body {{/?slot}}
 }
 
 ///|
@@ -259,21 +260,54 @@ fn parse_data_slot_name(
 ///|
 /// Parse an HTML template with `{{slot_name}}` placeholders.
 pub fn parse_template(input : String) -> Result[Template, TemplateError] {
-  let parts : Array[TemplatePart] = []
-  let required_slots : Array[TemplateSlot] = []
+  // Use recursive helper to parse with conditional block support
+  match parse_template_recursive(input, 0, input.length()) {
+    Ok((parts, end)) => {
+      // Verify we consumed all input
+      if end != input.length() {
+        return Err(ParseError("unexpected content at end of template"))
+      }
+      
+      // Collect required slots from non-conditional parts only
+      let required_slots : Array[TemplateSlot] = []
+      let mut i = 0
+      while i < parts.length() {
+        match parts[i] {
+          Slot(slot) =>
+            if not(required_slots.contains(slot)) {
+              required_slots.push(slot)
+            }
+          _ => () // ConditionalBlock slots are NOT required
+        }
+        i = i + 1
+      }
+      
+      Ok({ parts, required_slots, layout: None })
+    }
+    Err(e) => Err(e)
+  }
+}
 
-  let n = input.length()
-  let mut i = 0
-  let mut text_start = 0
-  while i < n {
+///|
+/// Recursive helper to parse template with conditional block support.
+/// Returns (parts, end_position) where end_position is the index after parsing.
+fn parse_template_recursive(
+  input : String,
+  start : Int,
+  end : Int,
+) -> Result[(Array[TemplatePart], Int), TemplateError] {
+  let parts : Array[TemplatePart] = []
+  let mut i = start
+  let mut text_start = start
+  while i < end {
     let c = char_at_template(input, i)
-    if c == '{' && i + 1 < n && char_at_template(input, i + 1) == '{' {
+    if c == '{' && i + 1 < end && char_at_template(input, i + 1) == '{' {
       if i > text_start {
         parts.push(Text(substr_template(input, text_start, i)))
       }
       let mut j = i + 2
       let mut close = -1
-      while j + 1 < n {
+      while j + 1 < end {
         if char_at_template(input, j) == '}' &&
           char_at_template(input, j + 1) == '}' {
           close = j
@@ -289,6 +323,64 @@ pub fn parse_template(input : String) -> Result[Template, TemplateError] {
       if slot_name.length() == 0 {
         return Err(ParseError("empty template slot"))
       }
+      
+      // Check if this is a conditional block opening {{?slot}}
+      if char_at_template(slot_name, 0) == '?' {
+        // Parse conditional block
+        let cond_slot_name = trim_template(substr_template(slot_name, 1, slot_name.length()))
+        let cond_slot = match slot_from_name(cond_slot_name) {
+          Ok(s) => s
+          Err(e) => return Err(e)
+        }
+        
+        // Parse body until closing tag {{/?slot_name}}
+        let body_start = close + 2
+        let closing_prefix = "{{/?" + cond_slot_name + "}}"
+        let closing_len = closing_prefix.length()
+        
+        // Find closing tag
+        let mut body_end = -1
+        let mut k = body_start
+        while k <= end - closing_len {
+          let mut found = true
+          let mut l = 0
+          while l < closing_len {
+            if char_at_template(input, k + l) != char_at_template(closing_prefix, l) {
+              found = false
+              break
+            }
+            l = l + 1
+          }
+          if found {
+            body_end = k
+            break
+          }
+          k = k + 1
+        }
+        
+        if body_end < 0 {
+          return Err(ParseError("missing closing tag for conditional block: {{/?" + cond_slot_name + "}}"))
+        }
+        
+        // Parse body parts recursively (to handle nested conditionals)
+        match parse_template_recursive(input, body_start, body_end) {
+          Ok((body_parts, _)) => {
+            parts.push(ConditionalBlock(cond_slot, body_parts))
+          }
+          Err(e) => return Err(e)
+        }
+        
+        i = body_end + closing_len
+        text_start = i
+        continue
+      }
+      
+      // Check if this is a closing tag (shouldn't appear here)
+      if char_at_template(slot_name, 0) == '/' && char_at_template(slot_name, 1) == '?' {
+        return Err(ParseError("unexpected closing tag"))
+      }
+      
+      // Normal slot, include, layout, or data slot
       if starts_with_template(slot_name, "include:") {
         let filename = trim_template(
           substr_template(slot_name, 8, slot_name.length()),
@@ -323,23 +415,20 @@ pub fn parse_template(input : String) -> Result[Template, TemplateError] {
           }
         }
         parts.push(Slot(slot))
-        if not(required_slots.contains(slot)) {
-          required_slots.push(slot)
-        }
       }
       i = close + 2
       text_start = i
       continue
     }
-    if c == '}' && i + 1 < n && char_at_template(input, i + 1) == '}' {
+    if c == '}' && i + 1 < end && char_at_template(input, i + 1) == '}' {
       return Err(ParseError("unexpected '}}'"))
     }
     i = i + 1
   }
-  if text_start < n {
-    parts.push(Text(substr_template(input, text_start, n)))
+  if text_start < end {
+    parts.push(Text(substr_template(input, text_start, end)))
   }
-  Ok({ parts, required_slots, layout: None })
+  Ok((parts, i))
 }
 
 ///|
@@ -399,6 +488,41 @@ fn render_parts(
             return Err(MissingDataSlot(path.to_string()))
           }
         }
+      ConditionalBlock(slot, body_parts) => {
+        // Render body only if slot is non-empty
+        match slots.get(slot) {
+          Some(value) => {
+            if value.length() > 0 {
+              // Render body parts
+              let mut j = 0
+              while j < body_parts.length() {
+                match body_parts[j] {
+                  Text(t) => out.write_string(t)
+                  Slot(s) =>
+                    match slots.get(s) {
+                      Some(v) => out.write_string(v)
+                      None => () // Missing slot renders as empty in conditional
+                    }
+                  DataSlot(file, key_path) =>
+                    match data_store {
+                      Some(store) =>
+                        match @data.resolve_string(store, file, key_path) {
+                          Ok(v) => out.write_string(v)
+                          Err(_) => () // Missing data slot renders as empty in conditional
+                        }
+                      None => () // Missing data store renders as empty in conditional
+                    }
+                  _ =>
+                    // Include and Layout should not appear in conditional bodies
+                    return Err(ParseError("include/layout not allowed in conditional"))
+                }
+                j = j + 1
+              }
+            }
+          }
+          None => () // Slot not in map, treat as empty
+        }
+      }
       Include(_) =>
         return Err(ParseError("include directive not resolved at render time"))
       Layout(_) =>
@@ -502,6 +626,13 @@ pub fn parse_template_with_includes(
         Slot(slot) => result.push(Slot(slot))
         DataSlot(file, keys) => result.push(DataSlot(file, keys))
         Layout(path) => result.push(Layout(path))
+        ConditionalBlock(slot, body_parts) => {
+          // Recursively flatten body parts
+          match flatten_includes(body_parts, resolver, visited) {
+            Ok(flattened_body) => result.push(ConditionalBlock(slot, flattened_body))
+            Err(e) => return Err(e)
+          }
+        }
         Include(filename) => {
           // Check for cycles
           if visited.contains(filename) {
@@ -604,7 +735,7 @@ pub fn parse_template_with_includes(
         if not(required_slots.contains(slot)) {
           required_slots.push(slot)
         }
-      _ => ()
+      _ => () // ConditionalBlock slots are NOT required
     }
     i = i + 1
   }
