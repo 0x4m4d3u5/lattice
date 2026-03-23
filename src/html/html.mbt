@@ -62,7 +62,7 @@ fn char_at_html(s : String, i : Int) -> Char {
 
 ///|
 /// Escape text for HTML body context (&, <, >).
-fn escape_html_body(s : String) -> String {
+pub fn escape_html_body(s : String) -> String {
   let buf = StringBuilder::new()
   let n = s.length()
   let mut i = 0
