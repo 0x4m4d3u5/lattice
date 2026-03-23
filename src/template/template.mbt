@@ -697,7 +697,7 @@ fn render_parts(
         }
       FrontmatterSlot(field) =>
         match page_fields.get(field) {
-          Some(value) => out.write_string(value)
+          Some(value) => out.write_string(@html.escape_html_body(value))
           None => () // Missing frontmatter field renders as empty string
         }
       ConditionalBlock(slot, body_parts) =>
@@ -726,7 +726,7 @@ fn render_parts(
                     }
                   FrontmatterSlot(field) =>
                     match page_fields.get(field) {
-                      Some(v) => out.write_string(v)
+                      Some(v) => out.write_string(@html.escape_html_body(v))
                       None => () // Missing frontmatter field renders as empty in conditional
                     }
                   FrontmatterConditionalBlock(field, inner_parts) =>
@@ -758,7 +758,7 @@ fn render_parts(
                                 }
                               FrontmatterSlot(f) =>
                                 match page_fields.get(f) {
-                                  Some(v) => out.write_string(v)
+                                  Some(v) => out.write_string(@html.escape_html_body(v))
                                   None => ()
                                 }
                               _ =>
@@ -811,7 +811,7 @@ fn render_parts(
                     }
                   FrontmatterSlot(f) =>
                     match page_fields.get(f) {
-                      Some(v) => out.write_string(v)
+                      Some(v) => out.write_string(@html.escape_html_body(v))
                       None => () // Missing frontmatter field renders as empty in conditional
                     }
                   ConditionalBlock(slot, inner_parts) =>
@@ -843,7 +843,7 @@ fn render_parts(
                                 }
                               FrontmatterSlot(f) =>
                                 match page_fields.get(f) {
-                                  Some(v) => out.write_string(v)
+                                  Some(v) => out.write_string(@html.escape_html_body(v))
                                   None => ()
                                 }
                               _ =>
@@ -903,7 +903,7 @@ fn render_parts(
                             }
                           FrontmatterSlot(f) =>
                             match page_fields.get(f) {
-                              Some(v) => out.write_string(v)
+                              Some(v) => out.write_string(@html.escape_html_body(v))
                               None => ()
                             }
                           LoopItemSlot(field_path) =>
