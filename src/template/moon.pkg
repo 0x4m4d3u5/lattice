@@ -1,3 +1,4 @@
 import {
   "kurisu/lattice/src/data" @data,
+  "kurisu/lattice/src/frontmatter",
 }

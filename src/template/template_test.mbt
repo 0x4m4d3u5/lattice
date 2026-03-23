@@ -1142,3 +1142,305 @@ test "render {{page.field}} in conditional body with data store" {
     Err(_) => assert_true(false)
   }
 }
+
+
+///|
+test "parse {{#each data.nav.items}}...{{/each}} loop" {
+  let tpl = match
+    parse_template("{{#each data.nav.items}}{{item}}{{/each}}") {
+    Ok(v) => v
+    Err(_) => {
+      assert_true(false)
+      { parts: [], required_slots: [], layout: None }
+    }
+  }
+  
+  // Should have one part: DataEachBlock
+  assert_eq(tpl.parts.length(), 1)
+  match tpl.parts[0] {
+    DataEachBlock(file, key_path, body_parts) => {
+      assert_eq(file, "nav")
+      assert_eq(key_path.length(), 1)
+      assert_eq(key_path[0], "items")
+      // Body should have one part: LoopItemSlot([])
+      assert_eq(body_parts.length(), 1)
+      match body_parts[0] {
+        LoopItemSlot(path) => assert_eq(path.length(), 0)
+        _ => assert_true(false)
+      }
+    }
+    _ => assert_true(false)
+  }
+}
+
+///|
+test "parse {{#each data.nav.links}}...{{/each}} with field access" {
+  let tpl = match
+    parse_template("{{#each data.nav.links}}<a href=\"{{item.url}}\">{{item.title}}</a>{{/each}}") {
+    Ok(v) => v
+    Err(_) => {
+      assert_true(false)
+      { parts: [], required_slots: [], layout: None }
+    }
+  }
+  
+  match tpl.parts[0] {
+    DataEachBlock(file, key_path, body_parts) => {
+      assert_eq(file, "nav")
+      assert_eq(key_path[0], "links")
+      // Body should have 5 parts: Text, LoopItemSlot, Text, LoopItemSlot, Text
+      assert_eq(body_parts.length(), 5)
+      match body_parts[1] {
+        LoopItemSlot(path) => {
+          assert_eq(path.length(), 1)
+          assert_eq(path[0], "url")
+        }
+        _ => assert_true(false)
+      }
+      match body_parts[3] {
+        LoopItemSlot(path) => {
+          assert_eq(path.length(), 1)
+          assert_eq(path[0], "title")
+        }
+        _ => assert_true(false)
+      }
+    }
+    _ => assert_true(false)
+  }
+}
+
+///|
+test "parse {{item.title}} creates LoopItemSlot with path" {
+  let tpl = match parse_template("{{item.title}}") {
+    Ok(v) => v
+    Err(_) => {
+      assert_true(false)
+      { parts: [], required_slots: [], layout: None }
+    }
+  }
+  
+  match tpl.parts[0] {
+    LoopItemSlot(path) => {
+      assert_eq(path.length(), 1)
+      assert_eq(path[0], "title")
+    }
+    _ => assert_true(false)
+  }
+}
+
+///|
+test "parse {{item.a.b}} creates LoopItemSlot with nested path" {
+  let tpl = match parse_template("{{item.a.b}}") {
+    Ok(v) => v
+    Err(_) => {
+      assert_true(false)
+      { parts: [], required_slots: [], layout: None }
+    }
+  }
+  
+  match tpl.parts[0] {
+    LoopItemSlot(path) => {
+      assert_eq(path.length(), 2)
+      assert_eq(path[0], "a")
+      assert_eq(path[1], "b")
+    }
+    _ => assert_true(false)
+  }
+}
+
+///|
+test "parse unclosed {{#each}} returns ParseError" {
+  match parse_template("{{#each data.nav.items}}{{item}}") {
+    Ok(_) => assert_true(false)
+    Err(ParseError(msg)) => assert_true(msg.contains("missing closing tag"))
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "render loop over string array" {
+  // Create a data file with an actual array
+  let fields : Map[String, @frontmatter.FrontmatterValue] = Map::new()
+  fields.set(
+    "items",
+    @frontmatter.FArray([
+      @frontmatter.FStr("home"),
+      @frontmatter.FStr("blog"),
+      @frontmatter.FStr("about"),
+    ]),
+  )
+  let array_file = @data.new_file("nav", fields)
+  let array_store = @data.new_store([array_file])
+  
+  let tpl = match
+    parse_template("{{#each data.nav.items}}<li>{{item}}</li>{{/each}}") {
+    Ok(v) => v
+    Err(_) => {
+      assert_true(false)
+      { parts: [], required_slots: [], layout: None }
+    }
+  }
+  
+  let slots : Map[TemplateSlot, String] = Map::new()
+  match render_template_with_data(tpl, slots, array_store, Map::new()) {
+    Ok(html) => {
+      assert_true(html.contains("<li>home</li>"))
+      assert_true(html.contains("<li>blog</li>"))
+      assert_true(html.contains("<li>about</li>"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "render loop over map array with field access" {
+  // Create a data file with an array of maps
+  let link1 : Map[String, @frontmatter.FrontmatterValue] = Map::new()
+  link1.set("title", @frontmatter.FStr("Home"))
+  link1.set("url", @frontmatter.FStr("/"))
+  
+  let link2 : Map[String, @frontmatter.FrontmatterValue] = Map::new()
+  link2.set("title", @frontmatter.FStr("Blog"))
+  link2.set("url", @frontmatter.FStr("/blog"))
+  
+  let fields : Map[String, @frontmatter.FrontmatterValue] = Map::new()
+  fields.set(
+    "links",
+    @frontmatter.FArray([@frontmatter.FMap(link1), @frontmatter.FMap(link2)]),
+  )
+  
+  let file = @data.new_file("nav", fields)
+  let store = @data.new_store([file])
+  
+  let tpl = match
+    parse_template("{{#each data.nav.links}}<a href=\"{{item.url}}\">{{item.title}}</a>{{/each}}") {
+    Ok(v) => v
+    Err(_) => {
+      assert_true(false)
+      { parts: [], required_slots: [], layout: None }
+    }
+  }
+  
+  let slots : Map[TemplateSlot, String] = Map::new()
+  match render_template_with_data(tpl, slots, store, Map::new()) {
+    Ok(html) => {
+      assert_true(html.contains("<a href=\"/\">Home</a>"))
+      assert_true(html.contains("<a href=\"/blog\">Blog</a>"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "render loop with non-array value renders nothing" {
+  let store = @data.new_store([
+    @data.new_string_file("nav", [("title", "Main")]),
+  ])
+  
+  let tpl = match
+    parse_template("{{#each data.nav.title}}{{item}}{{/each}}") {
+    Ok(v) => v
+    Err(_) => {
+      assert_true(false)
+      { parts: [], required_slots: [], layout: None }
+    }
+  }
+  
+  let slots : Map[TemplateSlot, String] = Map::new()
+  match render_template_with_data(tpl, slots, store, Map::new()) {
+    Ok(html) => assert_eq(html, "")
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "render loop with missing key renders nothing" {
+  let store = @data.new_store([
+    @data.new_string_file("nav", [("title", "Main")]),
+  ])
+  
+  let tpl = match
+    parse_template("{{#each data.nav.missing}}{{item}}{{/each}}") {
+    Ok(v) => v
+    Err(_) => {
+      assert_true(false)
+      { parts: [], required_slots: [], layout: None }
+    }
+  }
+  
+  let slots : Map[TemplateSlot, String] = Map::new()
+  match render_template_with_data(tpl, slots, store, Map::new()) {
+    Ok(html) => assert_eq(html, "")
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "render {{item.field}} with non-map item renders empty" {
+  let fields : Map[String, @frontmatter.FrontmatterValue] = Map::new()
+  fields.set(
+    "items",
+    @frontmatter.FArray([@frontmatter.FStr("string_value")]),
+  )
+  
+  let file = @data.new_file("nav", fields)
+  let store = @data.new_store([file])
+  
+  let tpl = match
+    parse_template("{{#each data.nav.items}}{{item.title}}{{/each}}") {
+    Ok(v) => v
+    Err(_) => {
+      assert_true(false)
+      { parts: [], required_slots: [], layout: None }
+    }
+  }
+  
+  let slots : Map[TemplateSlot, String] = Map::new()
+  match render_template_with_data(tpl, slots, store, Map::new()) {
+    Ok(html) => assert_eq(html, "")
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "render {{item}} outside loop renders empty" {
+  let store = @data.new_store([
+    @data.new_string_file("nav", [("title", "Main")]),
+  ])
+  
+  let tpl = match parse_template("Item: {{item}}") {
+    Ok(v) => v
+    Err(_) => {
+      assert_true(false)
+      { parts: [], required_slots: [], layout: None }
+    }
+  }
+  
+  let slots : Map[TemplateSlot, String] = Map::new()
+  match render_template_with_data(tpl, slots, store, Map::new()) {
+    Ok(html) => assert_eq(html, "Item: ")
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "parse {{#each}} with nested path" {
+  let tpl = match
+    parse_template("{{#each data.site.nav.links}}{{item}}{{/each}}") {
+    Ok(v) => v
+    Err(_) => {
+      assert_true(false)
+      { parts: [], required_slots: [], layout: None }
+    }
+  }
+  
+  match tpl.parts[0] {
+    DataEachBlock(file, key_path, _) => {
+      assert_eq(file, "site")
+      assert_eq(key_path.length(), 2)
+      assert_eq(key_path[0], "nav")
+      assert_eq(key_path[1], "links")
+    }
+    _ => assert_true(false)
+  }
+}

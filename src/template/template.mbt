@@ -45,6 +45,8 @@ pub(all) enum TemplatePart {
   Layout(String) // layout filename, resolved at load time
   ConditionalBlock(TemplateSlot, Array[TemplatePart]) // {{?slot}} body {{/?slot}}
   FrontmatterConditionalBlock(String, Array[TemplatePart]) // {{?page.field}} body {{/?page.field}} — conditional on frontmatter field presence and non-empty value
+  DataEachBlock(String, Array[String], Array[TemplatePart]) // {{#each data.file.key.path}} body {{/each}} — loop over data array
+  LoopItemSlot(Array[String]) // {{item}} or {{item.field}} inside {{#each}} block
 }
 
 ///|
@@ -274,13 +276,13 @@ pub fn parse_template(input : String) -> Result[Template, TemplateError] {
       let required_slots : Array[TemplateSlot] = []
       let mut i = 0
       while i < parts.length() {
-        match parts[i] {
-          Slot(slot) =>
-            if not(required_slots.contains(slot)) {
-              required_slots.push(slot)
-            }
-          _ => () // ConditionalBlock slots are NOT required
-        }
+      match parts[i] {
+        Slot(slot) =>
+          if not(required_slots.contains(slot)) {
+            required_slots.push(slot)
+          }
+        _ => () // ConditionalBlock, DataEachBlock, LoopItemSlot are NOT required
+      }
         i = i + 1
       }
 
@@ -326,6 +328,90 @@ fn parse_template_recursive(
         return Err(ParseError("empty template slot"))
       }
 
+      // Check if this is a loop block opening {{#each data.file.key.path}}
+      if starts_with_template(slot_name, "#each data.") {
+        // Parse each loop block
+        let each_name = trim_template(
+          substr_template(slot_name, 11, slot_name.length()),
+        ) // Remove "#each data." prefix (11 characters: #each data.)
+        
+        // Parse file name and key path from remaining name
+        let each_parts = split_dot_template(each_name)
+        if each_parts.length() < 1 {
+          return Err(ParseError("invalid each block '" + slot_name + "'"))
+        }
+        
+        let file = each_parts[0]
+        let key_path : Array[String] = []
+        let mut k = 1
+        while k < each_parts.length() {
+          key_path.push(each_parts[k])
+          k = k + 1
+        }
+        
+        if file.length() == 0 {
+          return Err(ParseError("invalid each block '" + slot_name + "'"))
+        }
+        
+        // Parse body until closing tag {{/each}}
+        let body_start = close + 2
+        let closing_prefix = "{{/each}}"
+        let closing_len = closing_prefix.length()
+        
+        // Find closing tag
+        let mut body_end = -1
+        let mut k = body_start
+        while k <= end - closing_len {
+          let mut found = true
+          let mut l = 0
+          while l < closing_len {
+            if char_at_template(input, k + l) != char_at_template(closing_prefix, l) {
+              found = false
+              break
+            }
+            l = l + 1
+          }
+          if found {
+            body_end = k
+            break
+          }
+          k = k + 1
+        }
+        
+        if body_end < 0 {
+          return Err(
+            ParseError("missing closing tag for each block: {{/each}}"),
+          )
+        }
+        
+        // Parse body parts recursively (to handle nested loops)
+        match parse_template_recursive(input, body_start, body_end) {
+          Ok((body_parts, _)) =>
+            parts.push(DataEachBlock(file, key_path, body_parts))
+          Err(e) => return Err(e)
+        }
+        
+        i = body_end + closing_len
+        text_start = i
+        continue
+      }
+      
+      // Check if this is a loop item slot {{item}} or {{item.field}}
+      if slot_name == "item" || starts_with_template(slot_name, "item.") {
+        if starts_with_template(slot_name, "item.") {
+          let field = trim_template(
+            substr_template(slot_name, 5, slot_name.length()),
+          )
+          let item_fields = split_dot_template(field)
+          parts.push(LoopItemSlot(item_fields))
+        } else {
+          parts.push(LoopItemSlot([]))
+        }
+        i = close + 2
+        text_start = i
+        continue
+      }
+      
       // Check if this is a conditional block opening {{?slot}}
       if char_at_template(slot_name, 0) == '?' {
         // Parse conditional block
@@ -508,6 +594,47 @@ fn parse_template_recursive(
     parts.push(Text(substr_template(input, text_start, end)))
   }
   Ok((parts, i))
+}
+
+///|
+/// Resolve a field path from a loop item value.
+/// Returns Some(string) if path can be resolved, None otherwise.
+fn resolve_loop_item_field(
+  item : @frontmatter.FrontmatterValue,
+  field_path : Array[String],
+) -> String? {
+  if field_path.length() == 0 {
+    // {{item}} without field path - convert entire item to string
+    return Some(@data.value_to_string(item))
+  }
+  
+  // Navigate through nested maps
+  let mut current : @frontmatter.FrontmatterValue? = Some(item)
+  let mut idx = 0
+  while idx < field_path.length() {
+    match current {
+      None => return None
+      Some(v) =>
+        match v {
+          @frontmatter.FMap(map) =>
+            match map.get(field_path[idx]) {
+              Some(next_v) => {
+                if idx + 1 == field_path.length() {
+                  // Final field reached - convert to string
+                  return Some(@data.value_to_string(next_v))
+                } else {
+                  current = Some(next_v)
+                }
+              }
+              None => return None
+            }
+          _ => return None // Not a map, can't navigate further
+        }
+    }
+    idx = idx + 1
+  }
+  
+  None
 }
 
 ///|
@@ -743,6 +870,66 @@ fn render_parts(
             }
           None => () // Frontmatter field not in map, treat as empty
         }
+      DataEachBlock(file, key_path, body_parts) =>
+        // Render each block - loop over array items
+        match data_store {
+          Some(store) =>
+            match @data.resolve(store, file, key_path) {
+              Ok(v) =>
+                match v {
+                  @frontmatter.FArray(items) => {
+                    // For each item in the array, render body with loop item context
+                    let mut item_idx = 0
+                    while item_idx < items.length() {
+                      let item_value = items[item_idx]
+                      // Render body parts with loop item context
+                      let mut j = 0
+                      while j < body_parts.length() {
+                        match body_parts[j] {
+                          Text(t) => out.write_string(t)
+                          Slot(s) =>
+                            match slots.get(s) {
+                              Some(v) => out.write_string(v)
+                              None => ()
+                            }
+                          DataSlot(df, dk) =>
+                            match data_store {
+                              Some(store) =>
+                                match @data.resolve_string(store, df, dk) {
+                                  Ok(v) => out.write_string(v)
+                                  Err(_) => ()
+                                }
+                              None => ()
+                            }
+                          FrontmatterSlot(f) =>
+                            match page_fields.get(f) {
+                              Some(v) => out.write_string(v)
+                              None => ()
+                            }
+                          LoopItemSlot(field_path) =>
+                            // Resolve field path from current loop item
+                            match resolve_loop_item_field(item_value, field_path) {
+                              Some(v) => out.write_string(v)
+                              None => ()
+                            }
+                          _ =>
+                            // DataEachBlock and other blocks shouldn't appear in loop bodies
+                            return Err(ParseError("nested loops not supported"))
+                        }
+                        j = j + 1
+                      }
+                      item_idx = item_idx + 1
+                    }
+                  }
+                  _ => () // Not an array, render nothing
+                }
+              Err(_) => () // Resolution error, render nothing
+            }
+          None => () // No data store, render nothing
+        }
+      LoopItemSlot(_) =>
+        // LoopItemSlot outside DataEachBlock is treated as empty
+        ()
       Include(_) =>
         return Err(ParseError("include directive not resolved at render time"))
       Layout(_) =>
@@ -868,6 +1055,14 @@ pub fn parse_template_with_includes(
               result.push(FrontmatterConditionalBlock(field, flattened_body))
             Err(e) => return Err(e)
           }
+        DataEachBlock(file, key_path, body_parts) =>
+          // Recursively flatten body parts
+          match flatten_includes(body_parts, resolver, visited) {
+            Ok(flattened_body) =>
+              result.push(DataEachBlock(file, key_path, flattened_body))
+            Err(e) => return Err(e)
+          }
+        LoopItemSlot(field_path) => result.push(LoopItemSlot(field_path))
         Include(filename) => {
           // Check for cycles
           if visited.contains(filename) {

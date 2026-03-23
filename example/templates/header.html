@@ -2,5 +2,11 @@
   <p>lattice example</p>
   <h1><a href="/">{{site_name}}</a></h1>
   <p>Reference implementation for the SCC demo.</p>
-  <nav>{{nav_links}}</nav>
+  <nav>
+    <ul>
+      {{#each data.nav.links}}
+      <li><a href="/{{item}}/">{{item}}</a></li>
+      {{/each}}
+    </ul>
+  </nav>
 </header>
