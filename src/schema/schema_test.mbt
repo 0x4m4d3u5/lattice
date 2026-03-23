@@ -1,4 +1,3 @@
-///|
 fn sample_schema() -> Schema {
   {
     name: "posts",
@@ -13,7 +12,6 @@ fn sample_schema() -> Schema {
   }
 }
 
-///|
 fn parse_frontmatter_or_fail(src : String) -> @frontmatter.Frontmatter {
   match @frontmatter.parse(src) {
     Ok(fm) => fm
@@ -21,7 +19,6 @@ fn parse_frontmatter_or_fail(src : String) -> @frontmatter.Frontmatter {
   }
 }
 
-///|
 test "schema accepts matching field types and optional absence" {
   let fm = parse_frontmatter_or_fail(
     "+++\n" +
@@ -37,7 +34,6 @@ test "schema accepts matching field types and optional absence" {
   assert_eq(errors.length(), 0)
 }
 
-///|
 test "schema reports required field missing" {
   let fm = parse_frontmatter_or_fail(
     "+++\n" + "published = true\n" + "tags = [\"moonbit\"]\n" + "+++\n",
@@ -50,7 +46,6 @@ test "schema reports required field missing" {
   assert_eq(errors[1].message, "required field missing")
 }
 
-///|
 test "schema reports field type mismatches for scalars and arrays" {
   let fm = parse_frontmatter_or_fail(
     "+++\n" +
@@ -70,7 +65,6 @@ test "schema reports field type mismatches for scalars and arrays" {
   assert_true(errors[2].message.contains("expected Array[String]"))
 }
 
-///|
 test "schema optional field still validates inner type when present" {
   let fm = parse_frontmatter_or_fail(
     "+++\n" +
@@ -87,7 +81,6 @@ test "schema optional field still validates inner type when present" {
   assert_true(errors[0].message.contains("expected String"))
 }
 
-///|
 test "schema accepts valid date field" {
   let schema : Schema = {
     name: "posts",
@@ -100,7 +93,6 @@ test "schema accepts valid date field" {
   assert_eq(errors.length(), 0)
 }
 
-///|
 test "schema rejects invalid date string format with typed error" {
   let schema : Schema = {
     name: "posts",
@@ -115,7 +107,6 @@ test "schema rejects invalid date string format with typed error" {
   assert_true(errors[0].message.contains("expected Date"))
 }
 
-///|
 test "schema optional date field handles absence valid value and non-date error" {
   let schema : Schema = {
     name: "posts",
@@ -141,4 +132,35 @@ test "schema optional date field handles absence valid value and non-date error"
   assert_eq(invalid_errors.length(), 1)
   assert_eq(invalid_errors[0].field, "published_at")
   assert_true(invalid_errors[0].message.contains("expected Date"))
+}
+
+test "schema rejects unrecognized field not in schema" {
+  let fm = parse_frontmatter_or_fail(
+    "+++\n" +
+    "title = \"Intro\"\n" +
+    "date = 2026-03-11\n" +
+    "published = true\n" +
+    "tags = [\"moonbit\", \"ssg\"]\n" +
+    "typo_field = \"should error\"\n" +
+    "+++\n",
+  )
+  let errors = validate(fm, sample_schema())
+  assert_eq(errors.length(), 1)
+  assert_eq(errors[0].field, "typo_field")
+  assert_true(errors[0].message.contains("unrecognized"))
+}
+
+test "schema accepts all fields when every key matches schema" {
+  let fm = parse_frontmatter_or_fail(
+    "+++\n" +
+    "title = \"Complete Post\"\n" +
+    "date = 2026-03-11\n" +
+    "published = true\n" +
+    "order = 42\n" +
+    "tags = [\"moonbit\", \"ssg\"]\n" +
+    "summary = \"A complete frontmatter\"\n" +
+    "+++\n",
+  )
+  let errors = validate(fm, sample_schema())
+  assert_eq(errors.length(), 0)
 }

@@ -140,5 +140,22 @@ pub fn validate(
     }
     i = i + 1
   }
+  // Phase 2: detect unrecognized fields
+  let valid_fields = Map::new()
+  let mut j = 0
+  while j < schema.fields.length() {
+    valid_fields.set(schema.fields[j].name, true)
+    j = j + 1
+  }
+  for key, _ in fm.fields {
+    match valid_fields.get(key) {
+      None =>
+        errors.push({
+          field: key,
+          message: "unrecognized field not declared in schema",
+        })
+      _ => () // field is valid
+    }
+  }
   errors
 }
