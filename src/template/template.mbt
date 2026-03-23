@@ -46,6 +46,7 @@ pub(all) enum TemplatePart {
   ConditionalBlock(TemplateSlot, Array[TemplatePart]) // {{?slot}} body {{/?slot}}
   FrontmatterConditionalBlock(String, Array[TemplatePart]) // {{?page.field}} body {{/?page.field}} — conditional on frontmatter field presence and non-empty value
   DataEachBlock(String, Array[String], Array[TemplatePart]) // {{#each data.file.key.path}} body {{/each}} — loop over data array
+  FrontmatterEachBlock(String, Array[TemplatePart]) // {{#each page.field}} body {{/each}} — loop over frontmatter array field
   LoopItemSlot(Array[String]) // {{item}} or {{item.field}} inside {{#each}} block
 }
 
@@ -396,6 +397,60 @@ fn parse_template_recursive(
         continue
       }
       
+      // Check if this is a frontmatter array loop {{#each page.field}}
+      if starts_with_template(slot_name, "#each page.") {
+        // Parse frontmatter each block
+        let field = trim_template(
+          substr_template(slot_name, 11, slot_name.length()),
+        ) // Remove "#each page." prefix (11 characters: #each page.)
+        
+        if field.length() == 0 {
+          return Err(ParseError("invalid each block '" + slot_name + "'"))
+        }
+        
+        // Parse body until closing tag {{/each}}
+        let body_start = close + 2
+        let closing_prefix = "{{/each}}"
+        let closing_len = closing_prefix.length()
+        
+        // Find closing tag
+        let mut body_end = -1
+        let mut k = body_start
+        while k <= end - closing_len {
+          let mut found = true
+          let mut l = 0
+          while l < closing_len {
+            if char_at_template(input, k + l) != char_at_template(closing_prefix, l) {
+              found = false
+              break
+            }
+            l = l + 1
+          }
+          if found {
+            body_end = k
+            break
+          }
+          k = k + 1
+        }
+        
+        if body_end < 0 {
+          return Err(
+            ParseError("missing closing tag for each block: {{/each}}"),
+          )
+        }
+        
+        // Parse body parts recursively (to handle nested loops)
+        match parse_template_recursive(input, body_start, body_end) {
+          Ok((body_parts, _)) =>
+            parts.push(FrontmatterEachBlock(field, body_parts))
+          Err(e) => return Err(e)
+        }
+        
+        i = body_end + closing_len
+        text_start = i
+        continue
+      }
+      
       // Check if this is a loop item slot {{item}} or {{item.field}}
       if slot_name == "item" || starts_with_template(slot_name, "item.") {
         if starts_with_template(slot_name, "item.") {
@@ -643,6 +698,7 @@ fn render_parts(
   slots : Map[TemplateSlot, String],
   data_store : @data.DataStore?,
   page_fields : Map[String, String],
+  page_field_arrays : Map[String, Array[String]],
 ) -> Result[String, TemplateError] {
   let mut i = 0
   while i < template.required_slots.length() {
@@ -927,8 +983,57 @@ fn render_parts(
             }
           None => () // No data store, render nothing
         }
+      FrontmatterEachBlock(field, body_parts) =>
+        // Render each block - loop over frontmatter array field
+        match page_field_arrays.get(field) {
+          Some(items) => {
+            // For each item in the array, render body with loop item context
+            let mut item_idx = 0
+            while item_idx < items.length() {
+              let item_value = items[item_idx]
+              // Render body parts with loop item context
+              let mut j = 0
+              while j < body_parts.length() {
+                match body_parts[j] {
+                  Text(t) => out.write_string(t)
+                  Slot(s) =>
+                    match slots.get(s) {
+                      Some(v) => out.write_string(v)
+                      None => ()
+                    }
+                  DataSlot(df, dk) =>
+                    match data_store {
+                      Some(store) =>
+                        match @data.resolve_string(store, df, dk) {
+                          Ok(v) => out.write_string(v)
+                          Err(_) => ()
+                        }
+                      None => ()
+                    }
+                  FrontmatterSlot(f) =>
+                    match page_fields.get(f) {
+                      Some(v) => out.write_string(@html.escape_html_body(v))
+                      None => ()
+                    }
+                  LoopItemSlot(field_path) =>
+                    // {{item}} renders the current string item
+                    // {{item.field}} renders empty (no subfield support for string arrays)
+                    if field_path.length() == 0 {
+                      out.write_string(item_value)
+                    }
+                  _ =>
+                    // Other blocks shouldn't appear in loop bodies
+                    return Err(ParseError("nested loops not supported"))
+                }
+                j = j + 1
+              }
+              item_idx = item_idx + 1
+            }
+          }
+          None => () // Field not found, render nothing (graceful degradation)
+        }
       LoopItemSlot(_) =>
-        // LoopItemSlot outside DataEachBlock is treated as empty
+        // LoopItemSlot outside loops is treated as empty
         ()
       Include(_) =>
         return Err(ParseError("include directive not resolved at render time"))
@@ -950,12 +1055,13 @@ pub fn render_template(
   slots : Map[TemplateSlot, String],
   page_fields : Map[String, String],
 ) -> Result[String, TemplateError] {
+  let page_field_arrays = Map::new()
   // If template has a layout, render child first, then render layout with body
   match template.layout {
     Some(layout) => {
       // Render the child template
       let child_output = match
-        render_parts(template, slots, None, page_fields) {
+        render_parts(template, slots, None, page_fields, page_field_arrays) {
         Ok(output) => output
         Err(e) => return Err(e)
       }
@@ -968,9 +1074,9 @@ pub fn render_template(
       layout_slots.set(Body, child_output)
 
       // Render layout with all slots including body
-      render_parts(layout, layout_slots, None, page_fields)
+      render_parts(layout, layout_slots, None, page_fields, page_field_arrays)
     }
-    None => render_parts(template, slots, None, page_fields)
+    None => render_parts(template, slots, None, page_fields, page_field_arrays)
   }
 }
 
@@ -981,13 +1087,14 @@ pub fn render_template_with_data(
   slots : Map[TemplateSlot, String],
   data_store : @data.DataStore,
   page_fields : Map[String, String],
+  page_field_arrays : Map[String, Array[String]],
 ) -> Result[String, TemplateError] {
   // If template has a layout, render child first, then render layout with body
   match template.layout {
     Some(layout) => {
       // Render the child template
       let child_output = match
-        render_parts(template, slots, Some(data_store), page_fields) {
+        render_parts(template, slots, Some(data_store), page_fields, page_field_arrays) {
         Ok(output) => output
         Err(e) => return Err(e)
       }
@@ -1000,9 +1107,9 @@ pub fn render_template_with_data(
       layout_slots.set(Body, child_output)
 
       // Render layout with all slots including body
-      render_parts(layout, layout_slots, Some(data_store), page_fields)
+      render_parts(layout, layout_slots, Some(data_store), page_fields, page_field_arrays)
     }
-    None => render_parts(template, slots, Some(data_store), page_fields)
+    None => render_parts(template, slots, Some(data_store), page_fields, page_field_arrays)
   }
 }
 
@@ -1060,6 +1167,13 @@ pub fn parse_template_with_includes(
           match flatten_includes(body_parts, resolver, visited) {
             Ok(flattened_body) =>
               result.push(DataEachBlock(file, key_path, flattened_body))
+            Err(e) => return Err(e)
+          }
+        FrontmatterEachBlock(field, body_parts) =>
+          // Recursively flatten body parts
+          match flatten_includes(body_parts, resolver, visited) {
+            Ok(flattened_body) =>
+              result.push(FrontmatterEachBlock(field, flattened_body))
             Err(e) => return Err(e)
           }
         LoopItemSlot(field_path) => result.push(LoopItemSlot(field_path))

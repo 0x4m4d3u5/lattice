@@ -12,7 +12,7 @@ test "template render with data" {
     }
   }
   let slots : Map[TemplateSlot, String] = Map::new()
-  match render_template_with_data(tpl, slots, store, Map::new()) {
+  match render_template_with_data(tpl, slots, store, Map::new(), Map::new()) {
     Ok(html) => assert_true(html.contains("<h1>Demo</h1>"))
     Err(_) => assert_true(false)
   }
@@ -83,7 +83,7 @@ test "template multiple data slots" {
     }
   }
   let slots : Map[TemplateSlot, String] = Map::new()
-  match render_template_with_data(tpl, slots, store, Map::new()) {
+  match render_template_with_data(tpl, slots, store, Map::new(), Map::new()) {
     Ok(html) => {
       assert_true(html.contains("<h1>My Blog</h1>"))
       assert_true(html.contains("<p>John Doe</p>"))
@@ -107,7 +107,7 @@ test "template nested data path" {
     }
   }
   let slots : Map[TemplateSlot, String] = Map::new()
-  match render_template_with_data(tpl, slots, store, Map::new()) {
+  match render_template_with_data(tpl, slots, store, Map::new(), Map::new()) {
     Ok(html) => assert_eq(html, "Theme: dark")
     Err(_) => assert_true(false)
   }
@@ -131,7 +131,7 @@ test "template mixed data and standard slots" {
   }
   let slots : Map[TemplateSlot, String] = Map::new()
   slots.set(Title, "My Site")
-  match render_template_with_data(tpl, slots, store, Map::new()) {
+  match render_template_with_data(tpl, slots, store, Map::new(), Map::new()) {
     Ok(html) => {
       assert_true(html.contains("<title>My Site - Build fast</title>"))
       assert_true(html.contains("<h1>My Site</h1>"))
@@ -873,7 +873,7 @@ test "template conditional with data slot inside body" {
 
   let slots : Map[TemplateSlot, String] = Map::new()
   slots.set(Title, "My Site")
-  match render_template_with_data(tpl, slots, store, Map::new()) {
+  match render_template_with_data(tpl, slots, store, Map::new(), Map::new()) {
     Ok(html) => {
       assert_true(html.contains("<h1>My Site</h1>"))
       assert_true(html.contains("<p>Build fast</p>"))
@@ -1137,7 +1137,7 @@ test "render {{page.field}} in conditional body with data store" {
   slots.set(Title, "My Post")
   let page_fields : Map[String, String] = Map::new()
   page_fields.set("series", "MoonBit Series")
-  match render_template_with_data(tpl, slots, store, page_fields) {
+  match render_template_with_data(tpl, slots, store, page_fields, Map::new()) {
     Ok(html) => assert_eq(html, "Series: MoonBit Series")
     Err(_) => assert_true(false)
   }
@@ -1282,7 +1282,7 @@ test "render loop over string array" {
   }
   
   let slots : Map[TemplateSlot, String] = Map::new()
-  match render_template_with_data(tpl, slots, array_store, Map::new()) {
+  match render_template_with_data(tpl, slots, array_store, Map::new(), Map::new()) {
     Ok(html) => {
       assert_true(html.contains("<li>home</li>"))
       assert_true(html.contains("<li>blog</li>"))
@@ -1322,7 +1322,7 @@ test "render loop over map array with field access" {
   }
   
   let slots : Map[TemplateSlot, String] = Map::new()
-  match render_template_with_data(tpl, slots, store, Map::new()) {
+  match render_template_with_data(tpl, slots, store, Map::new(), Map::new()) {
     Ok(html) => {
       assert_true(html.contains("<a href=\"/\">Home</a>"))
       assert_true(html.contains("<a href=\"/blog\">Blog</a>"))
@@ -1347,7 +1347,7 @@ test "render loop with non-array value renders nothing" {
   }
   
   let slots : Map[TemplateSlot, String] = Map::new()
-  match render_template_with_data(tpl, slots, store, Map::new()) {
+  match render_template_with_data(tpl, slots, store, Map::new(), Map::new()) {
     Ok(html) => assert_eq(html, "")
     Err(_) => assert_true(false)
   }
@@ -1369,7 +1369,7 @@ test "render loop with missing key renders nothing" {
   }
   
   let slots : Map[TemplateSlot, String] = Map::new()
-  match render_template_with_data(tpl, slots, store, Map::new()) {
+  match render_template_with_data(tpl, slots, store, Map::new(), Map::new()) {
     Ok(html) => assert_eq(html, "")
     Err(_) => assert_true(false)
   }
@@ -1396,7 +1396,7 @@ test "render {{item.field}} with non-map item renders empty" {
   }
   
   let slots : Map[TemplateSlot, String] = Map::new()
-  match render_template_with_data(tpl, slots, store, Map::new()) {
+  match render_template_with_data(tpl, slots, store, Map::new(), Map::new()) {
     Ok(html) => assert_eq(html, "")
     Err(_) => assert_true(false)
   }
@@ -1417,7 +1417,7 @@ test "render {{item}} outside loop renders empty" {
   }
   
   let slots : Map[TemplateSlot, String] = Map::new()
-  match render_template_with_data(tpl, slots, store, Map::new()) {
+  match render_template_with_data(tpl, slots, store, Map::new(), Map::new()) {
     Ok(html) => assert_eq(html, "Item: ")
     Err(_) => assert_true(false)
   }
@@ -1442,5 +1442,155 @@ test "parse {{#each}} with nested path" {
       assert_eq(key_path[1], "links")
     }
     _ => assert_true(false)
+  }
+}
+
+///|
+test "parse {{#each page.keywords}}...{{/each}} loop" {
+  let tpl = match
+    parse_template("{{#each page.keywords}}{{item}}{{/each}}") {
+    Ok(v) => v
+    Err(_) => {
+      assert_true(false)
+      { parts: [], required_slots: [], layout: None }
+    }
+  }
+  
+  // Should have one part: FrontmatterEachBlock
+  assert_eq(tpl.parts.length(), 1)
+  match tpl.parts[0] {
+    FrontmatterEachBlock(field, body_parts) => {
+      assert_eq(field, "keywords")
+      // Body should have one part: LoopItemSlot([])
+      assert_eq(body_parts.length(), 1)
+      match body_parts[0] {
+        LoopItemSlot(path) => assert_eq(path.length(), 0)
+        _ => assert_true(false)
+      }
+    }
+    _ => assert_true(false)
+  }
+}
+
+///|
+test "parse {{#each page.tags}}...{{/each}} with text" {
+  let tpl = match
+    parse_template("Tags: {{#each page.tags}}{{item}}, {{/each}}") {
+    Ok(v) => v
+    Err(_) => {
+      assert_true(false)
+      { parts: [], required_slots: [], layout: None }
+    }
+  }
+  
+  match tpl.parts[1] {
+    FrontmatterEachBlock(field, body_parts) => {
+      assert_eq(field, "tags")
+      // Body should have 2 parts: LoopItemSlot, Text
+      assert_eq(body_parts.length(), 2)
+      match body_parts[0] {
+        LoopItemSlot(path) => assert_eq(path.length(), 0)
+        _ => assert_true(false)
+      }
+    }
+    _ => assert_true(false)
+  }
+}
+
+///|
+test "parse {{#each page.}} empty field returns ParseError" {
+  match parse_template("{{#each page.}}{{item}}{{/each}}") {
+    Ok(_) => assert_true(false)
+    Err(ParseError(msg)) => assert_true(msg.contains("invalid each block"))
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "render {{#each page.keywords}} with array present" {
+  let tpl = match parse_template("{{#each page.keywords}}{{item}} {{/each}}") {
+    Ok(v) => v
+    Err(_) => {
+      assert_true(false)
+      { parts: [], required_slots: [], layout: None }
+    }
+  }
+  
+  let slots = Map::new()
+  let page_fields = Map::new()
+  let page_field_arrays = Map::new()
+  page_field_arrays.set("keywords", ["moonbit", "ssg", "template"])
+  let data_store = @data.empty_store()
+  
+  match render_template_with_data(tpl, slots, data_store, page_fields, page_field_arrays) {
+    Ok(output) => assert_eq(output, "moonbit ssg template ")
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "render {{#each page.tags}} with missing field renders empty" {
+  let tpl = match parse_template("{{#each page.tags}}{{item}}{{/each}}") {
+    Ok(v) => v
+    Err(_) => {
+      assert_true(false)
+      { parts: [], required_slots: [], layout: None }
+    }
+  }
+  
+  let slots = Map::new()
+  let page_fields = Map::new()
+  let page_field_arrays = Map::new()
+  // tags not present in page_field_arrays
+  let data_store = @data.empty_store()
+  
+  match render_template_with_data(tpl, slots, data_store, page_fields, page_field_arrays) {
+    Ok(output) => assert_eq(output, "")
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "render {{#each page.contributors}} with empty array renders empty" {
+  let tpl = match parse_template("{{#each page.contributors}}{{item}}{{/each}}") {
+    Ok(v) => v
+    Err(_) => {
+      assert_true(false)
+      { parts: [], required_slots: [], layout: None }
+    }
+  }
+  
+  let slots = Map::new()
+  let page_fields = Map::new()
+  let page_field_arrays = Map::new()
+  page_field_arrays.set("contributors", [])
+  let data_store = @data.empty_store()
+  
+  match render_template_with_data(tpl, slots, data_store, page_fields, page_field_arrays) {
+    Ok(output) => assert_eq(output, "")
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "render {{#each page.keywords}} with {{item.field}} renders empty for string arrays" {
+  let tpl = match parse_template("{{#each page.keywords}}{{item.name}} {{/each}}") {
+    Ok(v) => v
+    Err(_) => {
+      assert_true(false)
+      { parts: [], required_slots: [], layout: None }
+    }
+  }
+  
+  let slots = Map::new()
+  let page_fields = Map::new()
+  let page_field_arrays = Map::new()
+  page_field_arrays.set("keywords", ["moonbit", "ssg"])
+  let data_store = @data.empty_store()
+  
+  // String arrays don't support subfield access, so {{item.name}} renders empty
+  match render_template_with_data(tpl, slots, data_store, page_fields, page_field_arrays) {
+    Ok(output) => assert_eq(output, "  ")
+    Err(_) => assert_true(false)
   }
 }

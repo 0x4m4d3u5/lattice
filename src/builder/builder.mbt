@@ -223,6 +223,47 @@ pub fn frontmatter_to_strings(
 }
 
 ///|
+/// Extract frontmatter array fields for template iteration.
+/// Returns a Map of field names to string arrays for use with {{#each page.field}}.
+/// Only FArray fields are extracted; FMap fields are skipped.
+pub fn frontmatter_to_arrays(
+  fm : @frontmatter.Frontmatter,
+) -> Map[String, Array[String]] {
+  let result : Map[String, Array[String]] = Map::new()
+  fn convert_array(val : @frontmatter.FrontmatterValue) -> Array[String] {
+    match val {
+      @frontmatter.FArray(items) => {
+        let strings : Array[String] = []
+        let mut i = 0
+        while i < items.length() {
+          strings.push(convert_scalar_to_string(items[i]))
+          i = i + 1
+        }
+        strings
+      }
+      _ => [] // Not an array, return empty
+    }
+  }
+  fn convert_scalar_to_string(val : @frontmatter.FrontmatterValue) -> String {
+    match val {
+      @frontmatter.FStr(s) => s
+      @frontmatter.FDate(d) => d
+      @frontmatter.FInt(n) => "\{n}"
+      @frontmatter.FBool(true) => "true"
+      @frontmatter.FBool(false) => "false"
+      _ => "" // FMap and FArray not supported as scalar
+    }
+  }
+  for key, value in fm.fields {
+    match value {
+      @frontmatter.FArray(_) => result.set(key, convert_array(value))
+      _ => () // Skip non-array fields
+    }
+  }
+  result
+}
+
+///|
 /// Extract YYYY-MM-DD prefix from date string for comparison.
 /// Pages without dates get empty string (sorts last/first depending on order).
 fn extract_iso_date_prefix(date : String?) -> String {
@@ -632,7 +673,7 @@ fn render_archive_page(
   match archive_template {
     Some(tpl) =>
       match
-        @template.render_template_with_data(tpl, slots, data_store, Map::new()) {
+        @template.render_template_with_data(tpl, slots, data_store, Map::new(), Map::new()) {
         Ok(html) => Ok(html)
         Err(e) => Err(template_error_text(e))
       }
@@ -644,6 +685,7 @@ fn render_archive_page(
               tpl,
               slots,
               data_store,
+              Map::new(),
               Map::new(),
             ) {
             Ok(html) => Ok(html)
@@ -2186,7 +2228,7 @@ fn render_tag_page_html(
         url,
       )
       match
-        @template.render_template_with_data(tpl, slots, data_store, Map::new()) {
+        @template.render_template_with_data(tpl, slots, data_store, Map::new(), Map::new()) {
         Ok(html) => Ok(html)
         Err(e) => Err("tag page template: " + template_error_text(e))
       }
@@ -2263,7 +2305,7 @@ fn render_tags_index_html(
         tags_index_page_url(pagination.page_number),
       )
       match
-        @template.render_template_with_data(tpl, slots, data_store, Map::new()) {
+        @template.render_template_with_data(tpl, slots, data_store, Map::new(), Map::new()) {
         Ok(html) => Ok(html)
         Err(e) => Err("tags index template: " + template_error_text(e))
       }
@@ -2367,7 +2409,7 @@ fn render_404_page(
       slots.set(@template.NextPostUrl, "")
       slots.set(@template.NextPostTitle, "")
       match
-        @template.render_template_with_data(tpl, slots, data_store, Map::new()) {
+        @template.render_template_with_data(tpl, slots, data_store, Map::new(), Map::new()) {
         Ok(html) => Ok(html)
         Err(e) => Err("404 page template: " + template_error_text(e))
       }
@@ -2531,7 +2573,7 @@ fn render_collection_index(
         page_url,
       )
       match
-        @template.render_template_with_data(tpl, slots, data_store, Map::new()) {
+        @template.render_template_with_data(tpl, slots, data_store, Map::new(), Map::new()) {
         Ok(html) => {
           let structured_data_markup = @html.render_structured_data_script(
             collection_breadcrumb_structured_data_builder(
@@ -3005,9 +3047,10 @@ fn process_document(
         slots.set(@template.NextPostUrl, next_post_url)
         slots.set(@template.NextPostTitle, next_post_title)
         let page_fields = frontmatter_to_strings(fm)
+        let page_field_arrays = frontmatter_to_arrays(fm)
         match
           @template.render_template_with_data(
-            tpl, slots, data_store, page_fields,
+            tpl, slots, data_store, page_fields, page_field_arrays,
           ) {
           Ok(html) =>
             Ok(
@@ -3509,8 +3552,9 @@ fn process_document_for_lint(
       slots.set(@template.NextPostUrl, next_post_url)
       slots.set(@template.NextPostTitle, next_post_title)
       let page_fields = frontmatter_to_strings(fm)
+      let page_field_arrays = frontmatter_to_arrays(fm)
       match
-        @template.render_template_with_data(tpl, slots, data_store, page_fields) {
+        @template.render_template_with_data(tpl, slots, data_store, page_fields, page_field_arrays) {
         Ok(html) => html
         Err(e) => {
           violations.push({
