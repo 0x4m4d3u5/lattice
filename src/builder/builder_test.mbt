@@ -2332,3 +2332,147 @@ test "redirect pages generated from redirect_from frontmatter" {
   assert_true(redirect2.contains("https://example.com/posts/new-post"))
   assert_true(redirect2.contains("<link rel=\"canonical\""))
 }
+
+///|
+test "check reports TemplateSlotError when template references undeclared schema field" {
+  // Validates the structural contract: {{page.field}} in a template must
+  // correspond to a field declared in the collection schema. A mismatch is
+  // caught at --check time rather than silently rendering empty at build time.
+  let root = "./_tmp_check_template_schema_mismatch"
+  let content_root = root + "/content"
+  let posts_root = content_root + "/posts"
+  let data_root = content_root + "/data"
+  let templates_root = root + "/templates"
+  let output_root = root + "/dist"
+  ensure_dir_test(root)
+  ensure_dir_test(content_root)
+  ensure_dir_test(posts_root)
+  ensure_dir_test(data_root)
+  ensure_dir_test(templates_root)
+  ensure_dir_test(output_root)
+
+  // Schema declares only title and date — not subtitle
+  assert_true(
+    write_file_test(
+      root + "/collections.cfg",
+      "[posts]\nschema = title:String,date:Date\ndir = " + posts_root + "\n",
+    ),
+  )
+  // Template references {{page.subtitle}} which is not in the schema
+  assert_true(
+    write_file_test(
+      templates_root + "/page.html",
+      "<html><body><h2>{{page.subtitle}}</h2>{{content}}</body></html>\n",
+    ),
+  )
+  assert_true(
+    write_file_test(
+      posts_root + "/hello.md",
+      "---\ntitle: Hello\ndate: 2026-03-24\n---\n\nBody.\n",
+    ),
+  )
+
+  let site_cfg = "title = CrossValidTest\nbase_url = /\ntemplates_dir = " +
+    templates_root +
+    "\ndata_dir = " +
+    data_root +
+    "\ncollections_file = " +
+    root +
+    "/collections.cfg\noutput_dir = " +
+    output_root +
+    "\n"
+  assert_true(write_file_test(root + "/site.cfg", site_cfg))
+
+  let site = match @config.parse(site_cfg) {
+    Ok(parsed) => parsed
+    Err(_) => {
+      assert_true(false)
+      abort("site config parse failed")
+    }
+  }
+  let result = @builder.check({
+    content_dir: content_root,
+    output_dir: output_root,
+    config_path: root + "/site.cfg",
+    site,
+    collections_path: Some(root + "/collections.cfg"),
+    force_rebuild: false,
+    include_drafts: false,
+  })
+  // Should report exactly one TemplateSlotError for {{page.subtitle}}
+  let slot_errors = result.violations.filter(fn(v) {
+    v.kind == @lint.TemplateSlotError && v.message.contains("subtitle")
+  })
+  assert_eq(slot_errors.length(), 1)
+}
+
+///|
+test "check reports no TemplateSlotError when template fields match schema" {
+  let root = "./_tmp_check_template_schema_match"
+  let content_root = root + "/content"
+  let posts_root = content_root + "/posts"
+  let data_root = content_root + "/data"
+  let templates_root = root + "/templates"
+  let output_root = root + "/dist"
+  ensure_dir_test(root)
+  ensure_dir_test(content_root)
+  ensure_dir_test(posts_root)
+  ensure_dir_test(data_root)
+  ensure_dir_test(templates_root)
+  ensure_dir_test(output_root)
+
+  // Schema declares title, date, and subtitle — matching template
+  assert_true(
+    write_file_test(
+      root + "/collections.cfg",
+      "[posts]\nschema = title:String,date:Date,subtitle:Optional[String]\ndir = " +
+      posts_root +
+      "\n",
+    ),
+  )
+  assert_true(
+    write_file_test(
+      templates_root + "/page.html",
+      "<html><body><h2>{{page.subtitle}}</h2>{{content}}</body></html>\n",
+    ),
+  )
+  assert_true(
+    write_file_test(
+      posts_root + "/hello.md",
+      "---\ntitle: Hello\ndate: 2026-03-24\n---\n\nBody.\n",
+    ),
+  )
+
+  let site_cfg = "title = CrossValidMatch\nbase_url = /\ntemplates_dir = " +
+    templates_root +
+    "\ndata_dir = " +
+    data_root +
+    "\ncollections_file = " +
+    root +
+    "/collections.cfg\noutput_dir = " +
+    output_root +
+    "\n"
+  assert_true(write_file_test(root + "/site.cfg", site_cfg))
+
+  let site = match @config.parse(site_cfg) {
+    Ok(parsed) => parsed
+    Err(_) => {
+      assert_true(false)
+      abort("site config parse failed")
+    }
+  }
+  let result = @builder.check({
+    content_dir: content_root,
+    output_dir: output_root,
+    config_path: root + "/site.cfg",
+    site,
+    collections_path: Some(root + "/collections.cfg"),
+    force_rebuild: false,
+    include_drafts: false,
+  })
+  // No TemplateSlotError for subtitle — it's declared in the schema
+  let slot_errors = result.violations.filter(fn(v) {
+    v.kind == @lint.TemplateSlotError && v.message.contains("subtitle")
+  })
+  assert_eq(slot_errors.length(), 0)
+}

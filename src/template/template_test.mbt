@@ -1581,16 +1581,105 @@ test "render {{#each page.keywords}} with {{item.field}} renders empty for strin
       { parts: [], required_slots: [], layout: None }
     }
   }
-  
+
   let slots = Map::new()
   let page_fields = Map::new()
   let page_field_arrays = Map::new()
   page_field_arrays.set("keywords", ["moonbit", "ssg"])
   let data_store = @data.empty_store()
-  
+
   // String arrays don't support subfield access, so {{item.name}} renders empty
   match render_template_with_data(tpl, slots, data_store, page_fields, page_field_arrays) {
     Ok(output) => assert_eq(output, "  ")
     Err(_) => assert_true(false)
   }
+}
+
+///|
+test "collect_frontmatter_refs returns empty for template with no page slots" {
+  let tpl = match parse_template("<html>{{title}}{{content}}</html>") {
+    Ok(v) => v
+    Err(_) => {
+      assert_true(false)
+      { parts: [], required_slots: [], layout: None }
+    }
+  }
+  let refs = collect_frontmatter_refs(tpl)
+  assert_eq(refs.length(), 0)
+}
+
+///|
+test "collect_frontmatter_refs collects {{page.field}} references" {
+  let tpl = match parse_template("{{page.subtitle}} {{page.author}}") {
+    Ok(v) => v
+    Err(_) => {
+      assert_true(false)
+      { parts: [], required_slots: [], layout: None }
+    }
+  }
+  let refs = collect_frontmatter_refs(tpl)
+  assert_eq(refs.length(), 2)
+  assert_true(refs.contains("subtitle"))
+  assert_true(refs.contains("author"))
+}
+
+///|
+test "collect_frontmatter_refs collects {{?page.field}} conditional refs" {
+  let tpl = match parse_template("{{?page.hero}}<img src=\"{{page.hero}}\">{{/?page.hero}}") {
+    Ok(v) => v
+    Err(_) => {
+      assert_true(false)
+      { parts: [], required_slots: [], layout: None }
+    }
+  }
+  let refs = collect_frontmatter_refs(tpl)
+  // "hero" appears in both the conditional guard and the body slot — deduplicated
+  assert_eq(refs.length(), 1)
+  assert_true(refs.contains("hero"))
+}
+
+///|
+test "collect_frontmatter_refs collects {{#each page.field}} loop refs" {
+  let tpl = match parse_template("{{#each page.keywords}}<li>{{item}}</li>{{/each}}") {
+    Ok(v) => v
+    Err(_) => {
+      assert_true(false)
+      { parts: [], required_slots: [], layout: None }
+    }
+  }
+  let refs = collect_frontmatter_refs(tpl)
+  assert_eq(refs.length(), 1)
+  assert_true(refs.contains("keywords"))
+}
+
+///|
+test "collect_frontmatter_refs deduplicates repeated field references" {
+  let tpl = match parse_template("{{page.hero}} and again {{page.hero}}") {
+    Ok(v) => v
+    Err(_) => {
+      assert_true(false)
+      { parts: [], required_slots: [], layout: None }
+    }
+  }
+  let refs = collect_frontmatter_refs(tpl)
+  assert_eq(refs.length(), 1)
+  assert_true(refs.contains("hero"))
+}
+
+///|
+test "collect_frontmatter_refs collects refs from mixed expression types" {
+  let tpl = match parse_template(
+    "{{page.title_override}}{{?page.hero}}img{{/?page.hero}}{{#each page.authors}}.{{/each}}",
+  ) {
+    Ok(v) => v
+    Err(_) => {
+      assert_true(false)
+      { parts: [], required_slots: [], layout: None }
+    }
+  }
+  let refs = collect_frontmatter_refs(tpl)
+  assert_eq(refs.length(), 3)
+  assert_true(refs.contains("title_override"))
+  assert_true(refs.contains("hero"))
+  assert_true(refs.contains("authors"))
 }

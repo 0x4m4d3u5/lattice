@@ -5286,6 +5286,49 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
       templates.page,
       violations,
     )
+    // Cross-validate template {{page.field}} references against the collection
+    // schema. A reference to a field not declared in the schema is a structural
+    // violation: it means the template and schema disagree about the content
+    // contract, and the field will silently render as empty at build time.
+    match page_template {
+      Some(tpl) => {
+        let tpl_path = match coll.definition.template {
+          Some(path) => path
+          None => templates_dir_for_build(config) + "/page.html"
+        }
+        let schema = coll.definition.schema
+        let valid_fields : Map[String, Bool] = Map::new()
+        let mut fi = 0
+        while fi < schema.fields.length() {
+          valid_fields.set(schema.fields[fi].name, true)
+          fi = fi + 1
+        }
+        let fm_refs = @template.collect_frontmatter_refs(tpl)
+        let mut ri = 0
+        while ri < fm_refs.length() {
+          let field = fm_refs[ri]
+          match valid_fields.get(field) {
+            None =>
+              violations.push({
+                path: tpl_path,
+                line: None,
+                column: None,
+                kind: @lint.TemplateSlotError,
+                message: "template references '{{page." +
+                field +
+                "}}' but field '" +
+                field +
+                "' is not declared in the '" +
+                coll.definition.name +
+                "' collection schema",
+              })
+            _ => ()
+          }
+          ri = ri + 1
+        }
+      }
+      None => ()
+    }
     let coll_pages : Array[@graph.GraphPage] = []
     // Build sorted pages for prev/next navigation
     let sorted_coll_pages = build_sorted_collection_pages(
