@@ -141,11 +141,21 @@ pub fn validate(
     i = i + 1
   }
   // Phase 2: detect unrecognized fields
+  // Reserved keys are consumed by the lattice builder itself and are never
+  // user-schema fields — flagging them as unrecognized would be a false positive.
+  let reserved = [
+    "toc", "toc_depth", "draft", "template", "redirect_from", "og_image",
+  ]
   let valid_fields = Map::new()
   let mut j = 0
   while j < schema.fields.length() {
     valid_fields.set(schema.fields[j].name, true)
     j = j + 1
+  }
+  let mut k = 0
+  while k < reserved.length() {
+    valid_fields.set(reserved[k], true)
+    k = k + 1
   }
   for key, _ in fm.fields {
     match valid_fields.get(key) {
