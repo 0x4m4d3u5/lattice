@@ -1302,3 +1302,58 @@ pub fn parse_template_with_includes(
 
   Ok({ parts: final_parts, required_slots, layout: resolved_layout })
 }
+
+///|
+/// Collect all frontmatter field names referenced in a template.
+/// Covers `{{page.field}}`, `{{?page.field}}`, and `{{#each page.field}}`
+/// expressions, recursively including nested block bodies.
+///
+/// Used by the lint pipeline to cross-validate template field references
+/// against the collection's schema — catching "template uses {{page.subtitle}}
+/// but schema has no subtitle field" at --check time.
+pub fn collect_frontmatter_refs(tpl : Template) -> Array[String] {
+  let refs : Array[String] = []
+  collect_refs_from_parts(tpl.parts, refs)
+  if tpl.layout is Some(layout_tpl) {
+    collect_refs_from_parts(layout_tpl.parts, refs)
+  }
+  refs
+}
+
+///|
+fn collect_refs_from_parts(
+  parts : Array[TemplatePart],
+  refs : Array[String],
+) -> Unit {
+  let mut i = 0
+  while i < parts.length() {
+    collect_refs_from_part(parts[i], refs)
+    i = i + 1
+  }
+}
+
+///|
+fn collect_refs_from_part(part : TemplatePart, refs : Array[String]) -> Unit {
+  match part {
+    FrontmatterSlot(field) =>
+      if not(refs.contains(field)) {
+        refs.push(field)
+      }
+    FrontmatterConditionalBlock(field, body) => {
+      if not(refs.contains(field)) {
+        refs.push(field)
+      }
+      collect_refs_from_parts(body, refs)
+    }
+    FrontmatterEachBlock(field, body) => {
+      if not(refs.contains(field)) {
+        refs.push(field)
+      }
+      collect_refs_from_parts(body, refs)
+    }
+    ConditionalBlock(_, body) => collect_refs_from_parts(body, refs)
+    DataEachBlock(_, _, body) => collect_refs_from_parts(body, refs)
+    Text(_) | Slot(_) | DataSlot(_, _) | Include(_) | Layout(_) |
+    LoopItemSlot(_) => ()
+  }
+}

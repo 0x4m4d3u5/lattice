@@ -11,7 +11,7 @@ pub(all) enum ViolationType {
   CollectionsError
   DuplicateSlug
   IOError
-}
+} derive(Eq)
 
 ///|
 pub(all) struct LintViolation {
