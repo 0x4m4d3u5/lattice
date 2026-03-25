@@ -18,6 +18,7 @@ pub(all) enum FieldType {
   TBool
   TArray(FieldType)
   TOptional(FieldType)
+  TEnum(Array[String])
 }
 
 ///|
@@ -53,6 +54,18 @@ fn field_type_name(ft : FieldType) -> String {
     TBool => "Bool"
     TArray(inner) => "Array[" + field_type_name(inner) + "]"
     TOptional(inner) => "Optional[" + field_type_name(inner) + "]"
+    TEnum(allowed) => {
+      let mut result = "Enum["
+      let mut i = 0
+      while i < allowed.length() {
+        if i > 0 {
+          result = result + ","
+        }
+        result = result + "\"" + allowed[i] + "\""
+        i = i + 1
+      }
+      result + "]"
+    }
   }
 }
 
@@ -98,6 +111,22 @@ fn type_matches(val : @frontmatter.FrontmatterValue, ft : FieldType) -> Bool {
         _ => false
       }
     TOptional(inner) => type_matches(val, inner)
+    TEnum(allowed) =>
+      match val {
+        @frontmatter.FStr(s) => {
+          let mut found = false
+          let mut i = 0
+          while i < allowed.length() {
+            if s == allowed[i] {
+              found = true
+              break
+            }
+            i = i + 1
+          }
+          found
+        }
+        _ => false
+      }
   }
 }
 
@@ -129,11 +158,18 @@ pub fn validate(
           t => t
         }
         if not(type_matches(val, expected)) {
+          // Specialized error message for enum mismatches
+          let error_msg = match (expected, val) {
+            (TEnum(_), @frontmatter.FStr(s)) =>
+              "expected one of " + field_type_name(expected) + ", got \"" + s + "\""
+            _ =>
+              "expected " +
+              field_type_name(expected) +
+              " but got incompatible value"
+          }
           errors.push({
             field: fdef.name,
-            message: "expected " +
-            field_type_name(expected) +
-            " but got incompatible value",
+            message: error_msg,
           })
         }
       }

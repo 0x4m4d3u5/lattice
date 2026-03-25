@@ -164,3 +164,114 @@ test "schema accepts all fields when every key matches schema" {
   let errors = validate(fm, sample_schema())
   assert_eq(errors.length(), 0)
 }
+
+
+test "TEnum accepts valid values" {
+  let schema : Schema = {
+    name: "posts",
+    fields: [{ name: "status", field_type: TEnum(["draft", "published", "archived"]), required: true }],
+  }
+  let fm_valid = parse_frontmatter_or_fail(
+    "+++\n" + "status = \"published\"\n" + "+++\n",
+  )
+  let errors = validate(fm_valid, schema)
+  assert_eq(errors.length(), 0)
+}
+
+test "TEnum rejects invalid values" {
+  let schema : Schema = {
+    name: "posts",
+    fields: [{ name: "status", field_type: TEnum(["draft", "published", "archived"]), required: true }],
+  }
+  let fm_invalid = parse_frontmatter_or_fail(
+    "+++\n" + "status = \"wip\"\n" + "+++\n",
+  )
+  let errors = validate(fm_invalid, schema)
+  assert_eq(errors.length(), 1)
+  assert_eq(errors[0].field, "status")
+  assert_eq(errors[0].message, "expected one of Enum[\"draft\",\"published\",\"archived\"], got \"wip\"")
+}
+
+test "TOptional(TEnum) accepts absent field" {
+  let schema : Schema = {
+    name: "posts",
+    fields: [{ name: "status", field_type: TOptional(TEnum(["draft", "published"])), required: false }],
+  }
+  let fm_absent = parse_frontmatter_or_fail("+++\n+++\n")
+  let errors = validate(fm_absent, schema)
+  assert_eq(errors.length(), 0)
+}
+
+test "TOptional(TEnum) accepts valid value" {
+  let schema : Schema = {
+    name: "posts",
+    fields: [{ name: "status", field_type: TOptional(TEnum(["draft", "published"])), required: false }],
+  }
+  let fm_valid = parse_frontmatter_or_fail(
+    "+++\n" + "status = \"draft\"\n" + "+++\n",
+  )
+  let errors = validate(fm_valid, schema)
+  assert_eq(errors.length(), 0)
+}
+
+test "TOptional(TEnum) rejects invalid value" {
+  let schema : Schema = {
+    name: "posts",
+    fields: [{ name: "status", field_type: TOptional(TEnum(["draft", "published"])), required: false }],
+  }
+  let fm_invalid = parse_frontmatter_or_fail(
+    "+++\n" + "status = \"archived\"\n" + "+++\n",
+  )
+  let errors = validate(fm_invalid, schema)
+  assert_eq(errors.length(), 1)
+  assert_eq(errors[0].field, "status")
+  assert_eq(errors[0].message, "expected one of Enum[\"draft\",\"published\"], got \"archived\"")
+}
+
+test "TEnum rejects non-string values" {
+  let schema : Schema = {
+    name: "posts",
+    fields: [{ name: "status", field_type: TEnum(["draft", "published"]), required: true }],
+  }
+  let fm_non_string = parse_frontmatter_or_fail(
+    "+++\n" + "status = 123\n" + "+++\n",
+  )
+  let errors = validate(fm_non_string, schema)
+  assert_eq(errors.length(), 1)
+  assert_eq(errors[0].field, "status")
+  assert_true(errors[0].message.contains("expected Enum"))
+}
+
+test "TEnum in full schema validation" {
+  let schema : Schema = {
+    name: "posts",
+    fields: [
+      { name: "title", field_type: TString, required: true },
+      { name: "status", field_type: TEnum(["draft", "published", "archived"]), required: true },
+      { name: "priority", field_type: TOptional(TEnum(["low", "medium", "high"])), required: false },
+    ],
+  }
+  let fm = parse_frontmatter_or_fail(
+    "+++\n" +
+    "title = \"Post Title\"\n" +
+    "status = \"published\"\n" +
+    "priority = \"high\"\n" +
+    "+++\n",
+  )
+  let errors = validate(fm, schema)
+  assert_eq(errors.length(), 0)
+}
+
+test "TEnum empty allowed set always fails" {
+  let schema : Schema = {
+    name: "posts",
+    fields: [{ name: "status", field_type: TEnum([]), required: true }],
+  }
+  let fm = parse_frontmatter_or_fail(
+    "+++\n" + "status = \"any\"\n" + "+++\n",
+  )
+  let errors = validate(fm, schema)
+  assert_eq(errors.length(), 1)
+  assert_eq(errors[0].field, "status")
+  assert_eq(errors[0].message, "expected one of Enum[], got \"any\"")
+}

@@ -224,6 +224,57 @@ fn parse_type_name(s : String, pos : Int) -> (String, Int) {
 }
 
 ///|
+fn parse_string_array_at(s : String, pos : Int) -> Result[(Array[String], Int), String] {
+  let start = skip_ws_type(s, pos)
+  if start >= s.length() || char_at_collections(s, start) != '[' {
+    return Err("expected '[' for enum values")
+  }
+  let values : Array[String] = []
+  let mut i = start + 1
+  while i < s.length() {
+    let p = skip_ws_type(s, i)
+    if p >= s.length() {
+      return Err("unexpected end of input in enum")
+    }
+    let c = char_at_collections(s, p)
+    if c == ']' {
+      return Ok((values, p + 1))
+    }
+    if c == '"' {
+      let mut j = p + 1
+      while j < s.length() {
+        let ch = char_at_collections(s, j)
+        if ch == '"' {
+          values.push(substr_collections(s, p + 1, j))
+          i = j + 1
+          break
+        }
+        if ch == '\\' && j + 1 < s.length() {
+          j = j + 2
+        } else {
+          j = j + 1
+        }
+      }
+      if j >= s.length() {
+        return Err("unterminated string in enum values")
+      }
+    } else {
+      return Err("expected quoted string in enum values")
+    }
+    let q = skip_ws_type(s, i)
+    if q < s.length() {
+      let comma = char_at_collections(s, q)
+      if comma == ',' {
+        i = q + 1
+      } else if comma != ']' {
+        return Err("expected ',' or ']' after enum value")
+      }
+    }
+  }
+  Err("expected ']' to close enum values")
+}
+
+///|
 fn parse_field_type_at(
   s : String,
   pos : Int,
@@ -262,6 +313,15 @@ fn parse_field_type_at(
           return Ok((@schema.TArray(inner), q + 1))
         }
         return Ok((@schema.TOptional(inner), q + 1))
+      }
+    }
+  }
+  if name == "Enum" {
+    let p = skip_ws_type(s, next)
+    match parse_string_array_at(s, p) {
+      Err(e) => return Err(e)
+      Ok((allowed, after_enum)) => {
+        return Ok((@schema.TEnum(allowed), after_enum))
       }
     }
   }
