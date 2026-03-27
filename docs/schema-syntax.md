@@ -24,6 +24,7 @@ The current implementation supports:
 - `Bool`
 - `Array[Type]`
 - `Optional[Type]`
+- `Enum["v1","v2","v3"]`
 
 Examples:
 
@@ -32,6 +33,7 @@ schema = title:String, count:Int, published:Bool
 schema = title:String, published_at:Date
 schema = tags:Array[String]
 schema = draft:Optional[Bool], published_at:Optional[Date], description:Optional[String]
+schema = status:Enum["draft","published","archived"]
 ```
 
 ## Required vs optional
@@ -56,6 +58,42 @@ That means:
 - `description` may be absent
 
 This is why schema validation is useful: your templates and downstream build stages can assume required fields are present because the build would have already failed otherwise.
+
+## Enum fields
+
+The `Enum["v1","v2","v3"]` type constrains a string field to a specific set of allowed values. Values in the schema are quoted strings, comma-separated.
+
+Example declaration:
+
+```cfg
+schema = status:Enum["draft","published","archived"]
+```
+
+Valid frontmatter:
+
+```md
+---
+title = My Post
+status = published
+---
+```
+
+Invalid frontmatter (build error):
+
+```md
+---
+title = My Post
+status = pubished  # typo: missing 'l'
+---
+```
+
+Why it fails:
+
+- `status` is declared as `Enum["draft","published","archived"]`
+- `"pubished"` is not in the allowed values list
+- the build emits a diagnostic with the field name, rejected value, and full list of allowed values
+
+This catches typos and domain violations at build time, not at template render time or in the final site output.
 
 ## Frontmatter syntax
 
