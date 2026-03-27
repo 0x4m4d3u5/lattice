@@ -86,6 +86,15 @@ Similarly, a wikilink to a page that exists but has been deleted and recreated a
 
 This isn't a limitation of the type system — it's a reminder that types are a tool, not a panacea. Lattice makes structural integrity a compile-time property. Semantic integrity (valid content, up-to-date backlinks, sensible publication dates) is still a human concern. The thesis holds: we've shifted the boundary between what the compiler catches and what humans catch, but we haven't eliminated the human side entirely.
 
+### Enum Type Constraints — Invalid Values as Build Errors
+
+The `TEnum(Array[String])` type closes a validation gap between structural and domain-level guarantees. Before this type was added (commit `a8b278b`), a `String` field like `status` could hold any value — `"draaft"` typoed, `"PUBLISHED"` instead of `"published"`, or any arbitrary string. The type system enforced *structure* (the field exists and is a string) but not *domain* (the value is one of a known set). A bug like `status = "pubished"` would flow silently through the build, potentially rendering wrong UI states or broken filters.
+
+The solution follows the same pattern as the date range validation fix. `TEnum(Array[String])` declares the allowed values in the schema, and `type_matches()` in `src/schema/schema.mbt` checks the actual `FStr` value against that list. If validation fails, `Schema.validate()` returns a `ValidationError` with the field name, the rejected value, and the complete allowed list. The build emits that diagnostic before any HTML is rendered — the renderer structurally cannot process invalid enum values.
+
+This is the structural story in action. The type system creates the pressure: enums are a natural constraint for categorical data like post status, content categories, or configuration flags. The `type_matches()` function enforces the invariant by pattern-matching on `TEnum(allowed)` and checking membership. The error message includes the full allowed list (`["draft","published","archived"]`), making failures actionable for the author.
+
+The contrast with dynamic SSGs is stark. Hugo or Astro would accept `"pubished"` as a valid string and pass it through to templates. The error might surface as an empty filter result, a broken state badge, or nothing at all — the author discovers it at runtime or in the deployed site. Here, the schema validator rejects it at the frontmatter parsing step, before the content enters the render pipeline. Domain-level integrity is enforced as a structural property.
 
 
 ### Template Expression DSL
