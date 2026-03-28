@@ -257,6 +257,101 @@ test "render_archive_page_content generates HTML list of page links" {
 }
 
 ///|
+test "render_archive_index generates HTML with year headings and month links" {
+  let groups : Array[@builder.ArchiveGroup] = [
+    {
+      year: "2024",
+      month: "03",
+      pages: [
+        {
+          slug: "post1",
+          title: "Post 1",
+          url: "/posts/post1",
+          description: None,
+          date: Some("2024-03-15"),
+          outgoing: [],
+        },
+        {
+          slug: "post2",
+          title: "Post 2",
+          url: "/posts/post2",
+          description: None,
+          date: Some("2024-03-20"),
+          outgoing: [],
+        },
+      ],
+    },
+    {
+      year: "2024",
+      month: "01",
+      pages: [
+        {
+          slug: "post3",
+          title: "Post 3",
+          url: "/posts/post3",
+          description: None,
+          date: Some("2024-01-10"),
+          outgoing: [],
+        },
+      ],
+    },
+    {
+      year: "2023",
+      month: "12",
+      pages: [
+        {
+          slug: "post4",
+          title: "Post 4",
+          url: "/posts/post4",
+          description: None,
+          date: Some("2023-12-05"),
+          outgoing: [],
+        },
+      ],
+    },
+  ]
+
+  let site = match @config.parse("title = Test\nbase_url = /\n") {
+    Ok(s) => s
+    Err(_) => {
+      assert_true(false)
+      abort("config parse failed")
+    }
+  }
+  let result = @builder.render_archive_index(
+    groups,
+    "posts",
+    site,
+    None, // no archive template
+    None, // no index template
+    "",
+    "",
+    @data.empty_store(),
+  )
+  match result {
+    Ok(html) => {
+      // Should have year headings
+      assert_true(html.contains("<h2>2024</h2>"))
+      assert_true(html.contains("<h2>2023</h2>"))
+      // Should have month links with proper URLs
+      assert_true(html.contains("href=\"/posts/2024/03/\""))
+      assert_true(html.contains("March 2024"))
+      assert_true(html.contains("href=\"/posts/2024/01/\""))
+      assert_true(html.contains("January 2024"))
+      assert_true(html.contains("href=\"/posts/2023/12/\""))
+      assert_true(html.contains("December 2023"))
+      // Should show post counts
+      assert_true(html.contains("(2 posts)"))
+      assert_true(html.contains("(1 post)"))
+    }
+    Err(msg) => {
+      assert_true(false)
+      abort("render_archive_index failed: " + msg)
+    }
+  }
+}
+
+///|
 test "build uses per-collection page template override" {
   let root = "./_tmp_builder_collection_template"
   let content_root = root + "/content"
