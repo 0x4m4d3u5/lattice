@@ -18,6 +18,11 @@ test "render_page without canonical_url or og_image" {
   assert_eq(html.contains("og:url"), false)
   assert_eq(html.contains("og:image"), false)
   assert_eq(html.contains("alternate.*atom"), false)
+  // Should NOT contain Twitter Card tags when canonical_url is None
+  assert_eq(html.contains("twitter:card"), false)
+  assert_eq(html.contains("twitter:title"), false)
+  assert_eq(html.contains("twitter:description"), false)
+  assert_eq(html.contains("twitter:image"), false)
   // Should contain basic meta tags
   assert_eq(
     html.contains("<meta name=\"description\" content=\"Test description\""),
@@ -70,6 +75,26 @@ test "render_page with canonical_url only" {
   assert_eq(html.contains("og:image"), false)
   // Should NOT contain feed discovery when feed_url is None
   assert_eq(html.contains("alternate.*atom"), false)
+  // Should contain Twitter Card tags when canonical_url is Some
+  // Uses "summary" card type when og_image is absent
+  assert_eq(
+    html.contains(
+      "<meta name=\"twitter:card\" content=\"summary\" />",
+    ),
+    true,
+  )
+  assert_eq(
+    html.contains("<meta name=\"twitter:title\" content=\"Test Page\" />"),
+    true,
+  )
+  assert_eq(
+    html.contains(
+      "<meta name=\"twitter:description\" content=\"Test description\" />",
+    ),
+    true,
+  )
+  // Should NOT contain twitter:image when og_image is None
+  assert_eq(html.contains("twitter:image"), false)
 }
 
 ///|
@@ -120,6 +145,20 @@ test "render_page with canonical_url and og_image" {
   )
   // Should NOT contain feed discovery when feed_url is None
   assert_eq(html.contains("alternate.*atom"), false)
+  // Should contain twitter:image when og_image is Some
+  assert_eq(
+    html.contains(
+      "<meta name=\"twitter:image\" content=\"https://example.com/images/og.png\" />",
+    ),
+    true,
+  )
+  // Uses "summary_large_image" card type when og_image is present
+  assert_eq(
+    html.contains(
+      "<meta name=\"twitter:card\" content=\"summary_large_image\" />",
+    ),
+    true,
+  )
 }
 
 ///|
@@ -150,6 +189,14 @@ test "render_page without description should skip og:description" {
   )
   // Should NOT contain feed discovery when feed_url is None
   assert_eq(html.contains("alternate.*atom"), false)
+  // Twitter Card: title present, description absent
+  assert_eq(
+    html.contains(
+      "<meta name=\"twitter:title\" content=\"Test &amp; Page\" />",
+    ),
+    true,
+  )
+  assert_eq(html.contains("twitter:description"), false)
 }
 
 ///|
@@ -177,6 +224,25 @@ test "render_page escapes special characters in canonical_url and og_image" {
   // Title and description should also be escaped
   assert_eq(html.contains("content=\"Test &amp; Page\""), true)
   assert_eq(html.contains("content=\"Test &quot;description&quot;\""), true)
+  // Twitter Card tags should also escape special characters
+  assert_eq(
+    html.contains(
+      "<meta name=\"twitter:title\" content=\"Test &amp; Page\" />",
+    ),
+    true,
+  )
+  assert_eq(
+    html.contains(
+      "<meta name=\"twitter:description\" content=\"Test &quot;description&quot;\" />",
+    ),
+    true,
+  )
+  assert_eq(
+    html.contains(
+      "<meta name=\"twitter:image\" content=\"https://example.com/img/og.png?v=1&amp;x=2\" />",
+    ),
+    true,
+  )
 }
 
 ///|

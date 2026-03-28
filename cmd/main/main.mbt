@@ -171,30 +171,28 @@ fn build_parser() -> @clap.Parser {
             defaults=["./content"],
             help="Content directory",
           ),
-          "output-dir": @clap.Arg::positional(
+          "output-dir": @clap.Arg::named(
+            short='o',
+            nargs=One,
             defaults=[""],
             help="Output directory (default: config.output_dir or ./dist)",
           ),
           "config": @clap.Arg::named(
             short='c',
             nargs=One,
-            global=true,
+            defaults=[""],
             help="Override site config file",
           ),
           "collections": @clap.Arg::named(
             nargs=One,
-            global=true,
+            defaults=[""],
             help="Override collections config file",
           ),
-          "drafts": @clap.Arg::flag(
-            help="Include draft posts in the build",
-          ),
+          "drafts": @clap.Arg::flag(help="Include draft posts in the build"),
           "force": @clap.Arg::flag(
             help="Ignore incremental cache and rebuild everything",
           ),
-          "watch": @clap.Arg::flag(
-            help="Rebuild on file changes with polling",
-          ),
+          "watch": @clap.Arg::flag(help="Rebuild on file changes with polling"),
           "watch-interval": @clap.Arg::named(
             short='i',
             nargs=One,
@@ -210,19 +208,21 @@ fn build_parser() -> @clap.Parser {
             defaults=["./content"],
             help="Content directory",
           ),
-          "output-dir": @clap.Arg::positional(
+          "output-dir": @clap.Arg::named(
+            short='o',
+            nargs=One,
             defaults=[""],
             help="Output directory (default: config.output_dir or ./dist)",
           ),
           "config": @clap.Arg::named(
             short='c',
             nargs=One,
-            global=true,
+            defaults=[""],
             help="Override site config file",
           ),
           "collections": @clap.Arg::named(
             nargs=One,
-            global=true,
+            defaults=[""],
             help="Override collections config file",
           ),
         },
@@ -234,19 +234,21 @@ fn build_parser() -> @clap.Parser {
             defaults=["./content"],
             help="Content directory",
           ),
-          "output-dir": @clap.Arg::positional(
+          "output-dir": @clap.Arg::named(
+            short='o',
+            nargs=One,
             defaults=[""],
             help="Output directory (default: config.output_dir or ./dist)",
           ),
           "config": @clap.Arg::named(
             short='c',
             nargs=One,
-            global=true,
+            defaults=[""],
             help="Override site config file",
           ),
           "collections": @clap.Arg::named(
             nargs=One,
-            global=true,
+            defaults=[""],
             help="Override collections config file",
           ),
           "port": @clap.Arg::named(
@@ -255,11 +257,18 @@ fn build_parser() -> @clap.Parser {
             defaults=["4321"],
             help="HTTP port for dev server (default: 4321)",
           ),
-          "drafts": @clap.Arg::flag(
-            help="Include draft posts in the build",
-          ),
+          "drafts": @clap.Arg::flag(help="Include draft posts in the build"),
         },
         help="Start dev server with live reload",
+      ),
+      "init": @clap.SubCommand::new(
+        args={
+          "name": @clap.Arg::positional(
+            defaults=["my-site"],
+            help="Site directory name (default: my-site)",
+          ),
+        },
+        help="Scaffold a new Lattice site",
       ),
     },
   )
@@ -281,14 +290,29 @@ fn cli_options_from_clap(
   sv : @clap.SimpleValue,
   subcmd_name : String,
 ) -> CliOptions {
-  let content_dir = safe_get_one(sv, "content-dir").unwrap_or("./content")
+  let content_dir = if sv.positional_args.length() > 0 {
+    sv.positional_args[0]
+  } else {
+    "./content"
+  }
   let output_dir_raw = safe_get_one(sv, "output-dir").unwrap_or("")
-  let output_dir : String? =
-    if output_dir_raw.length() == 0 { None } else {
-      Some(output_dir_raw)
-    }
-  let config_path : String? = safe_get_one(sv, "config")
-  let collections_path : String? = safe_get_one(sv, "collections")
+  let output_dir : String? = if output_dir_raw.length() == 0 {
+    None
+  } else {
+    Some(output_dir_raw)
+  }
+  let config_raw = safe_get_one(sv, "config").unwrap_or("")
+  let config_path : String? = if config_raw.length() == 0 {
+    None
+  } else {
+    Some(config_raw)
+  }
+  let collections_raw = safe_get_one(sv, "collections").unwrap_or("")
+  let collections_path : String? = if collections_raw.length() == 0 {
+    None
+  } else {
+    Some(collections_raw)
+  }
   let include_drafts = sv.get_flag("drafts").unwrap_or(false)
 
   match subcmd_name {
@@ -316,7 +340,7 @@ fn cli_options_from_clap(
         serve_port: @serve.default_port(),
       }
     }
-    "check" => {
+    "check" =>
       {
         content_dir,
         output_dir,
@@ -330,12 +354,13 @@ fn cli_options_from_clap(
         serve_mode: false,
         serve_port: @serve.default_port(),
       }
-    }
     "serve" => {
       let port_str = safe_get_one(sv, "port").unwrap_or("4321")
       let serve_port = match parse_positive_int(port_str) {
         Some(n) =>
-          if @serve.is_valid_port(n) { n } else {
+          if @serve.is_valid_port(n) {
+            n
+          } else {
             @serve.default_port()
           }
         None => @serve.default_port()
@@ -354,7 +379,7 @@ fn cli_options_from_clap(
         serve_port,
       }
     }
-    _ => {
+    _ =>
       {
         content_dir,
         output_dir,
@@ -368,7 +393,6 @@ fn cli_options_from_clap(
         serve_mode: false,
         serve_port: @serve.default_port(),
       }
-    }
   }
 }
 
@@ -718,7 +742,7 @@ fn run_main() -> Unit {
   )
 
   match parse_result {
-    Ok(help_message) => {
+    Ok(help_message) =>
       match help_message {
         Some(msg) => {
           println(msg)
@@ -726,7 +750,6 @@ fn run_main() -> Unit {
         }
         None => ()
       }
-    }
     Err(err) => {
       println(err.to_string())
       println("")
@@ -747,6 +770,25 @@ fn run_main() -> Unit {
   }
 
   let subcmd_sv = sv.subcmd.unwrap()
+
+  // Handle 'init' subcommand early — no config loading needed
+  if subcmd_name == "init" {
+    let name = if subcmd_sv.positional_args.length() > 0 {
+      subcmd_sv.positional_args[0]
+    } else {
+      "my-site"
+    }
+    match @scaffold.scaffold_site(name) {
+      Ok(_) => println("[lattice] created site in ./" + name)
+      Err(msg) => {
+        print_diagnostic_main(cli_error(msg))
+        @sys.exit(1)
+        return
+      }
+    }
+    return
+  }
+
   let options = cli_options_from_clap(subcmd_sv, subcmd_name)
 
   // Validate port for serve

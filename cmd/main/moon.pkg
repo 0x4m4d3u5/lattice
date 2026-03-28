@@ -5,6 +5,7 @@ import {
   "kurisu/lattice/src/config" @config,
   "kurisu/lattice/src/diagnostic" @diagnostic,
   "kurisu/lattice/src/lint" @lint,
+  "kurisu/lattice/src/scaffold" @scaffold,
   "kurisu/lattice/src/serve" @serve,
   "kurisu/lattice/src/watch" @watch,
   "moonbitlang/x/fs" @fs,

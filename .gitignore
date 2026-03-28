@@ -9,3 +9,5 @@ dist/
 _tmp_*/
 _vault_dist/
 content/data/
+.choir/
+.serena/
