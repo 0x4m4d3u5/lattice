@@ -31,106 +31,6 @@ pub(all) struct FeedChannel {
 }
 
 ///|
-fn char_at_rss(s : String, i : Int) -> Char {
-  s[i].to_int().unsafe_to_char()
-}
-
-///|
-fn escape_xml_text(s : String) -> String {
-  let buf = StringBuilder::new()
-  let n = s.length()
-  let mut i = 0
-  while i < n {
-    let c = char_at_rss(s, i)
-    if c == '&' {
-      buf.write_string("&amp;")
-    } else if c == '<' {
-      buf.write_string("&lt;")
-    } else if c == '>' {
-      buf.write_string("&gt;")
-    } else {
-      buf.write_char(c)
-    }
-    i = i + 1
-  }
-  buf.to_string()
-}
-
-///|
-fn escape_xml_attr(s : String) -> String {
-  let buf = StringBuilder::new()
-  let n = s.length()
-  let mut i = 0
-  while i < n {
-    let c = char_at_rss(s, i)
-    if c == '&' {
-      buf.write_string("&amp;")
-    } else if c == '<' {
-      buf.write_string("&lt;")
-    } else if c == '>' {
-      buf.write_string("&gt;")
-    } else if c == '"' {
-      buf.write_string("&quot;")
-    } else {
-      buf.write_char(c)
-    }
-    i = i + 1
-  }
-  buf.to_string()
-}
-
-///|
-fn starts_with_at(s : String, pos : Int, prefix : String) -> Bool {
-  let plen = prefix.length()
-  if pos + plen > s.length() {
-    return false
-  }
-  let mut j = 0
-  while j < plen {
-    if char_at_rss(s, pos + j) != char_at_rss(prefix, j) {
-      return false
-    }
-    j = j + 1
-  }
-  true
-}
-
-///|
-fn trim(s : String) -> String {
-  let n = s.length()
-  let mut lo = 0
-  while lo < n &&
-        (
-          char_at_rss(s, lo) == ' ' ||
-          char_at_rss(s, lo) == '\t' ||
-          char_at_rss(s, lo) == '\r'
-        ) {
-    lo = lo + 1
-  }
-  let mut hi = n
-  while hi > lo &&
-        (
-          char_at_rss(s, hi - 1) == ' ' ||
-          char_at_rss(s, hi - 1) == '\t' ||
-          char_at_rss(s, hi - 1) == '\r'
-        ) {
-    hi = hi - 1
-  }
-  let buf = StringBuilder::new()
-  let mut i = lo
-  while i < hi {
-    buf.write_char(char_at_rss(s, i))
-    i = i + 1
-  }
-  buf.to_string()
-}
-
-///|
-fn is_digit(c : Char) -> Bool {
-  c >= '0' && c <= '9'
-}
-
-///|
 fn parse_fixed_uint(s : String, start : Int, count : Int) -> Int? {
   if start + count > s.length() {
     return None
@@ -138,8 +38,8 @@ fn parse_fixed_uint(s : String, start : Int, count : Int) -> Int? {
   let mut i = 0
   let mut value = 0
   while i < count {
-    let c = char_at_rss(s, start + i)
-    if not(is_digit(c)) {
+    let c = @strutil.char_at(s, start + i)
+    if not(@strutil.is_digit(c)) {
       return None
     }
     value = value * 10 + (c.to_int() - '0'.to_int())
@@ -149,46 +49,12 @@ fn parse_fixed_uint(s : String, start : Int, count : Int) -> Int? {
 }
 
 ///|
-fn is_leap_year(year : Int) -> Bool {
-  if year % 400 == 0 {
-    true
-  } else if year % 100 == 0 {
-    false
-  } else {
-    year % 4 == 0
-  }
-}
-
-///|
-fn days_in_month(year : Int, month : Int) -> Int {
-  if month == 1 ||
-    month == 3 ||
-    month == 5 ||
-    month == 7 ||
-    month == 8 ||
-    month == 10 ||
-    month == 12 {
-    31
-  } else if month == 4 || month == 6 || month == 9 || month == 11 {
-    30
-  } else if month == 2 {
-    if is_leap_year(year) {
-      29
-    } else {
-      28
-    }
-  } else {
-    0
-  }
-}
-
-///|
 /// Parse either YYYY-MM-DD or RFC3339-like date; normalize to RFC3339 UTC.
 fn normalize_feed_datetime(raw : String?) -> String? {
   match raw {
     None => None
     Some(date_text) => {
-      let s = trim(date_text)
+      let s = @strutil.trim(date_text)
       if s.length() == 0 {
         return None
       }
@@ -196,7 +62,7 @@ fn normalize_feed_datetime(raw : String?) -> String? {
         let year = parse_fixed_uint(s, 0, 4)
         let month = parse_fixed_uint(s, 5, 2)
         let day = parse_fixed_uint(s, 8, 2)
-        if char_at_rss(s, 4) != '-' || char_at_rss(s, 7) != '-' {
+        if @strutil.char_at(s, 4) != '-' || @strutil.char_at(s, 7) != '-' {
           return None
         }
         match (year, month, day) {
@@ -204,7 +70,7 @@ fn normalize_feed_datetime(raw : String?) -> String? {
             if m < 1 || m > 12 {
               return None
             }
-            let max_day = days_in_month(y, m)
+            let max_day = @strutil.days_in_month(y, m)
             if d < 1 || d > max_day {
               return None
             }
@@ -212,7 +78,7 @@ fn normalize_feed_datetime(raw : String?) -> String? {
           }
           _ => None
         }
-      } else if starts_with_at(s, 0, "20") &&
+      } else if @strutil.starts_with_at(s, 0, "20") &&
         s.has_suffix("Z") &&
         s.length() >= 20 {
         Some(s)
@@ -220,42 +86,6 @@ fn normalize_feed_datetime(raw : String?) -> String? {
         None
       }
     }
-  }
-}
-
-///|
-fn normalize_base_url(base_url : String) -> String {
-  let trimmed = trim(base_url)
-  if trimmed == "/" {
-    return ""
-  }
-  if trimmed.has_suffix("/") {
-    let buf = StringBuilder::new()
-    let mut i = 0
-    let end_pos = trimmed.length() - 1
-    while i < end_pos {
-      buf.write_char(char_at_rss(trimmed, i))
-      i = i + 1
-    }
-    return buf.to_string()
-  }
-  trimmed
-}
-
-///|
-fn absolute_url(base_url : String, path : String) -> String {
-  let base = normalize_base_url(base_url)
-  if base.length() == 0 {
-    return path
-  }
-  if path.length() == 0 {
-    return base
-  }
-  let path_starts_slash = char_at_rss(path, 0) == '/'
-  if path_starts_slash {
-    base + path
-  } else {
-    base + "/" + path
   }
 }
 
@@ -296,23 +126,13 @@ fn sort_pages_for_feed(
     sorted.push(pages[i])
     i = i + 1
   }
-  i = 1
-  while i < sorted.length() {
-    let mut j = i
-    while j > 0 && compare_pages(sorted[j - 1], sorted[j]) > 0 {
-      let tmp = sorted[j - 1]
-      sorted[j - 1] = sorted[j]
-      sorted[j] = tmp
-      j = j - 1
-    }
-    i = i + 1
-  }
+  @strutil.insertion_sort(sorted, compare_pages)
   sorted
 }
 
 ///|
 fn to_feed_item(base_url : String, page : @graph.GraphPage) -> FeedItem {
-  let link = absolute_url(base_url, page.url)
+  let link = @strutil.absolute_url(base_url, page.url)
   let normalized_date = normalize_feed_datetime(page.date)
   {
     title: page.title,
@@ -354,7 +174,7 @@ fn build_feed_channel(
     i = i + 1
   }
 
-  let home_link = absolute_url(base_url, "/")
+  let home_link = @strutil.absolute_url(base_url, "/")
   {
     title,
     id: home_link,
@@ -378,25 +198,25 @@ fn render_atom_item(
 
   buf.write_string("  <entry>\n")
   buf.write_string("    <title>")
-  buf.write_string(escape_xml_text(item.title))
+  buf.write_string(@strutil.escape_html_body(item.title))
   buf.write_string("</title>\n")
 
   buf.write_string("    <id>")
-  buf.write_string(escape_xml_text(item.id))
+  buf.write_string(@strutil.escape_html_body(item.id))
   buf.write_string("</id>\n")
 
   buf.write_string("    <link href=\"")
-  buf.write_string(escape_xml_attr(item.link))
+  buf.write_string(@strutil.escape_html_attr(item.link))
   buf.write_string("\" />\n")
 
   buf.write_string("    <updated>")
-  buf.write_string(escape_xml_text(effective_updated))
+  buf.write_string(@strutil.escape_html_body(effective_updated))
   buf.write_string("</updated>\n")
 
   match item.published {
     Some(v) => {
       buf.write_string("    <published>")
-      buf.write_string(escape_xml_text(v))
+      buf.write_string(@strutil.escape_html_body(v))
       buf.write_string("</published>\n")
     }
     None => ()
@@ -405,7 +225,7 @@ fn render_atom_item(
   match item.summary {
     Some(summary) => {
       buf.write_string("    <summary>")
-      buf.write_string(escape_xml_text(summary))
+      buf.write_string(@strutil.escape_html_body(summary))
       buf.write_string("</summary>\n")
     }
     None => ()
@@ -426,23 +246,23 @@ fn render_atom(channel : FeedChannel) -> String {
   buf.write_string("<feed xmlns=\"http://www.w3.org/2005/Atom\">\n")
 
   buf.write_string("  <title>")
-  buf.write_string(escape_xml_text(channel.title))
+  buf.write_string(@strutil.escape_html_body(channel.title))
   buf.write_string("</title>\n")
 
   buf.write_string("  <id>")
-  buf.write_string(escape_xml_text(channel.id))
+  buf.write_string(@strutil.escape_html_body(channel.id))
   buf.write_string("</id>\n")
 
   buf.write_string("  <link href=\"")
-  buf.write_string(escape_xml_attr(channel.link))
+  buf.write_string(@strutil.escape_html_attr(channel.link))
   buf.write_string("\" />\n")
 
   buf.write_string("  <updated>")
-  buf.write_string(escape_xml_text(feed_updated))
+  buf.write_string(@strutil.escape_html_body(feed_updated))
   buf.write_string("</updated>\n")
 
   buf.write_string("  <author><name>")
-  buf.write_string(escape_xml_text(channel.author_name))
+  buf.write_string(@strutil.escape_html_body(channel.author_name))
   buf.write_string("</name></author>\n")
 
   let mut i = 0

@@ -32,66 +32,9 @@ pub struct ResolutionError {
 // ── helpers ───────────────────────────────────────────────────────────────────
 
 ///|
-fn char_at_wl(s : String, i : Int) -> Char {
-  s[i].to_int().unsafe_to_char()
-}
-
-///|
-fn slugify_lookup_key_wl(s : String, end : Int) -> String {
-  let buf = StringBuilder::new()
-  let mut i = 0
-  while i < end {
-    let c = char_at_wl(s, i)
-    if c == ' ' || c == '_' {
-      buf.write_char('-')
-    } else if c >= 'A' && c <= 'Z' {
-      buf.write_char((c.to_int() + 32).unsafe_to_char())
-    } else {
-      buf.write_char(c)
-    }
-    i = i + 1
-  }
-  buf.to_string()
-}
-
-///|
 /// Canonical lookup key for wikilink targets.
 pub fn lookup_key(target : String) -> String {
-  let end = if target.has_suffix(".md") {
-    target.length() - 3
-  } else {
-    target.length()
-  }
-  slugify_lookup_key_wl(target, end)
-}
-
-///|
-fn substr_wl(s : String, start : Int, end : Int) -> String {
-  let buf = StringBuilder::new()
-  let mut i = start
-  while i < end {
-    buf.write_char(char_at_wl(s, i))
-    i = i + 1
-  }
-  buf.to_string()
-}
-
-///|
-fn trim_wl(s : String) -> String {
-  let n = s.length()
-  if n == 0 {
-    return s
-  }
-  let mut lo = 0
-  while lo < n && (char_at_wl(s, lo) == ' ' || char_at_wl(s, lo) == '\t') {
-    lo = lo + 1
-  }
-  let mut hi = n
-  while hi > lo &&
-        (char_at_wl(s, hi - 1) == ' ' || char_at_wl(s, hi - 1) == '\t') {
-    hi = hi - 1
-  }
-  substr_wl(s, lo, hi)
+  @slug.filename_to_slug(target)
 }
 
 ///|
@@ -101,18 +44,18 @@ fn parse_inner(inner : String, source_file : String) -> RawWikilink {
   let mut pipe = -1
   let mut i = 0
   while i < n {
-    if char_at_wl(inner, i) == '|' {
+    if @strutil.char_at(inner, i) == '|' {
       pipe = i
       break
     }
     i = i + 1
   }
   if pipe >= 0 {
-    let target = trim_wl(substr_wl(inner, 0, pipe))
-    let display = trim_wl(substr_wl(inner, pipe + 1, n))
+    let target = @strutil.trim(@strutil.substr(inner, 0, pipe))
+    let display = @strutil.trim(@strutil.substr(inner, pipe + 1, n))
     { target, display: Some(display), source_file }
   } else {
-    { target: trim_wl(inner), display: None, source_file }
+    { target: @strutil.trim(inner), display: None, source_file }
   }
 }
 
@@ -134,38 +77,39 @@ pub fn extract(content : String, source_file : String) -> Array[RawWikilink] {
       let mut probe = i
       while probe < n &&
             (
-              char_at_wl(content, probe) == ' ' ||
-              char_at_wl(content, probe) == '\t'
+              @strutil.char_at(content, probe) == ' ' ||
+              @strutil.char_at(content, probe) == '\t'
             ) {
         probe = probe + 1
       }
       if probe + 2 < n &&
-        char_at_wl(content, probe) == '`' &&
-        char_at_wl(content, probe + 1) == '`' &&
-        char_at_wl(content, probe + 2) == '`' {
+        @strutil.char_at(content, probe) == '`' &&
+        @strutil.char_at(content, probe + 1) == '`' &&
+        @strutil.char_at(content, probe + 2) == '`' {
         in_fence = not(in_fence)
       }
       line_start = false
     }
-    if char_at_wl(content, i) == '\n' {
+    if @strutil.char_at(content, i) == '\n' {
       line_start = true
       if not(in_fence) {
         in_inline = false
       }
       i = i + 1
-    } else if not(in_fence) && char_at_wl(content, i) == '`' {
+    } else if not(in_fence) && @strutil.char_at(content, i) == '`' {
       in_inline = not(in_inline)
       i = i + 1
     } else if not(in_fence) &&
       not(in_inline) &&
-      char_at_wl(content, i) == '[' &&
-      char_at_wl(content, i + 1) == '[' {
+      @strutil.char_at(content, i) == '[' &&
+      @strutil.char_at(content, i + 1) == '[' {
       let inner_start = i + 2
       let mut j = inner_start
       let mut found = false
       while j + 1 < n {
-        if char_at_wl(content, j) == ']' && char_at_wl(content, j + 1) == ']' {
-          let inner = substr_wl(content, inner_start, j)
+        if @strutil.char_at(content, j) == ']' &&
+          @strutil.char_at(content, j + 1) == ']' {
+          let inner = @strutil.substr(content, inner_start, j)
           let link = parse_inner(inner, source_file)
           if link.target.length() > 0 {
             links.push(link)

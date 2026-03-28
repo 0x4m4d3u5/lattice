@@ -33,73 +33,13 @@ pub(all) suberror CacheError {
 const CACHE_VERSION : Int = 1
 
 ///|
-fn char_at_cache(s : String, i : Int) -> Char {
-  s[i].to_int().unsafe_to_char()
-}
-
-///|
-fn write_json_hex_digit_cache(n : Int) -> Char {
-  if n < 10 {
-    ('0'.to_int() + n).unsafe_to_char()
-  } else {
-    ('a'.to_int() + (n - 10)).unsafe_to_char()
-  }
-}
-
-///|
-fn write_json_string_cache(buf : StringBuilder, s : String) -> Unit {
-  buf.write_char('"')
-  let mut i = 0
-  while i < s.length() {
-    let c = char_at_cache(s, i)
-    if c == '"' {
-      buf.write_string("\\\"")
-    } else if c == '\\' {
-      buf.write_string("\\\\")
-    } else if c == '\n' {
-      buf.write_string("\\n")
-    } else if c == '\r' {
-      buf.write_string("\\r")
-    } else if c == '\t' {
-      buf.write_string("\\t")
-    } else {
-      let code = c.to_int()
-      if code < 0x20 {
-        buf.write_string("\\u00")
-        buf.write_char(write_json_hex_digit_cache((code >> 4) & 0xF))
-        buf.write_char(write_json_hex_digit_cache(code & 0xF))
-      } else {
-        buf.write_char(c)
-      }
-    }
-    i = i + 1
-  }
-  buf.write_char('"')
-}
-
-///|
-fn skip_ws_cache(source : String, idx : Int) -> Int {
-  let mut i = idx
-  while i < source.length() &&
-        (
-          char_at_cache(source, i) == ' ' ||
-          char_at_cache(source, i) == '\n' ||
-          char_at_cache(source, i) == '\r' ||
-          char_at_cache(source, i) == '\t'
-        ) {
-    i = i + 1
-  }
-  i
-}
-
-///|
 fn expect_char_cache(
   source : String,
   idx : Int,
   expected : Char,
 ) -> Int raise CacheParseError {
-  let i = skip_ws_cache(source, idx)
-  if i >= source.length() || char_at_cache(source, i) != expected {
+  let i = @strutil.skip_ws(source, idx)
+  if i >= source.length() || @strutil.char_at(source, i) != expected {
     raise ParseFailure("expected '" + expected.to_string() + "'")
   }
   i + 1
@@ -110,14 +50,14 @@ fn parse_json_string_cache(
   source : String,
   idx : Int,
 ) -> (String, Int) raise CacheParseError {
-  let mut i = skip_ws_cache(source, idx)
-  if i >= source.length() || char_at_cache(source, i) != '"' {
+  let mut i = @strutil.skip_ws(source, idx)
+  if i >= source.length() || @strutil.char_at(source, i) != '"' {
     raise ParseFailure("expected string")
   }
   i = i + 1
   let buf = StringBuilder::new()
   while i < source.length() {
-    let c = char_at_cache(source, i)
+    let c = @strutil.char_at(source, i)
     if c == '"' {
       return (buf.to_string(), i + 1)
     }
@@ -130,7 +70,7 @@ fn parse_json_string_cache(
     if i >= source.length() {
       raise ParseFailure("unterminated escape")
     }
-    let escaped = char_at_cache(source, i)
+    let escaped = @strutil.char_at(source, i)
     if escaped == '"' {
       buf.write_char('"')
     } else if escaped == '\\' {
@@ -162,17 +102,17 @@ fn parse_int_cache(
   source : String,
   idx : Int,
 ) -> (Int, Int) raise CacheParseError {
-  let mut i = skip_ws_cache(source, idx)
+  let mut i = @strutil.skip_ws(source, idx)
   if i >= source.length() ||
-    char_at_cache(source, i) < '0' ||
-    char_at_cache(source, i) > '9' {
+    @strutil.char_at(source, i) < '0' ||
+    @strutil.char_at(source, i) > '9' {
     raise ParseFailure("expected integer")
   }
   let mut value = 0
   while i < source.length() &&
-        char_at_cache(source, i) >= '0' &&
-        char_at_cache(source, i) <= '9' {
-    value = value * 10 + (char_at_cache(source, i).to_int() - '0'.to_int())
+        @strutil.char_at(source, i) >= '0' &&
+        @strutil.char_at(source, i) <= '9' {
+    value = value * 10 + (@strutil.char_at(source, i).to_int() - '0'.to_int())
     i = i + 1
   }
   (value, i)
@@ -189,11 +129,11 @@ fn parse_entry_cache(
   let mut seen_slug = false
   let mut seen_fingerprint = false
   while true {
-    i = skip_ws_cache(source, i)
+    i = @strutil.skip_ws(source, i)
     if i >= source.length() {
       raise ParseFailure("unterminated entry object")
     }
-    if char_at_cache(source, i) == '}' {
+    if @strutil.char_at(source, i) == '}' {
       if not(seen_slug) || not(seen_fingerprint) {
         raise ParseFailure("entry missing required field")
       }
@@ -214,17 +154,17 @@ fn parse_entry_cache(
     } else {
       raise ParseFailure("unknown entry field '" + key + "'")
     }
-    i = skip_ws_cache(source, i)
+    i = @strutil.skip_ws(source, i)
     if i >= source.length() {
       raise ParseFailure("unterminated entry object")
     }
-    if char_at_cache(source, i) == '}' {
+    if @strutil.char_at(source, i) == '}' {
       if not(seen_slug) || not(seen_fingerprint) {
         raise ParseFailure("entry missing required field")
       }
       return ({ slug, fingerprint }, i + 1)
     }
-    if char_at_cache(source, i) != ',' {
+    if @strutil.char_at(source, i) != ',' {
       raise ParseFailure("expected ',' or '}' in entry object")
     }
     i = i + 1
@@ -239,18 +179,18 @@ fn parse_entries_cache(
 ) -> (Array[CacheEntry], Int) raise CacheParseError {
   let mut i = expect_char_cache(source, idx, '[')
   let entries : Array[CacheEntry] = []
-  i = skip_ws_cache(source, i)
-  if i < source.length() && char_at_cache(source, i) == ']' {
+  i = @strutil.skip_ws(source, i)
+  if i < source.length() && @strutil.char_at(source, i) == ']' {
     return (entries, i + 1)
   }
   while true {
     let (entry, next_after_entry) = parse_entry_cache(source, i)
     entries.push(entry)
-    i = skip_ws_cache(source, next_after_entry)
+    i = @strutil.skip_ws(source, next_after_entry)
     if i >= source.length() {
       raise ParseFailure("unterminated entries array")
     }
-    let c = char_at_cache(source, i)
+    let c = @strutil.char_at(source, i)
     if c == ']' {
       return (entries, i + 1)
     }
@@ -271,8 +211,8 @@ pub fn parse(source : String) -> CacheFile raise CacheParseError {
   }
   i = expect_char_cache(source, next_after_version_key, ':')
   let (version, next_after_version) = parse_int_cache(source, i)
-  i = skip_ws_cache(source, next_after_version)
-  if i >= source.length() || char_at_cache(source, i) != ',' {
+  i = @strutil.skip_ws(source, next_after_version)
+  if i >= source.length() || @strutil.char_at(source, i) != ',' {
     raise ParseFailure("expected ',' after version")
   }
   i = i + 1
@@ -282,11 +222,11 @@ pub fn parse(source : String) -> CacheFile raise CacheParseError {
   }
   i = expect_char_cache(source, next_after_entries_key, ':')
   let (entries, next_after_entries) = parse_entries_cache(source, i)
-  i = skip_ws_cache(source, next_after_entries)
-  if i >= source.length() || char_at_cache(source, i) != '}' {
+  i = @strutil.skip_ws(source, next_after_entries)
+  if i >= source.length() || @strutil.char_at(source, i) != '}' {
     raise ParseFailure("expected '}' at end of cache file")
   }
-  i = skip_ws_cache(source, i + 1)
+  i = @strutil.skip_ws(source, i + 1)
   if i != source.length() {
     raise ParseFailure("unexpected trailing characters")
   }
@@ -306,9 +246,9 @@ pub fn render(file : CacheFile) -> String {
     }
     let entry = file.entries[i]
     buf.write_string("{\"slug\":")
-    write_json_string_cache(buf, entry.slug)
+    @strutil.write_json_string(buf, entry.slug)
     buf.write_string(",\"fingerprint\":")
-    write_json_string_cache(buf, entry.fingerprint)
+    @strutil.write_json_string(buf, entry.fingerprint)
     buf.write_char('}')
     i = i + 1
   }
@@ -426,7 +366,7 @@ fn hash_string_cache(seed : Int64, source : String) -> Int64 {
   let mut hash = seed
   let mut i = 0
   while i < source.length() {
-    hash = hash ^ char_at_cache(source, i).to_int().to_int64()
+    hash = hash ^ @strutil.char_at(source, i).to_int().to_int64()
     hash = hash * 1099511628211L
     i = i + 1
   }

@@ -6,15 +6,10 @@
 /// path. No ambiguity, no runtime surprises, no collision detection needed.
 
 ///|
-fn char_at(s : String, i : Int) -> Char {
-  s[i].to_int().unsafe_to_char()
-}
-
-///|
 /// Convert a markdown filename to a URL slug.
 ///
 /// Rules:
-///   - Strip the .md extension (if present)
+///   - Strip the .md extension (if present, case-insensitive)
 ///   - Lowercase all ASCII uppercase letters
 ///   - Replace spaces and underscores with hyphens
 ///
@@ -23,9 +18,11 @@ fn char_at(s : String, i : Int) -> Char {
 ///   "My Post.md"       → "my-post"
 ///   "index.md"         → "index"
 ///   "about_me.md"      → "about-me"
+///   "GUIDE.MD"         → "guide"
 pub fn filename_to_slug(filename : String) -> String {
-  // Strip .md extension by limiting the character count we pass to slugify.
-  let end = if filename.has_suffix(".md") {
+  // Strip .md extension (case-insensitive) by limiting the character count
+  let lower = filename.to_lower()
+  let end = if lower.has_suffix(".md") {
     filename.length() - 3
   } else {
     filename.length()
@@ -47,7 +44,7 @@ fn slugify_n(s : String, end : Int) -> String {
   let buf = StringBuilder::new()
   let mut i = 0
   while i < end {
-    let c = char_at(s, i)
+    let c = @strutil.char_at(s, i)
     if c == ' ' || c == '_' {
       buf.write_char('-')
     } else if c >= 'A' && c <= 'Z' {

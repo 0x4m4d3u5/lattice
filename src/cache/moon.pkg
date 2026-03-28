@@ -1,3 +1,4 @@
 import {
   "moonbitlang/x/fs" @fs,
+  "kurisu/lattice/src/strutil" @strutil,
 }

@@ -74,32 +74,6 @@ fn is_digit_shortcode(c : Char) -> Bool {
 }
 
 ///|
-fn is_name_char_shortcode(c : Char) -> Bool {
-  (c >= 'a' && c <= 'z') ||
-  (c >= 'A' && c <= 'Z') ||
-  (c >= '0' && c <= '9') ||
-  c == '_' ||
-  c == '-' ||
-  c == '/'
-}
-
-///|
-fn starts_with_shortcode(s : String, prefix : String) -> Bool {
-  let plen = prefix.length()
-  if plen > s.length() {
-    return false
-  }
-  let mut i = 0
-  while i < plen {
-    if char_at_shortcode(s, i) != char_at_shortcode(prefix, i) {
-      return false
-    }
-    i = i + 1
-  }
-  true
-}
-
-///|
 fn parse_int_shortcode(s : String) -> Int? {
   if s.length() == 0 {
     return None
@@ -130,24 +104,9 @@ fn parse_int_shortcode(s : String) -> Int? {
 }
 
 ///|
-fn skip_ws_shortcode(s : String, pos : Int) -> Int {
-  let mut i = pos
-  while i < s.length() &&
-        (
-          char_at_shortcode(s, i) == ' ' ||
-          char_at_shortcode(s, i) == '\t' ||
-          char_at_shortcode(s, i) == '\n' ||
-          char_at_shortcode(s, i) == '\r'
-        ) {
-    i = i + 1
-  }
-  i
-}
-
-///|
 fn parse_name_shortcode(s : String, pos : Int) -> (String, Int) {
   let mut i = pos
-  while i < s.length() && is_name_char_shortcode(char_at_shortcode(s, i)) {
+  while i < s.length() && @strutil.is_ident_part(char_at_shortcode(s, i)) {
     i = i + 1
   }
   (substr_shortcode(s, pos, i), i)
@@ -235,31 +194,31 @@ pub fn parse(raw : String) -> Result[ShortcodeCall, ShortcodeError] {
   if s.length() == 0 {
     return Err(InvalidSyntax("empty shortcode"))
   }
-  let i0 = skip_ws_shortcode(s, 0)
+  let i0 = @strutil.skip_ws(s, 0)
   let (name, next_name) = parse_name_shortcode(s, i0)
   if name.length() == 0 {
     return Err(InvalidSyntax("missing shortcode name"))
   }
-  if starts_with_shortcode(name, "/") {
+  if @strutil.starts_with(name, "/") {
     return Err(InvalidSyntax("closing shortcode is not a call"))
   }
 
   let params : Map[String, ShortcodeParam] = Map::new()
-  let mut i = skip_ws_shortcode(s, next_name)
+  let mut i = @strutil.skip_ws(s, next_name)
   while i < s.length() {
     let (key, key_end) = parse_name_shortcode(s, i)
     if key.length() == 0 {
       return Err(InvalidSyntax("invalid parameter key"))
     }
-    let eq_pos = skip_ws_shortcode(s, key_end)
+    let eq_pos = @strutil.skip_ws(s, key_end)
     if eq_pos >= s.length() || char_at_shortcode(s, eq_pos) != '=' {
       return Err(InvalidSyntax("expected '=' after parameter '" + key + "'"))
     }
-    let value_pos = skip_ws_shortcode(s, eq_pos + 1)
+    let value_pos = @strutil.skip_ws(s, eq_pos + 1)
     match parse_value_shortcode(s, value_pos) {
       Ok((value, next)) => {
         params.set(key, value)
-        i = skip_ws_shortcode(s, next)
+        i = @strutil.skip_ws(s, next)
       }
       Err(msg) => return Err(InvalidSyntax("param '" + key + "': " + msg))
     }
@@ -274,40 +233,18 @@ pub fn parse_open_close_tag(raw : String) -> (String?, Bool) {
   if s.length() == 0 {
     return (None, false)
   }
-  let i0 = skip_ws_shortcode(s, 0)
+  let i0 = @strutil.skip_ws(s, 0)
   let (name, _) = parse_name_shortcode(s, i0)
   if name.length() == 0 {
     return (None, false)
   }
-  if starts_with_shortcode(name, "/") {
+  if @strutil.starts_with(name, "/") {
     if name.length() <= 1 {
       return (None, true)
     }
     return (Some(substr_shortcode(name, 1, name.length())), true)
   }
   (Some(name), false)
-}
-
-///|
-fn escape_html_shortcode(s : String) -> String {
-  let out = StringBuilder::new()
-  let mut i = 0
-  while i < s.length() {
-    let c = char_at_shortcode(s, i)
-    if c == '&' {
-      out.write_string("&amp;")
-    } else if c == '<' {
-      out.write_string("&lt;")
-    } else if c == '>' {
-      out.write_string("&gt;")
-    } else if c == '"' {
-      out.write_string("&quot;")
-    } else {
-      out.write_char(c)
-    }
-    i = i + 1
-  }
-  out.to_string()
 }
 
 ///|
@@ -370,9 +307,9 @@ fn render_image(call : ShortcodeCall) -> Result[String, ShortcodeError] {
     out.write_string("<figure class=\"sc-image\">")
   }
   out.write_string("<img src=\"")
-  out.write_string(escape_html_shortcode(src))
+  out.write_string(@strutil.escape_html_attr(src))
   out.write_string("\" alt=\"")
-  out.write_string(escape_html_shortcode(alt))
+  out.write_string(@strutil.escape_html_attr(alt))
   out.write_string("\"")
   match width {
     Some(w) => {
@@ -386,7 +323,7 @@ fn render_image(call : ShortcodeCall) -> Result[String, ShortcodeError] {
   match caption {
     Some(text) => {
       out.write_string("<figcaption>")
-      out.write_string(escape_html_shortcode(text))
+      out.write_string(@strutil.escape_html_attr(text))
       out.write_string("</figcaption></figure>")
     }
     None => ()
@@ -406,12 +343,12 @@ fn render_video(call : ShortcodeCall) -> Result[String, ShortcodeError] {
   }
   let out = StringBuilder::new()
   out.write_string("<video controls src=\"")
-  out.write_string(escape_html_shortcode(src))
+  out.write_string(@strutil.escape_html_attr(src))
   out.write_string("\"")
   match poster {
     Some(p) => {
       out.write_string(" poster=\"")
-      out.write_string(escape_html_shortcode(p))
+      out.write_string(@strutil.escape_html_attr(p))
       out.write_string("\"")
     }
     None => ()
@@ -444,27 +381,27 @@ fn render_figure(call : ShortcodeCall) -> Result[String, ShortcodeError] {
   match link {
     Some(href) => {
       out.write_string("<a href=\"")
-      out.write_string(escape_html_shortcode(href))
+      out.write_string(@strutil.escape_html_attr(href))
       out.write_string("\">")
       out.write_string("<img src=\"")
-      out.write_string(escape_html_shortcode(src))
+      out.write_string(@strutil.escape_html_attr(src))
       out.write_string("\" alt=\"")
-      out.write_string(escape_html_shortcode(alt))
+      out.write_string(@strutil.escape_html_attr(alt))
       out.write_string("\" />")
       out.write_string("</a>")
     }
     None => {
       out.write_string("<img src=\"")
-      out.write_string(escape_html_shortcode(src))
+      out.write_string(@strutil.escape_html_attr(src))
       out.write_string("\" alt=\"")
-      out.write_string(escape_html_shortcode(alt))
+      out.write_string(@strutil.escape_html_attr(alt))
       out.write_string("\" />")
     }
   }
   match caption {
     Some(text) => {
       out.write_string("<figcaption>")
-      out.write_string(escape_html_shortcode(text))
+      out.write_string(@strutil.escape_html_attr(text))
       out.write_string("</figcaption>")
     }
     None => ()
@@ -497,12 +434,12 @@ fn render_callout(call : ShortcodeCall) -> Result[String, ShortcodeError] {
   }
   let out = StringBuilder::new()
   out.write_string("<aside class=\"callout callout-")
-  out.write_string(escape_html_shortcode(callout_type))
+  out.write_string(@strutil.escape_html_attr(callout_type))
   out.write_string("\">")
   match title {
     Some(t) => {
       out.write_string("<p class=\"callout-title\">")
-      out.write_string(escape_html_shortcode(t))
+      out.write_string(@strutil.escape_html_attr(t))
       out.write_string("</p>")
     }
     None => ()
@@ -510,7 +447,7 @@ fn render_callout(call : ShortcodeCall) -> Result[String, ShortcodeError] {
   match body {
     Some(text) => {
       out.write_string("<p>")
-      out.write_string(escape_html_shortcode(text))
+      out.write_string(@strutil.escape_html_attr(text))
       out.write_string("</p>")
     }
     None => ()

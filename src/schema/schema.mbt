@@ -161,16 +161,17 @@ pub fn validate(
           // Specialized error message for enum mismatches
           let error_msg = match (expected, val) {
             (TEnum(_), @frontmatter.FStr(s)) =>
-              "expected one of " + field_type_name(expected) + ", got \"" + s + "\""
+              "expected one of " +
+              field_type_name(expected) +
+              ", got \"" +
+              s +
+              "\""
             _ =>
               "expected " +
               field_type_name(expected) +
               " but got incompatible value"
           }
-          errors.push({
-            field: fdef.name,
-            message: error_msg,
-          })
+          errors.push({ field: fdef.name, message: error_msg })
         }
       }
     }

@@ -673,7 +673,13 @@ fn render_archive_page(
   match archive_template {
     Some(tpl) =>
       match
-        @template.render_template_with_data(tpl, slots, data_store, Map::new(), Map::new()) {
+        @template.render_template_with_data(
+          tpl,
+          slots,
+          data_store,
+          Map::new(),
+          Map::new(),
+        ) {
         Ok(html) => Ok(html)
         Err(e) => Err(template_error_text(e))
       }
@@ -2228,7 +2234,13 @@ fn render_tag_page_html(
         url,
       )
       match
-        @template.render_template_with_data(tpl, slots, data_store, Map::new(), Map::new()) {
+        @template.render_template_with_data(
+          tpl,
+          slots,
+          data_store,
+          Map::new(),
+          Map::new(),
+        ) {
         Ok(html) => Ok(html)
         Err(e) => Err("tag page template: " + template_error_text(e))
       }
@@ -2305,7 +2317,13 @@ fn render_tags_index_html(
         tags_index_page_url(pagination.page_number),
       )
       match
-        @template.render_template_with_data(tpl, slots, data_store, Map::new(), Map::new()) {
+        @template.render_template_with_data(
+          tpl,
+          slots,
+          data_store,
+          Map::new(),
+          Map::new(),
+        ) {
         Ok(html) => Ok(html)
         Err(e) => Err("tags index template: " + template_error_text(e))
       }
@@ -2409,7 +2427,13 @@ fn render_404_page(
       slots.set(@template.NextPostUrl, "")
       slots.set(@template.NextPostTitle, "")
       match
-        @template.render_template_with_data(tpl, slots, data_store, Map::new(), Map::new()) {
+        @template.render_template_with_data(
+          tpl,
+          slots,
+          data_store,
+          Map::new(),
+          Map::new(),
+        ) {
         Ok(html) => Ok(html)
         Err(e) => Err("404 page template: " + template_error_text(e))
       }
@@ -2573,7 +2597,13 @@ fn render_collection_index(
         page_url,
       )
       match
-        @template.render_template_with_data(tpl, slots, data_store, Map::new(), Map::new()) {
+        @template.render_template_with_data(
+          tpl,
+          slots,
+          data_store,
+          Map::new(),
+          Map::new(),
+        ) {
         Ok(html) => {
           let structured_data_markup = @html.render_structured_data_script(
             collection_breadcrumb_structured_data_builder(
@@ -3554,7 +3584,9 @@ fn process_document_for_lint(
       let page_fields = frontmatter_to_strings(fm)
       let page_field_arrays = frontmatter_to_arrays(fm)
       match
-        @template.render_template_with_data(tpl, slots, data_store, page_fields, page_field_arrays) {
+        @template.render_template_with_data(
+          tpl, slots, data_store, page_fields, page_field_arrays,
+        ) {
         Ok(html) => html
         Err(e) => {
           violations.push({

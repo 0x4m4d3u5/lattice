@@ -133,7 +133,6 @@ test "collections parse invalid sort value" {
   }
 }
 
-
 ///|
 test "collections parse Enum type" {
   let src = "[posts]\n" +
@@ -172,7 +171,7 @@ test "collections parse optional Enum" {
       assert_eq(field.name, "status")
       assert_false(field.required)
       match field.field_type {
-        @schema.TOptional(inner) => {
+        @schema.TOptional(inner) =>
           match inner {
             @schema.TEnum(allowed) => {
               assert_eq(allowed.length(), 2)
@@ -181,7 +180,6 @@ test "collections parse optional Enum" {
             }
             _ => assert_true(false)
           }
-        }
         _ => assert_true(false)
       }
     }
@@ -211,16 +209,12 @@ test "collections parse Enum with single value" {
 
 ///|
 test "collections parse Enum with empty values" {
-  let src = "[posts]\n" +
-    "schema = status:Enum[]\n" +
-    "dir = content/posts\n"
+  let src = "[posts]\n" + "schema = status:Enum[]\n" + "dir = content/posts\n"
   match parse(src) {
     Ok(cfg) => {
       let field = cfg.definitions[0].schema.fields[0]
       match field.field_type {
-        @schema.TEnum(allowed) => {
-          assert_eq(allowed.length(), 0)
-        }
+        @schema.TEnum(allowed) => assert_eq(allowed.length(), 0)
         _ => assert_true(false)
       }
     }

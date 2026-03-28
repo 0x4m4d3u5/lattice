@@ -1,4 +1,5 @@
 import {
+  "kurisu/lattice/src/strutil" @strutil,
   "kurisu/lattice/src/frontmatter" @frontmatter,
   "kurisu/lattice/src/html" @html,
   "kurisu/lattice/src/slug" @slug,

@@ -19,17 +19,6 @@ pub struct AssetValidation {
 }
 
 ///|
-fn join_path(base : String, part : String) -> String {
-  if base.length() == 0 {
-    return part
-  }
-  if part.length() == 0 {
-    return base
-  }
-  base + "/" + part
-}
-
-///|
 fn ensure_dir(path : String) -> Result[Unit, AssetCopyError] {
   if @fs.path_exists(path) {
     let exists_as_dir = @fs.is_dir(path) catch {
@@ -84,8 +73,8 @@ fn copy_tree(
   let mut i = 0
   while i < entries.length() {
     let name = entries[i]
-    let src_path = join_path(src_dir, name)
-    let dest_path = join_path(dest_dir, name)
+    let src_path = @strutil.join_path(src_dir, name)
+    let dest_path = @strutil.join_path(dest_dir, name)
     let is_dir = @fs.is_dir(src_path) catch {
       @fs.IOError(msg) => return Err(SourceReadError(src_path, msg))
     }
@@ -116,7 +105,7 @@ fn validate_tree(path : String, errors : Array[AssetCopyError]) -> Unit {
 
   let mut i = 0
   while i < entries.length() {
-    let entry_path = join_path(path, entries[i])
+    let entry_path = @strutil.join_path(path, entries[i])
     let is_dir = @fs.is_dir(entry_path) catch {
       @fs.IOError(msg) => {
         errors.push(SourceReadError(entry_path, msg))
@@ -170,7 +159,7 @@ pub fn format_error(err : AssetCopyError) -> String {
 /// Validate static assets readability without writing output files.
 pub fn check_static(site_root : String, static_dir : String) -> AssetValidation {
   let errors : Array[AssetCopyError] = []
-  let source_root = join_path(site_root, static_dir)
+  let source_root = @strutil.join_path(site_root, static_dir)
 
   if not(@fs.path_exists(source_root)) {
     return { errors, }
@@ -200,7 +189,7 @@ pub fn copy_static(
   output_dir : String,
   static_dir : String,
 ) -> Result[Int, AssetCopyError] {
-  let source_root = join_path(site_root, static_dir)
+  let source_root = @strutil.join_path(site_root, static_dir)
   if not(@fs.path_exists(source_root)) {
     return Ok(0)
   }
@@ -212,6 +201,6 @@ pub fn copy_static(
     return Err(SourceNotDirectory(source_root))
   }
 
-  let dest_root = join_path(output_dir, static_dir)
+  let dest_root = @strutil.join_path(output_dir, static_dir)
   copy_tree(source_root, dest_root)
 }

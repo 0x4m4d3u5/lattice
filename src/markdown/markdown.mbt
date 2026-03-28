@@ -107,77 +107,9 @@ pub struct RenderResult {
 // literals type-check correctly.
 
 ///|
-fn char_at(s : String, i : Int) -> Char {
-  s[i].to_int().unsafe_to_char()
-}
-
-///|
-fn substr(s : String, start : Int, end_pos : Int) -> String {
-  let buf = StringBuilder::new()
-  let mut i = start
-  while i < end_pos {
-    buf.write_char(char_at(s, i))
-    i = i + 1
-  }
-  buf.to_string()
-}
-
-///|
-fn starts_with_at(s : String, pos : Int, prefix : String) -> Bool {
-  let plen = prefix.length()
-  if pos + plen > s.length() {
-    return false
-  }
-  let mut j = 0
-  while j < plen {
-    if char_at(s, pos + j) != char_at(prefix, j) {
-      return false
-    }
-    j = j + 1
-  }
-  true
-}
-
-///|
-fn trim_start(s : String) -> String {
-  let n = s.length()
-  let mut i = 0
-  while i < n && (char_at(s, i) == ' ' || char_at(s, i) == '\t') {
-    i = i + 1
-  }
-  substr(s, i, n)
-}
-
-///|
-fn trim_end(s : String) -> String {
-  let n = s.length()
-  let mut j = n
-  while j > 0 &&
-        (
-          char_at(s, j - 1) == ' ' ||
-          char_at(s, j - 1) == '\t' ||
-          char_at(s, j - 1) == '\r'
-        ) {
-    j = j - 1
-  }
-  substr(s, 0, j)
-}
-
-///|
-fn trim(s : String) -> String {
-  trim_end(trim_start(s))
-}
-
-///|
 fn is_blank(s : String) -> Bool {
-  trim(s).length() == 0
+  @strutil.trim(s).length() == 0
 }
-
-///|
-fn is_digit(c : Char) -> Bool {
-  c >= '0' && c <= '9'
-}
-
 // ── line splitting ────────────────────────────────────────────────────────────
 
 ///|
@@ -187,10 +119,10 @@ fn lines_of(s : String) -> Array[String] {
   let mut i = 0
   while i <= n {
     let mut end = i
-    while end < n && char_at(s, end) != '\n' {
+    while end < n && @strutil.char_at(s, end) != '\n' {
       end = end + 1
     }
-    result.push(substr(s, i, end))
+    result.push(@strutil.substr(s, i, end))
     if end >= n {
       break
     }
@@ -198,54 +130,7 @@ fn lines_of(s : String) -> Array[String] {
   }
   result
 }
-
-///|
-fn join_lines(lines : Array[String]) -> String {
-  let buf = StringBuilder::new()
-  let mut i = 0
-  while i < lines.length() {
-    if i > 0 {
-      buf.write_char('\n')
-    }
-    buf.write_string(lines[i])
-    i = i + 1
-  }
-  buf.to_string()
-}
-
 // ── HTML escaping ─────────────────────────────────────────────────────────────
-
-///|
-fn escape_html(s : String) -> String {
-  let buf = StringBuilder::new()
-  let n = s.length()
-  let mut i = 0
-  while i < n {
-    let c = char_at(s, i)
-    if c == '&' {
-      buf.write_string("&amp;")
-    } else if c == '<' {
-      buf.write_string("&lt;")
-    } else if c == '>' {
-      buf.write_string("&gt;")
-    } else if c == '"' {
-      buf.write_string("&quot;")
-    } else {
-      buf.write_char(c)
-    }
-    i = i + 1
-  }
-  buf.to_string()
-}
-
-///|
-fn ascii_lower_char(c : Char) -> Char {
-  if c >= 'A' && c <= 'Z' {
-    (c.to_int() + 32).unsafe_to_char()
-  } else {
-    c
-  }
-}
 
 ///|
 fn is_ascii_alnum(c : Char) -> Bool {
@@ -254,7 +139,7 @@ fn is_ascii_alnum(c : Char) -> Bool {
 
 ///|
 fn slugify_heading_text(text : String) -> String {
-  let trimmed = trim(text)
+  let trimmed = @strutil.trim(text)
   if trimmed.length() == 0 {
     return "section"
   }
@@ -263,7 +148,7 @@ fn slugify_heading_text(text : String) -> String {
   let mut wrote_any = false
   let mut i = 0
   while i < trimmed.length() {
-    let lower = ascii_lower_char(char_at(trimmed, i))
+    let lower = @strutil.ascii_lower_char(@strutil.char_at(trimmed, i))
     if is_ascii_alnum(lower) {
       buf.write_char(lower)
       wrote_any = true
@@ -278,8 +163,8 @@ fn slugify_heading_text(text : String) -> String {
   if slug.length() == 0 {
     return "section"
   }
-  if char_at(slug, slug.length() - 1) == '-' {
-    substr(slug, 0, slug.length() - 1)
+  if @strutil.char_at(slug, slug.length() - 1) == '-' {
+    @strutil.substr(slug, 0, slug.length() - 1)
   } else {
     slug
   }
@@ -315,7 +200,7 @@ fn plain_text_inlines(inlines : Array[Inline]) -> String {
     buf.write_string(plain_text_inline(inlines[i]))
     i = i + 1
   }
-  trim(buf.to_string())
+  @strutil.trim(buf.to_string())
 }
 
 ///|
@@ -340,7 +225,7 @@ fn next_heading_anchor(text : String, counts : Map[String, Int]) -> String {
 fn count_char(s : String, pos : Int, c : Char) -> Int {
   let n = s.length()
   let mut count = 0
-  while pos + count < n && char_at(s, pos + count) == c {
+  while pos + count < n && @strutil.char_at(s, pos + count) == c {
     count = count + 1
   }
   count
@@ -348,54 +233,33 @@ fn count_char(s : String, pos : Int, c : Char) -> Int {
 
 ///|
 /// Find the first occurrence of `needle` in s[from..limit]. Returns -1 if absent.
-fn find_str(s : String, from : Int, needle : String, limit : Int) -> Int {
-  let nlen = needle.length()
-  let mut i = from
-  while i + nlen <= limit {
-    if starts_with_at(s, i, needle) {
-      return i
-    }
-    i = i + 1
-  }
-  -1
-}
 
 ///|
 /// Find the first occurrence of `c` in s[from..limit]. Returns -1 if absent.
-fn find_char(s : String, from : Int, c : Char, limit : Int) -> Int {
-  let mut i = from
-  while i < limit {
-    if char_at(s, i) == c {
-      return i
-    }
-    i = i + 1
-  }
-  -1
-}
 
 ///|
 /// Find the first occurrence of `c` in string `s` starting at position 0.
 fn find_char_in_str(s : String, c : Char) -> Int {
-  find_char(s, 0, c, s.length())
+  @strutil.find_char(s, 0, c, s.length())
 }
 
 ///|
 fn split_shortcode_params_raw(raw : String) -> String {
-  trim(raw)
+  @strutil.trim(raw)
 }
 
 ///|
 fn is_full_shortcode_line(line : String) -> Bool {
-  let t = trim(line)
+  let t = @strutil.trim(line)
   t.length() >= 7 &&
-  starts_with_at(t, 0, "{{<") &&
-  starts_with_at(t, t.length() - 3, ">}}")
+  @strutil.starts_with_at(t, 0, "{{<") &&
+  @strutil.starts_with_at(t, t.length() - 3, ">}}")
 }
 
 ///|
 fn shortcode_inner_text_from_line(line : String) -> String {
-  let t = trim(line)
-  trim(substr(t, 3, t.length() - 3))
+  let t = @strutil.trim(line)
+  @strutil.trim(@strutil.substr(t, 3, t.length() - 3))
 }
 
 ///|
@@ -412,9 +276,9 @@ fn preprocess_callout_next_line(body : String) -> String {
           if call.name == "callout" &&
             i + 1 < ls.length() &&
             not(is_blank(ls[i + 1])) {
-            let merged = trim(line) +
+            let merged = @strutil.trim(line) +
               " " +
-              trim(ls[i + 1]) +
+              @strutil.trim(ls[i + 1]) +
               " {{< /callout >}}"
             out.push(merged)
             i = i + 2
@@ -426,7 +290,7 @@ fn preprocess_callout_next_line(body : String) -> String {
     out.push(line)
     i = i + 1
   }
-  join_lines(out)
+  @strutil.join_lines(out)
 }
 
 // ── inline parsing ────────────────────────────────────────────────────────────
@@ -439,23 +303,23 @@ pub fn parse_inlines(s : String, from : Int, to : Int) -> Array[Inline] {
   let mut i = from
   let mut text_start = from
   while i < to {
-    let c = char_at(s, i)
+    let c = @strutil.char_at(s, i)
     if c == '\\' && i + 1 < to {
       // backslash escape: emit accumulated text then the escaped char
       if text_start < i {
-        result.push(Text(substr(s, text_start, i)))
+        result.push(Text(@strutil.substr(s, text_start, i)))
       }
-      result.push(Text(char_at(s, i + 1).to_string()))
+      result.push(Text(@strutil.char_at(s, i + 1).to_string()))
       i = i + 2
       text_start = i
     } else if c == '`' {
       // inline code: `code`
       if text_start < i {
-        result.push(Text(substr(s, text_start, i)))
+        result.push(Text(@strutil.substr(s, text_start, i)))
       }
-      let close = find_char(s, i + 1, '`', to)
+      let close = @strutil.find_char(s, i + 1, '`', to)
       if close >= 0 {
-        result.push(InlineCode(substr(s, i + 1, close)))
+        result.push(InlineCode(@strutil.substr(s, i + 1, close)))
         i = close + 1
       } else {
         // unterminated — treat backtick as literal text
@@ -474,10 +338,10 @@ pub fn parse_inlines(s : String, from : Int, to : Int) -> Array[Inline] {
       } else {
         "*"
       }
-      let close = find_str(s, inner_start, close_needle, to)
+      let close = @strutil.find_str(s, inner_start, close_needle, to)
       if close > inner_start {
         if text_start < i {
-          result.push(Text(substr(s, text_start, i)))
+          result.push(Text(@strutil.substr(s, text_start, i)))
         }
         let inner = parse_inlines(s, inner_start, close)
         if star_count >= 3 {
@@ -495,13 +359,13 @@ pub fn parse_inlines(s : String, from : Int, to : Int) -> Array[Inline] {
         // no matching close — treat stars as literal text
         i = i + 1
       }
-    } else if c == '~' && i + 1 < to && char_at(s, i + 1) == '~' {
+    } else if c == '~' && i + 1 < to && @strutil.char_at(s, i + 1) == '~' {
       // strikethrough: ~~text~~
       let inner_start = i + 2
-      let close = find_str(s, inner_start, "~~", to)
+      let close = @strutil.find_str(s, inner_start, "~~", to)
       if close > inner_start {
         if text_start < i {
-          result.push(Text(substr(s, text_start, i)))
+          result.push(Text(@strutil.substr(s, text_start, i)))
         }
         let inner = parse_inlines(s, inner_start, close)
         result.push(Strikethrough(inner))
@@ -513,20 +377,22 @@ pub fn parse_inlines(s : String, from : Int, to : Int) -> Array[Inline] {
       }
     } else if c == '{' &&
       i + 2 < to &&
-      char_at(s, i + 1) == '{' &&
-      char_at(s, i + 2) == '<' {
+      @strutil.char_at(s, i + 1) == '{' &&
+      @strutil.char_at(s, i + 2) == '<' {
       if text_start < i {
-        result.push(Text(substr(s, text_start, i)))
+        result.push(Text(@strutil.substr(s, text_start, i)))
       }
-      let close = find_str(s, i + 3, ">}}", to)
+      let close = @strutil.find_str(s, i + 3, ">}}", to)
       if close >= 0 {
-        let raw = split_shortcode_params_raw(substr(s, i + 3, close))
+        let raw = split_shortcode_params_raw(@strutil.substr(s, i + 3, close))
         match @shortcode.parse(raw) {
           Ok(call) =>
             if call.name == "callout" {
               let closing_tag = "{{< /callout >}}"
               let body_start = close + 3
-              let end_callout = find_str(s, body_start, closing_tag, to)
+              let end_callout = @strutil.find_str(
+                s, body_start, closing_tag, to,
+              )
               if end_callout >= 0 {
                 let copied : Map[String, @shortcode.ShortcodeParam] = Map::new()
                 let param_keys = [
@@ -542,7 +408,9 @@ pub fn parse_inlines(s : String, from : Int, to : Int) -> Array[Inline] {
                   }
                   j = j + 1
                 }
-                let body_text = trim(substr(s, body_start, end_callout))
+                let body_text = @strutil.trim(
+                  @strutil.substr(s, body_start, end_callout),
+                )
                 if body_text.length() > 0 {
                   copied.set("body", @shortcode.StringParam(body_text))
                 }
@@ -557,7 +425,7 @@ pub fn parse_inlines(s : String, from : Int, to : Int) -> Array[Inline] {
               i = close + 3
             }
           Err(_) => {
-            result.push(Text(substr(s, i, close + 3)))
+            result.push(Text(@strutil.substr(s, i, close + 3)))
             i = close + 3
           }
         }
@@ -566,19 +434,19 @@ pub fn parse_inlines(s : String, from : Int, to : Int) -> Array[Inline] {
         i = i + 3
       }
       text_start = i
-    } else if c == '!' && i + 1 < to && char_at(s, i + 1) == '[' {
+    } else if c == '!' && i + 1 < to && @strutil.char_at(s, i + 1) == '[' {
       // image: ![alt](url)
-      let bracket_close = find_char(s, i + 2, ']', to)
+      let bracket_close = @strutil.find_char(s, i + 2, ']', to)
       if bracket_close >= 0 &&
         bracket_close + 1 < to &&
-        char_at(s, bracket_close + 1) == '(' {
-        let paren_close = find_char(s, bracket_close + 2, ')', to)
+        @strutil.char_at(s, bracket_close + 1) == '(' {
+        let paren_close = @strutil.find_char(s, bracket_close + 2, ')', to)
         if paren_close >= 0 {
           if text_start < i {
-            result.push(Text(substr(s, text_start, i)))
+            result.push(Text(@strutil.substr(s, text_start, i)))
           }
-          let alt = substr(s, i + 2, bracket_close)
-          let url = substr(s, bracket_close + 2, paren_close)
+          let alt = @strutil.substr(s, i + 2, bracket_close)
+          let url = @strutil.substr(s, bracket_close + 2, paren_close)
           result.push(Image(alt, url))
           i = paren_close + 1
           text_start = i
@@ -588,21 +456,23 @@ pub fn parse_inlines(s : String, from : Int, to : Int) -> Array[Inline] {
       } else {
         i = i + 1
       }
-    } else if c == '[' && i + 1 < to && char_at(s, i + 1) == '[' {
+    } else if c == '[' && i + 1 < to && @strutil.char_at(s, i + 1) == '[' {
       // wikilink: [[target]] or [[target|display]]
       if text_start < i {
-        result.push(Text(substr(s, text_start, i)))
+        result.push(Text(@strutil.substr(s, text_start, i)))
       }
-      let close_j = find_str(s, i + 2, "]]", to)
+      let close_j = @strutil.find_str(s, i + 2, "]]", to)
       if close_j >= 0 {
-        let inner = substr(s, i + 2, close_j)
+        let inner = @strutil.substr(s, i + 2, close_j)
         let pipe = find_char_in_str(inner, '|')
         if pipe >= 0 {
-          let target = trim(substr(inner, 0, pipe))
-          let display = trim(substr(inner, pipe + 1, inner.length()))
+          let target = @strutil.trim(@strutil.substr(inner, 0, pipe))
+          let display = @strutil.trim(
+            @strutil.substr(inner, pipe + 1, inner.length()),
+          )
           result.push(WikiRef(target, Some(display)))
         } else {
-          result.push(WikiRef(trim(inner), None))
+          result.push(WikiRef(@strutil.trim(inner), None))
         }
         i = close_j + 2
       } else {
@@ -613,13 +483,13 @@ pub fn parse_inlines(s : String, from : Int, to : Int) -> Array[Inline] {
       text_start = i
     } else if c == '[' {
       // Check for footnote reference: [^label]
-      if i + 2 < to && char_at(s, i + 1) == '^' {
-        let bracket_close = find_char(s, i + 2, ']', to)
+      if i + 2 < to && @strutil.char_at(s, i + 1) == '^' {
+        let bracket_close = @strutil.find_char(s, i + 2, ']', to)
         if bracket_close >= 0 {
           if text_start < i {
-            result.push(Text(substr(s, text_start, i)))
+            result.push(Text(@strutil.substr(s, text_start, i)))
           }
-          let label = substr(s, i + 2, bracket_close)
+          let label = @strutil.substr(s, i + 2, bracket_close)
           result.push(FootnoteRef(label))
           i = bracket_close + 1
           text_start = i
@@ -627,21 +497,23 @@ pub fn parse_inlines(s : String, from : Int, to : Int) -> Array[Inline] {
           // Unterminated footnote ref - treat as literal
           i = i + 1
         }
-      } else if i + 1 < to && char_at(s, i + 1) == '[' {
+      } else if i + 1 < to && @strutil.char_at(s, i + 1) == '[' {
         // wikilink: [[target]] or [[target|display]]
         if text_start < i {
-          result.push(Text(substr(s, text_start, i)))
+          result.push(Text(@strutil.substr(s, text_start, i)))
         }
-        let close_j = find_str(s, i + 2, "]]", to)
+        let close_j = @strutil.find_str(s, i + 2, "]]", to)
         if close_j >= 0 {
-          let inner = substr(s, i + 2, close_j)
+          let inner = @strutil.substr(s, i + 2, close_j)
           let pipe = find_char_in_str(inner, '|')
           if pipe >= 0 {
-            let target = trim(substr(inner, 0, pipe))
-            let display = trim(substr(inner, pipe + 1, inner.length()))
+            let target = @strutil.trim(@strutil.substr(inner, 0, pipe))
+            let display = @strutil.trim(
+              @strutil.substr(inner, pipe + 1, inner.length()),
+            )
             result.push(WikiRef(target, Some(display)))
           } else {
-            result.push(WikiRef(trim(inner), None))
+            result.push(WikiRef(@strutil.trim(inner), None))
           }
           i = close_j + 2
         } else {
@@ -652,17 +524,17 @@ pub fn parse_inlines(s : String, from : Int, to : Int) -> Array[Inline] {
         text_start = i
       } else {
         // regular link: [text](url)
-        let bracket_close = find_char(s, i + 1, ']', to)
+        let bracket_close = @strutil.find_char(s, i + 1, ']', to)
         if bracket_close >= 0 &&
           bracket_close + 1 < to &&
-          char_at(s, bracket_close + 1) == '(' {
-          let paren_close = find_char(s, bracket_close + 2, ')', to)
+          @strutil.char_at(s, bracket_close + 1) == '(' {
+          let paren_close = @strutil.find_char(s, bracket_close + 2, ')', to)
           if paren_close >= 0 {
             if text_start < i {
-              result.push(Text(substr(s, text_start, i)))
+              result.push(Text(@strutil.substr(s, text_start, i)))
             }
-            let link_text = substr(s, i + 1, bracket_close)
-            let url = substr(s, bracket_close + 2, paren_close)
+            let link_text = @strutil.substr(s, i + 1, bracket_close)
+            let url = @strutil.substr(s, bracket_close + 2, paren_close)
             result.push(Link(link_text, url))
             i = paren_close + 1
             text_start = i
@@ -677,11 +549,11 @@ pub fn parse_inlines(s : String, from : Int, to : Int) -> Array[Inline] {
       // soft line break: two trailing spaces before newline = hard break,
       // otherwise collapse to a space (standard markdown behavior)
       if text_start < i {
-        result.push(Text(substr(s, text_start, i)))
+        result.push(Text(@strutil.substr(s, text_start, i)))
       }
       let is_hard = i >= 2 &&
-        char_at(s, i - 1) == ' ' &&
-        char_at(s, i - 2) == ' '
+        @strutil.char_at(s, i - 1) == ' ' &&
+        @strutil.char_at(s, i - 2) == ' '
       if is_hard {
         result.push(HardBreak)
       } else {
@@ -695,7 +567,7 @@ pub fn parse_inlines(s : String, from : Int, to : Int) -> Array[Inline] {
   }
   // flush any trailing text
   if text_start < to {
-    result.push(Text(substr(s, text_start, to)))
+    result.push(Text(@strutil.substr(s, text_start, to)))
   }
   result
 }
@@ -706,7 +578,7 @@ pub fn parse_inlines(s : String, from : Int, to : Int) -> Array[Inline] {
 fn count_leading_hashes(line : String) -> Int {
   let n = line.length()
   let mut count = 0
-  while count < n && char_at(line, count) == '#' {
+  while count < n && @strutil.char_at(line, count) == '#' {
     count = count + 1
   }
   count
@@ -719,25 +591,26 @@ fn is_heading_line(line : String) -> Bool {
     return false
   }
   let n = line.length()
-  hashes < n && char_at(line, hashes) == ' '
+  hashes < n && @strutil.char_at(line, hashes) == ' '
 }
 
 ///|
 fn heading_level_and_text(line : String) -> (Int, String) {
   let level = count_leading_hashes(line)
-  let text = trim(substr(line, level + 1, line.length()))
+  let text = @strutil.trim(@strutil.substr(line, level + 1, line.length()))
   (level, text)
 }
 
 ///|
 fn is_hrule(line : String) -> Bool {
-  let t = trim(line)
+  let t = @strutil.trim(line)
   t == "---" || t == "***" || t == "___"
 }
 
 ///|
 fn is_fence_start(line : String) -> Bool {
-  starts_with_at(line, 0, "```") || starts_with_at(line, 0, "~~~")
+  @strutil.starts_with_at(line, 0, "```") ||
+  @strutil.starts_with_at(line, 0, "~~~")
 }
 
 ///|
@@ -746,7 +619,7 @@ fn fence_lang_tag(line : String) -> String? {
   if n < 3 {
     return None
   }
-  let lang = trim(substr(line, 3, n))
+  let lang = @strutil.trim(@strutil.substr(line, 3, n))
   if lang.length() == 0 {
     None
   } else {
@@ -757,7 +630,7 @@ fn fence_lang_tag(line : String) -> String? {
 ///|
 fn fence_char_of(line : String) -> Char {
   if line.length() > 0 {
-    char_at(line, 0)
+    @strutil.char_at(line, 0)
   } else {
     '`'
   }
@@ -767,9 +640,9 @@ fn fence_char_of(line : String) -> Char {
 fn is_fence_end(line : String, fence_char : Char) -> Bool {
   let n = line.length()
   n >= 3 &&
-  char_at(line, 0) == fence_char &&
-  char_at(line, 1) == fence_char &&
-  char_at(line, 2) == fence_char
+  @strutil.char_at(line, 0) == fence_char &&
+  @strutil.char_at(line, 1) == fence_char &&
+  @strutil.char_at(line, 2) == fence_char
 }
 
 ///|
@@ -778,8 +651,8 @@ fn is_fence_end(line : String, fence_char : Char) -> Bool {
 fn is_unordered_item(line : String) -> Bool {
   let n = line.length()
   n >= 2 &&
-  (char_at(line, 0) == '-' || char_at(line, 0) == '*') &&
-  char_at(line, 1) == ' '
+  (@strutil.char_at(line, 0) == '-' || @strutil.char_at(line, 0) == '*') &&
+  @strutil.char_at(line, 1) == ' '
 }
 
 ///|
@@ -789,10 +662,13 @@ fn is_ordered_item(line : String) -> Bool {
     return false
   }
   let mut i = 0
-  while i < n && is_digit(char_at(line, i)) {
+  while i < n && @strutil.is_digit(@strutil.char_at(line, i)) {
     i = i + 1
   }
-  i > 0 && i + 1 < n && char_at(line, i) == '.' && char_at(line, i + 1) == ' '
+  i > 0 &&
+  i + 1 < n &&
+  @strutil.char_at(line, i) == '.' &&
+  @strutil.char_at(line, i + 1) == ' '
 }
 
 ///|
@@ -800,7 +676,7 @@ fn is_ordered_item(line : String) -> Bool {
 fn count_leading_spaces(line : String) -> Int {
   let n = line.length()
   let mut count = 0
-  while count < n && char_at(line, count) == ' ' {
+  while count < n && @strutil.char_at(line, count) == ' ' {
     count = count + 1
   }
   count
@@ -817,12 +693,12 @@ fn is_nested_indent(line : String) -> Bool {
 fn ordered_item_text(line : String) -> String {
   let n = line.length()
   let mut i = 0
-  while i < n && is_digit(char_at(line, i)) {
+  while i < n && @strutil.is_digit(@strutil.char_at(line, i)) {
     i = i + 1
   }
   // skip ". " (dot and space)
   if i + 2 <= n {
-    substr(line, i + 2, n)
+    @strutil.substr(line, i + 2, n)
   } else {
     ""
   }
@@ -830,7 +706,7 @@ fn ordered_item_text(line : String) -> String {
 
 ///|
 fn is_blockquote_line(line : String) -> Bool {
-  line.length() > 0 && char_at(line, 0) == '>'
+  line.length() > 0 && @strutil.char_at(line, 0) == '>'
 }
 
 ///|
@@ -840,8 +716,8 @@ fn strip_blockquote_marker(line : String) -> String {
     return ""
   }
   // strip '>' and optional single space after it
-  let start = if n > 1 && char_at(line, 1) == ' ' { 2 } else { 1 }
-  substr(line, start, n)
+  let start = if n > 1 && @strutil.char_at(line, 1) == ' ' { 2 } else { 1 }
+  @strutil.substr(line, start, n)
 }
 
 ///|
@@ -851,11 +727,11 @@ fn is_footnote_def_line(line : String) -> Bool {
     return false
   }
   // Footnote def starts with "[^" followed by label and ":"
-  if char_at(line, 0) == '[' && char_at(line, 1) == '^' {
-    let close_bracket = find_char(line, 2, ']', n)
+  if @strutil.char_at(line, 0) == '[' && @strutil.char_at(line, 1) == '^' {
+    let close_bracket = @strutil.find_char(line, 2, ']', n)
     if close_bracket >= 2 &&
       close_bracket + 1 < n &&
-      char_at(line, close_bracket + 1) == ':' {
+      @strutil.char_at(line, close_bracket + 1) == ':' {
       return true
     }
   }
@@ -869,9 +745,9 @@ fn footnote_label_from_def(line : String) -> String {
   if n < 3 {
     return ""
   }
-  let close_bracket = find_char(line, 2, ']', n)
+  let close_bracket = @strutil.find_char(line, 2, ']', n)
   if close_bracket >= 2 {
-    substr(line, 2, close_bracket)
+    @strutil.substr(line, 2, close_bracket)
   } else {
     ""
   }
@@ -884,13 +760,13 @@ fn footnote_text_from_def(line : String) -> String {
   if n < 3 {
     return ""
   }
-  let close_bracket = find_char(line, 2, ']', n)
+  let close_bracket = @strutil.find_char(line, 2, ']', n)
   if close_bracket >= 2 &&
     close_bracket + 1 < n &&
-    char_at(line, close_bracket + 1) == ':' {
+    @strutil.char_at(line, close_bracket + 1) == ':' {
     // Skip ": " (colon and space)
     if close_bracket + 2 <= n {
-      trim(substr(line, close_bracket + 2, n))
+      @strutil.trim(@strutil.substr(line, close_bracket + 2, n))
     } else {
       ""
     }
@@ -911,21 +787,25 @@ fn is_table_row_line(line : String) -> Bool {
 /// Split a GFM table row into trimmed cell strings.
 /// Handles both `| a | b |` (outer pipes) and `a | b` formats.
 fn split_table_row(line : String) -> Array[String] {
-  let t = trim(line)
+  let t = @strutil.trim(line)
   let n = t.length()
   // strip leading pipe
-  let start = if n > 0 && char_at(t, 0) == '|' { 1 } else { 0 }
+  let start = if n > 0 && @strutil.char_at(t, 0) == '|' { 1 } else { 0 }
   // strip trailing pipe
-  let end_pos = if n > 0 && char_at(t, n - 1) == '|' { n - 1 } else { n }
-  let inner = substr(t, start, end_pos)
+  let end_pos = if n > 0 && @strutil.char_at(t, n - 1) == '|' {
+    n - 1
+  } else {
+    n
+  }
+  let inner = @strutil.substr(t, start, end_pos)
   // split on '|'
   let cells : Array[String] = []
   let inner_n = inner.length()
   let mut i = 0
   let mut cell_start = 0
   while i <= inner_n {
-    if i == inner_n || char_at(inner, i) == '|' {
-      cells.push(trim(substr(inner, cell_start, i)))
+    if i == inner_n || @strutil.char_at(inner, i) == '|' {
+      cells.push(@strutil.trim(@strutil.substr(inner, cell_start, i)))
       cell_start = i + 1
     }
     i = i + 1
@@ -937,7 +817,7 @@ fn split_table_row(line : String) -> Array[String] {
 /// A separator cell contains only `-` and `:` characters with at least one `-`.
 /// Examples: `---`, `:---`, `---:`, `:---:`.
 fn is_separator_cell(cell : String) -> Bool {
-  let t = trim(cell)
+  let t = @strutil.trim(cell)
   let n = t.length()
   if n == 0 {
     return false
@@ -945,7 +825,7 @@ fn is_separator_cell(cell : String) -> Bool {
   let mut has_dash = false
   let mut i = 0
   while i < n {
-    let c = char_at(t, i)
+    let c = @strutil.char_at(t, i)
     if c == '-' {
       has_dash = true
     } else if c != ':' {
@@ -979,13 +859,13 @@ fn is_separator_row(line : String) -> Bool {
 ///|
 /// Derive column alignment from a separator cell string.
 fn parse_col_align(cell : String) -> ColAlign {
-  let t = trim(cell)
+  let t = @strutil.trim(cell)
   let n = t.length()
   if n == 0 {
     return AlignDefault
   }
-  let starts_colon = char_at(t, 0) == ':'
-  let ends_colon = char_at(t, n - 1) == ':'
+  let starts_colon = @strutil.char_at(t, 0) == ':'
+  let ends_colon = @strutil.char_at(t, n - 1) == ':'
   if starts_colon && ends_colon {
     AlignCenter
   } else if starts_colon {
@@ -1003,7 +883,7 @@ fn parse_col_align(cell : String) -> ColAlign {
 /// Check if a line starts with ": " (definition prefix)
 fn is_definition_line(line : String) -> Bool {
   let n = line.length()
-  n >= 2 && char_at(line, 0) == ':' && char_at(line, 1) == ' '
+  n >= 2 && @strutil.char_at(line, 0) == ':' && @strutil.char_at(line, 1) == ' '
 }
 
 ///|
@@ -1069,7 +949,7 @@ pub fn parse_blocks_with_footnotes(
       if i < n {
         i = i + 1 // skip closing fence
       }
-      result.push(FencedCode(lang, join_lines(code_lines)))
+      result.push(FencedCode(lang, @strutil.join_lines(code_lines)))
     } else if is_blockquote_line(line) {
       let bq_lines : Array[String] = []
       while i < n && is_blockquote_line(ls[i]) {
@@ -1083,12 +963,12 @@ pub fn parse_blocks_with_footnotes(
       // Single-pass: consume each item line then immediately consume its
       // indented continuation lines before moving to the next item.
       while i < n && is_unordered_item(ls[i]) {
-        let text = substr(ls[i], 2, ls[i].length())
+        let text = @strutil.substr(ls[i], 2, ls[i].length())
         i = i + 1
         // Collect indented continuation lines belonging to this item.
         let nested_lines : Array[String] = []
         while i < n && is_nested_indent(ls[i]) {
-          nested_lines.push(substr(ls[i], 2, ls[i].length()))
+          nested_lines.push(@strutil.substr(ls[i], 2, ls[i].length()))
           i = i + 1
         }
         let children : Array[Block] = if nested_lines.length() > 0 {
@@ -1110,7 +990,7 @@ pub fn parse_blocks_with_footnotes(
         // Collect indented continuation lines belonging to this item.
         let nested_lines : Array[String] = []
         while i < n && is_nested_indent(ls[i]) {
-          nested_lines.push(substr(ls[i], 2, ls[i].length()))
+          nested_lines.push(@strutil.substr(ls[i], 2, ls[i].length()))
           i = i + 1
         }
         let children : Array[Block] = if nested_lines.length() > 0 {
@@ -1132,7 +1012,9 @@ pub fn parse_blocks_with_footnotes(
         let defs : Array[String] = []
         while i < n && is_definition_line(ls[i]) {
           // Strip ": " prefix and any extra leading whitespace (e.g. ":   ")
-          let def_text = trim_start(substr(ls[i], 2, ls[i].length()))
+          let def_text = @strutil.trim_start(
+            @strutil.substr(ls[i], 2, ls[i].length()),
+          )
           defs.push(def_text)
           i = i + 1
         }
@@ -1189,7 +1071,7 @@ pub fn parse_blocks_with_footnotes(
         para_lines.push(ls[i])
         i = i + 1
       }
-      let para_text = join_lines(para_lines)
+      let para_text = @strutil.join_lines(para_lines)
       result.push(Paragraph(parse_inlines(para_text, 0, para_text.length())))
     }
   }
@@ -1338,18 +1220,18 @@ fn render_fenced_code(lang : String?, code : String) -> String {
         let tokens = @highlight.highlight(l, code)
         let highlighted = @highlight.render_highlighted(tokens)
         "<pre class=\"highlight language-" +
-        escape_html(l) +
+        @strutil.escape_html_body(l) +
         "\"><code>" +
         highlighted +
         "</code></pre>\n"
       } else {
         "<pre><code class=\"language-" +
-        escape_html(l) +
+        @strutil.escape_html_body(l) +
         "\">" +
-        escape_html(code) +
+        @strutil.escape_html_body(code) +
         "</code></pre>\n"
       }
-    None => "<pre><code>" + escape_html(code) + "</code></pre>\n"
+    None => "<pre><code>" + @strutil.escape_html_body(code) + "</code></pre>\n"
   }
 }
 
@@ -1366,14 +1248,14 @@ fn render_footnotes_section(
   while i < footnotes.length() {
     let footnote = footnotes[i]
     buf.write_string("<li id=\"fn-")
-    buf.write_string(escape_html(footnote.label))
+    buf.write_string(@strutil.escape_html_body(footnote.label))
     buf.write_string("\">")
     // Render inline markdown in footnote text (e.g. **bold**, `code`)
     let inlines = parse_inlines(footnote.text, 0, footnote.text.length())
     let rendered_text = render_inlines_with_issues(inlines, wl, fn_map).html
     buf.write_string(rendered_text)
     buf.write_string(" <a href=\"#fnref-")
-    buf.write_string(escape_html(footnote.label))
+    buf.write_string(@strutil.escape_html_body(footnote.label))
     buf.write_string("\" class=\"footnote-backref\">↩</a>")
     buf.write_string("</li>\n")
     i = i + 1
@@ -1402,7 +1284,12 @@ fn render_inline_with_issues(
 ) -> RenderResult {
   match inline {
     Text(t) =>
-      { html: escape_html(t), shortcode_errors: [], toc: [], footnotes: [] }
+      {
+        html: @strutil.escape_html_body(t),
+        shortcode_errors: [],
+        toc: [],
+        footnotes: [],
+      }
     Bold(inner) => {
       let rendered = render_inlines_with_issues(inner, wl, fn_map)
       {
@@ -1441,7 +1328,7 @@ fn render_inline_with_issues(
     }
     InlineCode(code) =>
       {
-        html: "<code>" + escape_html(code) + "</code>",
+        html: "<code>" + @strutil.escape_html_body(code) + "</code>",
         shortcode_errors: [],
         toc: [],
         footnotes: [],
@@ -1449,9 +1336,9 @@ fn render_inline_with_issues(
     Link(text, url) =>
       {
         html: "<a href=\"" +
-        escape_html(url) +
+        @strutil.escape_html_body(url) +
         "\">" +
-        escape_html(text) +
+        @strutil.escape_html_body(text) +
         "</a>",
         shortcode_errors: [],
         toc: [],
@@ -1460,9 +1347,9 @@ fn render_inline_with_issues(
     Image(alt, url) =>
       {
         html: "<img src=\"" +
-        escape_html(url) +
+        @strutil.escape_html_body(url) +
         "\" alt=\"" +
-        escape_html(alt) +
+        @strutil.escape_html_body(alt) +
         "\" />",
         shortcode_errors: [],
         toc: [],
@@ -1477,9 +1364,9 @@ fn render_inline_with_issues(
         Some(url) =>
           {
             html: "<a href=\"" +
-            escape_html(url) +
+            @strutil.escape_html_body(url) +
             "\">" +
-            escape_html(text) +
+            @strutil.escape_html_body(text) +
             "</a>",
             shortcode_errors: [],
             toc: [],
@@ -1488,7 +1375,7 @@ fn render_inline_with_issues(
         None =>
           {
             html: "<a class=\"wl-broken\" href=\"#\">" +
-            escape_html(text) +
+            @strutil.escape_html_body(text) +
             "</a>",
             shortcode_errors: [],
             toc: [],
@@ -1501,9 +1388,9 @@ fn render_inline_with_issues(
         Some(ordinal) =>
           {
             html: "<sup><a href=\"#fn-" +
-            escape_html(label) +
+            @strutil.escape_html_body(label) +
             "\" id=\"fnref-" +
-            escape_html(label) +
+            @strutil.escape_html_body(label) +
             "\">[" +
             ordinal.to_string() +
             "]</a></sup>",
@@ -1514,7 +1401,7 @@ fn render_inline_with_issues(
         None =>
           {
             // Unresolved footnote reference - render as plain text
-            html: "[^" + escape_html(label) + "]",
+            html: "[^" + @strutil.escape_html_body(label) + "]",
             shortcode_errors: [],
             toc: [],
             footnotes: [],
@@ -1563,7 +1450,7 @@ fn render_block_with_issues(
         html: "<" +
         tag +
         " id=\"" +
-        escape_html(anchor) +
+        @strutil.escape_html_body(anchor) +
         "\">" +
         rendered.html +
         "</" +
@@ -1794,10 +1681,12 @@ fn render_block_with_issues(
       let mut j = 0
       while j < items.length() {
         let (term, defs) = items[j]
-        buf.write_string("<dt>" + escape_html(term) + "</dt>\n")
+        buf.write_string("<dt>" + @strutil.escape_html_body(term) + "</dt>\n")
         let mut k = 0
         while k < defs.length() {
-          buf.write_string("<dd>" + escape_html(defs[k]) + "</dd>\n")
+          buf.write_string(
+            "<dd>" + @strutil.escape_html_body(defs[k]) + "</dd>\n",
+          )
           k = k + 1
         }
         j = j + 1
@@ -1821,9 +1710,9 @@ pub fn render_table_of_contents(entries : Array[TocEntry]) -> String {
     buf.write_string("<li class=\"toc-level-")
     buf.write_string(entry.level.to_string())
     buf.write_string("\"><a href=\"#")
-    buf.write_string(escape_html(entry.anchor))
+    buf.write_string(@strutil.escape_html_body(entry.anchor))
     buf.write_string("\">")
-    buf.write_string(escape_html(entry.text))
+    buf.write_string(@strutil.escape_html_body(entry.text))
     buf.write_string("</a></li>\n")
     i = i + 1
   }

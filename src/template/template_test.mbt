@@ -1143,18 +1143,16 @@ test "render {{page.field}} in conditional body with data store" {
   }
 }
 
-
 ///|
 test "parse {{#each data.nav.items}}...{{/each}} loop" {
-  let tpl = match
-    parse_template("{{#each data.nav.items}}{{item}}{{/each}}") {
+  let tpl = match parse_template("{{#each data.nav.items}}{{item}}{{/each}}") {
     Ok(v) => v
     Err(_) => {
       assert_true(false)
       { parts: [], required_slots: [], layout: None }
     }
   }
-  
+
   // Should have one part: DataEachBlock
   assert_eq(tpl.parts.length(), 1)
   match tpl.parts[0] {
@@ -1176,14 +1174,16 @@ test "parse {{#each data.nav.items}}...{{/each}} loop" {
 ///|
 test "parse {{#each data.nav.links}}...{{/each}} with field access" {
   let tpl = match
-    parse_template("{{#each data.nav.links}}<a href=\"{{item.url}}\">{{item.title}}</a>{{/each}}") {
+    parse_template(
+      "{{#each data.nav.links}}<a href=\"{{item.url}}\">{{item.title}}</a>{{/each}}",
+    ) {
     Ok(v) => v
     Err(_) => {
       assert_true(false)
       { parts: [], required_slots: [], layout: None }
     }
   }
-  
+
   match tpl.parts[0] {
     DataEachBlock(file, key_path, body_parts) => {
       assert_eq(file, "nav")
@@ -1218,7 +1218,7 @@ test "parse {{item.title}} creates LoopItemSlot with path" {
       { parts: [], required_slots: [], layout: None }
     }
   }
-  
+
   match tpl.parts[0] {
     LoopItemSlot(path) => {
       assert_eq(path.length(), 1)
@@ -1237,7 +1237,7 @@ test "parse {{item.a.b}} creates LoopItemSlot with nested path" {
       { parts: [], required_slots: [], layout: None }
     }
   }
-  
+
   match tpl.parts[0] {
     LoopItemSlot(path) => {
       assert_eq(path.length(), 2)
@@ -1271,7 +1271,7 @@ test "render loop over string array" {
   )
   let array_file = @data.new_file("nav", fields)
   let array_store = @data.new_store([array_file])
-  
+
   let tpl = match
     parse_template("{{#each data.nav.items}}<li>{{item}}</li>{{/each}}") {
     Ok(v) => v
@@ -1280,9 +1280,10 @@ test "render loop over string array" {
       { parts: [], required_slots: [], layout: None }
     }
   }
-  
+
   let slots : Map[TemplateSlot, String] = Map::new()
-  match render_template_with_data(tpl, slots, array_store, Map::new(), Map::new()) {
+  match
+    render_template_with_data(tpl, slots, array_store, Map::new(), Map::new()) {
     Ok(html) => {
       assert_true(html.contains("<li>home</li>"))
       assert_true(html.contains("<li>blog</li>"))
@@ -1298,29 +1299,31 @@ test "render loop over map array with field access" {
   let link1 : Map[String, @frontmatter.FrontmatterValue] = Map::new()
   link1.set("title", @frontmatter.FStr("Home"))
   link1.set("url", @frontmatter.FStr("/"))
-  
+
   let link2 : Map[String, @frontmatter.FrontmatterValue] = Map::new()
   link2.set("title", @frontmatter.FStr("Blog"))
   link2.set("url", @frontmatter.FStr("/blog"))
-  
+
   let fields : Map[String, @frontmatter.FrontmatterValue] = Map::new()
   fields.set(
     "links",
     @frontmatter.FArray([@frontmatter.FMap(link1), @frontmatter.FMap(link2)]),
   )
-  
+
   let file = @data.new_file("nav", fields)
   let store = @data.new_store([file])
-  
+
   let tpl = match
-    parse_template("{{#each data.nav.links}}<a href=\"{{item.url}}\">{{item.title}}</a>{{/each}}") {
+    parse_template(
+      "{{#each data.nav.links}}<a href=\"{{item.url}}\">{{item.title}}</a>{{/each}}",
+    ) {
     Ok(v) => v
     Err(_) => {
       assert_true(false)
       { parts: [], required_slots: [], layout: None }
     }
   }
-  
+
   let slots : Map[TemplateSlot, String] = Map::new()
   match render_template_with_data(tpl, slots, store, Map::new(), Map::new()) {
     Ok(html) => {
@@ -1336,16 +1339,15 @@ test "render loop with non-array value renders nothing" {
   let store = @data.new_store([
     @data.new_string_file("nav", [("title", "Main")]),
   ])
-  
-  let tpl = match
-    parse_template("{{#each data.nav.title}}{{item}}{{/each}}") {
+
+  let tpl = match parse_template("{{#each data.nav.title}}{{item}}{{/each}}") {
     Ok(v) => v
     Err(_) => {
       assert_true(false)
       { parts: [], required_slots: [], layout: None }
     }
   }
-  
+
   let slots : Map[TemplateSlot, String] = Map::new()
   match render_template_with_data(tpl, slots, store, Map::new(), Map::new()) {
     Ok(html) => assert_eq(html, "")
@@ -1358,7 +1360,7 @@ test "render loop with missing key renders nothing" {
   let store = @data.new_store([
     @data.new_string_file("nav", [("title", "Main")]),
   ])
-  
+
   let tpl = match
     parse_template("{{#each data.nav.missing}}{{item}}{{/each}}") {
     Ok(v) => v
@@ -1367,7 +1369,7 @@ test "render loop with missing key renders nothing" {
       { parts: [], required_slots: [], layout: None }
     }
   }
-  
+
   let slots : Map[TemplateSlot, String] = Map::new()
   match render_template_with_data(tpl, slots, store, Map::new(), Map::new()) {
     Ok(html) => assert_eq(html, "")
@@ -1378,14 +1380,11 @@ test "render loop with missing key renders nothing" {
 ///|
 test "render {{item.field}} with non-map item renders empty" {
   let fields : Map[String, @frontmatter.FrontmatterValue] = Map::new()
-  fields.set(
-    "items",
-    @frontmatter.FArray([@frontmatter.FStr("string_value")]),
-  )
-  
+  fields.set("items", @frontmatter.FArray([@frontmatter.FStr("string_value")]))
+
   let file = @data.new_file("nav", fields)
   let store = @data.new_store([file])
-  
+
   let tpl = match
     parse_template("{{#each data.nav.items}}{{item.title}}{{/each}}") {
     Ok(v) => v
@@ -1394,7 +1393,7 @@ test "render {{item.field}} with non-map item renders empty" {
       { parts: [], required_slots: [], layout: None }
     }
   }
-  
+
   let slots : Map[TemplateSlot, String] = Map::new()
   match render_template_with_data(tpl, slots, store, Map::new(), Map::new()) {
     Ok(html) => assert_eq(html, "")
@@ -1407,7 +1406,7 @@ test "render {{item}} outside loop renders empty" {
   let store = @data.new_store([
     @data.new_string_file("nav", [("title", "Main")]),
   ])
-  
+
   let tpl = match parse_template("Item: {{item}}") {
     Ok(v) => v
     Err(_) => {
@@ -1415,7 +1414,7 @@ test "render {{item}} outside loop renders empty" {
       { parts: [], required_slots: [], layout: None }
     }
   }
-  
+
   let slots : Map[TemplateSlot, String] = Map::new()
   match render_template_with_data(tpl, slots, store, Map::new(), Map::new()) {
     Ok(html) => assert_eq(html, "Item: ")
@@ -1433,7 +1432,7 @@ test "parse {{#each}} with nested path" {
       { parts: [], required_slots: [], layout: None }
     }
   }
-  
+
   match tpl.parts[0] {
     DataEachBlock(file, key_path, _) => {
       assert_eq(file, "site")
@@ -1447,15 +1446,14 @@ test "parse {{#each}} with nested path" {
 
 ///|
 test "parse {{#each page.keywords}}...{{/each}} loop" {
-  let tpl = match
-    parse_template("{{#each page.keywords}}{{item}}{{/each}}") {
+  let tpl = match parse_template("{{#each page.keywords}}{{item}}{{/each}}") {
     Ok(v) => v
     Err(_) => {
       assert_true(false)
       { parts: [], required_slots: [], layout: None }
     }
   }
-  
+
   // Should have one part: FrontmatterEachBlock
   assert_eq(tpl.parts.length(), 1)
   match tpl.parts[0] {
@@ -1482,7 +1480,7 @@ test "parse {{#each page.tags}}...{{/each}} with text" {
       { parts: [], required_slots: [], layout: None }
     }
   }
-  
+
   match tpl.parts[1] {
     FrontmatterEachBlock(field, body_parts) => {
       assert_eq(field, "tags")
@@ -1515,14 +1513,17 @@ test "render {{#each page.keywords}} with array present" {
       { parts: [], required_slots: [], layout: None }
     }
   }
-  
+
   let slots = Map::new()
   let page_fields = Map::new()
   let page_field_arrays = Map::new()
   page_field_arrays.set("keywords", ["moonbit", "ssg", "template"])
   let data_store = @data.empty_store()
-  
-  match render_template_with_data(tpl, slots, data_store, page_fields, page_field_arrays) {
+
+  match
+    render_template_with_data(
+      tpl, slots, data_store, page_fields, page_field_arrays,
+    ) {
     Ok(output) => assert_eq(output, "moonbit ssg template ")
     Err(_) => assert_true(false)
   }
@@ -1537,14 +1538,17 @@ test "render {{#each page.tags}} with missing field renders empty" {
       { parts: [], required_slots: [], layout: None }
     }
   }
-  
+
   let slots = Map::new()
   let page_fields = Map::new()
   let page_field_arrays = Map::new()
   // tags not present in page_field_arrays
   let data_store = @data.empty_store()
-  
-  match render_template_with_data(tpl, slots, data_store, page_fields, page_field_arrays) {
+
+  match
+    render_template_with_data(
+      tpl, slots, data_store, page_fields, page_field_arrays,
+    ) {
     Ok(output) => assert_eq(output, "")
     Err(_) => assert_true(false)
   }
@@ -1552,21 +1556,25 @@ test "render {{#each page.tags}} with missing field renders empty" {
 
 ///|
 test "render {{#each page.contributors}} with empty array renders empty" {
-  let tpl = match parse_template("{{#each page.contributors}}{{item}}{{/each}}") {
+  let tpl = match
+    parse_template("{{#each page.contributors}}{{item}}{{/each}}") {
     Ok(v) => v
     Err(_) => {
       assert_true(false)
       { parts: [], required_slots: [], layout: None }
     }
   }
-  
+
   let slots = Map::new()
   let page_fields = Map::new()
   let page_field_arrays = Map::new()
   page_field_arrays.set("contributors", [])
   let data_store = @data.empty_store()
-  
-  match render_template_with_data(tpl, slots, data_store, page_fields, page_field_arrays) {
+
+  match
+    render_template_with_data(
+      tpl, slots, data_store, page_fields, page_field_arrays,
+    ) {
     Ok(output) => assert_eq(output, "")
     Err(_) => assert_true(false)
   }
@@ -1574,7 +1582,8 @@ test "render {{#each page.contributors}} with empty array renders empty" {
 
 ///|
 test "render {{#each page.keywords}} with {{item.field}} renders empty for string arrays" {
-  let tpl = match parse_template("{{#each page.keywords}}{{item.name}} {{/each}}") {
+  let tpl = match
+    parse_template("{{#each page.keywords}}{{item.name}} {{/each}}") {
     Ok(v) => v
     Err(_) => {
       assert_true(false)
@@ -1589,7 +1598,10 @@ test "render {{#each page.keywords}} with {{item.field}} renders empty for strin
   let data_store = @data.empty_store()
 
   // String arrays don't support subfield access, so {{item.name}} renders empty
-  match render_template_with_data(tpl, slots, data_store, page_fields, page_field_arrays) {
+  match
+    render_template_with_data(
+      tpl, slots, data_store, page_fields, page_field_arrays,
+    ) {
     Ok(output) => assert_eq(output, "  ")
     Err(_) => assert_true(false)
   }
@@ -1625,7 +1637,8 @@ test "collect_frontmatter_refs collects {{page.field}} references" {
 
 ///|
 test "collect_frontmatter_refs collects {{?page.field}} conditional refs" {
-  let tpl = match parse_template("{{?page.hero}}<img src=\"{{page.hero}}\">{{/?page.hero}}") {
+  let tpl = match
+    parse_template("{{?page.hero}}<img src=\"{{page.hero}}\">{{/?page.hero}}") {
     Ok(v) => v
     Err(_) => {
       assert_true(false)
@@ -1640,7 +1653,8 @@ test "collect_frontmatter_refs collects {{?page.field}} conditional refs" {
 
 ///|
 test "collect_frontmatter_refs collects {{#each page.field}} loop refs" {
-  let tpl = match parse_template("{{#each page.keywords}}<li>{{item}}</li>{{/each}}") {
+  let tpl = match
+    parse_template("{{#each page.keywords}}<li>{{item}}</li>{{/each}}") {
     Ok(v) => v
     Err(_) => {
       assert_true(false)
@@ -1668,9 +1682,10 @@ test "collect_frontmatter_refs deduplicates repeated field references" {
 
 ///|
 test "collect_frontmatter_refs collects refs from mixed expression types" {
-  let tpl = match parse_template(
-    "{{page.title_override}}{{?page.hero}}img{{/?page.hero}}{{#each page.authors}}.{{/each}}",
-  ) {
+  let tpl = match
+    parse_template(
+      "{{page.title_override}}{{?page.hero}}img{{/?page.hero}}{{#each page.authors}}.{{/each}}",
+    ) {
     Ok(v) => v
     Err(_) => {
       assert_true(false)

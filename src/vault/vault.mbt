@@ -85,7 +85,7 @@ pub fn is_active_project(meta : VaultMetadata?) -> Bool {
       match m.status {
         None => false
         Some(s) => {
-          let lower = to_lowercase(s)
+          let lower = @strutil.to_ascii_lower(s)
           lower == "active" ||
           lower == "in-progress" ||
           lower == "doing" ||
@@ -107,7 +107,7 @@ pub fn is_archived(meta : VaultMetadata?) -> Bool {
       match m.status {
         None => false
         Some(s) => {
-          let lower = to_lowercase(s)
+          let lower = @strutil.to_ascii_lower(s)
           lower == "archived" ||
           lower == "completed" ||
           lower == "done" ||
@@ -139,7 +139,7 @@ pub fn categorize_note(meta : VaultMetadata?) -> String {
 /// Handles common variations like "Project"/"project"/"PROJECT",
 /// "Area"/"Area of Focus"/"Domain", etc.
 fn normalize_type(raw_type : String) -> String {
-  let lower = to_lowercase(raw_type)
+  let lower = @strutil.to_ascii_lower(raw_type)
   if lower == "project" || lower == "projects" {
     return "project"
   }
@@ -173,7 +173,7 @@ pub fn category_class(category : String) -> String {
   let buf = StringBuilder::new()
   let mut i = 0
   while i < category.length() {
-    let c = char_at_vault(category, i)
+    let c = @strutil.char_at(category, i)
     if (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') {
       buf.write_char(c)
     } else if c >= 'A' && c <= 'Z' {
@@ -220,7 +220,7 @@ pub fn render_metadata_badge(meta : VaultMetadata?) -> String {
             "vault-type-" + category_class(cat)
           }
           "status" => {
-            let lower = to_lowercase(value)
+            let lower = @strutil.to_ascii_lower(value)
             "vault-status-" + category_class(lower)
           }
           _ => "vault-meta-" + category_class(kind)
@@ -228,7 +228,7 @@ pub fn render_metadata_badge(meta : VaultMetadata?) -> String {
         buf.write_string("<span class=\"vault-badge ")
         buf.write_string(class_suffix)
         buf.write_string("\">")
-        buf.write_string(escape_html_vault(value))
+        buf.write_string(@strutil.escape_html_attr(value))
         buf.write_string("</span>")
         if i < parts.length() - 1 {
           buf.write_char(' ')
@@ -252,7 +252,7 @@ pub fn should_exclude_from_index(meta : VaultMetadata?) -> Bool {
       match m.note_type {
         None => false
         Some(t) => {
-          let lower = to_lowercase(t)
+          let lower = @strutil.to_ascii_lower(t)
           lower == "private" ||
           lower == "inbox" ||
           lower == "wip" ||
@@ -280,7 +280,7 @@ pub fn category_label(category : String) -> String {
       if category.length() == 0 {
         return "Uncategorized"
       }
-      let first = char_at_vault(category, 0)
+      let first = @strutil.char_at(category, 0)
       if first >= 'a' && first <= 'z' {
         buf.write_char((first.to_int() - 32).unsafe_to_char())
       } else {
@@ -288,55 +288,10 @@ pub fn category_label(category : String) -> String {
       }
       let mut i = 1
       while i < category.length() {
-        buf.write_char(char_at_vault(category, i))
+        buf.write_char(@strutil.char_at(category, i))
         i = i + 1
       }
       buf.to_string()
     }
   }
-}
-
-// ── private helpers ─────────────────────────────────────────────────────────────
-
-///|
-fn char_at_vault(s : String, i : Int) -> Char {
-  s[i].to_int().unsafe_to_char()
-}
-
-///|
-fn to_lowercase(s : String) -> String {
-  let buf = StringBuilder::new()
-  let mut i = 0
-  while i < s.length() {
-    let c = char_at_vault(s, i)
-    if c >= 'A' && c <= 'Z' {
-      buf.write_char((c.to_int() + 32).unsafe_to_char())
-    } else {
-      buf.write_char(c)
-    }
-    i = i + 1
-  }
-  buf.to_string()
-}
-
-///|
-fn escape_html_vault(s : String) -> String {
-  let buf = StringBuilder::new()
-  let mut i = 0
-  while i < s.length() {
-    let c = char_at_vault(s, i)
-    if c == '&' {
-      buf.write_string("&amp;")
-    } else if c == '<' {
-      buf.write_string("&lt;")
-    } else if c == '>' {
-      buf.write_string("&gt;")
-    } else if c == '"' {
-      buf.write_string("&quot;")
-    } else {
-      buf.write_char(c)
-    }
-    i = i + 1
-  }
-  buf.to_string()
 }

@@ -1,3 +1,4 @@
 import {
+  "kurisu/lattice/src/strutil" @strutil,
   "kurisu/lattice/src/schema" @schema,
 }
