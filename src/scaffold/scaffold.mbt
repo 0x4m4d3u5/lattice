@@ -1089,20 +1089,20 @@ let welcome_post : String =
 
 ///|
 /// Generate lattice.conf with inline [[collections]] for the given target directory.
-/// Collection dir and template paths are relative to content-dir, matching how
-/// the builder resolves them (content_dir + "/" + path when not absolute).
-fn generate_lattice_conf(target_dir : String) -> String {
-  let content = target_dir + "/content"
+/// Collection dir and template paths are relative to the site root so the
+/// scaffold works when building from inside the site directory
+/// (e.g. `cd my-site && lattice build ./content`).
+fn generate_lattice_conf(_target_dir : String) -> String {
   "title = My Site\n" +
-    "base_url = http://localhost:4321\n" +
-    "description = A new site built with Lattice.\n" +
-    "\n" +
-    "[[collections]]\n" +
-    "name = posts\n" +
-    "dir = " + content + "/posts\n" +
-    "schema = title:String,date:Date,description:Optional[String],tags:Optional[Array[String]],author:Optional[String],draft:Optional[Bool]\n" +
-    "template = " + content + "/templates/page.html\n" +
-    "page_size = 10\n"
+  "base_url = http://localhost:4321\n" +
+  "description = A new site built with Lattice.\n" +
+  "\n" +
+  "[[collections]]\n" +
+  "name = posts\n" +
+  "dir = ./content/posts\n" +
+  "schema = title:String,date:Date,description:Optional[String],tags:Optional[Array[String]],author:Optional[String],draft:Optional[Bool]\n" +
+  "template = ./content/templates/page.html\n" +
+  "page_size = 10\n"
 }
 
 ///|
@@ -1283,7 +1283,8 @@ pub fn scaffold_site(target_dir : String) -> Result[Unit, String] {
     Ok(_) => ()
     Err(e) => return Err(e)
   }
-  match write_file(content + "/lattice.conf", generate_lattice_conf(target_dir)) {
+  match
+    write_file(content + "/lattice.conf", generate_lattice_conf(target_dir)) {
     Ok(_) => ()
     Err(e) => return Err(e)
   }

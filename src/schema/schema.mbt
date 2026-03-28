@@ -135,9 +135,11 @@ fn type_matches(val : @frontmatter.FrontmatterValue, ft : FieldType) -> Bool {
       match val {
         @frontmatter.FStr(s) =>
           s.length() > 0 &&
-          (@strutil.starts_with(s, "http://") ||
+          (
+            @strutil.starts_with(s, "http://") ||
             @strutil.starts_with(s, "https://") ||
-            @strutil.starts_with(s, "/"))
+            @strutil.starts_with(s, "/")
+          )
         _ => false
       }
     TSlug =>
