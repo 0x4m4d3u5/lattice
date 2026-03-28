@@ -39,20 +39,83 @@ Because wikilinks resolve against the complete index from pass 1, forward refere
 - `content/` - Example markdown content.
 - `dist/` - Build output.
 
-## Build and check
+## CLI
 
-Run from repo root:
+`lattice` uses subcommands powered by `@clap`:
 
-```bash
-moon check
-moon run cmd/main
+```
+lattice build   [content-dir] [output-dir] [options]
+lattice check   [content-dir] [output-dir] [options]
+lattice serve   [content-dir] [output-dir] [options]
 ```
 
-Optional custom paths:
+### `lattice build`
+
+Build the site and write HTML to the output directory.
 
 ```bash
-moon run cmd/main -- ./content ./dist
+# defaults: ./content → ./dist
+lattice build
+
+# explicit paths
+lattice build ./content ./dist
+
+# with config and collections overrides
+lattice build ./content ./dist --config ./example/site.cfg --collections ./example/collections.cfg
+
+# watch mode — rebuild on file changes
+lattice build ./content ./dist --watch
+
+# custom polling interval (default: 500 ms)
+lattice build ./content ./dist --watch --watch-interval 1000
+
+# include draft posts
+lattice build ./content ./dist --drafts
+
+# force full rebuild (ignore incremental cache)
+lattice build ./content ./dist --force
 ```
+
+### `lattice check`
+
+Run validation and lint pipeline only — no output writes.
+
+```bash
+lattice check ./content ./dist
+```
+
+### `lattice serve`
+
+Start the dev server with live reload and file watching.
+
+```bash
+# defaults: port 4321
+lattice serve ./content ./dist
+
+# custom port
+lattice serve ./content ./dist --port 8080
+
+# include drafts
+lattice serve ./content ./dist --drafts
+```
+
+### Common flags
+
+| Flag | Subcommands | Description |
+|------|------------|-------------|
+| `-c, --config <path>` | build, check, serve | Override site config file |
+| `--collections <path>` | build, check, serve | Override collections config file |
+| `--drafts` | build, serve | Include draft posts |
+| `--watch` | build | Rebuild on file changes with polling |
+| `--watch-interval <ms>` | build | Polling interval (default: 500) |
+| `--force` | build | Ignore incremental cache |
+| `-p, --port <N>` | serve | HTTP port for dev server (default: 4321) |
+
+### Defaults
+
+- `content-dir` → `./content`
+- config file → `<content-dir>/lattice.conf`
+- `output-dir` → `config.output_dir` or `./dist`
 
 ## Output
 

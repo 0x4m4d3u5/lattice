@@ -28,50 +28,69 @@ Build the project:
 moon build
 ```
 
-Run with defaults (`./content` -> `./dist`, config at `./content/lattice.conf`):
+Run a build with defaults (`./content` → `./dist`, config at `./content/lattice.conf`):
 
 ```bash
-moon run cmd/main
+moon run cmd/main -- build
 ```
 
-Run with explicit content/output directories:
+Run a build with explicit content/output directories:
 
 ```bash
-moon run cmd/main -- ./content ./dist
+moon run cmd/main -- build ./content ./dist
 ```
 
-Run with explicit config and collections files:
+Run a build with config and collections overrides:
 
 ```bash
-moon run cmd/main -- ./content ./dist --config ./example/site.cfg --collections ./example/collections.cfg
+moon run cmd/main -- build ./content ./dist --config ./example/site.cfg --collections ./example/collections.cfg
 ```
 
 Run structural checks only (no output writes):
 
 ```bash
-moon run cmd/main -- ./content ./dist --check
+moon run cmd/main -- check ./content ./dist
 ```
 
 Run in polling watch mode for local development:
 
 ```bash
-moon run cmd/main -- ./content ./dist --watch
+moon run cmd/main -- build ./content ./dist --watch
 ```
 
 Adjust the polling interval if needed:
 
 ```bash
-moon run cmd/main -- ./content ./dist --watch --watch-interval 1000
+moon run cmd/main -- build ./content ./dist --watch --watch-interval 1000
 ```
 
-### CLI flags
+Start the dev server with live reload:
 
-- `--config <path>`: override site config file (also supports `--config=<path>`)
-- `--collections <path>`: override collections config file (also supports `--collections=<path>`)
-- `--check`: run validation/lint pipeline only
-- `--watch`: do an initial build, then poll source/config/template/data/static inputs and rebuild on change
-- `--watch-interval <ms>`: override the polling interval in milliseconds (also supports `--watch-interval=<ms>`, default `500`)
-- `--help`: print CLI usage
+```bash
+moon run cmd/main -- serve ./content ./dist --port 4321
+```
+
+### CLI
+
+`lattice` uses subcommands powered by `@clap`:
+
+```
+lattice build   [content-dir] [output-dir] [options]   — build the site
+lattice check   [content-dir] [output-dir] [options]   — validate/lint only
+lattice serve   [content-dir] [output-dir] [options]   — dev server + live reload
+```
+
+| Flag | Subcommands | Description |
+|------|------------|-------------|
+| `-c, --config <path>` | build, check, serve | Override site config file |
+| `--collections <path>` | build, check, serve | Override collections config file |
+| `--drafts` | build, serve | Include draft posts |
+| `--watch` | build | Rebuild on file changes with polling |
+| `--watch-interval <ms>` | build | Polling interval (default: 500) |
+| `--force` | build | Ignore incremental cache |
+| `-p, --port <N>` | serve | HTTP port for dev server (default: 4321) |
+
+Defaults: `content-dir` → `./content`, config → `<content-dir>/lattice.conf`, `output-dir` → `config.output_dir` or `./dist`.
 
 ## Module Overview (`src/`)
 
@@ -110,10 +129,16 @@ The `example/` directory is a compact feature demo site:
 Run it with:
 
 ```bash
-moon run cmd/main -- ./example/content ./example/dist --config ./example/site.cfg
+moon run cmd/main -- build ./example/content ./example/dist --config ./example/site.cfg
 ```
 
-For local preview, pair `--watch` with a static file server such as `simple-http-server`:
+For local preview, start the dev server:
+
+```bash
+moon run cmd/main -- serve ./example/content ./example/dist --config ./example/site.cfg
+```
+
+Or pair `--watch` with a static file server such as `simple-http-server`:
 
 ```bash
 simple-http-server ./dist
