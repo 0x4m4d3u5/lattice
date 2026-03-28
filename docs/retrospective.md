@@ -144,3 +144,37 @@ The decision to accept relative paths (`/about`, `/posts/hello`) was deliberate.
 The honest limitation is that `TUrl` validates format, not liveness. A URL like `https://example.com/deleted-page` passes validation. A 404 URL is structurally valid. This is the same boundary described in "What Types Didn't Solve" — the type system catches structural violations (malformed URLs), but semantic violations (dead links, wrong destinations) remain a human concern. Wikilinks get resolution validation because lattice has the content graph. External URLs don't have that graph, so format validation is the strongest guarantee the type system can provide at this boundary.
 
 The `TUrl` implementation also added a `field_type_name()` case returning `"Url"`, which surfaces in error messages and in the `--check` lint output. The test suite in `src/schema/schema_test.mbt` covers the four cases: `https://` accepted, `http://` accepted, `/relative` accepted, `"not-a-url"` rejected, empty string rejected, and `ftp://` rejected (only HTTP/HTTPS are valid schemes). The pattern is the same as `TEnum`: add a variant to `FieldType`, add pattern-matching logic to `type_matches()`, add the display name to `field_type_name()`, write targeted tests. Each domain constraint follows the same structural seam.
+
+
+### Build Summary — Structured Error Reporting
+
+The `--check` mode and the build command previously ended with a single count line: "5 violation(s)" or "3 error(s)". That raw count is accurate but unactionable. When a build fails, the developer needs to know *what kinds* of errors dominate and *which files* are the worst offenders. The build summary adds exactly that: a structured breakdown of violations grouped by type and by file, printed after the individual diagnostics.
+
+The implementation adds three concepts:
+
+1. **`ViolationSummary`** in `src/lint/lint.mbt` — groups `LintViolation` entries by `ViolationType` and by file path, sorted by count descending. The `summarize()` function builds this from a `LintResult`, and `format_summary()` renders it as indented text (`By type:` / `By file:` sections).
+
+2. **`DiagnosticSummary`** in `src/diagnostic/diagnostic.mbt` — groups `Diagnostic` entries by severity (error/warning count), error code (E001–E011), and file path. This parallels `ViolationSummary` but operates on the richer `Diagnostic` type used by the build command.
+
+3. **CLI integration** in `cmd/main/main.mbt` — `run_once()` now calls `@lint.format_summary()` on check failure and `@diagnostic.format_summary()` on build failure, replacing the raw count line with the structured breakdown.
+
+The architectural decision is to compute summaries at the CLI boundary, not inside the builder. The builder returns flat arrays of violations and diagnostics — it doesn't know about summary formatting. The CLI layer, which already iterates through individual diagnostics to print them, also computes and prints the summary. This keeps the builder's return types simple (arrays, not aggregated structures) while giving the CLI layer the structured output it needs.
+
+The summary is purely additive — no existing behavior changes. Individual diagnostics are still printed one per line with full path, line, column, error code, and hint. The summary appears after the last diagnostic, giving the developer a quick scan of the error landscape before scrolling back up to the details.
+
+Example output for a check with schema and wikilink errors:
+
+```
+content/posts/draft.md:3 [error][E002] expected Date but got incompatible value
+content/posts/draft.md:7 [error][E004] broken wikilink: [[missing-page]]
+content/posts/old.md:1 [error][E002] required field missing: date
+Summary: 3 violation(s)
+  By type:
+    schema: 2
+    broken_wikilink: 1
+  By file:
+    content/posts/draft.md: 2
+    content/posts/old.md: 1
+```
+
+This is the UX thesis applied to error reporting. The individual diagnostics give the precise location and hint. The summary gives the structural overview. Together, they tell the developer both *where* the problems are and *what kind* of problems dominate the build — without requiring manual counting or piping through external tools.

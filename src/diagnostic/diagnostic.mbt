@@ -215,3 +215,177 @@ pub fn of_lint_violation(v : @lint.LintViolation) -> Diagnostic {
     note: hint_for_violation(v.kind),
   }
 }
+
+// ── build summary ────────────────────────────────────────────────────────────
+
+///|
+/// Count of diagnostics for a single error code.
+pub(all) struct CodeCount {
+  code : String
+  count : Int
+}
+
+///|
+/// Count of diagnostics for a single file path.
+pub(all) struct DiagnosticFileCount {
+  path : String
+  count : Int
+}
+
+///|
+/// Structured summary of build diagnostics, grouped by severity, code, and file.
+///
+/// Provides three breakdowns:
+/// - **error_count / warning_count**: totals by severity
+/// - **by_code**: how many diagnostics for each error code (E001–E011)
+/// - **by_file**: how many diagnostics per source file
+///
+/// Used by the build command to emit a structured summary after the
+/// individual diagnostic lines.
+pub(all) struct DiagnosticSummary {
+  error_count : Int
+  warning_count : Int
+  by_code : Array[CodeCount]
+  by_file : Array[DiagnosticFileCount]
+}
+
+///|
+/// Compute a structured summary from an array of diagnostics.
+///
+/// Groups by error code and by file path, sorted by count descending.
+pub fn summarize(diagnostics : Array[Diagnostic]) -> DiagnosticSummary {
+  let mut error_count = 0
+  let mut warning_count = 0
+  let code_counts : Map[String, Int] = Map::new()
+  let file_counts : Map[String, Int] = Map::new()
+
+  let mut i = 0
+  while i < diagnostics.length() {
+    let d = diagnostics[i]
+    match d.severity {
+      Error => error_count = error_count + 1
+      Warning => warning_count = warning_count + 1
+    }
+    match d.code {
+      Some(code) =>
+        match code_counts.get(code) {
+          Some(count) => code_counts.set(code, count + 1)
+          None => code_counts.set(code, 1)
+        }
+      None => ()
+    }
+    match d.path {
+      Some(path) =>
+        match file_counts.get(path) {
+          Some(count) => file_counts.set(path, count + 1)
+          None => file_counts.set(path, 1)
+        }
+      None => ()
+    }
+    i = i + 1
+  }
+
+  let by_code : Array[CodeCount] = []
+  for code, count in code_counts {
+    by_code.push({ code, count })
+  }
+  sort_code_counts(by_code)
+
+  let by_file : Array[DiagnosticFileCount] = []
+  for path, count in file_counts {
+    by_file.push({ path, count })
+  }
+  sort_diagnostic_file_counts(by_file)
+
+  {
+    error_count,
+    warning_count,
+    by_code,
+    by_file,
+  }
+}
+
+///|
+/// Format a `DiagnosticSummary` as a human-readable multi-line summary.
+///
+/// Output format:
+/// ```
+/// Summary: 3 error(s), 1 warning(s)
+///   By code:
+///     E002: 2
+///     E004: 1
+///   By file:
+///     content/posts/broken.md: 3
+/// ```
+pub fn format_summary(summary : DiagnosticSummary) -> String {
+  let buf = StringBuilder::new()
+  buf.write_string("Summary: ")
+  buf.write_string(summary.error_count.to_string())
+  buf.write_string(" error(s), ")
+  buf.write_string(summary.warning_count.to_string())
+  buf.write_string(" warning(s)")
+
+  if summary.by_code.length() > 0 {
+    buf.write_string("\n  By code:")
+    let mut i = 0
+    while i < summary.by_code.length() {
+      let cc = summary.by_code[i]
+      buf.write_string("\n    ")
+      buf.write_string(cc.code)
+      buf.write_string(": ")
+      buf.write_string(cc.count.to_string())
+      i = i + 1
+    }
+  }
+
+  if summary.by_file.length() > 0 {
+    buf.write_string("\n  By file:")
+    let mut i = 0
+    while i < summary.by_file.length() {
+      let fc = summary.by_file[i]
+      buf.write_string("\n    ")
+      buf.write_string(fc.path)
+      buf.write_string(": ")
+      buf.write_string(fc.count.to_string())
+      i = i + 1
+    }
+  }
+
+  buf.to_string()
+}
+
+///|
+fn sort_code_counts(items : Array[CodeCount]) -> Unit {
+  let n = items.length()
+  let mut i = 0
+  while i < n - 1 {
+    let mut j = i + 1
+    while j < n {
+      if items[j].count > items[i].count {
+        let tmp = items[i]
+        items[i] = items[j]
+        items[j] = tmp
+      }
+      j = j + 1
+    }
+    i = i + 1
+  }
+}
+
+///|
+fn sort_diagnostic_file_counts(items : Array[DiagnosticFileCount]) -> Unit {
+  let n = items.length()
+  let mut i = 0
+  while i < n - 1 {
+    let mut j = i + 1
+    while j < n {
+      if items[j].count > items[i].count {
+        let tmp = items[i]
+        items[i] = items[j]
+        items[j] = tmp
+      }
+      j = j + 1
+    }
+    i = i + 1
+  }
+}
