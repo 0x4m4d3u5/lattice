@@ -440,7 +440,7 @@ pub fn render_page(meta : PageMeta, body_html : String) -> String {
       "\" />\n"
     None => ""
   }
-  let og_tags = match meta.canonical_url {
+  let social_tags = match meta.canonical_url {
     Some(url) => {
       let og_desc = match meta.description {
         Some(d) =>
@@ -465,6 +465,24 @@ pub fn render_page(meta : PageMeta, body_html : String) -> String {
           "\" />\n"
         None => ""
       }
+      let tw_desc = match meta.description {
+        Some(d) =>
+          "  <meta name=\"twitter:description\" content=\"" +
+          @strutil.escape_html_attr(d) +
+          "\" />\n"
+        None => ""
+      }
+      let tw_img = match meta.og_image {
+        Some(img) =>
+          "  <meta name=\"twitter:image\" content=\"" +
+          @strutil.escape_html_attr(img) +
+          "\" />\n"
+        None => ""
+      }
+      let tw_card = match meta.og_image {
+        Some(_) => "summary_large_image"
+        None => "summary"
+      }
       "  <link rel=\"canonical\" href=\"" +
       @strutil.escape_html_attr(url) +
       "\" />\n" +
@@ -477,7 +495,15 @@ pub fn render_page(meta : PageMeta, body_html : String) -> String {
       @strutil.escape_html_attr(url) +
       "\" />\n" +
       og_img +
-      feed_tag
+      feed_tag +
+      "  <meta name=\"twitter:card\" content=\"" +
+      tw_card +
+      "\" />\n" +
+      "  <meta name=\"twitter:title\" content=\"" +
+      @strutil.escape_html_attr(meta.title) +
+      "\" />\n" +
+      tw_desc +
+      tw_img
     }
     None => ""
   }
@@ -495,7 +521,7 @@ pub fn render_page(meta : PageMeta, body_html : String) -> String {
   @strutil.escape_html_body(meta.title) +
   "</title>\n" +
   desc_tag +
-  og_tags +
+  social_tags +
   structured_data_script +
   style_tag +
   "</head>\n" +
