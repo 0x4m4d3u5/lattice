@@ -230,7 +230,21 @@ pub fn frontmatter_to_arrays(
   fm : @frontmatter.Frontmatter,
 ) -> Map[String, Array[String]] {
   let result : Map[String, Array[String]] = Map::new()
-  fn convert_array(val : @frontmatter.FrontmatterValue) -> Array[String] {
+  let convert_scalar_to_string = fn(
+    val : @frontmatter.FrontmatterValue,
+  ) -> String {
+    match val {
+      @frontmatter.FStr(s) => s
+      @frontmatter.FDate(d) => d
+      @frontmatter.FInt(n) => "\{n}"
+      @frontmatter.FBool(true) => "true"
+      @frontmatter.FBool(false) => "false"
+      _ => "" // FMap and FArray not supported as scalar
+    }
+  }
+  let convert_array = fn(
+    val : @frontmatter.FrontmatterValue,
+  ) -> Array[String] {
     match val {
       @frontmatter.FArray(items) => {
         let strings : Array[String] = []
@@ -242,16 +256,6 @@ pub fn frontmatter_to_arrays(
         strings
       }
       _ => [] // Not an array, return empty
-    }
-  }
-  fn convert_scalar_to_string(val : @frontmatter.FrontmatterValue) -> String {
-    match val {
-      @frontmatter.FStr(s) => s
-      @frontmatter.FDate(d) => d
-      @frontmatter.FInt(n) => "\{n}"
-      @frontmatter.FBool(true) => "true"
-      @frontmatter.FBool(false) => "false"
-      _ => "" // FMap and FArray not supported as scalar
     }
   }
   for key, value in fm.fields {
