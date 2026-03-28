@@ -671,7 +671,12 @@ fn render_archive_page(
   // Collect all tags from pages
   let tags_html = ""
   slots.set(@template.Tags, tags_html)
-  slots.set(@template.Description, "Archive for " + collection_name)
+  let description = if month == "" {
+    "Archive for " + collection_name + " — " + year
+  } else {
+    "Archive for " + collection_name + " — " + year + "-" + month
+  }
+  slots.set(@template.Description, description)
 
   match archive_template {
     Some(tpl) =>
@@ -717,21 +722,8 @@ pub fn render_archive_index(
   custom_css : String,
   data_store : @data.DataStore,
 ) -> Result[String, String] {
-  // Sort groups: newest year/month first (defensive — callers may pass unsorted data)
-  let mut si = 0
-  while si < groups.length() {
-    let mut sj = si + 1
-    while sj < groups.length() {
-      if groups[si].year < groups[sj].year ||
-        (groups[si].year == groups[sj].year && groups[si].month < groups[sj].month) {
-        let tmp = groups[si]
-        groups[si] = groups[sj]
-        groups[sj] = tmp
-      }
-      sj = sj + 1
-    }
-    si = si + 1
-  }
+  // `groups` is expected to be sorted newest-first by year/month by the builder
+  // (see `group_pages_by_year_month`). We rely on that invariant here.
 
   let buf = StringBuilder::new()
   // Group groups by year for the h2 headings
@@ -779,10 +771,7 @@ pub fn render_archive_index(
   slots.set(@template.SiteName, site.title)
   slots.set(
     @template.Url,
-    absolute_url_builder(
-      site.base_url,
-      "/" + collection_name + "/archive/",
-    ),
+    absolute_url_builder(site.base_url, "/" + collection_name + "/archive/"),
   )
   slots.set(@template.NavLinks, nav_links_html)
   slots.set(@template.CustomCss, custom_css)

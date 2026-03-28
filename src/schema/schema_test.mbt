@@ -342,14 +342,11 @@ test "TEnum empty allowed set always fails" {
   assert_eq(errors[0].message, "expected one of Enum[], got \"any\"")
 }
 
-
 ///|
 test "TUrl accepts https URL" {
   let schema : Schema = {
     name: "posts",
-    fields: [
-      { name: "canonical_url", field_type: TUrl, required: true },
-    ],
+    fields: [{ name: "canonical_url", field_type: TUrl, required: true }],
   }
   let fm = parse_frontmatter_or_fail(
     "+++\n" + "canonical_url = \"https://example.com\"\n" + "+++\n",
@@ -362,9 +359,7 @@ test "TUrl accepts https URL" {
 test "TUrl accepts http URL" {
   let schema : Schema = {
     name: "posts",
-    fields: [
-      { name: "canonical_url", field_type: TUrl, required: true },
-    ],
+    fields: [{ name: "canonical_url", field_type: TUrl, required: true }],
   }
   let fm = parse_frontmatter_or_fail(
     "+++\n" + "canonical_url = \"http://example.com/path\"\n" + "+++\n",
@@ -377,9 +372,7 @@ test "TUrl accepts http URL" {
 test "TUrl accepts relative URL" {
   let schema : Schema = {
     name: "posts",
-    fields: [
-      { name: "canonical_url", field_type: TUrl, required: true },
-    ],
+    fields: [{ name: "canonical_url", field_type: TUrl, required: true }],
   }
   let fm = parse_frontmatter_or_fail(
     "+++\n" + "canonical_url = \"/relative/path\"\n" + "+++\n",
@@ -392,9 +385,7 @@ test "TUrl accepts relative URL" {
 test "TUrl rejects empty string" {
   let schema : Schema = {
     name: "posts",
-    fields: [
-      { name: "canonical_url", field_type: TUrl, required: true },
-    ],
+    fields: [{ name: "canonical_url", field_type: TUrl, required: true }],
   }
   let fm = parse_frontmatter_or_fail(
     "+++\n" + "canonical_url = \"\"\n" + "+++\n",
@@ -409,9 +400,7 @@ test "TUrl rejects empty string" {
 test "TUrl rejects plain text" {
   let schema : Schema = {
     name: "posts",
-    fields: [
-      { name: "canonical_url", field_type: TUrl, required: true },
-    ],
+    fields: [{ name: "canonical_url", field_type: TUrl, required: true }],
   }
   let fm = parse_frontmatter_or_fail(
     "+++\n" + "canonical_url = \"not-a-url\"\n" + "+++\n",
@@ -426,9 +415,7 @@ test "TUrl rejects plain text" {
 test "TUrl rejects ftp URL" {
   let schema : Schema = {
     name: "posts",
-    fields: [
-      { name: "canonical_url", field_type: TUrl, required: true },
-    ],
+    fields: [{ name: "canonical_url", field_type: TUrl, required: true }],
   }
   let fm = parse_frontmatter_or_fail(
     "+++\n" + "canonical_url = \"ftp://example.com\"\n" + "+++\n",
@@ -443,13 +430,7 @@ test "TUrl rejects ftp URL" {
 test "TOptional(TUrl) absent field produces no error" {
   let schema : Schema = {
     name: "posts",
-    fields: [
-      {
-        name: "og_url",
-        field_type: TOptional(TUrl),
-        required: false,
-      },
-    ],
+    fields: [{ name: "og_url", field_type: TOptional(TUrl), required: false }],
   }
   let fm = parse_frontmatter_or_fail("+++\n+++\n")
   let errors = validate(fm, schema)
@@ -477,15 +458,11 @@ test "schema with canonical_url:Url rejects invalid value" {
   assert_true(errors[0].message.contains("expected Url"))
 }
 
-
-
 ///|
 test "TSlug accepts valid slug" {
   let schema : Schema = {
     name: "posts",
-    fields: [
-      { name: "category", field_type: TSlug, required: true },
-    ],
+    fields: [{ name: "category", field_type: TSlug, required: true }],
   }
   let fm = parse_frontmatter_or_fail(
     "+++\n" + "category = \"my-category\"\n" + "+++\n",
@@ -498,9 +475,7 @@ test "TSlug accepts valid slug" {
 test "TSlug accepts simple lowercase slug" {
   let schema : Schema = {
     name: "posts",
-    fields: [
-      { name: "category", field_type: TSlug, required: true },
-    ],
+    fields: [{ name: "category", field_type: TSlug, required: true }],
   }
   let fm = parse_frontmatter_or_fail(
     "+++\n" + "category = \"hello\"\n" + "+++\n",
@@ -513,9 +488,7 @@ test "TSlug accepts simple lowercase slug" {
 test "TSlug accepts numeric slug" {
   let schema : Schema = {
     name: "posts",
-    fields: [
-      { name: "category", field_type: TSlug, required: true },
-    ],
+    fields: [{ name: "category", field_type: TSlug, required: true }],
   }
   let fm = parse_frontmatter_or_fail(
     "+++\n" + "category = \"2026\"\n" + "+++\n",
@@ -528,9 +501,7 @@ test "TSlug accepts numeric slug" {
 test "TSlug accepts hyphenated slug" {
   let schema : Schema = {
     name: "posts",
-    fields: [
-      { name: "category", field_type: TSlug, required: true },
-    ],
+    fields: [{ name: "category", field_type: TSlug, required: true }],
   }
   let fm = parse_frontmatter_or_fail(
     "+++\n" + "category = \"my-cool-post-2026\"\n" + "+++\n",
@@ -543,9 +514,7 @@ test "TSlug accepts hyphenated slug" {
 test "TSlug rejects slug with spaces" {
   let schema : Schema = {
     name: "posts",
-    fields: [
-      { name: "category", field_type: TSlug, required: true },
-    ],
+    fields: [{ name: "category", field_type: TSlug, required: true }],
   }
   let fm = parse_frontmatter_or_fail(
     "+++\n" + "category = \"not a slug\"\n" + "+++\n",
@@ -554,7 +523,9 @@ test "TSlug rejects slug with spaces" {
   assert_eq(errors.length(), 1)
   assert_eq(errors[0].field, "category")
   assert_true(
-    errors[0].message.contains("expected a URL slug (lowercase alphanumeric and hyphens)"),
+    errors[0].message.contains(
+      "expected a URL slug (lowercase alphanumeric and hyphens)",
+    ),
   )
 }
 
@@ -562,18 +533,16 @@ test "TSlug rejects slug with spaces" {
 test "TSlug rejects empty string" {
   let schema : Schema = {
     name: "posts",
-    fields: [
-      { name: "category", field_type: TSlug, required: true },
-    ],
+    fields: [{ name: "category", field_type: TSlug, required: true }],
   }
-  let fm = parse_frontmatter_or_fail(
-    "+++\n" + "category = \"\"\n" + "+++\n",
-  )
+  let fm = parse_frontmatter_or_fail("+++\n" + "category = \"\"\n" + "+++\n")
   let errors = validate(fm, schema)
   assert_eq(errors.length(), 1)
   assert_eq(errors[0].field, "category")
   assert_true(
-    errors[0].message.contains("expected a URL slug (lowercase alphanumeric and hyphens)"),
+    errors[0].message.contains(
+      "expected a URL slug (lowercase alphanumeric and hyphens)",
+    ),
   )
 }
 
@@ -581,9 +550,7 @@ test "TSlug rejects empty string" {
 test "TSlug rejects uppercase letters" {
   let schema : Schema = {
     name: "posts",
-    fields: [
-      { name: "category", field_type: TSlug, required: true },
-    ],
+    fields: [{ name: "category", field_type: TSlug, required: true }],
   }
   let fm = parse_frontmatter_or_fail(
     "+++\n" + "category = \"My-Post\"\n" + "+++\n",
@@ -592,7 +559,9 @@ test "TSlug rejects uppercase letters" {
   assert_eq(errors.length(), 1)
   assert_eq(errors[0].field, "category")
   assert_true(
-    errors[0].message.contains("expected a URL slug (lowercase alphanumeric and hyphens)"),
+    errors[0].message.contains(
+      "expected a URL slug (lowercase alphanumeric and hyphens)",
+    ),
   )
 }
 
@@ -600,9 +569,7 @@ test "TSlug rejects uppercase letters" {
 test "TSlug rejects special characters" {
   let schema : Schema = {
     name: "posts",
-    fields: [
-      { name: "category", field_type: TSlug, required: true },
-    ],
+    fields: [{ name: "category", field_type: TSlug, required: true }],
   }
   let fm = parse_frontmatter_or_fail(
     "+++\n" + "category = \"hello_world!\"\n" + "+++\n",
@@ -615,9 +582,7 @@ test "TSlug rejects special characters" {
 test "TSlug rejects non-string values" {
   let schema : Schema = {
     name: "posts",
-    fields: [
-      { name: "category", field_type: TSlug, required: true },
-    ],
+    fields: [{ name: "category", field_type: TSlug, required: true }],
   }
   let fm = parse_frontmatter_or_fail("+++\n" + "category = 42\n" + "+++\n")
   let errors = validate(fm, schema)
@@ -631,11 +596,7 @@ test "TOptional(TSlug) absent field produces no error" {
   let schema : Schema = {
     name: "posts",
     fields: [
-      {
-        name: "category",
-        field_type: TOptional(TSlug),
-        required: false,
-      },
+      { name: "category", field_type: TOptional(TSlug), required: false },
     ],
   }
   let fm = parse_frontmatter_or_fail("+++\n+++\n")
@@ -648,11 +609,7 @@ test "TOptional(TSlug) accepts valid slug when present" {
   let schema : Schema = {
     name: "posts",
     fields: [
-      {
-        name: "category",
-        field_type: TOptional(TSlug),
-        required: false,
-      },
+      { name: "category", field_type: TOptional(TSlug), required: false },
     ],
   }
   let fm = parse_frontmatter_or_fail(

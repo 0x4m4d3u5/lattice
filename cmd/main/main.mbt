@@ -2,14 +2,14 @@
 /// Lattice — command-line entry point.
 ///
 /// Subcommands:
-///   lattice build [content-dir] [output-dir] [--config <path>] [--collections <path>] [--drafts] [--watch]
-///   lattice check [content-dir] [output-dir] [--config <path>] [--collections <path>]
-///   lattice serve [content-dir] [output-dir] [--port <N>] [--config <path>] [--collections <path>] [--drafts]
+///   lattice build [content-dir] [-o <dir>] [--config <path>] [--collections <path>] [--drafts] [--watch]
+///   lattice check [content-dir] [-o <dir>] [--config <path>] [--collections <path>]
+///   lattice serve [content-dir] [-o <dir>] [--port <N>] [--config <path>] [--collections <path>] [--drafts]
 ///
 /// Defaults:
 ///   content-dir → ./content
 ///   config file → <content-dir>/lattice.conf
-///   output-dir  → config.output_dir or ./dist
+///   output-dir  → -o flag, config.output_dir, or ./dist
 ///
 /// The build is two-pass:
 ///   1. Collect all .md files from content-dir, compute slugs, build page index.

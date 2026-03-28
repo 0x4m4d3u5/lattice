@@ -78,9 +78,7 @@ test "render_page with canonical_url only" {
   // Should contain Twitter Card tags when canonical_url is Some
   // Uses "summary" card type when og_image is absent
   assert_eq(
-    html.contains(
-      "<meta name=\"twitter:card\" content=\"summary\" />",
-    ),
+    html.contains("<meta name=\"twitter:card\" content=\"summary\" />"),
     true,
   )
   assert_eq(
@@ -191,9 +189,7 @@ test "render_page without description should skip og:description" {
   assert_eq(html.contains("alternate.*atom"), false)
   // Twitter Card: title present, description absent
   assert_eq(
-    html.contains(
-      "<meta name=\"twitter:title\" content=\"Test &amp; Page\" />",
-    ),
+    html.contains("<meta name=\"twitter:title\" content=\"Test &amp; Page\" />"),
     true,
   )
   assert_eq(html.contains("twitter:description"), false)
@@ -226,9 +222,7 @@ test "render_page escapes special characters in canonical_url and og_image" {
   assert_eq(html.contains("content=\"Test &quot;description&quot;\""), true)
   // Twitter Card tags should also escape special characters
   assert_eq(
-    html.contains(
-      "<meta name=\"twitter:title\" content=\"Test &amp; Page\" />",
-    ),
+    html.contains("<meta name=\"twitter:title\" content=\"Test &amp; Page\" />"),
     true,
   )
   assert_eq(

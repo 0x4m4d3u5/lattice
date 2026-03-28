@@ -297,12 +297,7 @@ pub fn summarize(diagnostics : Array[Diagnostic]) -> DiagnosticSummary {
   }
   sort_diagnostic_file_counts(by_file)
 
-  {
-    error_count,
-    warning_count,
-    by_code,
-    by_file,
-  }
+  { error_count, warning_count, by_code, by_file }
 }
 
 ///|
