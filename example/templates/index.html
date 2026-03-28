@@ -1,10 +1,21 @@
 {{layout: base.html}}
 <section class="listing">
-  <h1>{{title}}</h1>
-  <p>{{description}}</p>
-  <div>{{content}}</div>
-  <nav class="pagination">
-    <a href="{{prev_page}}">Newer</a>
-    <a href="{{next_page}}">Older</a>
+  <header class="listing__header">
+    <h1 class="listing__title">{{title}}</h1>
+    {{?description}}
+    <p class="listing__description">{{description}}</p>
+    {{/?description}}
+  </header>
+  <div class="listing__content">
+    {{content}}
+  </div>
+  <nav class="pagination" aria-label="Pagination">
+    {{?prev_page}}
+    <a href="{{prev_page}}" class="pagination__link pagination__link--prev">Newer posts</a>
+    {{/?prev_page}}
+    <span class="pagination__info">{{page_num}} / {{total_pages}}</span>
+    {{?next_page}}
+    <a href="{{next_page}}" class="pagination__link pagination__link--next">Older posts</a>
+    {{/?next_page}}
   </nav>
 </section>

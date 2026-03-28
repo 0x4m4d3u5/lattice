@@ -242,9 +242,7 @@ pub fn frontmatter_to_arrays(
       _ => "" // FMap and FArray not supported as scalar
     }
   }
-  let convert_array = fn(
-    val : @frontmatter.FrontmatterValue,
-  ) -> Array[String] {
+  let convert_array = fn(val : @frontmatter.FrontmatterValue) -> Array[String] {
     match val {
       @frontmatter.FArray(items) => {
         let strings : Array[String] = []
@@ -673,6 +671,127 @@ fn render_archive_page(
   // Collect all tags from pages
   let tags_html = ""
   slots.set(@template.Tags, tags_html)
+  slots.set(@template.Description, "Archive for " + collection_name)
+
+  match archive_template {
+    Some(tpl) =>
+      match
+        @template.render_template_with_data(
+          tpl,
+          slots,
+          data_store,
+          Map::new(),
+          Map::new(),
+        ) {
+        Ok(html) => Ok(html)
+        Err(e) => Err(template_error_text(e))
+      }
+    None =>
+      match index_template {
+        Some(tpl) =>
+          match
+            @template.render_template_with_data(
+              tpl,
+              slots,
+              data_store,
+              Map::new(),
+              Map::new(),
+            ) {
+            Ok(html) => Ok(html)
+            Err(e) => Err(template_error_text(e))
+          }
+        None => Ok(content)
+      }
+  }
+}
+
+///|
+/// Render an archive index page listing all year/month groups with links and post counts.
+pub fn render_archive_index(
+  groups : Array[ArchiveGroup],
+  collection_name : String,
+  site : @config.SiteConfig,
+  archive_template : @template.Template?,
+  index_template : @template.Template?,
+  nav_links_html : String,
+  custom_css : String,
+  data_store : @data.DataStore,
+) -> Result[String, String] {
+  // Sort groups: newest year/month first (defensive — callers may pass unsorted data)
+  let mut si = 0
+  while si < groups.length() {
+    let mut sj = si + 1
+    while sj < groups.length() {
+      if groups[si].year < groups[sj].year ||
+        (groups[si].year == groups[sj].year && groups[si].month < groups[sj].month) {
+        let tmp = groups[si]
+        groups[si] = groups[sj]
+        groups[sj] = tmp
+      }
+      sj = sj + 1
+    }
+    si = si + 1
+  }
+
+  let buf = StringBuilder::new()
+  // Group groups by year for the h2 headings
+  let mut i = 0
+  let mut current_year = ""
+  while i < groups.length() {
+    let group = groups[i]
+    if group.year != current_year {
+      if current_year != "" {
+        buf.write_string("</ul>\n")
+      }
+      current_year = group.year
+      buf.write_string("<h2>")
+      buf.write_string(escape_html_builder(group.year))
+      buf.write_string("</h2>\n<ul>\n")
+    }
+    let month_label = month_name(group.month) + " " + group.year
+    let href = "/" +
+      collection_name +
+      "/" +
+      group.year +
+      "/" +
+      group.month +
+      "/"
+    let count = group.pages.length().to_string()
+    buf.write_string("<li>")
+    buf.write_string(@html.anchor(href, month_label))
+    buf.write_string(" (")
+    buf.write_string(count)
+    buf.write_string(" post")
+    if group.pages.length() != 1 {
+      buf.write_string("s")
+    }
+    buf.write_string(")</li>\n")
+    i = i + 1
+  }
+  if current_year != "" {
+    buf.write_string("</ul>\n")
+  }
+  let content = buf.to_string()
+
+  let slots = Map::new()
+  slots.set(@template.Title, "Archive")
+  slots.set(@template.Content, content)
+  slots.set(@template.SiteName, site.title)
+  slots.set(
+    @template.Url,
+    absolute_url_builder(
+      site.base_url,
+      "/" + collection_name + "/archive/",
+    ),
+  )
+  slots.set(@template.NavLinks, nav_links_html)
+  slots.set(@template.CustomCss, custom_css)
+  slots.set(@template.Collection, collection_name)
+  slots.set(@template.Description, "Archive for " + collection_name)
+  slots.set(@template.Tags, "")
+  slots.set(@template.Year, "")
+  slots.set(@template.Month, "")
+  slots.set(@template.Day, "")
 
   match archive_template {
     Some(tpl) =>
@@ -859,7 +978,75 @@ fn build_archive_pages(
     i = i + 1
   }
 
+  // Build archive index page
+  let archive_index_html = match
+    render_archive_index(
+      groups,
+      collection_name,
+      config.site,
+      archive_template,
+      index_template,
+      nav_links_html,
+      custom_css,
+      data_store,
+    ) {
+    Ok(html) => html
+    Err(msg) => {
+      println(
+        "[error] archive index page " + collection_name + "/archive: " + msg,
+      )
+      errors = errors + 1
+      ""
+    }
+  }
+
+  if archive_index_html != "" {
+    let archive_dir = coll_dir + "/archive"
+    let archive_index_path = archive_dir + "/index.html"
+    let archive_write_ok = try {
+      ensure_dir(archive_dir)
+      @fs.write_string_to_file(archive_index_path, archive_index_html)
+      println("[lattice] wrote " + archive_index_path)
+      true
+    } catch {
+      @fs.IOError(msg) => {
+        println(
+          "[error] cannot write archive index page " +
+          archive_index_path +
+          ": " +
+          msg,
+        )
+        false
+      }
+    }
+    if archive_write_ok {
+      pages_written = pages_written + 1
+    } else {
+      errors = errors + 1
+    }
+  }
+
   (pages_written, errors)
+}
+
+///|
+/// Convert a two-digit month string (e.g. "03") to its English name.
+fn month_name(month : String) -> String {
+  match month {
+    "01" => "January"
+    "02" => "February"
+    "03" => "March"
+    "04" => "April"
+    "05" => "May"
+    "06" => "June"
+    "07" => "July"
+    "08" => "August"
+    "09" => "September"
+    "10" => "October"
+    "11" => "November"
+    "12" => "December"
+    _ => month
+  }
 }
 
 ///|

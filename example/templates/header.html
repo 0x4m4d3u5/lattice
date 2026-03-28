@@ -1,12 +1,12 @@
 <header class="site-header">
-  <p>lattice example</p>
-  <h1><a href="/">{{site_name}}</a></h1>
-  <p>Reference implementation for the SCC demo.</p>
-  <nav>
-    <ul>
+  <div class="site-header__inner">
+    <div class="site-header__brand">
+      <a href="/" class="site-header__title">{{site_name}}</a>
+    </div>
+    <nav class="site-nav" aria-label="Main navigation">
       {{#each data.nav.links}}
-      <li><a href="/{{item}}/">{{item}}</a></li>
+      <a href="/{{item}}/" class="site-nav__link">{{item}}</a>
       {{/each}}
-    </ul>
-  </nav>
+    </nav>
+  </div>
 </header>
