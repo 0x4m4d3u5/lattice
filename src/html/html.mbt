@@ -56,81 +56,29 @@ pub(all) enum StructuredData {
 // ── helpers ───────────────────────────────────────────────────────────────────
 
 ///|
-fn char_at_html(s : String, i : Int) -> Char {
-  s[i].to_int().unsafe_to_char()
-}
 
 ///|
 /// Escape text for HTML body context (&, <, >).
 pub fn escape_html_body(s : String) -> String {
-  let buf = StringBuilder::new()
-  let n = s.length()
-  let mut i = 0
-  while i < n {
-    let c = char_at_html(s, i)
-    if c == '&' {
-      buf.write_string("&amp;")
-    } else if c == '<' {
-      buf.write_string("&lt;")
-    } else if c == '>' {
-      buf.write_string("&gt;")
-    } else {
-      buf.write_char(c)
-    }
-    i = i + 1
-  }
-  buf.to_string()
+  @strutil.escape_html_body(s)
 }
 
 ///|
 /// Escape text for HTML attribute context (&, <, >, ").
-fn escape_html_attr(s : String) -> String {
-  let buf = StringBuilder::new()
-  let n = s.length()
-  let mut i = 0
-  while i < n {
-    let c = char_at_html(s, i)
-    if c == '&' {
-      buf.write_string("&amp;")
-    } else if c == '<' {
-      buf.write_string("&lt;")
-    } else if c == '>' {
-      buf.write_string("&gt;")
-    } else if c == '"' {
-      buf.write_string("&quot;")
-    } else {
-      buf.write_char(c)
-    }
-    i = i + 1
-  }
-  buf.to_string()
+pub fn escape_html_attr(s : String) -> String {
+  @strutil.escape_html_attr(s)
 }
 
 ///|
-fn hex_nibble_html(n : Int) -> Char {
-  if n < 10 {
-    ('0'.to_int() + n).unsafe_to_char()
-  } else {
-    ('a'.to_int() + (n - 10)).unsafe_to_char()
-  }
-}
-
-///|
-fn write_json_escape_html(buf : StringBuilder, code : Int) -> Unit {
-  buf.write_string("\\u")
-  buf.write_char(hex_nibble_html((code >> 12) & 0xF))
-  buf.write_char(hex_nibble_html((code >> 8) & 0xF))
-  buf.write_char(hex_nibble_html((code >> 4) & 0xF))
-  buf.write_char(hex_nibble_html(code & 0xF))
-}
-
-///|
-fn write_json_string_html(buf : StringBuilder, s : String) -> Unit {
+/// JSON-LD style string writer: escapes `<`, `>`, `&` as `\uXXXX` sequences
+/// in addition to standard JSON escaping. Required for safe embedding in
+/// HTML `<script type="application/ld+json">` blocks.
+fn write_json_string_ld(buf : StringBuilder, s : String) -> Unit {
   buf.write_char('"')
   let n = s.length()
   let mut i = 0
   while i < n {
-    let c = char_at_html(s, i)
+    let c = @strutil.char_at(s, i)
     if c == '\\' {
       buf.write_string("\\\\")
     } else if c == '"' {
@@ -148,7 +96,9 @@ fn write_json_string_html(buf : StringBuilder, s : String) -> Unit {
     } else if c == '&' {
       buf.write_string("\\u0026")
     } else if c.to_int() < 0x20 {
-      write_json_escape_html(buf, c.to_int())
+      buf.write_string("\\u00")
+      buf.write_char(@strutil.hex_nibble(c.to_int() / 16))
+      buf.write_char(@strutil.hex_nibble(c.to_int() % 16))
     } else {
       buf.write_char(c)
     }
@@ -171,9 +121,9 @@ fn write_json_field_html(
     buf.write_char('\n')
   }
   buf.write_string(indent)
-  write_json_string_html(buf, key)
+  write_json_string_ld(buf, key)
   buf.write_string(": ")
-  write_json_string_html(buf, value)
+  write_json_string_ld(buf, value)
   true
 }
 
@@ -190,7 +140,7 @@ fn begin_json_object_field_html(
     buf.write_char('\n')
   }
   buf.write_string(indent)
-  write_json_string_html(buf, key)
+  write_json_string_ld(buf, key)
   buf.write_string(": ")
   true
 }
@@ -209,7 +159,7 @@ fn write_json_int_field_html(
     buf.write_char('\n')
   }
   buf.write_string(indent)
-  write_json_string_html(buf, key)
+  write_json_string_ld(buf, key)
   buf.write_string(": ")
   buf.write_string(value.to_string())
   true
@@ -238,13 +188,13 @@ fn render_blog_posting_json_ld(data : BlogPostingData) -> String {
     buf, wrote_field, "  ", "mainEntityOfPage",
   )
   buf.write_string("{\n    ")
-  write_json_string_html(buf, "@type")
+  write_json_string_ld(buf, "@type")
   buf.write_string(": ")
-  write_json_string_html(buf, "WebPage")
+  write_json_string_ld(buf, "WebPage")
   buf.write_string(",\n    ")
-  write_json_string_html(buf, "@id")
+  write_json_string_ld(buf, "@id")
   buf.write_string(": ")
-  write_json_string_html(buf, data.url)
+  write_json_string_ld(buf, data.url)
   buf.write_string("\n  }")
   match data.description {
     Some(description) =>
@@ -273,15 +223,15 @@ fn render_blog_posting_json_ld(data : BlogPostingData) -> String {
         buf.write_char('\n')
       }
       buf.write_string("  ")
-      write_json_string_html(buf, "author")
+      write_json_string_ld(buf, "author")
       buf.write_string(": {\n    ")
-      write_json_string_html(buf, "@type")
+      write_json_string_ld(buf, "@type")
       buf.write_string(": ")
-      write_json_string_html(buf, "Person")
+      write_json_string_ld(buf, "Person")
       buf.write_string(",\n    ")
-      write_json_string_html(buf, "name")
+      write_json_string_ld(buf, "name")
       buf.write_string(": ")
-      write_json_string_html(buf, author)
+      write_json_string_ld(buf, author)
       buf.write_string("\n  }")
       wrote_field = true
     }
@@ -414,10 +364,10 @@ pub fn render_structured_data_script(items : Array[StructuredData]) -> String {
       let json = render_structured_data_json(items[i])
       let mut j = 0
       while j < json.length() {
-        if j == 0 || char_at_html(json, j - 1) == '\n' {
+        if j == 0 || @strutil.char_at(json, j - 1) == '\n' {
           buf.write_string("  ")
         }
-        buf.write_char(char_at_html(json, j))
+        buf.write_char(@strutil.char_at(json, j))
         j = j + 1
       }
       i = i + 1
@@ -439,7 +389,7 @@ pub fn inject_head_markup(document_html : String, markup : String) -> String {
     let mut matched = true
     let mut j = 0
     while j < needle.length() {
-      if char_at_html(document_html, i + j) != char_at_html(needle, j) {
+      if @strutil.char_at(document_html, i + j) != @strutil.char_at(needle, j) {
         matched = false
         j = needle.length()
       } else {
@@ -447,9 +397,9 @@ pub fn inject_head_markup(document_html : String, markup : String) -> String {
       }
     }
     if matched {
-      return substr(document_html, 0, i) +
+      return @strutil.substr(document_html, 0, i) +
         markup +
-        substr(document_html, i, document_html.length())
+        @strutil.substr(document_html, i, document_html.length())
     }
     i = i + 1
   }
@@ -460,23 +410,11 @@ pub fn inject_head_markup(document_html : String, markup : String) -> String {
 /// Render an Atom feed autodiscovery link tag.
 pub fn render_feed_link_tag(title : String, feed_url : String) -> String {
   "  <link rel=\"alternate\" type=\"application/atom+xml\" title=\"" +
-  escape_html_attr(title) +
+  @strutil.escape_html_attr(title) +
   "\" href=\"" +
-  escape_html_attr(feed_url) +
+  @strutil.escape_html_attr(feed_url) +
   "\" />\n"
 }
-
-///|
-fn substr(s : String, start : Int, end_pos : Int) -> String {
-  let buf = StringBuilder::new()
-  let mut i = start
-  while i < end_pos {
-    buf.write_char(char_at_html(s, i))
-    i = i + 1
-  }
-  buf.to_string()
-}
-
 // ── public API ────────────────────────────────────────────────────────────────
 
 ///|
@@ -491,13 +429,15 @@ pub fn render_page(meta : PageMeta, body_html : String) -> String {
   let desc_tag = match meta.description {
     Some(d) =>
       "  <meta name=\"description\" content=\"" +
-      escape_html_attr(d) +
+      @strutil.escape_html_attr(d) +
       "\" />\n"
     None => ""
   }
   let style_tag = match meta.stylesheet {
     Some(href) =>
-      "  <link rel=\"stylesheet\" href=\"" + escape_html_attr(href) + "\" />\n"
+      "  <link rel=\"stylesheet\" href=\"" +
+      @strutil.escape_html_attr(href) +
+      "\" />\n"
     None => ""
   }
   let og_tags = match meta.canonical_url {
@@ -505,36 +445,36 @@ pub fn render_page(meta : PageMeta, body_html : String) -> String {
       let og_desc = match meta.description {
         Some(d) =>
           "  <meta property=\"og:description\" content=\"" +
-          escape_html_attr(d) +
+          @strutil.escape_html_attr(d) +
           "\" />\n"
         None => ""
       }
       let og_img = match meta.og_image {
         Some(img) =>
           "  <meta property=\"og:image\" content=\"" +
-          escape_html_attr(img) +
+          @strutil.escape_html_attr(img) +
           "\" />\n"
         None => ""
       }
       let feed_tag = match meta.feed_url {
         Some(feed) =>
           "  <link rel=\"alternate\" type=\"application/atom+xml\" title=\"" +
-          escape_html_attr(meta.title) +
+          @strutil.escape_html_attr(meta.title) +
           "\" href=\"" +
-          escape_html_attr(feed) +
+          @strutil.escape_html_attr(feed) +
           "\" />\n"
         None => ""
       }
       "  <link rel=\"canonical\" href=\"" +
-      escape_html_attr(url) +
+      @strutil.escape_html_attr(url) +
       "\" />\n" +
       "  <meta property=\"og:type\" content=\"article\" />\n" +
       "  <meta property=\"og:title\" content=\"" +
-      escape_html_attr(meta.title) +
+      @strutil.escape_html_attr(meta.title) +
       "\" />\n" +
       og_desc +
       "  <meta property=\"og:url\" content=\"" +
-      escape_html_attr(url) +
+      @strutil.escape_html_attr(url) +
       "\" />\n" +
       og_img +
       feed_tag
@@ -546,13 +486,13 @@ pub fn render_page(meta : PageMeta, body_html : String) -> String {
   )
   "<!doctype html>\n" +
   "<html lang=\"" +
-  escape_html_attr(lang) +
+  @strutil.escape_html_attr(lang) +
   "\">\n" +
   "<head>\n" +
   "  <meta charset=\"utf-8\" />\n" +
   "  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />\n" +
   "  <title>" +
-  escape_html_body(meta.title) +
+  @strutil.escape_html_body(meta.title) +
   "</title>\n" +
   desc_tag +
   og_tags +
@@ -569,9 +509,9 @@ pub fn render_page(meta : PageMeta, body_html : String) -> String {
 /// Render an HTML anchor tag.
 pub fn anchor(href : String, text : String) -> String {
   "<a href=\"" +
-  escape_html_attr(href) +
+  @strutil.escape_html_attr(href) +
   "\">" +
-  escape_html_body(text) +
+  @strutil.escape_html_body(text) +
   "</a>"
 }
 

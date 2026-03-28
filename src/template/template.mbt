@@ -67,66 +67,13 @@ pub enum TemplateError {
 }
 
 ///|
-fn char_at_template(s : String, i : Int) -> Char {
-  s[i].to_int().unsafe_to_char()
-}
-
-///|
-fn substr_template(s : String, start : Int, end_pos : Int) -> String {
-  let buf = StringBuilder::new()
-  let mut i = start
-  while i < end_pos {
-    buf.write_char(char_at_template(s, i))
-    i = i + 1
-  }
-  buf.to_string()
-}
-
-///|
-fn is_ws_template(c : Char) -> Bool {
-  c == ' ' || c == '\t' || c == '\n' || c == '\r'
-}
-
-///|
-fn trim_template(s : String) -> String {
-  let n = s.length()
-  if n == 0 {
-    return s
-  }
-  let mut lo = 0
-  while lo < n && is_ws_template(char_at_template(s, lo)) {
-    lo = lo + 1
-  }
-  let mut hi = n
-  while hi > lo && is_ws_template(char_at_template(s, hi - 1)) {
-    hi = hi - 1
-  }
-  substr_template(s, lo, hi)
-}
-
-///|
-fn starts_with_template(s : String, prefix : String) -> Bool {
-  if prefix.length() > s.length() {
-    return false
-  }
-  let mut i = 0
-  while i < prefix.length() {
-    if char_at_template(s, i) != char_at_template(prefix, i) {
-      return false
-    }
-    i = i + 1
-  }
-  true
-}
-
-///|
 fn split_dot_template(s : String) -> Array[String] {
   let parts : Array[String] = []
   let mut start = 0
   let mut i = 0
   while i <= s.length() {
-    if i == s.length() || char_at_template(s, i) == '.' {
-      let part = trim_template(substr_template(s, start, i))
+    if i == s.length() || @strutil.char_at(s, i) == '.' {
+      let part = @strutil.trim(@strutil.substr(s, start, i))
       if part.length() > 0 {
         parts.push(part)
       }
@@ -277,13 +224,13 @@ pub fn parse_template(input : String) -> Result[Template, TemplateError] {
       let required_slots : Array[TemplateSlot] = []
       let mut i = 0
       while i < parts.length() {
-      match parts[i] {
-        Slot(slot) =>
-          if not(required_slots.contains(slot)) {
-            required_slots.push(slot)
-          }
-        _ => () // ConditionalBlock, DataEachBlock, LoopItemSlot are NOT required
-      }
+        match parts[i] {
+          Slot(slot) =>
+            if not(required_slots.contains(slot)) {
+              required_slots.push(slot)
+            }
+          _ => () // ConditionalBlock, DataEachBlock, LoopItemSlot are NOT required
+        }
         i = i + 1
       }
 
@@ -305,16 +252,16 @@ fn parse_template_recursive(
   let mut i = start
   let mut text_start = start
   while i < end {
-    let c = char_at_template(input, i)
-    if c == '{' && i + 1 < end && char_at_template(input, i + 1) == '{' {
+    let c = @strutil.char_at(input, i)
+    if c == '{' && i + 1 < end && @strutil.char_at(input, i + 1) == '{' {
       if i > text_start {
-        parts.push(Text(substr_template(input, text_start, i)))
+        parts.push(Text(@strutil.substr(input, text_start, i)))
       }
       let mut j = i + 2
       let mut close = -1
       while j + 1 < end {
-        if char_at_template(input, j) == '}' &&
-          char_at_template(input, j + 1) == '}' {
+        if @strutil.char_at(input, j) == '}' &&
+          @strutil.char_at(input, j + 1) == '}' {
           close = j
           break
         }
@@ -323,25 +270,25 @@ fn parse_template_recursive(
       if close < 0 {
         return Err(ParseError("unterminated template slot"))
       }
-      let raw_name = substr_template(input, i + 2, close)
-      let slot_name = trim_template(raw_name)
+      let raw_name = @strutil.substr(input, i + 2, close)
+      let slot_name = @strutil.trim(raw_name)
       if slot_name.length() == 0 {
         return Err(ParseError("empty template slot"))
       }
 
       // Check if this is a loop block opening {{#each data.file.key.path}}
-      if starts_with_template(slot_name, "#each data.") {
+      if @strutil.starts_with(slot_name, "#each data.") {
         // Parse each loop block
-        let each_name = trim_template(
-          substr_template(slot_name, 11, slot_name.length()),
+        let each_name = @strutil.trim(
+          @strutil.substr(slot_name, 11, slot_name.length()),
         ) // Remove "#each data." prefix (11 characters: #each data.)
-        
+
         // Parse file name and key path from remaining name
         let each_parts = split_dot_template(each_name)
         if each_parts.length() < 1 {
           return Err(ParseError("invalid each block '" + slot_name + "'"))
         }
-        
+
         let file = each_parts[0]
         let key_path : Array[String] = []
         let mut k = 1
@@ -349,16 +296,16 @@ fn parse_template_recursive(
           key_path.push(each_parts[k])
           k = k + 1
         }
-        
+
         if file.length() == 0 {
           return Err(ParseError("invalid each block '" + slot_name + "'"))
         }
-        
+
         // Parse body until closing tag {{/each}}
         let body_start = close + 2
         let closing_prefix = "{{/each}}"
         let closing_len = closing_prefix.length()
-        
+
         // Find closing tag
         let mut body_end = -1
         let mut k = body_start
@@ -366,7 +313,8 @@ fn parse_template_recursive(
           let mut found = true
           let mut l = 0
           while l < closing_len {
-            if char_at_template(input, k + l) != char_at_template(closing_prefix, l) {
+            if @strutil.char_at(input, k + l) !=
+              @strutil.char_at(closing_prefix, l) {
               found = false
               break
             }
@@ -378,41 +326,41 @@ fn parse_template_recursive(
           }
           k = k + 1
         }
-        
+
         if body_end < 0 {
           return Err(
             ParseError("missing closing tag for each block: {{/each}}"),
           )
         }
-        
+
         // Parse body parts recursively (to handle nested loops)
         match parse_template_recursive(input, body_start, body_end) {
           Ok((body_parts, _)) =>
             parts.push(DataEachBlock(file, key_path, body_parts))
           Err(e) => return Err(e)
         }
-        
+
         i = body_end + closing_len
         text_start = i
         continue
       }
-      
+
       // Check if this is a frontmatter array loop {{#each page.field}}
-      if starts_with_template(slot_name, "#each page.") {
+      if @strutil.starts_with(slot_name, "#each page.") {
         // Parse frontmatter each block
-        let field = trim_template(
-          substr_template(slot_name, 11, slot_name.length()),
+        let field = @strutil.trim(
+          @strutil.substr(slot_name, 11, slot_name.length()),
         ) // Remove "#each page." prefix (11 characters: #each page.)
-        
+
         if field.length() == 0 {
           return Err(ParseError("invalid each block '" + slot_name + "'"))
         }
-        
+
         // Parse body until closing tag {{/each}}
         let body_start = close + 2
         let closing_prefix = "{{/each}}"
         let closing_len = closing_prefix.length()
-        
+
         // Find closing tag
         let mut body_end = -1
         let mut k = body_start
@@ -420,7 +368,8 @@ fn parse_template_recursive(
           let mut found = true
           let mut l = 0
           while l < closing_len {
-            if char_at_template(input, k + l) != char_at_template(closing_prefix, l) {
+            if @strutil.char_at(input, k + l) !=
+              @strutil.char_at(closing_prefix, l) {
               found = false
               break
             }
@@ -432,30 +381,30 @@ fn parse_template_recursive(
           }
           k = k + 1
         }
-        
+
         if body_end < 0 {
           return Err(
             ParseError("missing closing tag for each block: {{/each}}"),
           )
         }
-        
+
         // Parse body parts recursively (to handle nested loops)
         match parse_template_recursive(input, body_start, body_end) {
           Ok((body_parts, _)) =>
             parts.push(FrontmatterEachBlock(field, body_parts))
           Err(e) => return Err(e)
         }
-        
+
         i = body_end + closing_len
         text_start = i
         continue
       }
-      
+
       // Check if this is a loop item slot {{item}} or {{item.field}}
-      if slot_name == "item" || starts_with_template(slot_name, "item.") {
-        if starts_with_template(slot_name, "item.") {
-          let field = trim_template(
-            substr_template(slot_name, 5, slot_name.length()),
+      if slot_name == "item" || @strutil.starts_with(slot_name, "item.") {
+        if @strutil.starts_with(slot_name, "item.") {
+          let field = @strutil.trim(
+            @strutil.substr(slot_name, 5, slot_name.length()),
           )
           let item_fields = split_dot_template(field)
           parts.push(LoopItemSlot(item_fields))
@@ -466,18 +415,18 @@ fn parse_template_recursive(
         text_start = i
         continue
       }
-      
+
       // Check if this is a conditional block opening {{?slot}}
-      if char_at_template(slot_name, 0) == '?' {
+      if @strutil.char_at(slot_name, 0) == '?' {
         // Parse conditional block
-        let cond_slot_name = trim_template(
-          substr_template(slot_name, 1, slot_name.length()),
+        let cond_slot_name = @strutil.trim(
+          @strutil.substr(slot_name, 1, slot_name.length()),
         )
 
         // Check if this is a page.field conditional
-        if starts_with_template(cond_slot_name, "page.") {
-          let field = trim_template(
-            substr_template(cond_slot_name, 5, cond_slot_name.length()),
+        if @strutil.starts_with(cond_slot_name, "page.") {
+          let field = @strutil.trim(
+            @strutil.substr(cond_slot_name, 5, cond_slot_name.length()),
           )
           if field.length() == 0 {
             return Err(
@@ -497,8 +446,8 @@ fn parse_template_recursive(
             let mut found = true
             let mut l = 0
             while l < closing_len {
-              if char_at_template(input, k + l) !=
-                char_at_template(closing_prefix, l) {
+              if @strutil.char_at(input, k + l) !=
+                @strutil.char_at(closing_prefix, l) {
                 found = false
                 break
               }
@@ -550,8 +499,8 @@ fn parse_template_recursive(
           let mut found = true
           let mut l = 0
           while l < closing_len {
-            if char_at_template(input, k + l) !=
-              char_at_template(closing_prefix, l) {
+            if @strutil.char_at(input, k + l) !=
+              @strutil.char_at(closing_prefix, l) {
               found = false
               break
             }
@@ -587,36 +536,36 @@ fn parse_template_recursive(
       }
 
       // Check if this is a closing tag (shouldn't appear here)
-      if char_at_template(slot_name, 0) == '/' &&
-        char_at_template(slot_name, 1) == '?' {
+      if @strutil.char_at(slot_name, 0) == '/' &&
+        @strutil.char_at(slot_name, 1) == '?' {
         return Err(ParseError("unexpected closing tag"))
       }
 
       // Normal slot, include, layout, or data slot
-      if starts_with_template(slot_name, "include:") {
-        let filename = trim_template(
-          substr_template(slot_name, 8, slot_name.length()),
+      if @strutil.starts_with(slot_name, "include:") {
+        let filename = @strutil.trim(
+          @strutil.substr(slot_name, 8, slot_name.length()),
         )
         if filename.length() == 0 {
           return Err(ParseError("empty include filename"))
         }
         parts.push(Include(filename))
-      } else if starts_with_template(slot_name, "layout:") {
-        let filename = trim_template(
-          substr_template(slot_name, 7, slot_name.length()),
+      } else if @strutil.starts_with(slot_name, "layout:") {
+        let filename = @strutil.trim(
+          @strutil.substr(slot_name, 7, slot_name.length()),
         )
         if filename.length() == 0 {
           return Err(ParseError("empty layout filename"))
         }
         parts.push(Layout(filename))
-      } else if starts_with_template(slot_name, "data.") {
+      } else if @strutil.starts_with(slot_name, "data.") {
         match parse_data_slot_name(slot_name) {
           Ok((file, key_path)) => parts.push(DataSlot(file, key_path))
           Err(e) => return Err(e)
         }
-      } else if starts_with_template(slot_name, "page.") {
-        let field = trim_template(
-          substr_template(slot_name, 5, slot_name.length()),
+      } else if @strutil.starts_with(slot_name, "page.") {
+        let field = @strutil.trim(
+          @strutil.substr(slot_name, 5, slot_name.length()),
         )
         if field.length() == 0 {
           return Err(ParseError("invalid page slot '" + slot_name + "'"))
@@ -640,13 +589,13 @@ fn parse_template_recursive(
       text_start = i
       continue
     }
-    if c == '}' && i + 1 < end && char_at_template(input, i + 1) == '}' {
+    if c == '}' && i + 1 < end && @strutil.char_at(input, i + 1) == '}' {
       return Err(ParseError("unexpected '}}'"))
     }
     i = i + 1
   }
   if text_start < end {
-    parts.push(Text(substr_template(input, text_start, end)))
+    parts.push(Text(@strutil.substr(input, text_start, end)))
   }
   Ok((parts, i))
 }
@@ -662,7 +611,7 @@ fn resolve_loop_item_field(
     // {{item}} without field path - convert entire item to string
     return Some(@data.value_to_string(item))
   }
-  
+
   // Navigate through nested maps
   let mut current : @frontmatter.FrontmatterValue? = Some(item)
   let mut idx = 0
@@ -673,14 +622,13 @@ fn resolve_loop_item_field(
         match v {
           @frontmatter.FMap(map) =>
             match map.get(field_path[idx]) {
-              Some(next_v) => {
+              Some(next_v) =>
                 if idx + 1 == field_path.length() {
                   // Final field reached - convert to string
                   return Some(@data.value_to_string(next_v))
                 } else {
                   current = Some(next_v)
                 }
-              }
               None => return None
             }
           _ => return None // Not a map, can't navigate further
@@ -688,7 +636,7 @@ fn resolve_loop_item_field(
     }
     idx = idx + 1
   }
-  
+
   None
 }
 
@@ -814,7 +762,8 @@ fn render_parts(
                                 }
                               FrontmatterSlot(f) =>
                                 match page_fields.get(f) {
-                                  Some(v) => out.write_string(@html.escape_html_body(v))
+                                  Some(v) =>
+                                    out.write_string(@html.escape_html_body(v))
                                   None => ()
                                 }
                               _ =>
@@ -899,7 +848,8 @@ fn render_parts(
                                 }
                               FrontmatterSlot(f) =>
                                 match page_fields.get(f) {
-                                  Some(v) => out.write_string(@html.escape_html_body(v))
+                                  Some(v) =>
+                                    out.write_string(@html.escape_html_body(v))
                                   None => ()
                                 }
                               _ =>
@@ -959,12 +909,14 @@ fn render_parts(
                             }
                           FrontmatterSlot(f) =>
                             match page_fields.get(f) {
-                              Some(v) => out.write_string(@html.escape_html_body(v))
+                              Some(v) =>
+                                out.write_string(@html.escape_html_body(v))
                               None => ()
                             }
                           LoopItemSlot(field_path) =>
                             // Resolve field path from current loop item
-                            match resolve_loop_item_field(item_value, field_path) {
+                            match
+                              resolve_loop_item_field(item_value, field_path) {
                               Some(v) => out.write_string(v)
                               None => ()
                             }
@@ -1094,7 +1046,13 @@ pub fn render_template_with_data(
     Some(layout) => {
       // Render the child template
       let child_output = match
-        render_parts(template, slots, Some(data_store), page_fields, page_field_arrays) {
+        render_parts(
+          template,
+          slots,
+          Some(data_store),
+          page_fields,
+          page_field_arrays,
+        ) {
         Ok(output) => output
         Err(e) => return Err(e)
       }
@@ -1107,9 +1065,22 @@ pub fn render_template_with_data(
       layout_slots.set(Body, child_output)
 
       // Render layout with all slots including body
-      render_parts(layout, layout_slots, Some(data_store), page_fields, page_field_arrays)
+      render_parts(
+        layout,
+        layout_slots,
+        Some(data_store),
+        page_fields,
+        page_field_arrays,
+      )
     }
-    None => render_parts(template, slots, Some(data_store), page_fields, page_field_arrays)
+    None =>
+      render_parts(
+        template,
+        slots,
+        Some(data_store),
+        page_fields,
+        page_field_arrays,
+      )
   }
 }
 
@@ -1246,7 +1217,7 @@ pub fn parse_template_with_includes(
         break
       }
       Text(s) => {
-        let trimmed = trim_template(s)
+        let trimmed = @strutil.trim(s)
         if trimmed.length() > 0 {
           // Found non-whitespace text before layout directive
           break
@@ -1335,10 +1306,7 @@ fn collect_refs_from_parts(
 ///|
 fn collect_refs_from_part(part : TemplatePart, refs : Array[String]) -> Unit {
   match part {
-    FrontmatterSlot(field) =>
-      if not(refs.contains(field)) {
-        refs.push(field)
-      }
+    FrontmatterSlot(field) => if not(refs.contains(field)) { refs.push(field) }
     FrontmatterConditionalBlock(field, body) => {
       if not(refs.contains(field)) {
         refs.push(field)
@@ -1353,7 +1321,11 @@ fn collect_refs_from_part(part : TemplatePart, refs : Array[String]) -> Unit {
     }
     ConditionalBlock(_, body) => collect_refs_from_parts(body, refs)
     DataEachBlock(_, _, body) => collect_refs_from_parts(body, refs)
-    Text(_) | Slot(_) | DataSlot(_, _) | Include(_) | Layout(_) |
-    LoopItemSlot(_) => ()
+    Text(_)
+    | Slot(_)
+    | DataSlot(_, _)
+    | Include(_)
+    | Layout(_)
+    | LoopItemSlot(_) => ()
   }
 }

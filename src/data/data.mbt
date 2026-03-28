@@ -35,48 +35,6 @@ pub enum DataError {
 }
 
 ///|
-fn char_at_data(s : String, i : Int) -> Char {
-  s[i].to_int().unsafe_to_char()
-}
-
-///|
-fn substr_data(s : String, start : Int, end_pos : Int) -> String {
-  let buf = StringBuilder::new()
-  let mut i = start
-  while i < end_pos {
-    buf.write_char(char_at_data(s, i))
-    i = i + 1
-  }
-  buf.to_string()
-}
-
-///|
-fn trim_data(s : String) -> String {
-  let n = s.length()
-  let mut lo = 0
-  while lo < n &&
-        (
-          char_at_data(s, lo) == ' ' ||
-          char_at_data(s, lo) == '\t' ||
-          char_at_data(s, lo) == '\r' ||
-          char_at_data(s, lo) == '\n'
-        ) {
-    lo = lo + 1
-  }
-  let mut hi = n
-  while hi > lo &&
-        (
-          char_at_data(s, hi - 1) == ' ' ||
-          char_at_data(s, hi - 1) == '\t' ||
-          char_at_data(s, hi - 1) == '\r' ||
-          char_at_data(s, hi - 1) == '\n'
-        ) {
-    hi = hi - 1
-  }
-  substr_data(s, lo, hi)
-}
-
-///|
 fn starts_with_data(s : String, prefix : String) -> Bool {
   let plen = prefix.length()
   if plen > s.length() {
@@ -84,7 +42,7 @@ fn starts_with_data(s : String, prefix : String) -> Bool {
   }
   let mut i = 0
   while i < plen {
-    if char_at_data(s, i) != char_at_data(prefix, i) {
+    if @strutil.char_at(s, i) != @strutil.char_at(prefix, i) {
       return false
     }
     i = i + 1
@@ -102,7 +60,7 @@ fn ends_with_data(s : String, suffix : String) -> Bool {
   let start = n - slen
   let mut i = 0
   while i < slen {
-    if char_at_data(s, start + i) != char_at_data(suffix, i) {
+    if @strutil.char_at(s, start + i) != @strutil.char_at(suffix, i) {
       return false
     }
     i = i + 1
@@ -117,10 +75,10 @@ fn split_lines_data(s : String) -> Array[String] {
   let mut i = 0
   while i <= n {
     let mut end = i
-    while end < n && char_at_data(s, end) != '\n' {
+    while end < n && @strutil.char_at(s, end) != '\n' {
       end = end + 1
     }
-    lines.push(substr_data(s, i, end))
+    lines.push(@strutil.substr(s, i, end))
     if end >= n {
       break
     }
@@ -130,116 +88,35 @@ fn split_lines_data(s : String) -> Array[String] {
 }
 
 ///|
-fn is_digit_data(c : Char) -> Bool {
-  c >= '0' && c <= '9'
-}
-
-///|
-fn parse_int_data(s : String) -> Int? {
-  if s.length() == 0 {
-    return None
-  }
-  let mut i = 0
-  let mut neg = false
-  if char_at_data(s, 0) == '-' {
-    neg = true
-    i = 1
-  }
-  if i >= s.length() {
-    return None
-  }
-  let mut value = 0
-  while i < s.length() {
-    let c = char_at_data(s, i)
-    if not(is_digit_data(c)) {
-      return None
-    }
-    value = value * 10 + (c.to_int() - '0'.to_int())
-    i = i + 1
-  }
-  if neg {
-    Some(-value)
-  } else {
-    Some(value)
-  }
-}
-
-///|
-fn parse_quoted_data(s : String, pos : Int) -> Result[(String, Int), String] {
-  if pos >= s.length() || char_at_data(s, pos) != '"' {
-    return Err("expected quote")
-  }
-  let buf = StringBuilder::new()
-  let mut i = pos + 1
-  while i < s.length() {
-    let c = char_at_data(s, i)
-    if c == '\\' {
-      if i + 1 >= s.length() {
-        return Err("unterminated escape")
-      }
-      let esc = char_at_data(s, i + 1)
-      if esc == 'n' {
-        buf.write_char('\n')
-      } else if esc == 't' {
-        buf.write_char('\t')
-      } else if esc == '"' {
-        buf.write_char('"')
-      } else if esc == '\\' {
-        buf.write_char('\\')
-      } else {
-        buf.write_char(esc)
-      }
-      i = i + 2
-    } else if c == '"' {
-      return Ok((buf.to_string(), i + 1))
-    } else {
-      buf.write_char(c)
-      i = i + 1
-    }
-  }
-  Err("unterminated string literal")
-}
-
-///|
-fn skip_ws_data(s : String, pos : Int) -> Int {
-  let mut i = pos
-  while i < s.length() &&
-        (char_at_data(s, i) == ' ' || char_at_data(s, i) == '\t') {
-    i = i + 1
-  }
-  i
-}
-
-///|
 fn parse_value_at_data(
   s : String,
   pos : Int,
 ) -> Result[(@frontmatter.FrontmatterValue, Int), String] {
-  let i = skip_ws_data(s, pos)
+  let i = @strutil.skip_ws(s, pos)
   if i >= s.length() {
     return Err("expected value")
   }
-  let c = char_at_data(s, i)
+  let c = @strutil.char_at(s, i)
   if c == '"' {
-    match parse_quoted_data(s, i) {
+    match @strutil.parse_quoted(s, i) {
       Ok((v, next)) => Ok((@frontmatter.FStr(v), next))
       Err(msg) => Err(msg)
     }
   } else if c == '[' {
     parse_array_at_data(s, i)
-  } else if starts_with_data(substr_data(s, i, s.length()), "true") {
+  } else if starts_with_data(@strutil.substr(s, i, s.length()), "true") {
     Ok((@frontmatter.FBool(true), i + 4))
-  } else if starts_with_data(substr_data(s, i, s.length()), "false") {
+  } else if starts_with_data(@strutil.substr(s, i, s.length()), "false") {
     Ok((@frontmatter.FBool(false), i + 5))
   } else {
     let mut j = i
     while j < s.length() &&
-          char_at_data(s, j) != ',' &&
-          char_at_data(s, j) != ']' {
+          @strutil.char_at(s, j) != ',' &&
+          @strutil.char_at(s, j) != ']' {
       j = j + 1
     }
-    let raw = trim_data(substr_data(s, i, j))
-    match parse_int_data(raw) {
+    let raw = @strutil.trim(@strutil.substr(s, i, j))
+    match @strutil.parse_int(raw) {
       Some(v) => Ok((@frontmatter.FInt(v), j))
       None => Ok((@frontmatter.FStr(raw), j))
     }
@@ -251,29 +128,29 @@ fn parse_array_at_data(
   s : String,
   pos : Int,
 ) -> Result[(@frontmatter.FrontmatterValue, Int), String] {
-  if pos >= s.length() || char_at_data(s, pos) != '[' {
+  if pos >= s.length() || @strutil.char_at(s, pos) != '[' {
     return Err("expected '['")
   }
   let items : Array[@frontmatter.FrontmatterValue] = []
   let mut i = pos + 1
-  i = skip_ws_data(s, i)
-  if i < s.length() && char_at_data(s, i) == ']' {
+  i = @strutil.skip_ws(s, i)
+  if i < s.length() && @strutil.char_at(s, i) == ']' {
     return Ok((@frontmatter.FArray(items), i + 1))
   }
   while i < s.length() {
     match parse_value_at_data(s, i) {
       Ok((v, next)) => {
         items.push(v)
-        i = skip_ws_data(s, next)
+        i = @strutil.skip_ws(s, next)
       }
       Err(msg) => return Err(msg)
     }
     if i >= s.length() {
       return Err("unterminated array")
     }
-    let c = char_at_data(s, i)
+    let c = @strutil.char_at(s, i)
     if c == ',' {
-      i = skip_ws_data(s, i + 1)
+      i = @strutil.skip_ws(s, i + 1)
     } else if c == ']' {
       return Ok((@frontmatter.FArray(items), i + 1))
     } else {
@@ -290,7 +167,7 @@ fn parse_assignment_data(
   let mut eq = -1
   let mut i = 0
   while i < line.length() {
-    if char_at_data(line, i) == '=' {
+    if @strutil.char_at(line, i) == '=' {
       eq = i
       break
     }
@@ -299,11 +176,11 @@ fn parse_assignment_data(
   if eq <= 0 {
     return Err("expected key=value")
   }
-  let key = trim_data(substr_data(line, 0, eq))
+  let key = @strutil.trim(@strutil.substr(line, 0, eq))
   if key.length() == 0 {
     return Err("empty key")
   }
-  let raw = trim_data(substr_data(line, eq + 1, line.length()))
+  let raw = @strutil.trim(@strutil.substr(line, eq + 1, line.length()))
   match parse_value_at_data(raw, 0) {
     Ok((v, _)) => Ok((key, v))
     Err(msg) => Err(msg)
@@ -316,8 +193,8 @@ fn split_key_path(key : String) -> Array[String] {
   let mut start = 0
   let mut i = 0
   while i <= key.length() {
-    if i == key.length() || char_at_data(key, i) == '.' {
-      let part = trim_data(substr_data(key, start, i))
+    if i == key.length() || @strutil.char_at(key, i) == '.' {
+      let part = @strutil.trim(@strutil.substr(key, start, i))
       if part.length() > 0 {
         parts.push(part)
       }
@@ -368,7 +245,7 @@ fn insert_key_path_at(
 ///|
 fn file_stem_data(filename : String) -> String {
   if ends_with_data(filename, ".toml") {
-    substr_data(filename, 0, filename.length() - 5)
+    @strutil.substr(filename, 0, filename.length() - 5)
   } else {
     filename
   }
@@ -385,8 +262,8 @@ fn parse_data_file(
   let mut i = 0
   while i < lines.length() {
     let line_no = i + 1
-    let raw = trim_data(lines[i])
-    if raw.length() == 0 || char_at_data(raw, 0) == '#' {
+    let raw = @strutil.trim(lines[i])
+    if raw.length() == 0 || @strutil.char_at(raw, 0) == '#' {
       i = i + 1
       continue
     }

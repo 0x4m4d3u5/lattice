@@ -30,22 +30,6 @@ pub struct Frontmatter {
 // character access so comparisons against char literals type-check correctly.
 
 ///|
-fn char_at(s : String, i : Int) -> Char {
-  s[i].to_int().unsafe_to_char()
-}
-
-///|
-fn substr(s : String, start : Int, end : Int) -> String {
-  let buf = StringBuilder::new()
-  let mut i = start
-  while i < end {
-    buf.write_char(char_at(s, i))
-    i = i + 1
-  }
-  buf.to_string()
-}
-
-///|
 fn trim_ws(s : String) -> String {
   let n = s.length()
   if n == 0 {
@@ -54,45 +38,29 @@ fn trim_ws(s : String) -> String {
   let mut lo = 0
   while lo < n &&
         (
-          char_at(s, lo) == ' ' ||
-          char_at(s, lo) == '\t' ||
-          char_at(s, lo) == '\r'
+          @strutil.char_at(s, lo) == ' ' ||
+          @strutil.char_at(s, lo) == '\t' ||
+          @strutil.char_at(s, lo) == '\r'
         ) {
     lo = lo + 1
   }
   let mut hi = n
   while hi > lo &&
         (
-          char_at(s, hi - 1) == ' ' ||
-          char_at(s, hi - 1) == '\t' ||
-          char_at(s, hi - 1) == '\r'
+          @strutil.char_at(s, hi - 1) == ' ' ||
+          @strutil.char_at(s, hi - 1) == '\t' ||
+          @strutil.char_at(s, hi - 1) == '\r'
         ) {
     hi = hi - 1
   }
-  substr(s, lo, hi)
-}
-
-///|
-fn starts_with_at(s : String, pos : Int, prefix : String) -> Bool {
-  let plen = prefix.length()
-  if pos + plen > s.length() {
-    return false
-  }
-  let mut j = 0
-  while j < plen {
-    if char_at(s, pos + j) != char_at(prefix, j) {
-      return false
-    }
-    j = j + 1
-  }
-  true
+  @strutil.substr(s, lo, hi)
 }
 
 ///|
 fn next_newline(s : String, from : Int) -> Int {
   let n = s.length()
   let mut i = from
-  while i < n && char_at(s, i) != '\n' {
+  while i < n && @strutil.char_at(s, i) != '\n' {
     i = i + 1
   }
   i
@@ -105,18 +73,13 @@ fn split_lines(s : String) -> Array[String] {
   let mut i = 0
   while i <= n {
     let end = next_newline(s, i)
-    lines.push(substr(s, i, end))
+    lines.push(@strutil.substr(s, i, end))
     if end >= n {
       break
     }
     i = end + 1
   }
   lines
-}
-
-///|
-fn is_digit(c : Char) -> Bool {
-  c >= '0' && c <= '9'
 }
 
 ///|
@@ -128,32 +91,34 @@ fn is_valid_iso8601_date(s : String) -> Bool {
     return false
   }
   // Check format: YYYY-MM-DD
-  if char_at(s, 4) != '-' || char_at(s, 7) != '-' {
+  if @strutil.char_at(s, 4) != '-' || @strutil.char_at(s, 7) != '-' {
     return false
   }
   // Extract and validate year (YYYY) - positions 0-3
-  if not(is_digit(char_at(s, 0))) ||
-    not(is_digit(char_at(s, 1))) ||
-    not(is_digit(char_at(s, 2))) ||
-    not(is_digit(char_at(s, 3))) {
+  if not(@strutil.is_digit(@strutil.char_at(s, 0))) ||
+    not(@strutil.is_digit(@strutil.char_at(s, 1))) ||
+    not(@strutil.is_digit(@strutil.char_at(s, 2))) ||
+    not(@strutil.is_digit(@strutil.char_at(s, 3))) {
     return false
   }
   // Extract and validate month (MM) - positions 5-6
-  if not(is_digit(char_at(s, 5))) || not(is_digit(char_at(s, 6))) {
+  if not(@strutil.is_digit(@strutil.char_at(s, 5))) ||
+    not(@strutil.is_digit(@strutil.char_at(s, 6))) {
     return false
   }
-  let month_1 = char_at(s, 5).to_int() - '0'.to_int()
-  let month_2 = char_at(s, 6).to_int() - '0'.to_int()
+  let month_1 = @strutil.char_at(s, 5).to_int() - '0'.to_int()
+  let month_2 = @strutil.char_at(s, 6).to_int() - '0'.to_int()
   let month = month_1 * 10 + month_2
   if month < 1 || month > 12 {
     return false
   }
   // Extract and validate day (DD) - positions 8-9
-  if not(is_digit(char_at(s, 8))) || not(is_digit(char_at(s, 9))) {
+  if not(@strutil.is_digit(@strutil.char_at(s, 8))) ||
+    not(@strutil.is_digit(@strutil.char_at(s, 9))) {
     return false
   }
-  let day_1 = char_at(s, 8).to_int() - '0'.to_int()
-  let day_2 = char_at(s, 9).to_int() - '0'.to_int()
+  let day_1 = @strutil.char_at(s, 8).to_int() - '0'.to_int()
+  let day_2 = @strutil.char_at(s, 9).to_int() - '0'.to_int()
   let day = day_1 * 10 + day_2
   if day < 1 {
     return false
@@ -178,7 +143,7 @@ fn parse_int_str(s : String) -> Result[Int, String] {
     return Err("empty integer")
   }
   let mut i = 0
-  let neg = char_at(s, 0) == '-'
+  let neg = @strutil.char_at(s, 0) == '-'
   if neg {
     i = 1
   }
@@ -187,8 +152,8 @@ fn parse_int_str(s : String) -> Result[Int, String] {
   }
   let mut value = 0
   while i < n {
-    let c = char_at(s, i)
-    if not(is_digit(c)) {
+    let c = @strutil.char_at(s, i)
+    if not(@strutil.is_digit(c)) {
       return Err("invalid digit in integer")
     }
     value = value * 10 + (c.to_int() - '0'.to_int())
@@ -203,39 +168,6 @@ fn parse_int_str(s : String) -> Result[Int, String] {
 
 ///|
 /// Parse a `"..."` string starting at `pos`. Returns (value, next_pos).
-fn parse_quoted(s : String, pos : Int) -> Result[(String, Int), String] {
-  let n = s.length()
-  if pos >= n || char_at(s, pos) != '"' {
-    return Err("expected '\"'")
-  }
-  let buf = StringBuilder::new()
-  let mut i = pos + 1
-  while i < n {
-    let c = char_at(s, i)
-    if c == '\\' && i + 1 < n {
-      let esc = char_at(s, i + 1)
-      if esc == 'n' {
-        buf.write_char('\n')
-      } else if esc == 't' {
-        buf.write_char('\t')
-      } else if esc == '"' {
-        buf.write_char('"')
-      } else if esc == '\\' {
-        buf.write_char('\\')
-      } else {
-        buf.write_char('\\')
-        buf.write_char(esc)
-      }
-      i = i + 2
-    } else if c == '"' {
-      return Ok((buf.to_string(), i + 1))
-    } else {
-      buf.write_char(c)
-      i = i + 1
-    }
-  }
-  Err("unterminated string literal")
-}
 
 ///|
 /// Parse a single value at `pos` in `s`. Returns (value, next_pos).
@@ -245,15 +177,16 @@ fn parse_value_at(
 ) -> Result[(FrontmatterValue, Int), String] {
   let n = s.length()
   let mut i = pos
-  while i < n && (char_at(s, i) == ' ' || char_at(s, i) == '\t') {
+  while i < n &&
+        (@strutil.char_at(s, i) == ' ' || @strutil.char_at(s, i) == '\t') {
     i = i + 1
   }
   if i >= n {
     return Err("expected value, got end of input")
   }
-  let c = char_at(s, i)
+  let c = @strutil.char_at(s, i)
   if c == '"' {
-    match parse_quoted(s, i) {
+    match @strutil.parse_quoted(s, i) {
       Ok((v, next)) =>
         if is_valid_iso8601_date(v) {
           Ok((FDate(v), next))
@@ -264,20 +197,20 @@ fn parse_value_at(
     }
   } else if c == '[' {
     parse_array_at(s, i)
-  } else if starts_with_at(s, i, "true") {
+  } else if @strutil.starts_with_at(s, i, "true") {
     Ok((FBool(true), i + 4))
-  } else if starts_with_at(s, i, "false") {
+  } else if @strutil.starts_with_at(s, i, "false") {
     Ok((FBool(false), i + 5))
-  } else if is_digit(c) || c == '-' {
+  } else if @strutil.is_digit(c) || c == '-' {
     let mut j = i
     while j < n &&
-          char_at(s, j) != ' ' &&
-          char_at(s, j) != '\t' &&
-          char_at(s, j) != ',' &&
-          char_at(s, j) != ']' {
+          @strutil.char_at(s, j) != ' ' &&
+          @strutil.char_at(s, j) != '\t' &&
+          @strutil.char_at(s, j) != ',' &&
+          @strutil.char_at(s, j) != ']' {
       j = j + 1
     }
-    let raw = trim_ws(substr(s, i, j))
+    let raw = trim_ws(@strutil.substr(s, i, j))
     if is_valid_iso8601_date(raw) {
       Ok((FDate(raw), j))
     } else {
@@ -289,10 +222,12 @@ fn parse_value_at(
   } else {
     // bare string: read until comma, closing bracket, or end
     let mut j = i
-    while j < n && char_at(s, j) != ',' && char_at(s, j) != ']' {
+    while j < n &&
+          @strutil.char_at(s, j) != ',' &&
+          @strutil.char_at(s, j) != ']' {
       j = j + 1
     }
-    Ok((FStr(trim_ws(substr(s, i, j))), j))
+    Ok((FStr(trim_ws(@strutil.substr(s, i, j))), j))
   }
 }
 
@@ -302,15 +237,16 @@ fn parse_array_at(
   pos : Int,
 ) -> Result[(FrontmatterValue, Int), String] {
   let n = s.length()
-  if pos >= n || char_at(s, pos) != '[' {
+  if pos >= n || @strutil.char_at(s, pos) != '[' {
     return Err("expected '['")
   }
   let items : Array[FrontmatterValue] = []
   let mut i = pos + 1
-  while i < n && (char_at(s, i) == ' ' || char_at(s, i) == '\t') {
+  while i < n &&
+        (@strutil.char_at(s, i) == ' ' || @strutil.char_at(s, i) == '\t') {
     i = i + 1
   }
-  if i < n && char_at(s, i) == ']' {
+  if i < n && @strutil.char_at(s, i) == ']' {
     return Ok((FArray(items), i + 1))
   }
   while i < n {
@@ -321,15 +257,16 @@ fn parse_array_at(
         i = next
       }
     }
-    while i < n && (char_at(s, i) == ' ' || char_at(s, i) == '\t') {
+    while i < n &&
+          (@strutil.char_at(s, i) == ' ' || @strutil.char_at(s, i) == '\t') {
       i = i + 1
     }
     if i >= n {
       return Err("unterminated array literal")
     }
-    if char_at(s, i) == ']' {
+    if @strutil.char_at(s, i) == ']' {
       return Ok((FArray(items), i + 1))
-    } else if char_at(s, i) == ',' {
+    } else if @strutil.char_at(s, i) == ',' {
       i = i + 1
     } else {
       return Err("expected ',' or ']' inside array")
@@ -344,7 +281,8 @@ fn parse_value_strict(s : String) -> Result[FrontmatterValue, String] {
     Err(e) => Err(e)
     Ok((value, next)) => {
       let mut i = next
-      while i < s.length() && (char_at(s, i) == ' ' || char_at(s, i) == '\t') {
+      while i < s.length() &&
+            (@strutil.char_at(s, i) == ' ' || @strutil.char_at(s, i) == '\t') {
         i = i + 1
       }
       if i != s.length() {
@@ -365,7 +303,7 @@ fn parse_assignment(
   let mut eq = -1
   let mut i = 0
   while i < n {
-    if char_at(line, i) == '=' {
+    if @strutil.char_at(line, i) == '=' {
       eq = i
       break
     }
@@ -374,11 +312,11 @@ fn parse_assignment(
   if eq < 0 {
     return Err("no '=' found in line")
   }
-  let key = trim_ws(substr(line, 0, eq))
+  let key = trim_ws(@strutil.substr(line, 0, eq))
   if key.length() == 0 {
     return Err("empty key")
   }
-  let val_str = trim_ws(substr(line, eq + 1, n))
+  let val_str = trim_ws(@strutil.substr(line, eq + 1, n))
   match parse_value_strict(val_str) {
     Ok(val) => Ok((key, val))
     Err(e) => Err("value error for '" + key + "': " + e)
@@ -389,9 +327,9 @@ fn parse_assignment(
 fn parse_yaml_value(raw : String) -> FrontmatterValue {
   let value = trim_ws(raw)
   if value.length() >= 2 &&
-    char_at(value, 0) == '\'' &&
-    char_at(value, value.length() - 1) == '\'' {
-    let unquoted = substr(value, 1, value.length() - 1)
+    @strutil.char_at(value, 0) == '\'' &&
+    @strutil.char_at(value, value.length() - 1) == '\'' {
+    let unquoted = @strutil.substr(value, 1, value.length() - 1)
     if is_valid_iso8601_date(unquoted) {
       return FDate(unquoted)
     }
@@ -412,7 +350,7 @@ fn parse_yaml_assignment(
   let mut colon = -1
   let mut i = 0
   while i < line.length() {
-    if char_at(line, i) == ':' {
+    if @strutil.char_at(line, i) == ':' {
       colon = i
       break
     }
@@ -421,11 +359,11 @@ fn parse_yaml_assignment(
   if colon < 0 {
     return Err("no '=' or ':' found in line")
   }
-  let key = trim_ws(substr(line, 0, colon))
+  let key = trim_ws(@strutil.substr(line, 0, colon))
   if key.length() == 0 {
     return Err("empty key")
   }
-  let value = trim_ws(substr(line, colon + 1, line.length()))
+  let value = trim_ws(@strutil.substr(line, colon + 1, line.length()))
   if value.length() > 0 {
     return Ok((key, parse_yaml_value(value), line_index + 1))
   }
@@ -434,13 +372,17 @@ fn parse_yaml_assignment(
   let mut j = line_index + 1
   while j < lines.length() {
     let raw = trim_ws(lines[j])
-    if raw.length() == 0 || char_at(raw, 0) == '#' {
+    if raw.length() == 0 || @strutil.char_at(raw, 0) == '#' {
       j = j + 1
       continue
     }
-    if char_at(raw, 0) == '-' &&
-      (raw.length() == 1 || char_at(raw, 1) == ' ' || char_at(raw, 1) == '\t') {
-      let item_raw = trim_ws(substr(raw, 1, raw.length()))
+    if @strutil.char_at(raw, 0) == '-' &&
+      (
+        raw.length() == 1 ||
+        @strutil.char_at(raw, 1) == ' ' ||
+        @strutil.char_at(raw, 1) == '\t'
+      ) {
+      let item_raw = trim_ws(@strutil.substr(raw, 1, raw.length()))
       items.push(parse_yaml_value(item_raw))
       j = j + 1
       continue
@@ -461,7 +403,7 @@ fn parse_yaml_assignment(
 /// Parse YAML frontmatter (--- delimited).
 pub fn parse_yaml(content : String) -> Result[Frontmatter, String] {
   let n = content.length()
-  if not(starts_with_at(content, 0, "---")) {
+  if not(@strutil.starts_with_at(content, 0, "---")) {
     return Err("missing opening '---' delimiter")
   }
   let first_nl = next_newline(content, 3)
@@ -472,16 +414,16 @@ pub fn parse_yaml(content : String) -> Result[Frontmatter, String] {
   let mut i = fm_start
   while i < n {
     let line_end = next_newline(content, i)
-    let line = trim_ws(substr(content, i, line_end))
+    let line = trim_ws(@strutil.substr(content, i, line_end))
     if line == "---" {
       let body_start = if line_end + 1 <= n { line_end + 1 } else { n }
       let fields : Map[String, FrontmatterValue] = Map::new()
-      let fm_text = substr(content, fm_start, i)
+      let fm_text = @strutil.substr(content, fm_start, i)
       let lines = split_lines(fm_text)
       let mut j = 0
       while j < lines.length() {
         let l = trim_ws(lines[j])
-        if l.length() > 0 && char_at(l, 0) != '#' {
+        if l.length() > 0 && @strutil.char_at(l, 0) != '#' {
           match parse_yaml_assignment(lines, j) {
             Ok((key, val, next_j)) => {
               fields.set(key, val)
@@ -493,7 +435,7 @@ pub fn parse_yaml(content : String) -> Result[Frontmatter, String] {
           j = j + 1
         }
       }
-      return Ok({ fields, body: substr(content, body_start, n) })
+      return Ok({ fields, body: @strutil.substr(content, body_start, n) })
     }
     if line_end >= n {
       break
@@ -507,7 +449,7 @@ pub fn parse_yaml(content : String) -> Result[Frontmatter, String] {
 /// Parse TOML frontmatter (+++ delimited).
 pub fn parse_toml(content : String) -> Result[Frontmatter, String] {
   let n = content.length()
-  if not(starts_with_at(content, 0, "+++")) {
+  if not(@strutil.starts_with_at(content, 0, "+++")) {
     return Err("missing opening '+++' delimiter")
   }
   let first_nl = next_newline(content, 3)
@@ -518,16 +460,16 @@ pub fn parse_toml(content : String) -> Result[Frontmatter, String] {
   let mut i = fm_start
   while i < n {
     let line_end = next_newline(content, i)
-    let line = trim_ws(substr(content, i, line_end))
+    let line = trim_ws(@strutil.substr(content, i, line_end))
     if line == "+++" {
       let body_start = if line_end + 1 <= n { line_end + 1 } else { n }
       let fields : Map[String, FrontmatterValue] = Map::new()
-      let fm_text = substr(content, fm_start, i)
+      let fm_text = @strutil.substr(content, fm_start, i)
       let lines = split_lines(fm_text)
       let mut j = 0
       while j < lines.length() {
         let l = trim_ws(lines[j])
-        if l.length() > 0 && char_at(l, 0) != '#' {
+        if l.length() > 0 && @strutil.char_at(l, 0) != '#' {
           match parse_assignment(l) {
             Ok((key, val)) => fields.set(key, val)
             Err(msg) => return Err("line " + (j + 1).to_string() + ": " + msg)
@@ -535,7 +477,7 @@ pub fn parse_toml(content : String) -> Result[Frontmatter, String] {
         }
         j = j + 1
       }
-      return Ok({ fields, body: substr(content, body_start, n) })
+      return Ok({ fields, body: @strutil.substr(content, body_start, n) })
     }
     if line_end >= n {
       break
@@ -575,9 +517,9 @@ pub fn parse_toml(content : String) -> Result[Frontmatter, String] {
 /// body text here
 /// ```
 pub fn parse(content : String) -> Result[Frontmatter, String] {
-  if starts_with_at(content, 0, "---") {
+  if @strutil.starts_with_at(content, 0, "---") {
     parse_yaml(content)
-  } else if starts_with_at(content, 0, "+++") {
+  } else if @strutil.starts_with_at(content, 0, "+++") {
     parse_toml(content)
   } else {
     Err(
