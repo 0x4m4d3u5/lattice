@@ -1,7 +1,60 @@
-<article class="prose">
-  <h1>{{title}}</h1>
-  <p>{{description}}</p>
-  <p class="meta">{{date}} · {{reading_time}} · {{word_count}} words</p>
-  <aside class="toc">{{table_of_contents}}</aside>
-  <div class="content">{{content}}</div>
+<article class="prose" itemscope itemtype="https://schema.org/BlogPosting">
+  <header class="prose__header">
+    <h1 class="prose__title" itemprop="headline">{{title}}</h1>
+    {{?description}}
+    <p class="prose__lede">{{description}}</p>
+    {{/?description}}
+    <div class="prose__meta">
+      {{?date}}
+      <time class="prose__date" itemprop="datePublished" content="{{date}}">{{date}}</time>
+      {{/?date}}
+      {{?author}}
+      <span class="prose__author" itemprop="author">{{author}}</span>
+      {{/?author}}
+      {{?reading_time}}
+      <span class="prose__reading-time">{{reading_time}} read</span>
+      {{/?reading_time}}
+      {{?word_count}}
+      <span class="prose__word-count">{{word_count}} words</span>
+      {{/?word_count}}
+    </div>
+    {{?tags}}
+    <div class="tag-list">{{tags}}</div>
+    {{/?tags}}
+  </header>
+
+  {{?table_of_contents}}
+  <aside class="toc" aria-label="Table of contents">
+    <details class="toc__details" open>
+      <summary class="toc__summary">On this page</summary>
+      {{table_of_contents}}
+    </details>
+  </aside>
+  {{/?table_of_contents}}
+
+  <div class="prose__body" itemprop="articleBody">
+    {{content}}
+  </div>
+
+  {{?backlinks}}
+  <aside class="backlinks" aria-label="Pages that link here">
+    <h2 class="backlinks__title">Linked from</h2>
+    {{backlinks}}
+  </aside>
+  {{/?backlinks}}
+
+  <nav class="post-nav" aria-label="Post navigation">
+    {{?prev_post_url}}
+    <a href="{{prev_post_url}}" class="post-nav__link post-nav__link--prev">
+      <span class="post-nav__label">Previous</span>
+      <span class="post-nav__title">{{prev_post_title}}</span>
+    </a>
+    {{/?prev_post_url}}
+    {{?next_post_url}}
+    <a href="{{next_post_url}}" class="post-nav__link post-nav__link--next">
+      <span class="post-nav__label">Next</span>
+      <span class="post-nav__title">{{next_post_title}}</span>
+    </a>
+    {{/?next_post_url}}
+  </nav>
 </article>
