@@ -25,6 +25,7 @@ The current implementation supports:
 - `Array[Type]`
 - `Optional[Type]`
 - `Enum["v1","v2","v3"]`
+- `Url`
 
 Examples:
 
@@ -34,6 +35,7 @@ schema = title:String, published_at:Date
 schema = tags:Array[String]
 schema = draft:Optional[Bool], published_at:Optional[Date], description:Optional[String]
 schema = status:Enum["draft","published","archived"]
+schema = canonical_url:Url, og_url:Optional[Url]
 ```
 
 ## Required vs optional
@@ -94,6 +96,51 @@ Why it fails:
 - the build emits a diagnostic with the field name, rejected value, and full list of allowed values
 
 This catches typos and domain violations at build time, not at template render time or in the final site output.
+
+## URL fields
+
+The `Url` type constrains a string field to URL-shaped values. A valid URL must start with `http://`, `https://`, or `/` (relative path). Empty strings are rejected.
+
+Example declaration:
+
+```cfg
+schema = canonical_url:Url, og_url:Optional[Url]
+```
+
+Valid frontmatter:
+
+```md
+---
+title = My Post
+canonical_url = https://example.com/posts/my-post
+---
+```
+
+Also valid (relative URL):
+
+```md
+---
+title = My Post
+canonical_url = /posts/my-post
+---
+```
+
+Invalid frontmatter (build error):
+
+```md
+---
+title = My Post
+canonical_url = not-a-url
+---
+```
+
+Why it fails:
+
+- `canonical_url` is declared as `Url`
+- `"not-a-url"` does not start with `http://`, `https://`, or `/`
+- the build emits a diagnostic with the field name and expected type
+
+This catches malformed canonical URLs, Open Graph URLs, and other URL-shaped metadata at build time instead of emitting `<link rel="canonical" href="not-a-url">` into the HTML output.
 
 ## Frontmatter syntax
 

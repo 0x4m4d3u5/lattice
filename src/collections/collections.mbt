@@ -255,6 +255,9 @@ fn parse_field_type_at(
   if name == "Bool" {
     return Ok((@schema.TBool, next))
   }
+  if name == "Url" {
+    return Ok((@schema.TUrl, next))
+  }
   if name == "Array" || name == "Optional" {
     let p = skip_ws_type(s, next)
     if p >= s.length() || @strutil.char_at(s, p) != '[' {

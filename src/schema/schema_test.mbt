@@ -341,3 +341,138 @@ test "TEnum empty allowed set always fails" {
   assert_eq(errors[0].field, "status")
   assert_eq(errors[0].message, "expected one of Enum[], got \"any\"")
 }
+
+
+///|
+test "TUrl accepts https URL" {
+  let schema : Schema = {
+    name: "posts",
+    fields: [
+      { name: "canonical_url", field_type: TUrl, required: true },
+    ],
+  }
+  let fm = parse_frontmatter_or_fail(
+    "+++\n" + "canonical_url = \"https://example.com\"\n" + "+++\n",
+  )
+  let errors = validate(fm, schema)
+  assert_eq(errors.length(), 0)
+}
+
+///|
+test "TUrl accepts http URL" {
+  let schema : Schema = {
+    name: "posts",
+    fields: [
+      { name: "canonical_url", field_type: TUrl, required: true },
+    ],
+  }
+  let fm = parse_frontmatter_or_fail(
+    "+++\n" + "canonical_url = \"http://example.com/path\"\n" + "+++\n",
+  )
+  let errors = validate(fm, schema)
+  assert_eq(errors.length(), 0)
+}
+
+///|
+test "TUrl accepts relative URL" {
+  let schema : Schema = {
+    name: "posts",
+    fields: [
+      { name: "canonical_url", field_type: TUrl, required: true },
+    ],
+  }
+  let fm = parse_frontmatter_or_fail(
+    "+++\n" + "canonical_url = \"/relative/path\"\n" + "+++\n",
+  )
+  let errors = validate(fm, schema)
+  assert_eq(errors.length(), 0)
+}
+
+///|
+test "TUrl rejects empty string" {
+  let schema : Schema = {
+    name: "posts",
+    fields: [
+      { name: "canonical_url", field_type: TUrl, required: true },
+    ],
+  }
+  let fm = parse_frontmatter_or_fail(
+    "+++\n" + "canonical_url = \"\"\n" + "+++\n",
+  )
+  let errors = validate(fm, schema)
+  assert_eq(errors.length(), 1)
+  assert_eq(errors[0].field, "canonical_url")
+  assert_true(errors[0].message.contains("expected Url"))
+}
+
+///|
+test "TUrl rejects plain text" {
+  let schema : Schema = {
+    name: "posts",
+    fields: [
+      { name: "canonical_url", field_type: TUrl, required: true },
+    ],
+  }
+  let fm = parse_frontmatter_or_fail(
+    "+++\n" + "canonical_url = \"not-a-url\"\n" + "+++\n",
+  )
+  let errors = validate(fm, schema)
+  assert_eq(errors.length(), 1)
+  assert_eq(errors[0].field, "canonical_url")
+  assert_true(errors[0].message.contains("expected Url"))
+}
+
+///|
+test "TUrl rejects ftp URL" {
+  let schema : Schema = {
+    name: "posts",
+    fields: [
+      { name: "canonical_url", field_type: TUrl, required: true },
+    ],
+  }
+  let fm = parse_frontmatter_or_fail(
+    "+++\n" + "canonical_url = \"ftp://example.com\"\n" + "+++\n",
+  )
+  let errors = validate(fm, schema)
+  assert_eq(errors.length(), 1)
+  assert_eq(errors[0].field, "canonical_url")
+  assert_true(errors[0].message.contains("expected Url"))
+}
+
+///|
+test "TOptional(TUrl) absent field produces no error" {
+  let schema : Schema = {
+    name: "posts",
+    fields: [
+      {
+        name: "og_url",
+        field_type: TOptional(TUrl),
+        required: false,
+      },
+    ],
+  }
+  let fm = parse_frontmatter_or_fail("+++\n+++\n")
+  let errors = validate(fm, schema)
+  assert_eq(errors.length(), 0)
+}
+
+///|
+test "schema with canonical_url:Url rejects invalid value" {
+  let schema : Schema = {
+    name: "posts",
+    fields: [
+      { name: "title", field_type: TString, required: true },
+      { name: "canonical_url", field_type: TUrl, required: true },
+    ],
+  }
+  let fm = parse_frontmatter_or_fail(
+    "+++\n" +
+    "title = \"My Post\"\n" +
+    "canonical_url = \"not-valid\"\n" +
+    "+++\n",
+  )
+  let errors = validate(fm, schema)
+  assert_eq(errors.length(), 1)
+  assert_eq(errors[0].field, "canonical_url")
+  assert_true(errors[0].message.contains("expected Url"))
+}

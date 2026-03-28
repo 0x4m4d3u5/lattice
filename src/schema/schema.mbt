@@ -19,6 +19,7 @@ pub(all) enum FieldType {
   TArray(FieldType)
   TOptional(FieldType)
   TEnum(Array[String])
+  TUrl
 }
 
 ///|
@@ -66,6 +67,7 @@ fn field_type_name(ft : FieldType) -> String {
       }
       result + "]"
     }
+    TUrl => "Url"
   }
 }
 
@@ -125,6 +127,15 @@ fn type_matches(val : @frontmatter.FrontmatterValue, ft : FieldType) -> Bool {
           }
           found
         }
+        _ => false
+      }
+    TUrl =>
+      match val {
+        @frontmatter.FStr(s) =>
+          s.length() > 0 &&
+          (@strutil.starts_with(s, "http://") ||
+            @strutil.starts_with(s, "https://") ||
+            @strutil.starts_with(s, "/"))
         _ => false
       }
   }

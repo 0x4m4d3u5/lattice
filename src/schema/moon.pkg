@@ -1,3 +1,4 @@
 import {
   "kurisu/lattice/src/frontmatter" @frontmatter,
+  "kurisu/lattice/src/strutil" @strutil,
 }
