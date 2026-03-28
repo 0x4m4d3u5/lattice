@@ -1,7 +1,11 @@
 {{layout: base.html}}
-<section class="listing">
-  <p class="eyebrow">tag</p>
-  <h1>{{tag_name}}</h1>
-  <p>{{tag_count}} page(s) match this tag.</p>
-  <div>{{content}}</div>
+<section class="listing listing--tag">
+  <header class="listing__header">
+    <p class="listing__eyebrow">Tag</p>
+    <h1 class="listing__title">#{{tag_name}}</h1>
+    <p class="listing__description">{{tag_count}} posts</p>
+  </header>
+  <div class="listing__content">
+    {{content}}
+  </div>
 </section>

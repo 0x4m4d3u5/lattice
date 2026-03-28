@@ -171,19 +171,21 @@ fn build_parser() -> @clap.Parser {
             defaults=["./content"],
             help="Content directory",
           ),
-          "output-dir": @clap.Arg::positional(
+          "output-dir": @clap.Arg::named(
+            short='o',
+            nargs=One,
             defaults=[""],
             help="Output directory (default: config.output_dir or ./dist)",
           ),
           "config": @clap.Arg::named(
             short='c',
             nargs=One,
-            global=true,
+            defaults=[""],
             help="Override site config file",
           ),
           "collections": @clap.Arg::named(
             nargs=One,
-            global=true,
+            defaults=[""],
             help="Override collections config file",
           ),
           "drafts": @clap.Arg::flag(
@@ -210,19 +212,21 @@ fn build_parser() -> @clap.Parser {
             defaults=["./content"],
             help="Content directory",
           ),
-          "output-dir": @clap.Arg::positional(
+          "output-dir": @clap.Arg::named(
+            short='o',
+            nargs=One,
             defaults=[""],
             help="Output directory (default: config.output_dir or ./dist)",
           ),
           "config": @clap.Arg::named(
             short='c',
             nargs=One,
-            global=true,
+            defaults=[""],
             help="Override site config file",
           ),
           "collections": @clap.Arg::named(
             nargs=One,
-            global=true,
+            defaults=[""],
             help="Override collections config file",
           ),
         },
@@ -234,19 +238,21 @@ fn build_parser() -> @clap.Parser {
             defaults=["./content"],
             help="Content directory",
           ),
-          "output-dir": @clap.Arg::positional(
+          "output-dir": @clap.Arg::named(
+            short='o',
+            nargs=One,
             defaults=[""],
             help="Output directory (default: config.output_dir or ./dist)",
           ),
           "config": @clap.Arg::named(
             short='c',
             nargs=One,
-            global=true,
+            defaults=[""],
             help="Override site config file",
           ),
           "collections": @clap.Arg::named(
             nargs=One,
-            global=true,
+            defaults=[""],
             help="Override collections config file",
           ),
           "port": @clap.Arg::named(
@@ -281,14 +287,28 @@ fn cli_options_from_clap(
   sv : @clap.SimpleValue,
   subcmd_name : String,
 ) -> CliOptions {
-  let content_dir = safe_get_one(sv, "content-dir").unwrap_or("./content")
+  let content_dir = if sv.positional_args.length() > 0 {
+    sv.positional_args[0]
+  } else {
+    "./content"
+  }
   let output_dir_raw = safe_get_one(sv, "output-dir").unwrap_or("")
   let output_dir : String? =
     if output_dir_raw.length() == 0 { None } else {
       Some(output_dir_raw)
     }
-  let config_path : String? = safe_get_one(sv, "config")
-  let collections_path : String? = safe_get_one(sv, "collections")
+  let config_raw = safe_get_one(sv, "config").unwrap_or("")
+  let config_path : String? = if config_raw.length() == 0 {
+    None
+  } else {
+    Some(config_raw)
+  }
+  let collections_raw = safe_get_one(sv, "collections").unwrap_or("")
+  let collections_path : String? = if collections_raw.length() == 0 {
+    None
+  } else {
+    Some(collections_raw)
+  }
   let include_drafts = sv.get_flag("drafts").unwrap_or(false)
 
   match subcmd_name {
