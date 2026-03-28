@@ -2,7 +2,8 @@
   "name": "kurisu/lattice",
   "version": "0.1.0",
   "deps": {
-    "moonbitlang/x": "0.4.40"
+    "moonbitlang/x": "0.4.40",
+    "TheWaWaR/clap": "0.2.6"
   },
   "readme": "README.mbt.md",
   "repository": "https://github.com/0x4m4d3u5/lattice",
