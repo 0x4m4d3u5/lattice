@@ -1,11 +1,10 @@
 ///|
 /// Lattice — command-line entry point.
 ///
-/// Usage:
-///   lattice [content-dir] [output-dir] [--config path] [--collections path] [--check]
-///           [--force] [--watch] [--watch-interval ms] [--drafts] [--help]
-///   lattice serve [content-dir] [output-dir] [--port N] [--config path] [--drafts]
-///   lattice dev   [content-dir] [output-dir] [--port N] [--config path] [--drafts]
+/// Subcommands:
+///   lattice build [content-dir] [output-dir] [--config <path>] [--collections <path>] [--drafts] [--watch]
+///   lattice check [content-dir] [output-dir] [--config <path>] [--collections <path>]
+///   lattice serve [content-dir] [output-dir] [--port <N>] [--config <path>] [--collections <path>] [--drafts]
 ///
 /// Defaults:
 ///   content-dir → ./content
@@ -17,6 +16,8 @@
 ///   2. Render each page through the full pipeline; write HTML to output-dir.
 ///
 /// Exit codes: 0 = clean build, 1 = one or more errors.
+
+///|
 pub(all) struct CliOptions {
   content_dir : String
   output_dir : String?
@@ -35,45 +36,6 @@ pub(all) struct CliOptions {
 priv struct CliState {
   build_config : @builder.BuildConfig
   watch_roots : Array[String]
-}
-
-///|
-priv struct VersionDisplay {
-  name : String
-  version : String
-}
-
-///|
-fn char_at_main(s : String, i : Int) -> Char {
-  s[i].to_int().unsafe_to_char()
-}
-
-///|
-fn starts_with_main(s : String, prefix : String) -> Bool {
-  let n = s.length()
-  let plen = prefix.length()
-  if plen > n {
-    return false
-  }
-  let mut i = 0
-  while i < plen {
-    if char_at_main(s, i) != char_at_main(prefix, i) {
-      return false
-    }
-    i = i + 1
-  }
-  true
-}
-
-///|
-fn substr_main(s : String, start : Int, end : Int) -> String {
-  let buf = StringBuilder::new()
-  let mut i = start
-  while i < end {
-    buf.write_char(char_at_main(s, i))
-    i = i + 1
-  }
-  buf.to_string()
 }
 
 ///|
@@ -196,345 +158,239 @@ fn config_error_diagnostic(
 }
 
 ///|
-fn parse_positive_int_main(value : String) -> Int? {
+/// Build the clap parser with build/check/serve subcommands.
+fn build_parser() -> @clap.Parser {
+  @clap.Parser::new(
+    prog="lattice",
+    description="A static site generator where structural violations are type errors.",
+    args={},
+    subcmds={
+      "build": @clap.SubCommand::new(
+        args={
+          "content-dir": @clap.Arg::positional(
+            defaults=["./content"],
+            help="Content directory",
+          ),
+          "output-dir": @clap.Arg::positional(
+            defaults=[""],
+            help="Output directory (default: config.output_dir or ./dist)",
+          ),
+          "config": @clap.Arg::named(
+            short='c',
+            nargs=One,
+            global=true,
+            help="Override site config file",
+          ),
+          "collections": @clap.Arg::named(
+            nargs=One,
+            global=true,
+            help="Override collections config file",
+          ),
+          "drafts": @clap.Arg::flag(
+            help="Include draft posts in the build",
+          ),
+          "force": @clap.Arg::flag(
+            help="Ignore incremental cache and rebuild everything",
+          ),
+          "watch": @clap.Arg::flag(
+            help="Rebuild on file changes with polling",
+          ),
+          "watch-interval": @clap.Arg::named(
+            short='i',
+            nargs=One,
+            defaults=["500"],
+            help="Polling interval in milliseconds (default: 500)",
+          ),
+        },
+        help="Build the site",
+      ),
+      "check": @clap.SubCommand::new(
+        args={
+          "content-dir": @clap.Arg::positional(
+            defaults=["./content"],
+            help="Content directory",
+          ),
+          "output-dir": @clap.Arg::positional(
+            defaults=[""],
+            help="Output directory (default: config.output_dir or ./dist)",
+          ),
+          "config": @clap.Arg::named(
+            short='c',
+            nargs=One,
+            global=true,
+            help="Override site config file",
+          ),
+          "collections": @clap.Arg::named(
+            nargs=One,
+            global=true,
+            help="Override collections config file",
+          ),
+        },
+        help="Run validation/lint pipeline only",
+      ),
+      "serve": @clap.SubCommand::new(
+        args={
+          "content-dir": @clap.Arg::positional(
+            defaults=["./content"],
+            help="Content directory",
+          ),
+          "output-dir": @clap.Arg::positional(
+            defaults=[""],
+            help="Output directory (default: config.output_dir or ./dist)",
+          ),
+          "config": @clap.Arg::named(
+            short='c',
+            nargs=One,
+            global=true,
+            help="Override site config file",
+          ),
+          "collections": @clap.Arg::named(
+            nargs=One,
+            global=true,
+            help="Override collections config file",
+          ),
+          "port": @clap.Arg::named(
+            short='p',
+            nargs=One,
+            defaults=["4321"],
+            help="HTTP port for dev server (default: 4321)",
+          ),
+          "drafts": @clap.Arg::flag(
+            help="Include draft posts in the build",
+          ),
+        },
+        help="Start dev server with live reload",
+      ),
+    },
+  )
+}
+
+///|
+fn safe_get_one(sv : @clap.SimpleValue, name : String) -> String? {
+  let result : Result[String, _] = try? sv.get_one(name)
+  match result {
+    Ok(v) => Some(v)
+    Err(_) => None
+  }
+}
+
+///|
+/// Extract CliOptions from the parsed clap SimpleValue.
+/// `subcmd_name` is "build", "check", or "serve".
+fn cli_options_from_clap(
+  sv : @clap.SimpleValue,
+  subcmd_name : String,
+) -> CliOptions {
+  let content_dir = safe_get_one(sv, "content-dir").unwrap_or("./content")
+  let output_dir_raw = safe_get_one(sv, "output-dir").unwrap_or("")
+  let output_dir : String? =
+    if output_dir_raw.length() == 0 { None } else {
+      Some(output_dir_raw)
+    }
+  let config_path : String? = safe_get_one(sv, "config")
+  let collections_path : String? = safe_get_one(sv, "collections")
+  let include_drafts = sv.get_flag("drafts").unwrap_or(false)
+
+  match subcmd_name {
+    "build" => {
+      let watch_mode = sv.get_flag("watch").unwrap_or(false)
+      let force_rebuild = sv.get_flag("force").unwrap_or(false)
+      let watch_interval_str = safe_get_one(sv, "watch-interval").unwrap_or(
+        "500",
+      )
+      let watch_interval_ms = match parse_positive_int(watch_interval_str) {
+        Some(n) => n
+        None => 500
+      }
+      {
+        content_dir,
+        output_dir,
+        config_path,
+        collections_path,
+        check_mode: false,
+        force_rebuild,
+        watch_mode,
+        watch_interval_ms,
+        include_drafts,
+        serve_mode: false,
+        serve_port: @serve.default_port(),
+      }
+    }
+    "check" => {
+      {
+        content_dir,
+        output_dir,
+        config_path,
+        collections_path,
+        check_mode: true,
+        force_rebuild: false,
+        watch_mode: false,
+        watch_interval_ms: 500,
+        include_drafts: false,
+        serve_mode: false,
+        serve_port: @serve.default_port(),
+      }
+    }
+    "serve" => {
+      let port_str = safe_get_one(sv, "port").unwrap_or("4321")
+      let serve_port = match parse_positive_int(port_str) {
+        Some(n) =>
+          if @serve.is_valid_port(n) { n } else {
+            @serve.default_port()
+          }
+        None => @serve.default_port()
+      }
+      {
+        content_dir,
+        output_dir,
+        config_path,
+        collections_path,
+        check_mode: false,
+        force_rebuild: false,
+        watch_mode: true,
+        watch_interval_ms: 500,
+        include_drafts,
+        serve_mode: true,
+        serve_port,
+      }
+    }
+    _ => {
+      {
+        content_dir,
+        output_dir,
+        config_path,
+        collections_path,
+        check_mode: false,
+        force_rebuild: false,
+        watch_mode: false,
+        watch_interval_ms: 500,
+        include_drafts: false,
+        serve_mode: false,
+        serve_port: @serve.default_port(),
+      }
+    }
+  }
+}
+
+///|
+fn parse_positive_int(value : String) -> Int? {
   if value.length() == 0 {
     return None
   }
   let mut parsed = 0
   let mut i = 0
   while i < value.length() {
-    let c = char_at_main(value, i)
+    let c = value[i].unsafe_to_char()
     if c < '0' || c > '9' {
       return None
     }
-    parsed = parsed * 10 + (c.to_int() - '0'.to_int())
+    parsed = parsed * 10 + (@strutil.char_at(value, i).to_int() - '0'.to_int())
     i = i + 1
   }
   if parsed <= 0 {
     return None
   }
   Some(parsed)
-}
-
-///|
-fn parse_version_from_mod() -> Result[VersionDisplay, String] {
-  let mod_path = "./moon.mod.json"
-  let source = @fs.read_file_to_string(mod_path) catch {
-    @fs.IOError(msg) => return Err("cannot read moon.mod.json: " + msg)
-  }
-
-  let mut name : String? = None
-  let mut version : String? = None
-  let mut i = 0
-  let n = source.length()
-
-  while i < n {
-    if i + 5 <= n &&
-      char_at_main(source, i) == '"' &&
-      char_at_main(source, i + 1) == 'n' &&
-      char_at_main(source, i + 2) == 'a' &&
-      char_at_main(source, i + 3) == 'm' &&
-      char_at_main(source, i + 4) == 'e' {
-      let mut j = i + 6
-      let buf = StringBuilder::new()
-      while j < n && char_at_main(source, j) != '"' {
-        buf.write_char(char_at_main(source, j))
-        j = j + 1
-      }
-      if j < n {
-        name = Some(buf.to_string())
-      }
-    }
-
-    if i + 8 <= n &&
-      char_at_main(source, i) == '"' &&
-      char_at_main(source, i + 1) == 'v' &&
-      char_at_main(source, i + 2) == 'e' &&
-      char_at_main(source, i + 3) == 'r' &&
-      char_at_main(source, i + 4) == 's' &&
-      char_at_main(source, i + 5) == 'i' &&
-      char_at_main(source, i + 6) == 'o' &&
-      char_at_main(source, i + 7) == 'n' {
-      let mut j = i + 9
-      let buf = StringBuilder::new()
-      while j < n && char_at_main(source, j) != '"' {
-        buf.write_char(char_at_main(source, j))
-        j = j + 1
-      }
-      if j < n {
-        version = Some(buf.to_string())
-      }
-    }
-
-    i = i + 1
-  }
-
-  match name {
-    Some(n) =>
-      match version {
-        Some(v) => Ok({ name: n, version: v })
-        None => Err("version not found in moon.mod.json")
-      }
-    None => Err("name not found in moon.mod.json")
-  }
-}
-
-///|
-fn print_help() -> Unit {
-  println("Usage:")
-  println(
-    "  lattice [content-dir] [output-dir] [--config path] [--collections path] [--check]",
-  )
-  println(
-    "          [--force] [--watch] [--watch-interval ms] [--drafts] [--help] [--version]",
-  )
-  println(
-    "  lattice serve [content-dir] [output-dir] [--port N] [--config path] [--drafts]",
-  )
-  println(
-    "  lattice dev   [content-dir] [output-dir] [--port N] [--config path] [--drafts]",
-  )
-  println("")
-  println("Defaults:")
-  println("  content-dir         ./content")
-  println("  config file         <content-dir>/lattice.conf")
-  println("  output-dir          config.output_dir or ./dist")
-  println("")
-  println("Flags:")
-  println("  --config <path>         Override site config file")
-  println("  --collections <path>    Override collections config file")
-  println("  --check                 Run validation/lint pipeline only")
-  println(
-    "  --force                 Ignore incremental cache and rebuild everything",
-  )
-  println("  --watch                 Rebuild on file changes with polling")
-  println(
-    "  --watch-interval <ms>   Polling interval in milliseconds (default: 500)",
-  )
-  println("  --drafts                Include draft posts in the build")
-  println("  --help                  Show this help text")
-  println("  --version               Print version information")
-  println("")
-  println("Dev server (serve / dev subcommand):")
-  println("  --port <N>              HTTP port for dev server (default: 4321)")
-  println("  Starts a local HTTP server, watches for changes, and signals")
-  println("  connected browser tabs to reload via Server-Sent Events.")
-}
-
-///|
-fn parse_cli_options(args : Array[String]) -> CliOptions {
-
-  // args[0] is the program name
-  let positionals : Array[String] = []
-  let mut config_path : String? = None
-  let mut collections_path : String? = None
-  let mut check_mode = false
-  let mut force_rebuild = false
-  let mut watch_mode = false
-  let mut watch_interval_ms = 500
-  let mut include_drafts = false
-  let mut serve_mode = false
-  let mut serve_port = @serve.default_port()
-
-  // Detect serve / dev subcommand as first positional argument
-  let mut i = 1
-  if args.length() > 1 && (args[1] == "serve" || args[1] == "dev") {
-    serve_mode = true
-    watch_mode = true
-    i = 2
-  }
-
-  while i < args.length() {
-    let arg = args[i]
-    if arg == "--help" || arg == "-h" {
-      print_help()
-      @sys.exit(0)
-      return {
-        content_dir: "./content",
-        output_dir: None,
-        config_path: None,
-        collections_path: None,
-        check_mode: false,
-        force_rebuild: false,
-        watch_mode: false,
-        watch_interval_ms: 500,
-        include_drafts: false,
-        serve_mode: false,
-        serve_port: @serve.default_port(),
-      }
-    } else if arg == "--version" {
-      match parse_version_from_mod() {
-        Ok(v) => println(v.name + " version " + v.version)
-        Err(msg) => print_diagnostic_main(cli_error(msg))
-      }
-      @sys.exit(0)
-      return {
-        content_dir: "./content",
-        output_dir: None,
-        config_path: None,
-        collections_path: None,
-        check_mode: false,
-        force_rebuild: false,
-        watch_mode: false,
-        watch_interval_ms: 500,
-        include_drafts: false,
-        serve_mode: false,
-        serve_port: @serve.default_port(),
-      }
-    } else if arg == "--port" {
-      if i + 1 >= args.length() {
-        print_diagnostic_main(cli_error("missing value for --port"))
-        @sys.exit(1)
-      }
-      match parse_positive_int_main(args[i + 1]) {
-        Some(parsed) =>
-          if @serve.is_valid_port(parsed) {
-            serve_port = parsed
-          } else {
-            print_diagnostic_main(
-              cli_error("invalid value for --port: must be 1–65535"),
-            )
-            @sys.exit(1)
-          }
-        None => {
-          print_diagnostic_main(
-            cli_error("invalid value for --port: must be a positive integer"),
-          )
-          @sys.exit(1)
-        }
-      }
-      i = i + 2
-    } else if starts_with_main(arg, "--port=") {
-      let value = substr_main(arg, 7, arg.length())
-      match parse_positive_int_main(value) {
-        Some(parsed) =>
-          if @serve.is_valid_port(parsed) {
-            serve_port = parsed
-          } else {
-            print_diagnostic_main(
-              cli_error("invalid value for --port: must be 1–65535"),
-            )
-            @sys.exit(1)
-          }
-        None => {
-          print_diagnostic_main(
-            cli_error("invalid value for --port: must be a positive integer"),
-          )
-          @sys.exit(1)
-        }
-      }
-      i = i + 1
-    } else if arg == "--config" {
-      if i + 1 >= args.length() {
-        print_diagnostic_main(cli_error("missing value for --config"))
-        @sys.exit(1)
-      }
-      config_path = Some(args[i + 1])
-      i = i + 2
-    } else if starts_with_main(arg, "--config=") {
-      let value = substr_main(arg, 9, arg.length())
-      if value.length() == 0 {
-        print_diagnostic_main(cli_error("missing value for --config"))
-        @sys.exit(1)
-      }
-      config_path = Some(value)
-      i = i + 1
-    } else if arg == "--collections" {
-      if i + 1 >= args.length() {
-        print_diagnostic_main(cli_error("missing value for --collections"))
-        @sys.exit(1)
-      }
-      collections_path = Some(args[i + 1])
-      i = i + 2
-    } else if starts_with_main(arg, "--collections=") {
-      let value = substr_main(arg, 14, arg.length())
-      if value.length() == 0 {
-        print_diagnostic_main(cli_error("missing value for --collections"))
-        @sys.exit(1)
-      }
-      collections_path = Some(value)
-      i = i + 1
-    } else if arg == "--check" {
-      check_mode = true
-      i = i + 1
-    } else if arg == "--force" {
-      force_rebuild = true
-      i = i + 1
-    } else if arg == "--watch" {
-      watch_mode = true
-      i = i + 1
-    } else if arg == "--watch-interval" {
-      if i + 1 >= args.length() {
-        print_diagnostic_main(cli_error("missing value for --watch-interval"))
-        @sys.exit(1)
-      }
-      match parse_positive_int_main(args[i + 1]) {
-        Some(parsed) => watch_interval_ms = parsed
-        None => {
-          print_diagnostic_main(
-            cli_error(
-              "invalid value for --watch-interval: must be a positive integer",
-            ),
-          )
-          @sys.exit(1)
-        }
-      }
-      i = i + 2
-    } else if starts_with_main(arg, "--watch-interval=") {
-      let value = substr_main(arg, 17, arg.length())
-      match parse_positive_int_main(value) {
-        Some(parsed) => watch_interval_ms = parsed
-        None => {
-          print_diagnostic_main(
-            cli_error(
-              "invalid value for --watch-interval: must be a positive integer",
-            ),
-          )
-          @sys.exit(1)
-        }
-      }
-      i = i + 1
-    } else if arg == "--drafts" {
-      include_drafts = true
-      i = i + 1
-    } else if starts_with_main(arg, "--") {
-      print_diagnostic_main({
-        severity: @diagnostic.Error,
-        code: None,
-        path: None,
-        line: None,
-        column: None,
-        message: "unknown option: " + arg,
-        note: Some("run with --help to see supported flags"),
-      })
-      @sys.exit(1)
-    } else {
-      positionals.push(arg)
-      i = i + 1
-    }
-  }
-
-  {
-    content_dir: if positionals.length() > 0 {
-      positionals[0]
-    } else {
-      "./content"
-    },
-    output_dir: if positionals.length() > 1 {
-      Some(positionals[1])
-    } else {
-      None
-    },
-    config_path,
-    collections_path,
-    check_mode,
-    force_rebuild,
-    watch_mode,
-    watch_interval_ms,
-    include_drafts,
-    serve_mode,
-    serve_port,
-  }
 }
 
 ///|
@@ -654,7 +510,6 @@ fn load_cli_state(options : CliOptions) -> Result[CliState, Int] {
 
   let collections = if site.collections.length() > 0 &&
     options.collections_path == None {
-    // Use inline collections from vault.toml
     match load_inline_collections(site.collections) {
       Ok(defs) => defs
       Err(diagnostic) => {
@@ -663,7 +518,6 @@ fn load_cli_state(options : CliOptions) -> Result[CliState, Int] {
       }
     }
   } else {
-    // Fall back to external collections file or default
     match
       load_collections_for_watch(
         options.content_dir,
@@ -714,11 +568,8 @@ fn run_once(build_config : @builder.BuildConfig, check_mode : Bool) -> Int {
       i = i + 1
     }
     if @lint.has_violations(lint_result) {
-      println(
-        "[lattice] check failed: " +
-        lint_result.violations.length().to_string() +
-        " violation(s)",
-      )
+      let summary = @lint.summarize(lint_result)
+      println(@lint.format_summary(summary))
       return 1
     }
     println("[lattice] check passed: no violations")
@@ -753,13 +604,8 @@ fn run_once(build_config : @builder.BuildConfig, check_mode : Bool) -> Int {
         " unchanged]",
       )
     } else {
-      println(
-        "[lattice] build failed: " +
-        result.errors.to_string() +
-        " error(s), " +
-        result.rebuilt_pages.to_string() +
-        " page(s) rebuilt",
-      )
+      let summary = @diagnostic.summarize(result.diagnostics)
+      println(@diagnostic.format_summary(summary))
     }
     result.errors
   }
@@ -861,8 +707,57 @@ fn run_watch(options : CliOptions, initial_state : CliState) -> Unit {
 }
 
 ///|
-fn main {
-  let options = parse_cli_options(@sys.get_cli_args())
+fn run_main() -> Unit {
+  let args = @sys.get_cli_args()
+  let parser = build_parser()
+  let sv = @clap.SimpleValue::new("lattice")
+
+  let parse_result : Result[String?, @clap.ParserError] = try? parser.parse(
+    sv,
+    args[1:].to_array(),
+  )
+
+  match parse_result {
+    Ok(help_message) => {
+      match help_message {
+        Some(msg) => {
+          println(msg)
+          return
+        }
+        None => ()
+      }
+    }
+    Err(err) => {
+      println(err.to_string())
+      println("")
+      println(parser.gen_help_message(["lattice"], {}))
+      @sys.exit(1)
+      return
+    }
+  }
+
+  // Determine which subcommand was selected
+  let subcmd_name = match sv.subcmd {
+    Some(sub) => sub.name
+    None => {
+      // No subcommand — show help
+      println(parser.gen_help_message(["lattice"], {}))
+      return
+    }
+  }
+
+  let subcmd_sv = sv.subcmd.unwrap()
+  let options = cli_options_from_clap(subcmd_sv, subcmd_name)
+
+  // Validate port for serve
+  if options.serve_mode && not(@serve.is_valid_port(options.serve_port)) {
+    print_diagnostic_main(
+      cli_error("invalid port: " + options.serve_port.to_string()),
+    )
+    @sys.exit(1)
+    return
+  }
+
   let state = match load_cli_state(options) {
     Ok(state) => state
     Err(code) => {
@@ -870,14 +765,8 @@ fn main {
       return
     }
   }
+
   if options.serve_mode {
-    if not(@serve.is_valid_port(options.serve_port)) {
-      print_diagnostic_main(
-        cli_error("invalid port: " + options.serve_port.to_string()),
-      )
-      @sys.exit(1)
-      return
-    }
     let output_dir = state.build_config.output_dir
     if not(@serve.start(options.serve_port, output_dir)) {
       print_diagnostic_main(
@@ -901,12 +790,19 @@ fn main {
     run_watch(options, state)
     return
   }
+
   if options.watch_mode {
     run_watch(options, state)
     return
   }
+
   let exit_code = run_once(state.build_config, options.check_mode)
   if exit_code > 0 {
     @sys.exit(1)
   }
+}
+
+///|
+fn main {
+  run_main()
 }

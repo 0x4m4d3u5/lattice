@@ -10,6 +10,8 @@ import {
   "moonbitlang/x/fs" @fs,
   "moonbitlang/x/sys" @sys,
   "moonbitlang/x/time" @time,
+  "TheWaWaR/clap" @clap,
+  "kurisu/lattice/src/strutil" @strutil,
 }
 
 options(
