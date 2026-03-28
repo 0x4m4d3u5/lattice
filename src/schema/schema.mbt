@@ -20,6 +20,7 @@ pub(all) enum FieldType {
   TOptional(FieldType)
   TEnum(Array[String])
   TUrl
+  TSlug
 }
 
 ///|
@@ -68,6 +69,7 @@ fn field_type_name(ft : FieldType) -> String {
       result + "]"
     }
     TUrl => "Url"
+    TSlug => "Slug"
   }
 }
 
@@ -138,7 +140,36 @@ fn type_matches(val : @frontmatter.FrontmatterValue, ft : FieldType) -> Bool {
             @strutil.starts_with(s, "/"))
         _ => false
       }
+    TSlug =>
+      match val {
+        @frontmatter.FStr(s) => is_valid_slug(s)
+        _ => false
+      }
   }
+}
+
+///|
+/// Check whether a string is a valid URL slug.
+/// Valid slugs are non-empty and contain only ASCII lowercase letters,
+/// digits, and hyphens.
+fn is_valid_slug(s : String) -> Bool {
+  if s.length() == 0 {
+    return false
+  }
+  let mut i = 0
+  let mut ok = true
+  while i < s.length() {
+    let c = s[i]
+    let is_lower = c >= 97 && c <= 122
+    let is_digit = c >= 48 && c <= 57
+    let is_hyphen = c == 45
+    if not(is_lower || is_digit || is_hyphen) {
+      ok = false
+      break
+    }
+    i = i + 1
+  }
+  ok
 }
 
 // ── public API ────────────────────────────────────────────────────────────────
@@ -169,12 +200,16 @@ pub fn validate(
           t => t
         }
         if not(type_matches(val, expected)) {
-          // Specialized error message for enum mismatches
+          // Specialized error message for enum and slug mismatches
           let error_msg = match (expected, val) {
             (TEnum(_), @frontmatter.FStr(s)) =>
               "expected one of " +
               field_type_name(expected) +
               ", got \"" +
+              s +
+              "\""
+            (TSlug, @frontmatter.FStr(s)) =>
+              "expected a URL slug (lowercase alphanumeric and hyphens), got: \"" +
               s +
               "\""
             _ =>

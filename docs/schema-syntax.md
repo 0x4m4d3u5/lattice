@@ -26,6 +26,7 @@ The current implementation supports:
 - `Optional[Type]`
 - `Enum["v1","v2","v3"]`
 - `Url`
+- `Slug`
 
 Examples:
 
@@ -36,6 +37,7 @@ schema = tags:Array[String]
 schema = draft:Optional[Bool], published_at:Optional[Date], description:Optional[String]
 schema = status:Enum["draft","published","archived"]
 schema = canonical_url:Url, og_url:Optional[Url]
+schema = category:Slug, subsection:Optional[Slug]
 ```
 
 ## Required vs optional
@@ -141,6 +143,51 @@ Why it fails:
 - the build emits a diagnostic with the field name and expected type
 
 This catches malformed canonical URLs, Open Graph URLs, and other URL-shaped metadata at build time instead of emitting `<link rel="canonical" href="not-a-url">` into the HTML output.
+
+## Slug fields
+
+The `Slug` type constrains a string field to URL-slug-shaped values. A valid slug is non-empty and contains only ASCII lowercase letters (`a-z`), digits (`0-9`), and hyphens (`-`). Spaces, uppercase letters, underscores, and special characters are all rejected.
+
+Example declaration:
+
+```cfg
+schema = category:Slug, subsection:Optional[Slug]
+```
+
+Valid frontmatter:
+
+```md
+---
+title = My Post
+category = getting-started
+---
+```
+
+Also valid:
+
+```md
+---
+title = My Post
+category = tutorial-2026
+---
+```
+
+Invalid frontmatter (build error):
+
+```md
+---
+title = My Post
+category = Getting Started
+---
+```
+
+Why it fails:
+
+- `category` is declared as `Slug`
+- `"Getting Started"` contains uppercase letters and a space
+- the build emits a diagnostic: `expected a URL slug (lowercase alphanumeric and hyphens), got: "Getting Started"`
+
+This catches malformed category slugs, tag identifiers, and other URL-segment fields at build time instead of producing broken URLs or inconsistent navigation.
 
 ## Frontmatter syntax
 
