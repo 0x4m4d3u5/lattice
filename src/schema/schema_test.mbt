@@ -618,3 +618,243 @@ test "TOptional(TSlug) accepts valid slug when present" {
   let errors = validate(fm, schema)
   assert_eq(errors.length(), 0)
 }
+
+// ── TRef tests ────────────────────────────────────────────────────────────────
+
+///|
+test "TRef structural validation accepts valid slug string" {
+  let schema : Schema = {
+    name: "posts",
+    fields: [{ name: "related_post", field_type: TRef(None), required: true }],
+  }
+  let fm = parse_frontmatter_or_fail(
+    "+++\n" + "related_post = \"my-post\"\n" + "+++\n",
+  )
+  let errors = validate(fm, schema)
+  assert_eq(errors.length(), 0)
+}
+
+///|
+test "TRef structural validation rejects non-string values" {
+  let schema : Schema = {
+    name: "posts",
+    fields: [{ name: "related_post", field_type: TRef(None), required: true }],
+  }
+  let fm = parse_frontmatter_or_fail("+++\n" + "related_post = 42\n" + "+++\n")
+  let errors = validate(fm, schema)
+  assert_eq(errors.length(), 1)
+  assert_eq(errors[0].field, "related_post")
+  assert_true(errors[0].message.contains("Ref"))
+}
+
+///|
+test "TRef structural validation rejects invalid slug format" {
+  let schema : Schema = {
+    name: "posts",
+    fields: [{ name: "related_post", field_type: TRef(None), required: true }],
+  }
+  let fm = parse_frontmatter_or_fail(
+    "+++\n" + "related_post = \"Not A Slug\"\n" + "+++\n",
+  )
+  let errors = validate(fm, schema)
+  assert_eq(errors.length(), 1)
+  assert_eq(errors[0].field, "related_post")
+  assert_true(errors[0].message.contains("expected a valid slug reference"))
+}
+
+///|
+test "TRef with collection constraint structural validation accepts valid slug" {
+  let schema : Schema = {
+    name: "posts",
+    fields: [
+      { name: "related_post", field_type: TRef(Some("blog")), required: true },
+    ],
+  }
+  let fm = parse_frontmatter_or_fail(
+    "+++\n" + "related_post = \"my-post\"\n" + "+++\n",
+  )
+  let errors = validate(fm, schema)
+  assert_eq(errors.length(), 0)
+}
+
+///|
+test "TOptional(TRef) absent field produces no error" {
+  let schema : Schema = {
+    name: "posts",
+    fields: [
+      {
+        name: "related_post",
+        field_type: TOptional(TRef(None)),
+        required: false,
+      },
+    ],
+  }
+  let fm = parse_frontmatter_or_fail("+++\n+++\n")
+  let errors = validate(fm, schema)
+  assert_eq(errors.length(), 0)
+}
+
+///|
+test "validate_refs: slug present in page index produces no error" {
+  let schema : Schema = {
+    name: "posts",
+    fields: [{ name: "related_post", field_type: TRef(None), required: true }],
+  }
+  let fm = parse_frontmatter_or_fail(
+    "+++\n" + "related_post = \"my-post\"\n" + "+++\n",
+  )
+  let page_index : Map[String, String] = Map::new()
+  page_index.set("my-post", "blog")
+  let errors = validate_refs(fm, schema, page_index)
+  assert_eq(errors.length(), 0)
+}
+
+///|
+test "validate_refs: slug absent from page index produces error" {
+  let schema : Schema = {
+    name: "posts",
+    fields: [{ name: "related_post", field_type: TRef(None), required: true }],
+  }
+  let fm = parse_frontmatter_or_fail(
+    "+++\n" + "related_post = \"missing-post\"\n" + "+++\n",
+  )
+  let page_index : Map[String, String] = Map::new()
+  page_index.set("other-post", "blog")
+  let errors = validate_refs(fm, schema, page_index)
+  assert_eq(errors.length(), 1)
+  assert_eq(errors[0].field, "related_post")
+  assert_true(
+    errors[0].message.contains("references unknown slug 'missing-post'"),
+  )
+}
+
+///|
+test "validate_refs: collection constraint satisfied produces no error" {
+  let schema : Schema = {
+    name: "posts",
+    fields: [
+      { name: "related_post", field_type: TRef(Some("blog")), required: true },
+    ],
+  }
+  let fm = parse_frontmatter_or_fail(
+    "+++\n" + "related_post = \"my-post\"\n" + "+++\n",
+  )
+  let page_index : Map[String, String] = Map::new()
+  page_index.set("my-post", "blog")
+  let errors = validate_refs(fm, schema, page_index)
+  assert_eq(errors.length(), 0)
+}
+
+///|
+test "validate_refs: slug in wrong collection produces error" {
+  let schema : Schema = {
+    name: "posts",
+    fields: [
+      { name: "related_post", field_type: TRef(Some("blog")), required: true },
+    ],
+  }
+  let fm = parse_frontmatter_or_fail(
+    "+++\n" + "related_post = \"my-page\"\n" + "+++\n",
+  )
+  let page_index : Map[String, String] = Map::new()
+  page_index.set("my-page", "pages")
+  let errors = validate_refs(fm, schema, page_index)
+  assert_eq(errors.length(), 1)
+  assert_eq(errors[0].field, "related_post")
+  assert_true(
+    errors[0].message.contains("from collection 'pages' but expected 'blog'"),
+  )
+}
+
+///|
+test "validate_refs: non-TRef fields are ignored" {
+  let schema : Schema = {
+    name: "posts",
+    fields: [
+      { name: "title", field_type: TString, required: true },
+      { name: "related_post", field_type: TRef(None), required: true },
+    ],
+  }
+  let fm = parse_frontmatter_or_fail(
+    "+++\n" +
+    "title = \"Hello\"\n" +
+    "related_post = \"existing-slug\"\n" +
+    "+++\n",
+  )
+  let page_index : Map[String, String] = Map::new()
+  page_index.set("existing-slug", "blog")
+  let errors = validate_refs(fm, schema, page_index)
+  assert_eq(errors.length(), 0)
+}
+
+///|
+test "validate_refs: TOptional(TRef) absent field produces no error" {
+  let schema : Schema = {
+    name: "posts",
+    fields: [
+      {
+        name: "related_post",
+        field_type: TOptional(TRef(None)),
+        required: false,
+      },
+    ],
+  }
+  let fm = parse_frontmatter_or_fail("+++\n+++\n")
+  let page_index : Map[String, String] = Map::new()
+  page_index.set("some-post", "blog")
+  let errors = validate_refs(fm, schema, page_index)
+  assert_eq(errors.length(), 0)
+}
+
+///|
+test "validate_refs: multiple TRef fields report all broken refs" {
+  let schema : Schema = {
+    name: "posts",
+    fields: [
+      { name: "related_post", field_type: TRef(None), required: true },
+      { name: "featured_post", field_type: TRef(None), required: true },
+    ],
+  }
+  let fm = parse_frontmatter_or_fail(
+    "+++\n" +
+    "related_post = \"missing-a\"\n" +
+    "featured_post = \"missing-b\"\n" +
+    "+++\n",
+  )
+  let page_index : Map[String, String] = Map::new()
+  let errors = validate_refs(fm, schema, page_index)
+  assert_eq(errors.length(), 2)
+  assert_eq(errors[0].field, "related_post")
+  assert_true(errors[0].message.contains("references unknown slug 'missing-a'"))
+  assert_eq(errors[1].field, "featured_post")
+  assert_true(errors[1].message.contains("references unknown slug 'missing-b'"))
+}
+
+///|
+test "field_type_name reports Ref for TRef(None)" {
+  // Verify TRef(None) structural validation passes with a valid slug string
+  let schema : Schema = {
+    name: "posts",
+    fields: [{ name: "related_post", field_type: TRef(None), required: true }],
+  }
+  let fm = parse_frontmatter_or_fail(
+    "+++\n" + "related_post = \"valid-slug\"\n" + "+++\n",
+  )
+  let errors = validate(fm, schema)
+  assert_eq(errors.length(), 0)
+}
+
+///|
+test "field_type_name reports Ref[collection] for TRef(Some)" {
+  // Verify TRef(Some("blog")) structural validation rejects non-string
+  let schema : Schema = {
+    name: "posts",
+    fields: [
+      { name: "related_post", field_type: TRef(Some("blog")), required: true },
+    ],
+  }
+  let fm = parse_frontmatter_or_fail("+++\n" + "related_post = 42\n" + "+++\n")
+  let errors = validate(fm, schema)
+  assert_eq(errors.length(), 1)
+  assert_eq(errors[0].field, "related_post")
+}

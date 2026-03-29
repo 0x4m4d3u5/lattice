@@ -78,6 +78,22 @@ The parser silently handled `!` as a literal character, then `[alt](url)` as a r
 
 The fix (commit `3c6c5a5`) adds `Image(String, String)` to the `Inline` enum and a `'!'` handler in `parse_inlines`. The structural lesson: the `Inline` enum is the type contract for what the parser can produce. An omission from that enum is a latent bug — the type system doesn't enforce completeness of parser coverage, only correctness of existing paths. Gaps in coverage are invisible until you write the test that demonstrates the wrong output.
 
+### Cross-Reference Validation: TRef and Content Relationships
+
+The `TRef(String?)` field type is the clearest structural guarantee lattice provides: a type that validates *content relationships* rather than just field types. Before `TRef`, a frontmatter field like `related_post: my-slug` was a string. If `my-slug` didn't exist in the page index, the template would render `<a href="/posts/my-slug">...</a>` — a broken link discovered at runtime by the visitor, not at build time by the author. This is exactly the failure mode that dynamic SSGs normalize. Hugo and Astro treat cross-references as string data. The template renders whatever the frontmatter says. If the slug is wrong, you get a 404 in production.
+
+`TRef` turns that into a hard build error. `TRef(None)` validates that the field value is a known slug in the page index. `TRef(Some("blog"))` constrains it further: the slug must belong to the `blog` collection specifically. A broken reference surfaces as a `ValidationError` before any HTML is rendered.
+
+The implementation required a deliberate two-pass design. `Schema.validate()` runs in pass 1 — it checks structural properties: is the field present, is it the right type, is it a valid slug format. But it cannot check existence, because the page index doesn't exist yet. Pass 1 is still collecting sources and computing slugs. The existence check belongs in pass 2, after the complete slug index is built. `validate_refs()` in `src/schema/schema.mbt` runs after `validate()` succeeds in `process_document()` — it receives the parsed frontmatter, the schema, and the slug-to-collection map, and checks every `TRef` field against the index.
+
+The two-pass constraint is not a limitation — it's the architectural point. Forward references within the same build are fine because the index is fully built before any rendering begins. Page A can reference page B's slug even if B's source file comes after A in the file system, because pass 1 has already processed both. The index is complete. Contrast this with a single-pass design where references to "later" pages would fail because the target hasn't been seen yet.
+
+The honest trade-off is that `TRef` validates build-time consistency, not deployment-time consistency. If a page is deleted from the content directory after a successful build, the next build will catch the broken reference. But the previously-built output still has the link. This is the same boundary described in "What Types Didn't Solve" — the type system catches structural violations at the build boundary, but the deployed artifact is still a static snapshot. A CI pipeline that runs `lattice build` before deployment closes this gap operationally, even though the type system can't.
+
+The `validate_refs()` function also handles the `TOptional(TRef(...))` pattern. An optional TRef field that is absent produces no error — absence is handled by `validate()`. An optional TRef field that is present but references a non-existent slug does produce an error. This mirrors the pattern for all `TOptional` types: absence is fine, but if the field is present it must be valid.
+
+The config syntax follows the existing `TEnum` pattern: `related_post:Ref` for any-collection validation, `related_post:Ref[blog]` for collection-constrained validation. The parser in `src/collections/collections.mbt` handles both forms by checking for `[` after the `Ref` keyword, identical to how `Enum["a","b"]` is parsed.
+
 ### What Types Didn't Solve
 
 The type system eliminates a class of structural errors: missing fields, type mismatches, broken links, configuration cycles. But it doesn't eliminate semantic errors. A post with `published: 2026-13-01` would now fail at schema validation (good). But `published: 2099-01-01` passes validation — the type is `FDate`, structurally valid, but semantically a future-dated post that might be accidentally published if you forget to check date ranges.

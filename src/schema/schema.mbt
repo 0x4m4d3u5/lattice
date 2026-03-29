@@ -21,6 +21,7 @@ pub(all) enum FieldType {
   TEnum(Array[String])
   TUrl
   TSlug
+  TRef(String?) // optional collection name constraint; None = any collection
 }
 
 ///|
@@ -70,6 +71,8 @@ fn field_type_name(ft : FieldType) -> String {
     }
     TUrl => "Url"
     TSlug => "Slug"
+    TRef(None) => "Ref"
+    TRef(Some(coll)) => "Ref[" + coll + "]"
   }
 }
 
@@ -147,6 +150,14 @@ fn type_matches(val : @frontmatter.FrontmatterValue, ft : FieldType) -> Bool {
         @frontmatter.FStr(s) => is_valid_slug(s)
         _ => false
       }
+    TRef(_) =>
+      // TRef structural check: value must be a string (valid slug format).
+      // Existence against the page index is validated in validate_refs()
+      // during pass 2, after the complete slug index is built.
+      match val {
+        @frontmatter.FStr(s) => is_valid_slug(s)
+        _ => false
+      }
   }
 }
 
@@ -214,6 +225,8 @@ pub fn validate(
               "expected a URL slug (lowercase alphanumeric and hyphens), got: \"" +
               s +
               "\""
+            (TRef(_), @frontmatter.FStr(s)) =>
+              "expected a valid slug reference, got: \"" + s + "\""
             _ =>
               "expected " +
               field_type_name(expected) +
@@ -251,6 +264,70 @@ pub fn validate(
         })
       _ => () // field is valid
     }
+  }
+  errors
+}
+
+///|
+/// Cross-reference validation for TRef fields.
+///
+/// This runs in pass 2, after the complete slug→collection page index is built.
+/// For each schema field of type TRef(coll?), checks that the field value (a slug)
+/// exists in the page index. If coll is Some(collection), also checks that the
+/// referenced slug belongs to the specified collection.
+///
+/// Returns an array of validation errors for broken references.
+pub fn validate_refs(
+  fm : @frontmatter.Frontmatter,
+  schema : Schema,
+  page_index : Map[String, String], // slug → collection name
+) -> Array[ValidationError] {
+  let errors : Array[ValidationError] = []
+  let mut i = 0
+  while i < schema.fields.length() {
+    let fdef = schema.fields[i]
+    // Extract the inner type from TOptional wrappers
+    let inner_type = match fdef.field_type {
+      TOptional(inner) => inner
+      t => t
+    }
+    match inner_type {
+      TRef(expected_coll) =>
+        match fm.fields.get(fdef.name) {
+          None => () // field absent — fine for optional, handled by validate()
+          Some(val) =>
+            match val {
+              @frontmatter.FStr(slug) =>
+                match page_index.get(slug) {
+                  None =>
+                    errors.push({
+                      field: fdef.name,
+                      message: "TRef: references unknown slug '" + slug + "'",
+                    })
+                  Some(coll_name) =>
+                    match expected_coll {
+                      Some(expected) =>
+                        if coll_name != expected {
+                          errors.push({
+                            field: fdef.name,
+                            message: "TRef: references slug '" +
+                            slug +
+                            "' from collection '" +
+                            coll_name +
+                            "' but expected '" +
+                            expected +
+                            "'",
+                          })
+                        }
+                      None => () // any collection is fine
+                    }
+                }
+              _ => () // non-string values caught by type_matches in validate()
+            }
+        }
+      _ => () // not a TRef field
+    }
+    i = i + 1
   }
   errors
 }
