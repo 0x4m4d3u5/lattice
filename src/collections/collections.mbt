@@ -288,6 +288,27 @@ fn parse_field_type_at(
         return Ok((@schema.TEnum(allowed), after_enum))
     }
   }
+  if name == "Ref" {
+    let p = skip_ws_type(s, next)
+    if p >= s.length() || @strutil.char_at(s, p) != '[' {
+      // Ref without collection constraint — matches any slug
+      return Ok((@schema.TRef(None), next))
+    }
+    // Ref[collection-name] — parse the collection name inside brackets
+    let mut j = p + 1
+    while j < s.length() {
+      let c = @strutil.char_at(s, j)
+      if c == ']' {
+        let coll_name = @strutil.trim(@strutil.substr(s, p + 1, j))
+        if coll_name.length() == 0 {
+          return Err("expected collection name inside Ref[]")
+        }
+        return Ok((@schema.TRef(Some(coll_name)), j + 1))
+      }
+      j = j + 1
+    }
+    return Err("expected ']' after Ref collection name")
+  }
   Err("unknown field type: " + name)
 }
 

@@ -2962,6 +2962,7 @@ fn process_document(
   collection_name : String,
   url : String,
   page_index : Map[String, String],
+  slug_owner : Map[String, String],
   known_tags : Map[String, String],
   tags_field : String,
   schema : @schema.Schema,
@@ -3059,6 +3060,28 @@ fn process_document(
         } else {
           None
         },
+      })
+      i = i + 1
+    }
+    return { document: None, diagnostics }
+  }
+  // Step 2a: validate TRef cross-references against the page slug index.
+  // This runs after schema structural validation passes — TRef fields need the
+  // complete slug index to check existence and collection constraints, which
+  // is only available in pass 2 after all sources have been collected.
+  let ref_errors = @schema.validate_refs(fm, schema, slug_owner)
+  if ref_errors.length() > 0 {
+    let mut i = 0
+    while i < ref_errors.length() {
+      let err = ref_errors[i]
+      diagnostics.push({
+        severity: @diagnostic.Error,
+        code: None,
+        path: Some(source_path),
+        line: frontmatter_field_line(source, err.field),
+        column: None,
+        message: "schema: " + err.field + ": " + err.message,
+        note: None,
       })
       i = i + 1
     }
@@ -3510,6 +3533,7 @@ fn process_document_for_lint(
   collection_name : String,
   url : String,
   page_index : Map[String, String],
+  slug_owner : Map[String, String],
   known_tags : Map[String, String],
   tags_field : String,
   schema : @schema.Schema,
@@ -3596,6 +3620,22 @@ fn process_document_for_lint(
       line: frontmatter_field_line(source, err.field),
       column: None,
       kind,
+      message: err.field + ": " + err.message,
+    })
+    i = i + 1
+  }
+
+  // Validate TRef cross-references (same logic as process_document, but
+  // for lint mode we collect violations without returning early)
+  let ref_errors = @schema.validate_refs(fm, schema, slug_owner)
+  i = 0
+  while i < ref_errors.length() {
+    let err = ref_errors[i]
+    violations.push({
+      path: source_path,
+      line: frontmatter_field_line(source, err.field),
+      column: None,
+      kind: @lint.SchemaError,
       message: err.field + ": " + err.message,
     })
     i = i + 1
@@ -4520,6 +4560,7 @@ pub fn build(
         coll.definition.name,
         page_url,
         page_index,
+        slug_owner,
         known_tags,
         tags_field,
         coll.definition.schema,
@@ -5567,6 +5608,7 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
         coll.definition.name,
         page_url,
         page_index,
+        slug_owner,
         known_tags,
         tags_field,
         coll.definition.schema,
