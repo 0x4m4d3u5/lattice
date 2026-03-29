@@ -858,3 +858,164 @@ test "field_type_name reports Ref[collection] for TRef(Some)" {
   assert_eq(errors.length(), 1)
   assert_eq(errors[0].field, "related_post")
 }
+
+// ── TArray(TRef) cross-reference validation tests ─────────────────────────────
+
+///|
+test "validate_refs: TArray(TRef(None)) all slugs present produces no error" {
+  let schema : Schema = {
+    name: "posts",
+    fields: [
+      {
+        name: "related_posts",
+        field_type: TArray(TRef(None)),
+        required: true,
+      },
+    ],
+  }
+  let fm = parse_frontmatter_or_fail(
+    "+++\n" +
+    "related_posts = [\"post-a\", \"post-b\", \"post-c\"]\n" +
+    "+++\n",
+  )
+  let page_index : Map[String, String] = Map::new()
+  page_index.set("post-a", "blog")
+  page_index.set("post-b", "blog")
+  page_index.set("post-c", "blog")
+  let errors = validate_refs(fm, schema, page_index)
+  assert_eq(errors.length(), 0)
+}
+
+///|
+test "validate_refs: TArray(TRef(None)) one slug missing produces one error" {
+  let schema : Schema = {
+    name: "posts",
+    fields: [
+      {
+        name: "related_posts",
+        field_type: TArray(TRef(None)),
+        required: true,
+      },
+    ],
+  }
+  let fm = parse_frontmatter_or_fail(
+    "+++\n" +
+    "related_posts = [\"post-a\", \"missing-post\", \"post-c\"]\n" +
+    "+++\n",
+  )
+  let page_index : Map[String, String] = Map::new()
+  page_index.set("post-a", "blog")
+  page_index.set("post-c", "blog")
+  let errors = validate_refs(fm, schema, page_index)
+  assert_eq(errors.length(), 1)
+  assert_eq(errors[0].field, "related_posts")
+  assert_true(
+    errors[0].message.contains(
+      "TRef: related_posts[1]: unknown slug 'missing-post'",
+    ),
+  )
+}
+
+///|
+test "validate_refs: TArray(TRef(Some)) slug in wrong collection produces error" {
+  let schema : Schema = {
+    name: "posts",
+    fields: [
+      {
+        name: "related_posts",
+        field_type: TArray(TRef(Some("blog"))),
+        required: true,
+      },
+    ],
+  }
+  let fm = parse_frontmatter_or_fail(
+    "+++\n" +
+    "related_posts = [\"post-a\", \"wrong-page\"]\n" +
+    "+++\n",
+  )
+  let page_index : Map[String, String] = Map::new()
+  page_index.set("post-a", "blog")
+  page_index.set("wrong-page", "pages")
+  let errors = validate_refs(fm, schema, page_index)
+  assert_eq(errors.length(), 1)
+  assert_eq(errors[0].field, "related_posts")
+  assert_true(
+    errors[0].message.contains(
+      "TRef: related_posts[1]: references slug 'wrong-page' from collection 'pages' but expected 'blog'",
+    ),
+  )
+}
+
+///|
+test "validate_refs: TOptional(TArray(TRef(None))) absent field produces no error" {
+  let schema : Schema = {
+    name: "posts",
+    fields: [
+      {
+        name: "related_posts",
+        field_type: TOptional(TArray(TRef(None))),
+        required: false,
+      },
+    ],
+  }
+  let fm = parse_frontmatter_or_fail("+++\n+++\n")
+  let page_index : Map[String, String] = Map::new()
+  page_index.set("some-post", "blog")
+  let errors = validate_refs(fm, schema, page_index)
+  assert_eq(errors.length(), 0)
+}
+
+///|
+test "validate_refs: TArray(TRef(None)) empty array produces no error" {
+  let schema : Schema = {
+    name: "posts",
+    fields: [
+      {
+        name: "related_posts",
+        field_type: TArray(TRef(None)),
+        required: false,
+      },
+    ],
+  }
+  let fm = parse_frontmatter_or_fail("+++\n" + "related_posts = []\n" + "+++\n")
+  let page_index : Map[String, String] = Map::new()
+  let errors = validate_refs(fm, schema, page_index)
+  assert_eq(errors.length(), 0)
+}
+
+///|
+test "validate_refs: TArray(TRef(None)) all slugs missing produces errors for each" {
+  let schema : Schema = {
+    name: "posts",
+    fields: [
+      {
+        name: "related_posts",
+        field_type: TArray(TRef(None)),
+        required: true,
+      },
+    ],
+  }
+  let fm = parse_frontmatter_or_fail(
+    "+++\n" +
+    "related_posts = [\"missing-a\", \"missing-b\", \"missing-c\"]\n" +
+    "+++\n",
+  )
+  let page_index : Map[String, String] = Map::new()
+  let errors = validate_refs(fm, schema, page_index)
+  assert_eq(errors.length(), 3)
+  assert_true(
+    errors[0].message.contains(
+      "TRef: related_posts[0]: unknown slug 'missing-a'",
+    ),
+  )
+  assert_true(
+    errors[1].message.contains(
+      "TRef: related_posts[1]: unknown slug 'missing-b'",
+    ),
+  )
+  assert_true(
+    errors[2].message.contains(
+      "TRef: related_posts[2]: unknown slug 'missing-c'",
+    ),
+  )
+}

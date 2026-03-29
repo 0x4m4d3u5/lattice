@@ -325,6 +325,61 @@ pub fn validate_refs(
               _ => () // non-string values caught by type_matches in validate()
             }
         }
+      TArray(TRef(expected_coll)) =>
+        // Array-of-refs: each element is a slug that must exist in the page index.
+        // This is the TArray(TRef(...)) case — a field like related_posts = ["a", "b"]
+        // where each element is cross-checked against the slug→collection map.
+        match fm.fields.get(fdef.name) {
+          None => () // field absent — fine for optional, handled by validate()
+          Some(val) =>
+            match val {
+              @frontmatter.FArray(items) => {
+                let mut j = 0
+                while j < items.length() {
+                  match items[j] {
+                    @frontmatter.FStr(slug) =>
+                      match page_index.get(slug) {
+                        None =>
+                          errors.push({
+                            field: fdef.name,
+                            message: "TRef: " +
+                            fdef.name +
+                            "[" +
+                            j.to_string() +
+                            "]: unknown slug '" +
+                            slug +
+                            "'",
+                          })
+                        Some(coll_name) =>
+                          match expected_coll {
+                            Some(expected) =>
+                              if coll_name != expected {
+                                errors.push({
+                                  field: fdef.name,
+                                  message: "TRef: " +
+                                  fdef.name +
+                                  "[" +
+                                  j.to_string() +
+                                  "]: references slug '" +
+                                  slug +
+                                  "' from collection '" +
+                                  coll_name +
+                                  "' but expected '" +
+                                  expected +
+                                  "'",
+                                })
+                              }
+                            None => () // any collection is fine
+                          }
+                      }
+                    _ => () // non-string elements caught by type_matches in validate()
+                  }
+                  j = j + 1
+                }
+              }
+              _ => () // non-array values caught by type_matches in validate()
+            }
+        }
       _ => () // not a TRef field
     }
     i = i + 1
