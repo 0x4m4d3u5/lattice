@@ -400,3 +400,98 @@ test "collections reject Date with unknown bound key" {
     Err(_) => assert_true(true)
   }
 }
+
+///|
+test "collections parse Float type unbounded" {
+  let src = "[posts]\n" + "schema = rating:Float\n" + "dir = content/posts\n"
+  match parse(src) {
+    Ok(cfg) => {
+      let field = cfg.definitions[0].schema.fields[0]
+      assert_eq(field.name, "rating")
+      match field.field_type {
+        @schema.TFloat(None, None) => assert_true(true)
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "collections parse Float(min=0.0,max=5.0)" {
+  let src = "[posts]\n" +
+    "schema = rating:Float(min=0.0,max=5.0)\n" +
+    "dir = content/posts\n"
+  match parse(src) {
+    Ok(cfg) => {
+      let field = cfg.definitions[0].schema.fields[0]
+      assert_eq(field.name, "rating")
+      match field.field_type {
+        @schema.TFloat(Some(min), Some(max)) => {
+          assert_true((min - 0.0).abs() < 0.0001)
+          assert_true((max - 5.0).abs() < 0.0001)
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "collections parse Float(min=-1.5)" {
+  let src = "[posts]\n" +
+    "schema = temp:Float(min=-1.5)\n" +
+    "dir = content/posts\n"
+  match parse(src) {
+    Ok(cfg) => {
+      let field = cfg.definitions[0].schema.fields[0]
+      assert_eq(field.name, "temp")
+      match field.field_type {
+        @schema.TFloat(Some(min), None) =>
+          assert_true((min - -1.5).abs() < 0.0001)
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "collections parse Float(max=10.0)" {
+  let src = "[posts]\n" +
+    "schema = score:Float(max=10.0)\n" +
+    "dir = content/posts\n"
+  match parse(src) {
+    Ok(cfg) => {
+      let field = cfg.definitions[0].schema.fields[0]
+      assert_eq(field.name, "score")
+      match field.field_type {
+        @schema.TFloat(None, Some(max)) =>
+          assert_true((max - 10.0).abs() < 0.0001)
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "collections parse Float bounds order-independent" {
+  let src = "[posts]\n" +
+    "schema = rating:Float(max=5.0,min=0.0)\n" +
+    "dir = content/posts\n"
+  match parse(src) {
+    Ok(cfg) => {
+      let field = cfg.definitions[0].schema.fields[0]
+      match field.field_type {
+        @schema.TFloat(Some(min), Some(max)) => {
+          assert_true((min - 0.0).abs() < 0.0001)
+          assert_true((max - 5.0).abs() < 0.0001)
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}

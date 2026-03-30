@@ -15,6 +15,7 @@ pub(all) enum FieldType {
   TString
   TDate(String?, String?) // (after, before) — both optional; TDate(None, None) accepts any date
   TInt(Int?, Int?) // (min, max) — both optional; TInt(None, None) accepts any integer
+  TFloat(Double?, Double?) // (min, max) — both optional; TFloat(None, None) accepts any float
   TBool
   TArray(FieldType)
   TOptional(FieldType)
@@ -62,6 +63,11 @@ fn field_type_name(ft : FieldType) -> String {
     TInt(None, Some(max)) => "Int(max=" + max.to_string() + ")"
     TInt(Some(min), Some(max)) =>
       "Int(min=" + min.to_string() + ", max=" + max.to_string() + ")"
+    TFloat(None, None) => "Float"
+    TFloat(Some(min), None) => "Float(min=" + min.to_string() + ")"
+    TFloat(None, Some(max)) => "Float(max=" + max.to_string() + ")"
+    TFloat(Some(min), Some(max)) =>
+      "Float(min=" + min.to_string() + ", max=" + max.to_string() + ")"
     TBool => "Bool"
     TArray(inner) => "Array[" + field_type_name(inner) + "]"
     TOptional(inner) => "Optional[" + field_type_name(inner) + "]"
@@ -112,6 +118,21 @@ fn type_matches(val : @frontmatter.FrontmatterValue, ft : FieldType) -> Bool {
     TInt(min, max) =>
       match val {
         @frontmatter.FInt(n) => {
+          let min_ok = match min {
+            Some(lo) => n >= lo
+            None => true
+          }
+          let max_ok = match max {
+            Some(hi) => n <= hi
+            None => true
+          }
+          min_ok && max_ok
+        }
+        _ => false
+      }
+    TFloat(min, max) =>
+      match val {
+        @frontmatter.FFloat(n) => {
           let min_ok = match min {
             Some(lo) => n >= lo
             None => true
@@ -277,6 +298,18 @@ pub fn validate(
                 (None, None) => "" // unreachable: TInt(None,None) matches everything
               }
               "expected Int in range " + range + ", got: " + n.to_string()
+            }
+            (TFloat(min, max), @frontmatter.FFloat(n)) => {
+              // Construct a range description for the error message.
+              // "expected Float in range [0.0, 5.0], got: -1.0"
+              let range = match (min, max) {
+                (Some(lo), Some(hi)) =>
+                  "[" + lo.to_string() + ", " + hi.to_string() + "]"
+                (Some(lo), None) => "[" + lo.to_string() + ", ∞)"
+                (None, Some(hi)) => "(-∞, " + hi.to_string() + "]"
+                (None, None) => "" // unreachable: TFloat(None,None) matches everything
+              }
+              "expected Float in range " + range + ", got: " + n.to_string()
             }
             _ =>
               "expected " +

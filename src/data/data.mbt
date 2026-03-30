@@ -116,9 +116,16 @@ fn parse_value_at_data(
       j = j + 1
     }
     let raw = @strutil.trim(@strutil.substr(s, i, j))
-    match @strutil.parse_int(raw) {
-      Some(v) => Ok((@frontmatter.FInt(v), j))
-      None => Ok((@frontmatter.FStr(raw), j))
+    if raw.contains(".") {
+      match @strutil.parse_float(raw) {
+        Some(v) => Ok((@frontmatter.FFloat(v), j))
+        None => Ok((@frontmatter.FStr(raw), j))
+      }
+    } else {
+      match @strutil.parse_int(raw) {
+        Some(v) => Ok((@frontmatter.FInt(v), j))
+        None => Ok((@frontmatter.FStr(raw), j))
+      }
     }
   }
 }
@@ -468,6 +475,7 @@ fn value_to_string_inner(v : @frontmatter.FrontmatterValue) -> String {
     @frontmatter.FStr(s) => s
     @frontmatter.FDate(s) => s
     @frontmatter.FInt(i) => i.to_string()
+    @frontmatter.FFloat(f) => f.to_string()
     @frontmatter.FBool(b) => if b { "true" } else { "false" }
     @frontmatter.FArray(items) => {
       let out = StringBuilder::new()

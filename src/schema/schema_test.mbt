@@ -1400,3 +1400,165 @@ test "TDate bounds rejects non-date values" {
   assert_eq(errors[0].field, "date")
   assert_true(errors[0].message.contains("expected Date"))
 }
+
+// ── TFloat bounds validation tests ───────────────────────────────────────────
+
+///|
+test "TFloat(None, None) validates any float" {
+  let schema : Schema = {
+    name: "posts",
+    fields: [{ name: "rating", field_type: TFloat(None, None), required: true }],
+  }
+  let fm_neg = parse_frontmatter_or_fail(
+    "+++\n" + "rating = -999.5\n" + "+++\n",
+  )
+  let fm_zero = parse_frontmatter_or_fail("+++\n" + "rating = 0.0\n" + "+++\n")
+  let fm_pos = parse_frontmatter_or_fail(
+    "+++\n" + "rating = 999.99\n" + "+++\n",
+  )
+  assert_eq(validate(fm_neg, schema).length(), 0)
+  assert_eq(validate(fm_zero, schema).length(), 0)
+  assert_eq(validate(fm_pos, schema).length(), 0)
+}
+
+///|
+test "TFloat(Some(0.0), Some(5.0)) accepts 2.5, rejects -1.0 and 5.1" {
+  let schema : Schema = {
+    name: "posts",
+    fields: [
+      {
+        name: "rating",
+        field_type: TFloat(Some(0.0), Some(5.0)),
+        required: true,
+      },
+    ],
+  }
+  let fm_mid = parse_frontmatter_or_fail("+++\n" + "rating = 2.5\n" + "+++\n")
+  assert_eq(validate(fm_mid, schema).length(), 0)
+
+  let fm_edge_low = parse_frontmatter_or_fail(
+    "+++\n" + "rating = 0.0\n" + "+++\n",
+  )
+  assert_eq(validate(fm_edge_low, schema).length(), 0)
+
+  let fm_edge_high = parse_frontmatter_or_fail(
+    "+++\n" + "rating = 5.0\n" + "+++\n",
+  )
+  assert_eq(validate(fm_edge_high, schema).length(), 0)
+
+  let fm_under = parse_frontmatter_or_fail(
+    "+++\n" + "rating = -1.0\n" + "+++\n",
+  )
+  let errors_under = validate(fm_under, schema)
+  assert_eq(errors_under.length(), 1)
+  assert_eq(errors_under[0].field, "rating")
+  assert_true(errors_under[0].message.contains("expected Float in range"))
+  assert_true(errors_under[0].message.contains("got:"))
+
+  let fm_over = parse_frontmatter_or_fail("+++\n" + "rating = 5.1\n" + "+++\n")
+  let errors_over = validate(fm_over, schema)
+  assert_eq(errors_over.length(), 1)
+  assert_eq(errors_over[0].field, "rating")
+  assert_true(errors_over[0].message.contains("expected Float in range"))
+  assert_true(errors_over[0].message.contains("got:"))
+}
+
+///|
+test "TFloat(Some(0.0), None) accepts 0.5, rejects -0.1" {
+  let schema : Schema = {
+    name: "posts",
+    fields: [
+      { name: "weight", field_type: TFloat(Some(0.0), None), required: true },
+    ],
+  }
+  let fm_ok = parse_frontmatter_or_fail("+++\n" + "weight = 0.5\n" + "+++\n")
+  assert_eq(validate(fm_ok, schema).length(), 0)
+
+  let fm_zero = parse_frontmatter_or_fail("+++\n" + "weight = 0.0\n" + "+++\n")
+  assert_eq(validate(fm_zero, schema).length(), 0)
+
+  let fm_neg = parse_frontmatter_or_fail("+++\n" + "weight = -0.1\n" + "+++\n")
+  let errors = validate(fm_neg, schema)
+  assert_eq(errors.length(), 1)
+  assert_eq(errors[0].field, "weight")
+  assert_true(errors[0].message.contains("expected Float in range"))
+  assert_true(errors[0].message.contains("got:"))
+}
+
+///|
+test "TFloat(None, Some(10.0)) rejects 10.1, accepts 9.99" {
+  let schema : Schema = {
+    name: "posts",
+    fields: [
+      { name: "score", field_type: TFloat(None, Some(10.0)), required: true },
+    ],
+  }
+  let fm_ok = parse_frontmatter_or_fail("+++\n" + "score = 9.99\n" + "+++\n")
+  assert_eq(validate(fm_ok, schema).length(), 0)
+
+  let fm_edge = parse_frontmatter_or_fail("+++\n" + "score = 10.0\n" + "+++\n")
+  assert_eq(validate(fm_edge, schema).length(), 0)
+
+  let fm_over = parse_frontmatter_or_fail("+++\n" + "score = 10.1\n" + "+++\n")
+  let errors = validate(fm_over, schema)
+  assert_eq(errors.length(), 1)
+  assert_eq(errors[0].field, "score")
+  assert_true(errors[0].message.contains("expected Float in range"))
+  assert_true(errors[0].message.contains("got:"))
+}
+
+///|
+test "TOptional(TFloat(Some(0.0), Some(5.0))) absent field produces no error" {
+  let schema : Schema = {
+    name: "posts",
+    fields: [
+      {
+        name: "rating",
+        field_type: TOptional(TFloat(Some(0.0), Some(5.0))),
+        required: false,
+      },
+    ],
+  }
+  let fm_absent = parse_frontmatter_or_fail("+++\n+++\n")
+  assert_eq(validate(fm_absent, schema).length(), 0)
+}
+
+///|
+test "TOptional(TFloat) out-of-range produces error" {
+  let schema : Schema = {
+    name: "posts",
+    fields: [
+      {
+        name: "rating",
+        field_type: TOptional(TFloat(Some(0.0), Some(5.0))),
+        required: false,
+      },
+    ],
+  }
+  let fm = parse_frontmatter_or_fail("+++\n" + "rating = -1.0\n" + "+++\n")
+  let errors = validate(fm, schema)
+  assert_eq(errors.length(), 1)
+  assert_eq(errors[0].field, "rating")
+  assert_true(errors[0].message.contains("expected Float in range"))
+}
+
+///|
+test "TFloat rejects non-float values" {
+  let schema : Schema = {
+    name: "posts",
+    fields: [
+      {
+        name: "rating",
+        field_type: TFloat(Some(0.0), Some(5.0)),
+        required: true,
+      },
+    ],
+  }
+  let fm_str = parse_frontmatter_or_fail(
+    "+++\n" + "rating = \"hello\"\n" + "+++\n",
+  )
+  let errors = validate(fm_str, schema)
+  assert_eq(errors.length(), 1)
+  assert_eq(errors[0].field, "rating")
+  assert_true(errors[0].message.contains("expected Float"))
+}
