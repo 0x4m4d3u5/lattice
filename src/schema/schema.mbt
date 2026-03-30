@@ -13,7 +13,7 @@
 /// Field type constraint.
 pub(all) enum FieldType {
   TString
-  TDate
+  TDate(String?, String?) // (after, before) — both optional; TDate(None, None) accepts any date
   TInt(Int?, Int?) // (min, max) — both optional; TInt(None, None) accepts any integer
   TBool
   TArray(FieldType)
@@ -52,7 +52,11 @@ pub(all) struct ValidationError {
 fn field_type_name(ft : FieldType) -> String {
   match ft {
     TString => "String"
-    TDate => "Date"
+    TDate(None, None) => "Date"
+    TDate(Some(after), None) => "Date(after=" + after + ")"
+    TDate(None, Some(before)) => "Date(before=" + before + ")"
+    TDate(Some(after), Some(before)) =>
+      "Date(after=" + after + ", before=" + before + ")"
     TInt(None, None) => "Int"
     TInt(Some(min), None) => "Int(min=" + min.to_string() + ")"
     TInt(None, Some(max)) => "Int(max=" + max.to_string() + ")"
@@ -90,9 +94,19 @@ fn type_matches(val : @frontmatter.FrontmatterValue, ft : FieldType) -> Bool {
         @frontmatter.FStr(_) => true
         _ => false
       }
-    TDate =>
+    TDate(after, before) =>
       match val {
-        @frontmatter.FDate(_) => true
+        @frontmatter.FDate(s) => {
+          let after_ok = match after {
+            Some(lo) => s > lo
+            None => true
+          }
+          let before_ok = match before {
+            Some(hi) => s < hi
+            None => true
+          }
+          after_ok && before_ok
+        }
         _ => false
       }
     TInt(min, max) =>
@@ -241,6 +255,17 @@ pub fn validate(
               "\""
             (TRef(_), @frontmatter.FStr(s)) =>
               "expected a valid slug reference, got: \"" + s + "\""
+            (TDate(after, before), @frontmatter.FDate(s)) => {
+              // Construct a temporal range description for the error message.
+              // "expected Date after 2020-01-01, got: 2019-12-31"
+              let range = match (after, before) {
+                (Some(lo), Some(hi)) => "after " + lo + " and before " + hi
+                (Some(lo), None) => "after " + lo
+                (None, Some(hi)) => "before " + hi
+                (None, None) => "" // unreachable: TDate(None,None) matches everything
+              }
+              "expected Date " + range + ", got: " + s
+            }
             (TInt(min, max), @frontmatter.FInt(n)) => {
               // Construct a range description for the error message.
               // "expected Int in range [1, 100], got: 0"
@@ -249,8 +274,7 @@ pub fn validate(
                   "[" + lo.to_string() + ", " + hi.to_string() + "]"
                 (Some(lo), None) => "[" + lo.to_string() + ", ∞)"
                 (None, Some(hi)) => "(-∞, " + hi.to_string() + "]"
-                (None, None) =>
-                  "" // unreachable: TInt(None,None) matches everything
+                (None, None) => "" // unreachable: TInt(None,None) matches everything
               }
               "expected Int in range " + range + ", got: " + n.to_string()
             }
