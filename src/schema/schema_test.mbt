@@ -6,7 +6,7 @@ fn sample_schema() -> Schema {
       { name: "title", field_type: TString, required: true },
       { name: "date", field_type: TDate, required: true },
       { name: "published", field_type: TBool, required: true },
-      { name: "order", field_type: TInt, required: false },
+      { name: "order", field_type: TInt(None, None), required: false },
       { name: "tags", field_type: TArray(TString), required: true },
       { name: "summary", field_type: TOptional(TString), required: false },
     ],
@@ -1018,4 +1018,163 @@ test "validate_refs: TArray(TRef(None)) all slugs missing produces errors for ea
       "TRef: related_posts[2]: unknown slug 'missing-c'",
     ),
   )
+}
+
+
+// ── TInt bounds validation tests ──────────────────────────────────────────────
+
+///|
+test "TInt(None, None) validates any integer" {
+  let schema : Schema = {
+    name: "posts",
+    fields: [
+      { name: "count", field_type: TInt(None, None), required: true },
+    ],
+  }
+  let fm_neg = parse_frontmatter_or_fail("+++\n" + "count = -999\n" + "+++\n")
+  let fm_zero = parse_frontmatter_or_fail("+++\n" + "count = 0\n" + "+++\n")
+  let fm_pos = parse_frontmatter_or_fail("+++\n" + "count = 999\n" + "+++\n")
+  assert_eq(validate(fm_neg, schema).length(), 0)
+  assert_eq(validate(fm_zero, schema).length(), 0)
+  assert_eq(validate(fm_pos, schema).length(), 0)
+}
+
+///|
+test "TInt(Some(1), None) rejects 0 and accepts 1 and above" {
+  let schema : Schema = {
+    name: "posts",
+    fields: [
+      { name: "priority", field_type: TInt(Some(1), None), required: true },
+    ],
+  }
+  let fm_zero = parse_frontmatter_or_fail("+++\n" + "priority = 0\n" + "+++\n")
+  let errors_zero = validate(fm_zero, schema)
+  assert_eq(errors_zero.length(), 1)
+  assert_eq(errors_zero[0].field, "priority")
+  assert_true(errors_zero[0].message.contains("expected Int in range [1, ∞)"))
+  assert_true(errors_zero[0].message.contains("got: 0"))
+
+  let fm_one = parse_frontmatter_or_fail("+++\n" + "priority = 1\n" + "+++\n")
+  assert_eq(validate(fm_one, schema).length(), 0)
+
+  let fm_large = parse_frontmatter_or_fail(
+    "+++\n" + "priority = 1000\n" + "+++\n",
+  )
+  assert_eq(validate(fm_large, schema).length(), 0)
+}
+
+///|
+test "TInt(None, Some(100)) rejects 101 and accepts 100 and below" {
+  let schema : Schema = {
+    name: "posts",
+    fields: [
+      { name: "score", field_type: TInt(None, Some(100)), required: true },
+    ],
+  }
+  let fm_over = parse_frontmatter_or_fail("+++\n" + "score = 101\n" + "+++\n")
+  let errors_over = validate(fm_over, schema)
+  assert_eq(errors_over.length(), 1)
+  assert_eq(errors_over[0].field, "score")
+  assert_true(errors_over[0].message.contains("expected Int in range (-∞, 100]"))
+  assert_true(errors_over[0].message.contains("got: 101"))
+
+  let fm_hundred = parse_frontmatter_or_fail(
+    "+++\n" + "score = 100\n" + "+++\n",
+  )
+  assert_eq(validate(fm_hundred, schema).length(), 0)
+
+  let fm_neg = parse_frontmatter_or_fail("+++\n" + "score = -1\n" + "+++\n")
+  assert_eq(validate(fm_neg, schema).length(), 0)
+}
+
+///|
+test "TInt(Some(1), Some(100)) rejects 0 and 101, accepts 50" {
+  let schema : Schema = {
+    name: "posts",
+    fields: [
+      { name: "percent", field_type: TInt(Some(1), Some(100)), required: true },
+    ],
+  }
+  let fm_under = parse_frontmatter_or_fail(
+    "+++\n" + "percent = 0\n" + "+++\n",
+  )
+  let errors_under = validate(fm_under, schema)
+  assert_eq(errors_under.length(), 1)
+  assert_eq(errors_under[0].field, "percent")
+  assert_true(errors_under[0].message.contains("expected Int in range [1, 100]"))
+  assert_true(errors_under[0].message.contains("got: 0"))
+
+  let fm_over = parse_frontmatter_or_fail(
+    "+++\n" + "percent = 101\n" + "+++\n",
+  )
+  let errors_over = validate(fm_over, schema)
+  assert_eq(errors_over.length(), 1)
+  assert_eq(errors_over[0].field, "percent")
+  assert_true(errors_over[0].message.contains("expected Int in range [1, 100]"))
+  assert_true(errors_over[0].message.contains("got: 101"))
+
+  let fm_mid = parse_frontmatter_or_fail(
+    "+++\n" + "percent = 50\n" + "+++\n",
+  )
+  assert_eq(validate(fm_mid, schema).length(), 0)
+
+  let fm_edge_low = parse_frontmatter_or_fail(
+    "+++\n" + "percent = 1\n" + "+++\n",
+  )
+  assert_eq(validate(fm_edge_low, schema).length(), 0)
+
+  let fm_edge_high = parse_frontmatter_or_fail(
+    "+++\n" + "percent = 100\n" + "+++\n",
+  )
+  assert_eq(validate(fm_edge_high, schema).length(), 0)
+}
+
+///|
+test "TOptional(TInt(Some(1), Some(10))) absent field produces no error" {
+  let schema : Schema = {
+    name: "posts",
+    fields: [
+      {
+        name: "rating",
+        field_type: TOptional(TInt(Some(1), Some(10))),
+        required: false,
+      },
+    ],
+  }
+  let fm_absent = parse_frontmatter_or_fail("+++\n+++\n")
+  assert_eq(validate(fm_absent, schema).length(), 0)
+}
+
+///|
+test "TOptional(TInt(Some(1), Some(10))) out-of-range produces error" {
+  let schema : Schema = {
+    name: "posts",
+    fields: [
+      {
+        name: "rating",
+        field_type: TOptional(TInt(Some(1), Some(10))),
+        required: false,
+      },
+    ],
+  }
+  let fm = parse_frontmatter_or_fail("+++\n" + "rating = 11\n" + "+++\n")
+  let errors = validate(fm, schema)
+  assert_eq(errors.length(), 1)
+  assert_eq(errors[0].field, "rating")
+  assert_true(errors[0].message.contains("expected Int in range [1, 10]"))
+}
+
+///|
+test "TInt bounds rejects non-integer values" {
+  let schema : Schema = {
+    name: "posts",
+    fields: [
+      { name: "count", field_type: TInt(Some(1), Some(100)), required: true },
+    ],
+  }
+  let fm_str = parse_frontmatter_or_fail("+++\n" + "count = \"hello\"\n" + "+++\n")
+  let errors = validate(fm_str, schema)
+  assert_eq(errors.length(), 1)
+  assert_eq(errors[0].field, "count")
+  assert_true(errors[0].message.contains("expected Int"))
 }

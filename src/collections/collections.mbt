@@ -233,6 +233,51 @@ fn parse_string_array_at(
 }
 
 ///|
+/// Parse an integer literal (with optional minus sign) starting at position.
+/// Returns the literal string and the position after the last digit.
+fn parse_int_literal_at(s : String, pos : Int) -> (String, Int) {
+  let mut i = pos
+  if i < s.length() && @strutil.char_at(s, i) == '-' {
+    i = i + 1
+  }
+  while i < s.length() {
+    let c = @strutil.char_at(s, i)
+    if c < '0' || c > '9' {
+      break
+    }
+    i = i + 1
+  }
+  (@strutil.substr(s, pos, i), i)
+}
+
+///|
+/// Parse a string as an integer, supporting negative values.
+fn parse_positive_or_negative_int(s : String) -> Int? {
+  if s.length() == 0 {
+    return None
+  }
+  let mut i = 0
+  let mut neg = false
+  if @strutil.char_at(s, 0) == '-' {
+    neg = true
+    i = 1
+    if i >= s.length() {
+      return None
+    }
+  }
+  let mut parsed = 0
+  while i < s.length() {
+    let c = @strutil.char_at(s, i)
+    if c < '0' || c > '9' {
+      return None
+    }
+    parsed = parsed * 10 + (c.to_int() - '0'.to_int())
+    i = i + 1
+  }
+  if neg { Some(0 - parsed) } else { Some(parsed) }
+}
+
+///|
 fn parse_field_type_at(
   s : String,
   pos : Int,
@@ -250,7 +295,57 @@ fn parse_field_type_at(
     return Ok((@schema.TDate, next))
   }
   if name == "Int" {
-    return Ok((@schema.TInt, next))
+    let p = skip_ws_type(s, next)
+    if p < s.length() && @strutil.char_at(s, p) == '(' {
+      // Parse Int(min=N,max=M) or Int(min=N) or Int(max=M)
+      let mut min_val : Int? = None
+      let mut max_val : Int? = None
+      let mut j = p + 1
+      // Parse key=value pairs separated by commas
+      let mut done = false
+      while j < s.length() && not(done) {
+        let q = skip_ws_type(s, j)
+        if q < s.length() && @strutil.char_at(s, q) == ')' {
+          j = q + 1
+          done = true
+        } else if starts_with_collections(
+          @strutil.substr(s, q, s.length()),
+          "min=",
+        ) {
+          j = q + 4 // skip "min="
+          let (num_str, after_num) = parse_int_literal_at(s, j)
+          match parse_positive_or_negative_int(num_str) {
+            Some(v) => min_val = Some(v)
+            None => return Err("invalid min value in Int bounds")
+          }
+          j = skip_ws_type(s, after_num)
+          if j < s.length() && @strutil.char_at(s, j) == ',' {
+            j = j + 1
+          }
+        } else if starts_with_collections(
+          @strutil.substr(s, q, s.length()),
+          "max=",
+        ) {
+          j = q + 4 // skip "max="
+          let (num_str, after_num) = parse_int_literal_at(s, j)
+          match parse_positive_or_negative_int(num_str) {
+            Some(v) => max_val = Some(v)
+            None => return Err("invalid max value in Int bounds")
+          }
+          j = skip_ws_type(s, after_num)
+          if j < s.length() && @strutil.char_at(s, j) == ',' {
+            j = j + 1
+          }
+        } else {
+          return Err("unexpected content in Int() bounds")
+        }
+      }
+      if not(done) {
+        return Err("expected ')' to close Int bounds")
+      }
+      return Ok((@schema.TInt(min_val, max_val), j))
+    }
+    return Ok((@schema.TInt(None, None), next))
   }
   if name == "Bool" {
     return Ok((@schema.TBool, next))

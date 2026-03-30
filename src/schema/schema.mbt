@@ -14,7 +14,7 @@
 pub(all) enum FieldType {
   TString
   TDate
-  TInt
+  TInt(Int?, Int?) // (min, max) — both optional; TInt(None, None) accepts any integer
   TBool
   TArray(FieldType)
   TOptional(FieldType)
@@ -53,7 +53,11 @@ fn field_type_name(ft : FieldType) -> String {
   match ft {
     TString => "String"
     TDate => "Date"
-    TInt => "Int"
+    TInt(None, None) => "Int"
+    TInt(Some(min), None) => "Int(min=" + min.to_string() + ")"
+    TInt(None, Some(max)) => "Int(max=" + max.to_string() + ")"
+    TInt(Some(min), Some(max)) =>
+      "Int(min=" + min.to_string() + ", max=" + max.to_string() + ")"
     TBool => "Bool"
     TArray(inner) => "Array[" + field_type_name(inner) + "]"
     TOptional(inner) => "Optional[" + field_type_name(inner) + "]"
@@ -91,9 +95,19 @@ fn type_matches(val : @frontmatter.FrontmatterValue, ft : FieldType) -> Bool {
         @frontmatter.FDate(_) => true
         _ => false
       }
-    TInt =>
+    TInt(min, max) =>
       match val {
-        @frontmatter.FInt(_) => true
+        @frontmatter.FInt(n) => {
+          let min_ok = match min {
+            Some(lo) => n >= lo
+            None => true
+          }
+          let max_ok = match max {
+            Some(hi) => n <= hi
+            None => true
+          }
+          min_ok && max_ok
+        }
         _ => false
       }
     TBool =>
@@ -227,6 +241,19 @@ pub fn validate(
               "\""
             (TRef(_), @frontmatter.FStr(s)) =>
               "expected a valid slug reference, got: \"" + s + "\""
+            (TInt(min, max), @frontmatter.FInt(n)) => {
+              // Construct a range description for the error message.
+              // "expected Int in range [1, 100], got: 0"
+              let range = match (min, max) {
+                (Some(lo), Some(hi)) =>
+                  "[" + lo.to_string() + ", " + hi.to_string() + "]"
+                (Some(lo), None) => "[" + lo.to_string() + ", ∞)"
+                (None, Some(hi)) => "(-∞, " + hi.to_string() + "]"
+                (None, None) =>
+                  "" // unreachable: TInt(None,None) matches everything
+              }
+              "expected Int in range " + range + ", got: " + n.to_string()
+            }
             _ =>
               "expected " +
               field_type_name(expected) +
