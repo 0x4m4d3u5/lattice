@@ -12,6 +12,7 @@ pub(all) enum FrontmatterValue {
   FStr(String)
   FDate(String)
   FInt(Int)
+  FFloat(Double)
   FBool(Bool)
   FArray(Array[FrontmatterValue])
   FMap(Map[String, FrontmatterValue])
@@ -137,6 +138,59 @@ fn is_valid_iso8601_date(s : String) -> Bool {
 }
 
 ///|
+/// Parse a string as a double, supporting negative values and decimal points.
+/// The string must contain at least one decimal point to be a float.
+fn parse_float_str(s : String) -> Result[Double, String] {
+  let n = s.length()
+  if n == 0 {
+    return Err("empty float")
+  }
+  let mut i = 0
+  let neg = @strutil.char_at(s, 0) == '-'
+  if neg {
+    i = 1
+  }
+  if i >= n {
+    return Err("expected digits after '-'")
+  }
+  let mut has_dot = false
+  let mut value = 0.0
+  // Parse integer part
+  while i < n {
+    let c = @strutil.char_at(s, i)
+    if c == '.' {
+      has_dot = true
+      i = i + 1
+      break
+    }
+    if not(@strutil.is_digit(c)) {
+      return Err("invalid character in float")
+    }
+    value = value * 10.0 + (c.to_int() - '0'.to_int()).to_double()
+    i = i + 1
+  }
+  if not(has_dot) {
+    return Err("no decimal point in float")
+  }
+  // Parse fractional part
+  let mut divisor = 10.0
+  while i < n {
+    let c = @strutil.char_at(s, i)
+    if not(@strutil.is_digit(c)) {
+      return Err("invalid character in float fractional part")
+    }
+    value = value + (c.to_int() - '0'.to_int()).to_double() / divisor
+    divisor = divisor * 10.0
+    i = i + 1
+  }
+  if neg {
+    Ok(0.0 - value)
+  } else {
+    Ok(value)
+  }
+}
+
+///|
 fn parse_int_str(s : String) -> Result[Int, String] {
   let n = s.length()
   if n == 0 {
@@ -213,6 +267,11 @@ fn parse_value_at(
     let raw = trim_ws(@strutil.substr(s, i, j))
     if is_valid_iso8601_date(raw) {
       Ok((FDate(raw), j))
+    } else if raw.contains(".") {
+      match parse_float_str(raw) {
+        Ok(v) => Ok((FFloat(v), j))
+        Err(_) => Ok((FStr(raw), j))
+      }
     } else {
       match parse_int_str(raw) {
         Ok(v) => Ok((FInt(v), j))

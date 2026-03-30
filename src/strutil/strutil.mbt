@@ -450,6 +450,60 @@ pub fn parse_int(s : String) -> Int? {
 }
 
 ///|
+/// Parse a string as a double. Returns None on failure.
+/// Accepts optional leading minus, digits, optional decimal point, more digits.
+pub fn parse_float(s : String) -> Double? {
+  let n = s.length()
+  if n == 0 {
+    return None
+  }
+  let mut i = 0
+  let neg = char_at(s, 0) == '-'
+  if neg {
+    i = 1
+  }
+  if i >= n {
+    return None
+  }
+  let mut value = 0.0
+  let mut has_digits = false
+  // Integer part
+  while i < n {
+    let c = char_at(s, i)
+    if c == '.' {
+      i = i + 1
+      break
+    }
+    if not(is_digit(c)) {
+      return None
+    }
+    value = value * 10.0 + (c.to_int() - '0'.to_int()).to_double()
+    has_digits = true
+    i = i + 1
+  }
+  // Fractional part
+  let mut divisor = 10.0
+  while i < n {
+    let c = char_at(s, i)
+    if not(is_digit(c)) {
+      return None
+    }
+    value = value + (c.to_int() - '0'.to_int()).to_double() / divisor
+    divisor = divisor * 10.0
+    has_digits = true
+    i = i + 1
+  }
+  if not(has_digits) {
+    return None
+  }
+  if neg {
+    Some(0.0 - value)
+  } else {
+    Some(value)
+  }
+}
+
+///|
 /// Parse a positive integer string. Returns None if not a positive integer.
 pub fn parse_positive_int(value : String) -> Int? {
   let n = value.length()

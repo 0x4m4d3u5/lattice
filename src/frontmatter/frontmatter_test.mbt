@@ -419,3 +419,68 @@ test "frontmatter detects missing delimiter" {
     }
   }
 }
+
+///|
+test "frontmatter parses float values in TOML format" {
+  let src = "+++\n" +
+    "rating = 4.5\n" +
+    "price = 9.99\n" +
+    "weight = -1.2\n" +
+    "+++\n" +
+    "Body\n"
+  match @frontmatter.parse(src) {
+    Ok(fm) => {
+      match fm.fields.get("rating") {
+        Some(FFloat(v)) => assert_true((v - 4.5).abs() < 0.0001)
+        _ => assert_true(false)
+      }
+      match fm.fields.get("price") {
+        Some(FFloat(v)) => assert_true((v - 9.99).abs() < 0.0001)
+        _ => assert_true(false)
+      }
+      match fm.fields.get("weight") {
+        Some(FFloat(v)) => assert_true((v - -1.2).abs() < 0.0001)
+        _ => assert_true(false)
+      }
+      assert_eq(fm.body, "Body\n")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "frontmatter parses float values in YAML format" {
+  let src = "---\n" + "rating: 4.5\n" + "lat: 39.1031\n" + "---\n" + "Body\n"
+  match @frontmatter.parse(src) {
+    Ok(fm) => {
+      match fm.fields.get("rating") {
+        Some(FFloat(v)) => assert_true((v - 4.5).abs() < 0.0001)
+        _ => assert_true(false)
+      }
+      match fm.fields.get("lat") {
+        Some(FFloat(v)) => assert_true((v - 39.1031).abs() < 0.0001)
+        _ => assert_true(false)
+      }
+      assert_eq(fm.body, "Body\n")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "frontmatter distinguishes float from int" {
+  let src = "+++\n" + "count = 42\n" + "rating = 4.5\n" + "+++\n"
+  match @frontmatter.parse(src) {
+    Ok(fm) => {
+      match fm.fields.get("count") {
+        Some(FInt(v)) => assert_eq(v, 42)
+        _ => assert_true(false)
+      }
+      match fm.fields.get("rating") {
+        Some(FFloat(v)) => assert_true((v - 4.5).abs() < 0.0001)
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}

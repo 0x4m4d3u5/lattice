@@ -192,6 +192,7 @@ pub fn frontmatter_to_strings(
       @frontmatter.FStr(s) => s
       @frontmatter.FDate(d) => d
       @frontmatter.FInt(n) => "\{n}"
+      @frontmatter.FFloat(n) => "\{n}"
       @frontmatter.FBool(true) => "true"
       @frontmatter.FBool(false) => "false"
       @frontmatter.FArray(items) => {

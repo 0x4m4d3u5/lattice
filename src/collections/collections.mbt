@@ -233,6 +233,41 @@ fn parse_string_array_at(
 }
 
 ///|
+/// Parse a float literal (with optional minus sign and decimal point) starting at position.
+/// Returns the literal string and the position after the last digit.
+fn parse_float_literal_at(s : String, pos : Int) -> (String, Int) {
+  let mut i = pos
+  if i < s.length() && @strutil.char_at(s, i) == '-' {
+    i = i + 1
+  }
+  while i < s.length() {
+    let c = @strutil.char_at(s, i)
+    if c < '0' || c > '9' {
+      break
+    }
+    i = i + 1
+  }
+  // Optional decimal point and fractional digits
+  if i < s.length() && @strutil.char_at(s, i) == '.' {
+    i = i + 1
+    while i < s.length() {
+      let c = @strutil.char_at(s, i)
+      if c < '0' || c > '9' {
+        break
+      }
+      i = i + 1
+    }
+  }
+  (@strutil.substr(s, pos, i), i)
+}
+
+///|
+/// Parse a string as a double, supporting negative values and decimal points.
+fn parse_positive_or_negative_float(s : String) -> Double? {
+  @strutil.parse_float(s)
+}
+
+///|
 /// Parse an integer literal (with optional minus sign) starting at position.
 /// Returns the literal string and the position after the last digit.
 fn parse_int_literal_at(s : String, pos : Int) -> (String, Int) {
@@ -416,6 +451,58 @@ fn parse_field_type_at(
       return Ok((@schema.TInt(min_val, max_val), j))
     }
     return Ok((@schema.TInt(None, None), next))
+  }
+  if name == "Float" {
+    let p = skip_ws_type(s, next)
+    if p < s.length() && @strutil.char_at(s, p) == '(' {
+      // Parse Float(min=N,max=M) or Float(min=N) or Float(max=M)
+      let mut min_val : Double? = None
+      let mut max_val : Double? = None
+      let mut j = p + 1
+      let mut done = false
+      while j < s.length() && not(done) {
+        let q = skip_ws_type(s, j)
+        if q < s.length() && @strutil.char_at(s, q) == ')' {
+          j = q + 1
+          done = true
+        } else if starts_with_collections(
+            @strutil.substr(s, q, s.length()),
+            "min=",
+          ) {
+          j = q + 4 // skip "min="
+          let (num_str, after_num) = parse_float_literal_at(s, j)
+          match parse_positive_or_negative_float(num_str) {
+            Some(v) => min_val = Some(v)
+            None => return Err("invalid min value in Float bounds")
+          }
+          j = skip_ws_type(s, after_num)
+          if j < s.length() && @strutil.char_at(s, j) == ',' {
+            j = j + 1
+          }
+        } else if starts_with_collections(
+            @strutil.substr(s, q, s.length()),
+            "max=",
+          ) {
+          j = q + 4 // skip "max="
+          let (num_str, after_num) = parse_float_literal_at(s, j)
+          match parse_positive_or_negative_float(num_str) {
+            Some(v) => max_val = Some(v)
+            None => return Err("invalid max value in Float bounds")
+          }
+          j = skip_ws_type(s, after_num)
+          if j < s.length() && @strutil.char_at(s, j) == ',' {
+            j = j + 1
+          }
+        } else {
+          return Err("unexpected content in Float() bounds")
+        }
+      }
+      if not(done) {
+        return Err("expected ')' to close Float bounds")
+      }
+      return Ok((@schema.TFloat(min_val, max_val), j))
+    }
+    return Ok((@schema.TFloat(None, None), next))
   }
   if name == "Bool" {
     return Ok((@schema.TBool, next))
