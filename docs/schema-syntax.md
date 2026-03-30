@@ -20,13 +20,14 @@ The current implementation supports:
 
 - `String`
 - `Date`
-- `Int`
+- `Int` or `Int(min=1)` or `Int(max=100)` or `Int(min=1,max=100)`
 - `Bool`
 - `Array[Type]`
 - `Optional[Type]`
 - `Enum["v1","v2","v3"]`
 - `Url`
 - `Slug`
+- `Ref` or `Ref[collection-name]`
 
 Examples:
 
@@ -38,6 +39,8 @@ schema = draft:Optional[Bool], published_at:Optional[Date], description:Optional
 schema = status:Enum["draft","published","archived"]
 schema = canonical_url:Url, og_url:Optional[Url]
 schema = category:Slug, subsection:Optional[Slug]
+schema = related_post:Ref[posts], featured:Optional[Ref]
+schema = related_posts:Array[Ref[posts]]
 ```
 
 ## Required vs optional
@@ -188,6 +191,112 @@ Why it fails:
 - the build emits a diagnostic: `expected a URL slug (lowercase alphanumeric and hyphens), got: "Getting Started"`
 
 This catches malformed category slugs, tag identifiers, and other URL-segment fields at build time instead of producing broken URLs or inconsistent navigation.
+
+## Cross-reference fields
+
+Cross-reference fields declare that a frontmatter value must reference an existing page slug. This turns broken internal links from runtime 404s into build-time errors.
+
+The `Ref` type comes in four forms:
+
+- `Ref` — a slug that must exist in any collection
+- `Ref[collection-name]` — a slug that must exist in a specific named collection
+- `Array[Ref[collection-name]]` — an array of cross-reference slugs, each validated
+- `Optional[Ref[collection-name]]` — an optional cross-reference
+
+Example declarations:
+
+```cfg
+schema = title:String, related_post:Ref[posts], featured:Ref
+schema = title:String, related_posts:Array[Ref[posts]]
+schema = title:String, see_also:Optional[Ref[posts]]
+```
+
+Valid frontmatter:
+
+```md
+---
+title = My Post
+related_post = getting-started
+---
+```
+
+Also valid (array of refs):
+
+```md
+---
+title = My Post
+related_posts = [intro, advanced-guide, faq]
+---
+```
+
+Invalid frontmatter (build error):
+
+```md
+---
+title = My Post
+related_post = non-existent-page
+---
+```
+
+Why it fails:
+
+- `related_post` is declared as `Ref[posts]`
+- `"non-existent-page"` is not a known slug in the `posts` collection
+- the build emits a diagnostic: `TRef: references unknown slug 'non-existent-page'`
+
+### Two-pass validation
+
+Cross-reference validation requires a two-pass build:
+
+1. **Pass 1 (structural check):** `validate()` checks that the field value is a valid slug format (non-empty, lowercase alphanumeric and hyphens). This runs before the page index is built.
+2. **Pass 2 (existence check):** `validate_refs()` checks that the slug exists in the page index (and belongs to the specified collection, if constrained). This runs after all pages have been collected and their slugs computed.
+
+The two-pass design means forward references work naturally — page A can reference page B even if B's source file comes after A in the file system, because pass 1 has already processed both.
+
+## Int bounds fields
+
+The `Int` type can optionally declare minimum and maximum bounds. Without bounds, any integer is accepted (backwards compatible with plain `Int`). With bounds, values outside the range produce a build error.
+
+The syntax is:
+
+- `Int` — any integer (equivalent to `Int(min=-∞, max=∞)`)
+- `Int(min=1)` — 1 and above
+- `Int(max=100)` — 100 and below
+- `Int(min=1,max=100)` — between 1 and 100 inclusive
+
+Example declarations:
+
+```cfg
+schema = title:String, priority:Int(min=1), score:Int(max=100), percent:Int(min=0,max=100)
+```
+
+Valid frontmatter:
+
+```md
+---
+title = My Post
+priority = 3
+score = 85
+percent = 50
+---
+```
+
+Invalid frontmatter (build error):
+
+```md
+---
+title = My Post
+priority = 0
+---
+```
+
+Why it fails:
+
+- `priority` is declared as `Int(min=1)`
+- `0` is below the minimum bound of `1`
+- the build emits a diagnostic: `expected Int in range [1, ∞), got: 0`
+
+This catches out-of-range metadata — priorities, percentages, ratings — at build time instead of producing pages with nonsensical values that templates might render without checking.
 
 ## Frontmatter syntax
 
