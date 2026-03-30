@@ -271,6 +271,38 @@ The documentation addition covers all four `Ref` forms: `Ref`, `Ref[collection-n
 
 The honest lesson is that documentation is not optional for type features. The structural guarantee only delivers value if users can discover and use it. A type system that's powerful but invisible is a weaker pitch than a simpler type system that's well-documented. The SCC rubric scores UX — and undocumented features score zero on UX regardless of their technical merit.
 
+### Incremental Builds — Content Fingerprinting and the Skip Decision
+
+Rebuilding every page on every `lattice build` invocation is correct but slow. For a site with hundreds of posts, regenerating unchanged pages wastes time on I/O and HTML serialization for output that is already correct on disk. Incremental builds require knowing whether a source file has changed since the last run.
+
+The implementation in `src/cache/cache.mbt` uses content fingerprinting rather than filesystem timestamps. The `fingerprint_for_source()` function computes an FNV-1a 64-bit hash over the source path and content:
+
+```moonbit
+fn fingerprint_for_source(path : String, source : String) -> String {
+  let mut hash = 1469598103934665603L  // FNV-1a 64-bit offset basis
+  hash = hash_string_cache(hash, path)
+  hash = hash_string_cache(hash, "\n---\n")
+  hash = hash_string_cache(hash, source)
+  hash.to_string()
+}
+```
+
+The hash mixes the path into the fingerprint so that renaming a file (same content, different path) produces a different fingerprint and forces a rebuild. The separator `"\n---\n"` prevents hash collisions between a path string and the content that follows it.
+
+The `should_skip()` function encodes the full skip decision:
+
+1. If `force_rebuild` is set, always rebuild.
+2. If the output file does not exist on disk, always rebuild.
+3. If the cached fingerprint for this slug matches the current source fingerprint, skip.
+
+Only all three conditions together justify a skip. The check for output-file existence matters because the cache survives `rm -rf dist/` — without it, the cache would falsely report "unchanged" for a missing output file.
+
+The cache itself is a versioned JSON file written to `dist/.lattice-cache` after each build. It stores `{slug → fingerprint}` pairs. If the cache version changes (e.g., the builder format changes), the version mismatch causes a full rebuild rather than silently using stale output.
+
+The manifest module (`src/manifest/manifest.mbt`) is a separate artifact. Where the cache tracks content fingerprints for build skipping, the manifest tracks source path, modification time, output path, and resolved wikilink targets per page. The manifest feeds the watch-mode incremental loop: when the file watcher detects a change, the manifest identifies which page's output to regenerate and which other pages may need updating because their wikilinks pointed at the changed page. These are two different invalidation concerns — content identity (cache) vs. dependency topology (manifest) — separated into two modules rather than merged into one.
+
+The structural thesis extends here: the cache's `CacheError` type makes I/O failures explicit rather than silently degrading to a full rebuild. `ReadError`, `ParseError`, and `WriteError` are distinct variants so callers can distinguish a missing cache file (expected on first run) from a corrupted cache file (indicates a bug). The `load()` function returns `Ok(empty(output_dir))` for a missing cache rather than propagating an error, which is the only case where silence is correct — an absent cache is not a failure.
+
 ### TInt Range Bounds — Domain Constraints as Type Parameters
 
 The `TInt` field type previously accepted any integer value. A `priority` field declared as `Int` would accept `-999`, `0`, and `999999` equally — the type system enforced *structure* (the field is an integer) but not *domain* (the integer is within an expected range). This is the same pattern as the `TEnum`/`TUrl`/`TSlug` evolution: start with structural guarantees, then add domain-specific constraints.
@@ -284,3 +316,36 @@ The error messages are deliberately specific. Rather than "expected Int but got 
 The collections parser handles `Int(min=1,max=100)` syntax by checking for `(` after the `Int` keyword, then parsing `min=` and `max=` key-value pairs. This follows the same pattern as `Enum["a","b"]` — parameterized type syntax with bracket/paren-delimited arguments. The parser is order-independent: `Int(max=100,min=1)` works the same as `Int(min=1,max=100)`.
 
 The honest limitation: `TInt` bounds validate at schema-check time, but they don't enforce uniqueness or other semantic properties. Two posts with `priority: 1` both pass validation — duplicate-priority detection is a different concern. The type system catches range violations; semantic consistency remains a human concern.
+
+### Data Files with Structural Validation — Extending the Type Guarantee Beyond Frontmatter
+
+Content collections hold the main editorial content — one markdown file per page, typed frontmatter enforced by schema. But sites need auxiliary structured data too: navigation menus, author profiles, site settings, link lists. In other SSGs this data lives in JSON or YAML files loaded at template render time, where a missing key becomes a runtime `undefined` rather than a build error.
+
+Lattice extends the structural guarantee to data files via the `src/data/` module. Data files use the same TOML-style key-value syntax as frontmatter (`key = value`), live under `content/data/`, and are validated against a `DataSchema` before any template rendering begins. Missing required keys produce a `DataError::ValidationError(file, key, message)` that surfaces in the diagnostic stream with the same severity and code routing as schema validation errors on content pages.
+
+The `DataSchema` stores a list of required key paths rather than typed field definitions:
+
+```moonbit
+pub struct DataSchema {
+  name : String
+  required_keys : Array[String]
+}
+```
+
+This is intentionally simpler than `Schema` for content collections. Data files are often small and heterogeneous — a `nav.toml` for navigation links doesn't need the same field-type granularity as a posts collection with `date`, `title`, and `tags`. The required-keys approach catches the most common failure mode (missing a key that a template expects) while avoiding over-engineering the constraint language for a secondary use case.
+
+The `parse_data_file()` function produces a `DataFile` whose `fields` map uses the same `FrontmatterValue` enum as frontmatter. This is not accidental. Templates access data values using the same slot expansion logic as frontmatter — `{{data.nav.title}}` resolves through the same value tree as `{{page.title}}`. Reusing `FrontmatterValue` means the template renderer handles both without a separate code path. It also means data files get the same typed value variants as frontmatter: `FBool`, `FInt`, `FArray`, `FMap` — not raw strings.
+
+Key paths support dot notation for nested data. A data file like:
+
+```toml
+nav.home = "/"
+nav.blog = "/posts"
+nav.about = "/about"
+```
+
+produces `FMap { "home" → FStr("/"), "blog" → FStr("/posts"), "about" → FStr("/about") }` nested under the `"nav"` key. A required key of `"nav.home"` in the `DataSchema` resolves the path recursively — `validate_file()` calls `resolve_in_map()` with the split path `["nav", "home"]` and returns an error if any segment is absent. This means required-key validation works for both flat and nested data structures without special-casing.
+
+The `load_from_dir()` function reads all `.toml` files from the data directory, parses each, optionally validates against a registered schema, and returns a `DataStore` (a map from filename stem to `DataFile`). Files without a matching schema in `[data.X]` config sections are loaded but not validated — they're accessible to templates but no required-key check runs. Files with a schema entry get validated before the build continues. This distinction follows the lattice pattern: validation is opt-in by declaring a schema, but the tool rewards the declaration with earlier failure. A data file that's never schema-validated might still fail at render time if a template references a missing key. A data file with a `[data.nav]` section and `required = "nav.home,nav.blog"` fails cleanly at the data-loading step with a clear diagnostic.
+
+The structural lesson is the same as frontmatter: the error contract moves toward the input rather than the output. Without data schema validation, a missing key in `nav.toml` produces a blank link or a template crash when the site builds. With it, the build fails at data loading with `data.nav: nav.home: required key missing`. The render pipeline never sees incomplete data.
