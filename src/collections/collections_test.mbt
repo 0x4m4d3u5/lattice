@@ -296,3 +296,107 @@ test "collections TEnum roundtrips through parser" {
     Err(_) => assert_true(false)
   }
 }
+
+///|
+test "collections parse Date type unbounded" {
+  let src = "[posts]\n" + "schema = date:Date\n" + "dir = content/posts\n"
+  match parse(src) {
+    Ok(cfg) => {
+      let field = cfg.definitions[0].schema.fields[0]
+      assert_eq(field.name, "date")
+      match field.field_type {
+        @schema.TDate(None, None) => assert_true(true)
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "collections parse Date(after=2020-01-01)" {
+  let src = "[posts]\n" +
+    "schema = date:Date(after=2020-01-01)\n" +
+    "dir = content/posts\n"
+  match parse(src) {
+    Ok(cfg) => {
+      let field = cfg.definitions[0].schema.fields[0]
+      assert_eq(field.name, "date")
+      match field.field_type {
+        @schema.TDate(Some(after), None) => assert_eq(after, "2020-01-01")
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "collections parse Date(before=2030-01-01)" {
+  let src = "[posts]\n" +
+    "schema = date:Date(before=2030-01-01)\n" +
+    "dir = content/posts\n"
+  match parse(src) {
+    Ok(cfg) => {
+      let field = cfg.definitions[0].schema.fields[0]
+      assert_eq(field.name, "date")
+      match field.field_type {
+        @schema.TDate(None, Some(before)) => assert_eq(before, "2030-01-01")
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "collections parse Date(after=2020-01-01,before=2030-01-01)" {
+  let src = "[posts]\n" +
+    "schema = date:Date(after=2020-01-01,before=2030-01-01)\n" +
+    "dir = content/posts\n"
+  match parse(src) {
+    Ok(cfg) => {
+      let field = cfg.definitions[0].schema.fields[0]
+      assert_eq(field.name, "date")
+      match field.field_type {
+        @schema.TDate(Some(after), Some(before)) => {
+          assert_eq(after, "2020-01-01")
+          assert_eq(before, "2030-01-01")
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "collections parse Date bounds order-independent" {
+  let src = "[posts]\n" +
+    "schema = date:Date(before=2030-01-01,after=2020-01-01)\n" +
+    "dir = content/posts\n"
+  match parse(src) {
+    Ok(cfg) => {
+      let field = cfg.definitions[0].schema.fields[0]
+      match field.field_type {
+        @schema.TDate(Some(after), Some(before)) => {
+          assert_eq(after, "2020-01-01")
+          assert_eq(before, "2030-01-01")
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "collections reject Date with unknown bound key" {
+  let src = "[posts]\n" +
+    "schema = date:Date(since=2020-01-01)\n" +
+    "dir = content/posts\n"
+  match parse(src) {
+    Ok(_) => assert_true(false)
+    Err(_) => assert_true(true)
+  }
+}

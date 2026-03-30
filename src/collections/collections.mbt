@@ -251,6 +251,23 @@ fn parse_int_literal_at(s : String, pos : Int) -> (String, Int) {
 }
 
 ///|
+/// Parse a date literal (YYYY-MM-DD) starting at position.
+/// Returns the literal string and the position after the last digit.
+/// This is a simple scan: digits and hyphens in the expected positions.
+fn parse_date_literal_at(s : String, pos : Int) -> (String, Int) {
+  let mut i = pos
+  while i < s.length() {
+    let c = @strutil.char_at(s, i)
+    if (c >= '0' && c <= '9') || c == '-' {
+      i = i + 1
+    } else {
+      break
+    }
+  }
+  (@strutil.substr(s, pos, i), i)
+}
+
+///|
 /// Parse a string as an integer, supporting negative values.
 fn parse_positive_or_negative_int(s : String) -> Int? {
   if s.length() == 0 {
@@ -274,7 +291,11 @@ fn parse_positive_or_negative_int(s : String) -> Int? {
     parsed = parsed * 10 + (c.to_int() - '0'.to_int())
     i = i + 1
   }
-  if neg { Some(0 - parsed) } else { Some(parsed) }
+  if neg {
+    Some(0 - parsed)
+  } else {
+    Some(parsed)
+  }
 }
 
 ///|
@@ -292,7 +313,56 @@ fn parse_field_type_at(
     return Ok((@schema.TString, next))
   }
   if name == "Date" {
-    return Ok((@schema.TDate, next))
+    let p = skip_ws_type(s, next)
+    if p < s.length() && @strutil.char_at(s, p) == '(' {
+      // Parse Date(after=YYYY-MM-DD,before=YYYY-MM-DD) syntax
+      let mut after_val : String? = None
+      let mut before_val : String? = None
+      let mut j = p + 1
+      let mut done = false
+      while j < s.length() && not(done) {
+        let q = skip_ws_type(s, j)
+        if q < s.length() && @strutil.char_at(s, q) == ')' {
+          j = q + 1
+          done = true
+        } else if starts_with_collections(
+            @strutil.substr(s, q, s.length()),
+            "after=",
+          ) {
+          j = q + 6 // skip "after="
+          let (date_str, after_date) = parse_date_literal_at(s, j)
+          if date_str.length() == 0 {
+            return Err("invalid after value in Date bounds")
+          }
+          after_val = Some(date_str)
+          j = skip_ws_type(s, after_date)
+          if j < s.length() && @strutil.char_at(s, j) == ',' {
+            j = j + 1
+          }
+        } else if starts_with_collections(
+            @strutil.substr(s, q, s.length()),
+            "before=",
+          ) {
+          j = q + 7 // skip "before="
+          let (date_str, after_date) = parse_date_literal_at(s, j)
+          if date_str.length() == 0 {
+            return Err("invalid before value in Date bounds")
+          }
+          before_val = Some(date_str)
+          j = skip_ws_type(s, after_date)
+          if j < s.length() && @strutil.char_at(s, j) == ',' {
+            j = j + 1
+          }
+        } else {
+          return Err("unexpected content in Date() bounds")
+        }
+      }
+      if not(done) {
+        return Err("expected ')' to close Date bounds")
+      }
+      return Ok((@schema.TDate(after_val, before_val), j))
+    }
+    return Ok((@schema.TDate(None, None), next))
   }
   if name == "Int" {
     let p = skip_ws_type(s, next)
@@ -309,9 +379,9 @@ fn parse_field_type_at(
           j = q + 1
           done = true
         } else if starts_with_collections(
-          @strutil.substr(s, q, s.length()),
-          "min=",
-        ) {
+            @strutil.substr(s, q, s.length()),
+            "min=",
+          ) {
           j = q + 4 // skip "min="
           let (num_str, after_num) = parse_int_literal_at(s, j)
           match parse_positive_or_negative_int(num_str) {
@@ -323,9 +393,9 @@ fn parse_field_type_at(
             j = j + 1
           }
         } else if starts_with_collections(
-          @strutil.substr(s, q, s.length()),
-          "max=",
-        ) {
+            @strutil.substr(s, q, s.length()),
+            "max=",
+          ) {
           j = q + 4 // skip "max="
           let (num_str, after_num) = parse_int_literal_at(s, j)
           match parse_positive_or_negative_int(num_str) {
@@ -441,6 +511,18 @@ fn parse_schema_fields(
       continue
     }
     if not(at_end) && c == ']' {
+      if depth > 0 {
+        depth = depth - 1
+      }
+      i = i + 1
+      continue
+    }
+    if not(at_end) && c == '(' {
+      depth = depth + 1
+      i = i + 1
+      continue
+    }
+    if not(at_end) && c == ')' {
       if depth > 0 {
         depth = depth - 1
       }
@@ -814,7 +896,7 @@ pub fn default_posts_collection(content_dir : String) -> CollectionDef {
       name: "posts",
       fields: [
         { name: "title", field_type: @schema.TString, required: true },
-        { name: "date", field_type: @schema.TDate, required: true },
+        { name: "date", field_type: @schema.TDate(None, None), required: true },
         {
           name: "description",
           field_type: @schema.TOptional(@schema.TString),
