@@ -270,6 +270,28 @@ fn build_parser() -> @clap.Parser {
         },
         help="Scaffold a new Lattice site",
       ),
+      "new": @clap.SubCommand::new(
+        args={
+          "collection": @clap.Arg::positional(
+            help="Collection name (e.g. posts)",
+          ),
+          "slug": @clap.Arg::positional(
+            help="Content slug (e.g. my-new-post)",
+          ),
+          "config": @clap.Arg::named(
+            short='c',
+            nargs=One,
+            defaults=[""],
+            help="Override site config file",
+          ),
+          "collections": @clap.Arg::named(
+            nargs=One,
+            defaults=[""],
+            help="Override collections config file",
+          ),
+        },
+        help="Create a new content file from a collection schema",
+      ),
     },
   )
 }
@@ -780,6 +802,122 @@ fn run_main() -> Unit {
     }
     match @scaffold.scaffold_site(name) {
       Ok(_) => println("[lattice] created site in ./" + name)
+      Err(msg) => {
+        print_diagnostic_main(cli_error(msg))
+        @sys.exit(1)
+        return
+      }
+    }
+    return
+  }
+
+  // Handle 'new' subcommand — load config + collections, then scaffold content file
+  if subcmd_name == "new" {
+    if subcmd_sv.positional_args.length() < 2 {
+      print_diagnostic_main(
+        cli_error("usage: lattice new <collection> <slug>"),
+      )
+      @sys.exit(1)
+      return
+    }
+    let collection_name = subcmd_sv.positional_args[0]
+    let slug = subcmd_sv.positional_args[1]
+    let config_raw = safe_get_one(subcmd_sv, "config").unwrap_or("")
+    let collections_raw = safe_get_one(subcmd_sv, "collections").unwrap_or(
+      "",
+    )
+    // Load config to discover collections
+    let config_path = if config_raw.length() > 0 {
+      config_raw
+    } else {
+      "./content/lattice.conf"
+    }
+    let config_source = @fs.read_file_to_string(config_path) catch {
+      @fs.IOError(msg) => {
+        print_diagnostic_main(
+          with_path(
+            cli_error("cannot read config file: " + msg),
+            Some(config_path),
+            None,
+            None,
+          ),
+        )
+        @sys.exit(1)
+        return
+      }
+    }
+    let site = match @config.parse(config_source) {
+      Ok(c) => c
+      Err(err) => {
+        print_diagnostic_main(config_error_diagnostic(config_path, err))
+        @sys.exit(1)
+        return
+      }
+    }
+    // Determine collections_path
+    let collections_path : String? = if collections_raw.length() > 0 {
+      Some(collections_raw)
+    } else {
+      site.collections_file
+    }
+    // Load collection definitions (try inline first, then external file)
+    let collection_defs = if site.collections.length() > 0 &&
+      collections_raw.length() == 0 {
+      match load_inline_collections(site.collections) {
+        Ok(defs) => defs
+        Err(diagnostic) => {
+          print_diagnostic_main(diagnostic)
+          @sys.exit(1)
+          return
+        }
+      }
+    } else {
+      match load_collections_for_watch("./content", collections_path) {
+        Ok(defs) => defs
+        Err(diagnostic) => {
+          print_diagnostic_main(diagnostic)
+          @sys.exit(1)
+          return
+        }
+      }
+    }
+    // Find the matching collection by name
+    let mut found_collection : @collections.CollectionDef? = None
+    let mut i = 0
+    while i < collection_defs.length() {
+      if collection_defs[i].name == collection_name {
+        found_collection = Some(collection_defs[i])
+      }
+      i = i + 1
+    }
+    let coll = match found_collection {
+      Some(c) => c
+      None => {
+        // Build list of available collection names for the error message
+        let available : Array[String] = []
+        let mut k = 0
+        while k < collection_defs.length() {
+          available.push(collection_defs[k].name)
+          k = k + 1
+        }
+        print_diagnostic_main(
+          cli_error(
+            "collection '" +
+            collection_name +
+            "' not found — available: " +
+            available
+              .iter()
+              .map(fn(n) { "'" + n + "'" })
+              .collect()
+              .to_string(),
+          ),
+        )
+        @sys.exit(1)
+        return
+      }
+    }
+    match @scaffold.new_content_file(coll.content_dir, coll.schema, slug) {
+      Ok(path) => println("[lattice] created " + path)
       Err(msg) => {
         print_diagnostic_main(cli_error(msg))
         @sys.exit(1)
