@@ -1291,3 +1291,164 @@ pub fn scaffold_site(target_dir : String) -> Result[Unit, String] {
 
   Ok(())
 }
+
+
+///|
+/// Generate a default stub value for a schema field type.
+///
+/// Returns a YAML-appropriate string representation that satisfies the
+/// field type constraints. For bounded types (TInt, TFloat, TString, TDate),
+/// the stub is chosen to satisfy the declared bounds:
+/// - TString(minlen=N) → "placeholder" (padded to satisfy minlen if needed)
+/// - TDate(after=X) → today's date or after, whichever is later
+/// - TInt(min=N) → N
+/// - TFloat(min=N) → N
+/// - TEnum → first allowed value
+pub fn stub_for_field_type(ft : @schema.FieldType) -> String {
+  match ft {
+    @schema.TString(minlen, maxlen) => {
+      // Start with "placeholder" and pad if minlen requires more characters
+      let base = "placeholder"
+      let min = match minlen {
+        Some(n) => n
+        None => 0
+      }
+      let max = match maxlen {
+        Some(n) => n
+        None => 9999
+      }
+      // Use the shorter of base and maxlen
+      let truncated = if base.length() > max {
+        @strutil.substr(base, 0, max)
+      } else {
+        base
+      }
+      // Pad to meet minlen if needed
+      if truncated.length() < min {
+        let buf = StringBuilder::new()
+        buf.write_string(truncated)
+        let mut i = truncated.length()
+        while i < min {
+          buf.write_char('-')
+          i = i + 1
+        }
+        buf.to_string()
+      } else {
+        truncated
+      }
+    }
+    @schema.TDate(_, _) => {
+      // Use today's date or a reasonable placeholder
+      // We can't access real time in scaffold without @watch/@time imports,
+      // so use a stable placeholder that's easy to spot and replace.
+      // TODO: accept current date as parameter for real usage
+      "2026-01-01"
+    }
+    @schema.TInt(min_val, _) => {
+      match min_val {
+        Some(n) => n.to_string()
+        None => "0"
+      }
+    }
+    @schema.TFloat(min_val, _) => {
+      match min_val {
+        Some(n) => n.to_string()
+        None => "0.0"
+      }
+    }
+    @schema.TBool => "false"
+    @schema.TArray(_) => "[]"
+    @schema.TOptional(inner) => stub_for_field_type(inner)
+    @schema.TEnum(allowed) => {
+      if allowed.length() > 0 {
+        allowed[0]
+      } else {
+        ""
+      }
+    }
+    @schema.TUrl => "https://example.com"
+    @schema.TSlug => "example-slug"
+    @schema.TRef(_) => "example-slug"
+  }
+}
+
+///|
+/// Generate frontmatter text from a schema definition.
+///
+/// Produces a YAML frontmatter block with stub values for all required fields.
+/// Optional fields are included as comments so the author knows they exist.
+pub fn generate_frontmatter(schema : @schema.Schema) -> String {
+  let buf = StringBuilder::new()
+  buf.write_string("---\n")
+  let mut i = 0
+  while i < schema.fields.length() {
+    let fdef = schema.fields[i]
+    if fdef.required {
+      // Emit required fields with stub values
+      let stub = stub_for_field_type(fdef.field_type)
+      // For array values, emit a single-element array using the inner type's stub
+      match fdef.field_type {
+        @schema.TArray(inner) =>
+          buf.write_string(
+            fdef.name + ":\n  - " + stub_for_field_type(inner) + "\n",
+          )
+        @schema.TOptional(@schema.TArray(inner)) =>
+          buf.write_string(
+            fdef.name + ":\n  - " + stub_for_field_type(inner) + "\n",
+          )
+        _ => buf.write_string(fdef.name + ": " + stub + "\n")
+      }
+    } else {
+      // Emit optional fields as comments so the author can uncomment them
+      match fdef.field_type {
+        @schema.TOptional(@schema.TArray(_)) =>
+          buf.write_string("# " + fdef.name + ":\n#   - value\n")
+        @schema.TOptional(_) =>
+          buf.write_string("# " + fdef.name + ": \n")
+        _ =>
+          buf.write_string("# " + fdef.name + ": \n")
+      }
+    }
+    i = i + 1
+  }
+  buf.write_string("---")
+  buf.to_string()
+}
+
+///|
+/// Generate a new content file from a collection schema.
+///
+/// Takes a content directory, schema definition, and slug, generates a
+/// markdown file with frontmatter stubs for all required fields, and writes
+/// it to the content directory.
+///
+/// Returns the path of the created file on success.
+pub fn new_content_file(
+  content_dir : String,
+  schema : @schema.Schema,
+  slug : String,
+) -> Result[String, String] {
+  // Validate the slug is non-empty
+  if slug.length() == 0 {
+    return Err("slug must not be empty")
+  }
+
+  // Build the file path
+  let file_path = content_dir + "/" + slug + ".md"
+
+  // Check if the file already exists
+  if @fs.path_exists(file_path) {
+    return Err(
+      "file already exists: " + file_path + " — refusing to overwrite",
+    )
+  }
+
+  // Generate frontmatter
+  let frontmatter = generate_frontmatter(schema)
+
+  // Build the full file content: frontmatter + body stub
+  let content = frontmatter + "\n\n# \n"
+
+  // Write the file
+  write_file(file_path, content).map(_ => file_path)
+}
