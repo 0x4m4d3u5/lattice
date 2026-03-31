@@ -3,12 +3,16 @@ fn sample_schema() -> Schema {
   {
     name: "posts",
     fields: [
-      { name: "title", field_type: TString, required: true },
+      { name: "title", field_type: TString(None, None), required: true },
       { name: "date", field_type: TDate(None, None), required: true },
       { name: "published", field_type: TBool, required: true },
       { name: "order", field_type: TInt(None, None), required: false },
-      { name: "tags", field_type: TArray(TString), required: true },
-      { name: "summary", field_type: TOptional(TString), required: false },
+      { name: "tags", field_type: TArray(TString(None, None)), required: true },
+      {
+        name: "summary",
+        field_type: TOptional(TString(None, None)),
+        required: false,
+      },
     ],
   }
 }
@@ -313,7 +317,7 @@ test "TEnum in full schema validation" {
   let schema : Schema = {
     name: "posts",
     fields: [
-      { name: "title", field_type: TString, required: true },
+      { name: "title", field_type: TString(None, None), required: true },
       {
         name: "status",
         field_type: TEnum(["draft", "published", "archived"]),
@@ -450,7 +454,7 @@ test "schema with canonical_url:Url rejects invalid value" {
   let schema : Schema = {
     name: "posts",
     fields: [
-      { name: "title", field_type: TString, required: true },
+      { name: "title", field_type: TString(None, None), required: true },
       { name: "canonical_url", field_type: TUrl, required: true },
     ],
   }
@@ -779,7 +783,7 @@ test "validate_refs: non-TRef fields are ignored" {
   let schema : Schema = {
     name: "posts",
     fields: [
-      { name: "title", field_type: TString, required: true },
+      { name: "title", field_type: TString(None, None), required: true },
       { name: "related_post", field_type: TRef(None), required: true },
     ],
   }
@@ -1561,4 +1565,171 @@ test "TFloat rejects non-float values" {
   assert_eq(errors.length(), 1)
   assert_eq(errors[0].field, "rating")
   assert_true(errors[0].message.contains("expected Float"))
+}
+
+// ── TString length bounds tests ──────────────────────────────────────────────
+
+///|
+test "TString(None, None) accepts any string" {
+  let schema : Schema = {
+    name: "posts",
+    fields: [{ name: "title", field_type: TString(None, None), required: true }],
+  }
+  let fm_short = parse_frontmatter_or_fail(
+    "+++\n" + "title = \"hi\"\n" + "+++\n",
+  )
+  let fm_long = parse_frontmatter_or_fail(
+    "+++\n" +
+    "title = \"This is a very long title that goes on and on and on\"\n" +
+    "+++\n",
+  )
+  let fm_empty = parse_frontmatter_or_fail("+++\n" + "title = \"\"\n" + "+++\n")
+  assert_eq(validate(fm_short, schema).length(), 0)
+  assert_eq(validate(fm_long, schema).length(), 0)
+  assert_eq(validate(fm_empty, schema).length(), 0)
+}
+
+///|
+test "TString(Some(5), None) accepts \"hello\" (5 chars), rejects \"hi\" (2 chars)" {
+  let schema : Schema = {
+    name: "posts",
+    fields: [
+      { name: "title", field_type: TString(Some(5), None), required: true },
+    ],
+  }
+  let fm_ok = parse_frontmatter_or_fail(
+    "+++\n" + "title = \"hello\"\n" + "+++\n",
+  )
+  assert_eq(validate(fm_ok, schema).length(), 0)
+
+  let fm_short = parse_frontmatter_or_fail(
+    "+++\n" + "title = \"hi\"\n" + "+++\n",
+  )
+  let errors = validate(fm_short, schema)
+  assert_eq(errors.length(), 1)
+  assert_eq(errors[0].field, "title")
+  assert_true(errors[0].message.contains("expected String with minlen=5"))
+  assert_true(errors[0].message.contains("got length 2"))
+}
+
+///|
+test "TString(None, Some(10)) accepts \"hello\" (5 chars), rejects \"hello world!!\" (13 chars)" {
+  let schema : Schema = {
+    name: "posts",
+    fields: [
+      { name: "excerpt", field_type: TString(None, Some(10)), required: true },
+    ],
+  }
+  let fm_ok = parse_frontmatter_or_fail(
+    "+++\n" + "excerpt = \"hello\"\n" + "+++\n",
+  )
+  assert_eq(validate(fm_ok, schema).length(), 0)
+
+  let fm_long = parse_frontmatter_or_fail(
+    "+++\n" + "excerpt = \"hello world!!\"\n" + "+++\n",
+  )
+  let errors = validate(fm_long, schema)
+  assert_eq(errors.length(), 1)
+  assert_eq(errors[0].field, "excerpt")
+  assert_true(errors[0].message.contains("expected String with maxlen=10"))
+  assert_true(errors[0].message.contains("got length 13"))
+}
+
+///|
+test "TString(Some(5), Some(10)) accepts 5-10 chars, rejects 2 and 13" {
+  let schema : Schema = {
+    name: "posts",
+    fields: [
+      { name: "title", field_type: TString(Some(5), Some(10)), required: true },
+    ],
+  }
+  // Accepts at boundary
+  let fm_5 = parse_frontmatter_or_fail(
+    "+++\n" + "title = \"01234\"\n" + "+++\n",
+  )
+  assert_eq(validate(fm_5, schema).length(), 0)
+
+  let fm_10 = parse_frontmatter_or_fail(
+    "+++\n" + "title = \"0123456789\"\n" + "+++\n",
+  )
+  assert_eq(validate(fm_10, schema).length(), 0)
+
+  let fm_7 = parse_frontmatter_or_fail(
+    "+++\n" + "title = \"hello!!\"\n" + "+++\n",
+  )
+  assert_eq(validate(fm_7, schema).length(), 0)
+
+  // Rejects below min
+  let fm_2 = parse_frontmatter_or_fail("+++\n" + "title = \"hi\"\n" + "+++\n")
+  let errors_short = validate(fm_2, schema)
+  assert_eq(errors_short.length(), 1)
+  assert_eq(errors_short[0].field, "title")
+  assert_true(
+    errors_short[0].message.contains("expected String with minlen=5, maxlen=10"),
+  )
+  assert_true(errors_short[0].message.contains("got length 2"))
+
+  // Rejects above max
+  let fm_13 = parse_frontmatter_or_fail(
+    "+++\n" + "title = \"hello world!!\"\n" + "+++\n",
+  )
+  let errors_long = validate(fm_13, schema)
+  assert_eq(errors_long.length(), 1)
+  assert_eq(errors_long[0].field, "title")
+  assert_true(
+    errors_long[0].message.contains("expected String with minlen=5, maxlen=10"),
+  )
+  assert_true(errors_long[0].message.contains("got length 13"))
+}
+
+///|
+test "TOptional(TString(Some(5), Some(10))) absent field produces no error" {
+  let schema : Schema = {
+    name: "posts",
+    fields: [
+      {
+        name: "subtitle",
+        field_type: TOptional(TString(Some(5), Some(10))),
+        required: false,
+      },
+    ],
+  }
+  let fm_absent = parse_frontmatter_or_fail("+++\n+++\n")
+  assert_eq(validate(fm_absent, schema).length(), 0)
+}
+
+///|
+test "TOptional(TString(Some(5), Some(10))) out-of-range produces error" {
+  let schema : Schema = {
+    name: "posts",
+    fields: [
+      {
+        name: "subtitle",
+        field_type: TOptional(TString(Some(5), Some(10))),
+        required: false,
+      },
+    ],
+  }
+  let fm = parse_frontmatter_or_fail("+++\n" + "subtitle = \"hi\"\n" + "+++\n")
+  let errors = validate(fm, schema)
+  assert_eq(errors.length(), 1)
+  assert_eq(errors[0].field, "subtitle")
+  assert_true(
+    errors[0].message.contains("expected String with minlen=5, maxlen=10"),
+  )
+}
+
+///|
+test "TString bounds rejects non-string values" {
+  let schema : Schema = {
+    name: "posts",
+    fields: [
+      { name: "title", field_type: TString(Some(5), Some(10)), required: true },
+    ],
+  }
+  let fm_int = parse_frontmatter_or_fail("+++\n" + "title = 42\n" + "+++\n")
+  let errors = validate(fm_int, schema)
+  assert_eq(errors.length(), 1)
+  assert_eq(errors[0].field, "title")
+  assert_true(errors[0].message.contains("expected String"))
 }

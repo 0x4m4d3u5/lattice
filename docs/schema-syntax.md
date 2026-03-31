@@ -44,6 +44,8 @@ schema = related_post:Ref[posts], featured:Optional[Ref]
 schema = related_posts:Array[Ref[posts]]
 schema = title:String, rating:Float(min=0.0,max=5.0), weight:Optional[Float]
 schema = title:String, published_at:Date(after=2020-01-01,before=2030-01-01)
+schema = title:String(minlen=5), excerpt:String(maxlen=160)
+schema = title:String(minlen=5), excerpt:String(maxlen=160), slug:String(minlen=3,maxlen=60)
 ```
 
 ## Required vs optional
@@ -386,6 +388,48 @@ Why it fails:
 - the build emits a diagnostic: `expected Date after 2020-01-01 and before 2030-01-01, got: 2019-12-31`
 
 This catches temporal violations — archived content dated in the future, legacy content predating a migration cutoff — at build time. The lexicographic comparison trick works because ISO 8601 dates sort correctly as strings: year digits come first, then month, then day.
+
+## String length bounds fields
+
+The `String` type can optionally declare minimum and maximum length bounds. Without bounds, any string is accepted (backwards compatible with plain `String`). With bounds, strings whose length falls outside the range produce a build error.
+
+The syntax is:
+
+- `String` — any string (no length constraint)
+- `String(minlen=5)` — 5 characters or more
+- `String(maxlen=160)` — 160 characters or fewer
+- `String(minlen=5,maxlen=160)` — between 5 and 160 characters inclusive
+
+Example declarations:
+
+```cfg
+schema = title:String(minlen=5), excerpt:String(maxlen=160), subtitle:String(minlen=5,maxlen=100)
+```
+
+Valid frontmatter:
+
+```md
+---
+title = My First Post
+excerpt = A short introduction to the blog
+---
+```
+
+Invalid frontmatter (build error):
+
+```md
+---
+title = Hi
+---
+```
+
+Why it fails:
+
+- `title` is declared as `String(minlen=5)`
+- `"Hi"` has length 2, which is below the minimum of 5
+- the build emits a diagnostic: `expected String with minlen=5, got length 2: "Hi"`
+
+This catches common authoring constraints at build time — titles too short to be meaningful, SEO meta descriptions exceeding recommended lengths, excerpts that are too long or too short. String length is a particularly common constraint in content-driven sites, and the `String(minlen,maxlen)` syntax completes the "domain constraints as type parameters" pattern. All four bounded types (`Int`, `Float`, `Date`, `String`) now follow the same parameterization syntax, handled identically by the collections parser.
 
 ## Frontmatter syntax
 
