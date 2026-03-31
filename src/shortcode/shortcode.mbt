@@ -27,60 +27,13 @@ pub enum ShortcodeError {
 }
 
 ///|
-fn char_at_shortcode(s : String, i : Int) -> Char {
-  s[i].to_int().unsafe_to_char()
-}
-
-///|
-fn substr_shortcode(s : String, start : Int, end_pos : Int) -> String {
-  let buf = StringBuilder::new()
-  let mut i = start
-  while i < end_pos {
-    buf.write_char(char_at_shortcode(s, i))
-    i = i + 1
-  }
-  buf.to_string()
-}
-
-///|
-fn trim_shortcode(s : String) -> String {
-  let n = s.length()
-  let mut lo = 0
-  while lo < n &&
-        (
-          char_at_shortcode(s, lo) == ' ' ||
-          char_at_shortcode(s, lo) == '\t' ||
-          char_at_shortcode(s, lo) == '\n' ||
-          char_at_shortcode(s, lo) == '\r'
-        ) {
-    lo = lo + 1
-  }
-  let mut hi = n
-  while hi > lo &&
-        (
-          char_at_shortcode(s, hi - 1) == ' ' ||
-          char_at_shortcode(s, hi - 1) == '\t' ||
-          char_at_shortcode(s, hi - 1) == '\n' ||
-          char_at_shortcode(s, hi - 1) == '\r'
-        ) {
-    hi = hi - 1
-  }
-  substr_shortcode(s, lo, hi)
-}
-
-///|
-fn is_digit_shortcode(c : Char) -> Bool {
-  c >= '0' && c <= '9'
-}
-
-///|
 fn parse_int_shortcode(s : String) -> Int? {
   if s.length() == 0 {
     return None
   }
   let mut i = 0
   let mut neg = false
-  if char_at_shortcode(s, 0) == '-' {
+  if @strutil.char_at(s, 0) == '-' {
     neg = true
     i = 1
   }
@@ -89,8 +42,8 @@ fn parse_int_shortcode(s : String) -> Int? {
   }
   let mut value = 0
   while i < s.length() {
-    let c = char_at_shortcode(s, i)
-    if not(is_digit_shortcode(c)) {
+    let c = @strutil.char_at(s, i)
+    if not(@strutil.is_digit(c)) {
       return None
     }
     value = value * 10 + (c.to_int() - '0'.to_int())
@@ -106,10 +59,10 @@ fn parse_int_shortcode(s : String) -> Int? {
 ///|
 fn parse_name_shortcode(s : String, pos : Int) -> (String, Int) {
   let mut i = pos
-  while i < s.length() && @strutil.is_ident_part(char_at_shortcode(s, i)) {
+  while i < s.length() && @strutil.is_ident_part(@strutil.char_at(s, i)) {
     i = i + 1
   }
-  (substr_shortcode(s, pos, i), i)
+  (@strutil.substr(s, pos, i), i)
 }
 
 ///|
@@ -117,18 +70,18 @@ fn parse_quoted_shortcode(
   s : String,
   pos : Int,
 ) -> Result[(String, Int), String] {
-  if pos >= s.length() || char_at_shortcode(s, pos) != '"' {
+  if pos >= s.length() || @strutil.char_at(s, pos) != '"' {
     return Err("expected quote")
   }
   let buf = StringBuilder::new()
   let mut i = pos + 1
   while i < s.length() {
-    let c = char_at_shortcode(s, i)
+    let c = @strutil.char_at(s, i)
     if c == '\\' {
       if i + 1 >= s.length() {
         return Err("unterminated escape")
       }
-      let esc = char_at_shortcode(s, i + 1)
+      let esc = @strutil.char_at(s, i + 1)
       if esc == 'n' {
         buf.write_char('\n')
       } else if esc == 't' {
@@ -159,7 +112,7 @@ fn parse_value_shortcode(
   if pos >= s.length() {
     return Err("expected value")
   }
-  let c = char_at_shortcode(s, pos)
+  let c = @strutil.char_at(s, pos)
   if c == '"' {
     match parse_quoted_shortcode(s, pos) {
       Ok((v, next)) => Ok((StringParam(v), next))
@@ -167,14 +120,10 @@ fn parse_value_shortcode(
     }
   } else {
     let mut i = pos
-    while i < s.length() &&
-          char_at_shortcode(s, i) != ' ' &&
-          char_at_shortcode(s, i) != '\t' &&
-          char_at_shortcode(s, i) != '\n' &&
-          char_at_shortcode(s, i) != '\r' {
+    while i < s.length() && not(@strutil.is_whitespace(@strutil.char_at(s, i))) {
       i = i + 1
     }
-    let raw = trim_shortcode(substr_shortcode(s, pos, i))
+    let raw = @strutil.trim(@strutil.substr(s, pos, i))
     if raw == "true" {
       return Ok((BoolParam(true), i))
     }
@@ -190,7 +139,7 @@ fn parse_value_shortcode(
 
 ///|
 pub fn parse(raw : String) -> Result[ShortcodeCall, ShortcodeError] {
-  let s = trim_shortcode(raw)
+  let s = @strutil.trim(raw)
   if s.length() == 0 {
     return Err(InvalidSyntax("empty shortcode"))
   }
@@ -211,7 +160,7 @@ pub fn parse(raw : String) -> Result[ShortcodeCall, ShortcodeError] {
       return Err(InvalidSyntax("invalid parameter key"))
     }
     let eq_pos = @strutil.skip_ws(s, key_end)
-    if eq_pos >= s.length() || char_at_shortcode(s, eq_pos) != '=' {
+    if eq_pos >= s.length() || @strutil.char_at(s, eq_pos) != '=' {
       return Err(InvalidSyntax("expected '=' after parameter '" + key + "'"))
     }
     let value_pos = @strutil.skip_ws(s, eq_pos + 1)
@@ -229,7 +178,7 @@ pub fn parse(raw : String) -> Result[ShortcodeCall, ShortcodeError] {
 
 ///|
 pub fn parse_open_close_tag(raw : String) -> (String?, Bool) {
-  let s = trim_shortcode(raw)
+  let s = @strutil.trim(raw)
   if s.length() == 0 {
     return (None, false)
   }
@@ -242,7 +191,7 @@ pub fn parse_open_close_tag(raw : String) -> (String?, Bool) {
     if name.length() <= 1 {
       return (None, true)
     }
-    return (Some(substr_shortcode(name, 1, name.length())), true)
+    return (Some(@strutil.substr(name, 1, name.length())), true)
   }
   (Some(name), false)
 }
