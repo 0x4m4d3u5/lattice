@@ -19,8 +19,9 @@ Each `name:Type` pair becomes one field in the collection schema.
 The current implementation supports:
 
 - `String`
-- `Date`
+- `Date` or `Date(after=2020-01-01)` or `Date(before=2030-01-01)` or `Date(after=2020-01-01,before=2030-01-01)`
 - `Int` or `Int(min=1)` or `Int(max=100)` or `Int(min=1,max=100)`
+- `Float` or `Float(min=0.0)` or `Float(max=5.0)` or `Float(min=0.0,max=5.0)`
 - `Bool`
 - `Array[Type]`
 - `Optional[Type]`
@@ -41,6 +42,8 @@ schema = canonical_url:Url, og_url:Optional[Url]
 schema = category:Slug, subsection:Optional[Slug]
 schema = related_post:Ref[posts], featured:Optional[Ref]
 schema = related_posts:Array[Ref[posts]]
+schema = title:String, rating:Float(min=0.0,max=5.0), weight:Optional[Float]
+schema = title:String, published_at:Date(after=2020-01-01,before=2030-01-01)
 ```
 
 ## Required vs optional
@@ -297,6 +300,92 @@ Why it fails:
 - the build emits a diagnostic: `expected Int in range [1, ∞), got: 0`
 
 This catches out-of-range metadata — priorities, percentages, ratings — at build time instead of producing pages with nonsensical values that templates might render without checking.
+
+## Float bounds fields
+
+The `Float` type accepts any floating-point value. `Float(min=0.0,max=5.0)` constrains to a range. The decimal point is the discriminant between Int and Float in frontmatter: `count: 42` parses as Int, `rating: 4.5` parses as Float.
+
+The syntax is:
+
+- `Float` — any float (equivalent to `Float(min=-∞, max=∞)`)
+- `Float(min=0.0)` — 0.0 and above
+- `Float(max=5.0)` — 5.0 and below
+- `Float(min=0.0,max=5.0)` — between 0.0 and 5.0 inclusive
+
+Example declarations:
+
+```cfg
+schema = title:String, rating:Float(min=0.0,max=5.0), weight:Optional[Float]
+```
+
+Valid frontmatter:
+
+```md
+---
+title = My Post
+rating = 4.5
+---
+```
+
+Invalid frontmatter (build error):
+
+```md
+---
+title = My Post
+rating = -1.0
+---
+```
+
+Why it fails:
+
+- `rating` is declared as `Float(min=0.0,max=5.0)`
+- `-1.0` is below the minimum bound of `0.0`
+- the build emits a diagnostic: `expected Float in range [0.0, 5.0], got: -1.0`
+
+This catches out-of-range continuous values — ratings, weights, scores — at build time instead of producing pages with nonsensical floating-point metadata.
+
+## Date bounds fields
+
+The `Date` type validates `YYYY-MM-DD` format. `Date(after=2020-01-01)` adds an exclusive lower bound. ISO 8601 strings compare lexicographically (`"2020-01-02" > "2020-01-01"`), so no date parsing is needed for the comparison — the bounds check is a string comparison, which is both correct and fast.
+
+The syntax is:
+
+- `Date` — any valid date (equivalent to `Date(after=..., before=...)` with no bounds)
+- `Date(after=2020-01-01)` — after 2020-01-01 (exclusive)
+- `Date(before=2030-01-01)` — before 2030-01-01 (exclusive)
+- `Date(after=2020-01-01,before=2030-01-01)` — within range (both bounds exclusive)
+
+Example declarations:
+
+```cfg
+schema = title:String, published_at:Date(after=2020-01-01,before=2030-01-01)
+```
+
+Valid frontmatter:
+
+```md
+---
+title = My Post
+published_at = 2025-06-15
+---
+```
+
+Invalid frontmatter (build error):
+
+```md
+---
+title = My Post
+published_at = 2019-12-31
+---
+```
+
+Why it fails:
+
+- `published_at` is declared as `Date(after=2020-01-01,before=2030-01-01)`
+- `2019-12-31` is not after `2020-01-01` (the bound is exclusive)
+- the build emits a diagnostic: `expected Date after 2020-01-01 and before 2030-01-01, got: 2019-12-31`
+
+This catches temporal violations — archived content dated in the future, legacy content predating a migration cutoff — at build time. The lexicographic comparison trick works because ISO 8601 dates sort correctly as strings: year digits come first, then month, then day.
 
 ## Frontmatter syntax
 
