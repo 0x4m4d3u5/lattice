@@ -345,7 +345,57 @@ fn parse_field_type_at(
 
   let (name, next) = parse_type_name(s, start)
   if name == "String" {
-    return Ok((@schema.TString, next))
+    // Check for String(minlen=...,maxlen=...) syntax
+    let p = skip_ws_type(s, next)
+    if p < s.length() && @strutil.char_at(s, p) == '(' {
+      // Parse String(minlen=N,maxlen=M) or String(minlen=N) or String(maxlen=M)
+      let mut minlen_val : Int? = None
+      let mut maxlen_val : Int? = None
+      let mut j = p + 1
+      let mut done = false
+      while j < s.length() && not(done) {
+        let q = skip_ws_type(s, j)
+        if q < s.length() && @strutil.char_at(s, q) == ')' {
+          j = q + 1
+          done = true
+        } else if starts_with_collections(
+            @strutil.substr(s, q, s.length()),
+            "minlen=",
+          ) {
+          j = q + 7 // skip "minlen="
+          let (num_str, after_num) = parse_int_literal_at(s, j)
+          match parse_positive_or_negative_int(num_str) {
+            Some(v) => minlen_val = Some(v)
+            None => return Err("invalid minlen value in String bounds")
+          }
+          j = skip_ws_type(s, after_num)
+          if j < s.length() && @strutil.char_at(s, j) == ',' {
+            j = j + 1
+          }
+        } else if starts_with_collections(
+            @strutil.substr(s, q, s.length()),
+            "maxlen=",
+          ) {
+          j = q + 7 // skip "maxlen="
+          let (num_str, after_num) = parse_int_literal_at(s, j)
+          match parse_positive_or_negative_int(num_str) {
+            Some(v) => maxlen_val = Some(v)
+            None => return Err("invalid maxlen value in String bounds")
+          }
+          j = skip_ws_type(s, after_num)
+          if j < s.length() && @strutil.char_at(s, j) == ',' {
+            j = j + 1
+          }
+        } else {
+          return Err("unexpected content in String() bounds")
+        }
+      }
+      if not(done) {
+        return Err("expected ')' to close String bounds")
+      }
+      return Ok((@schema.TString(minlen_val, maxlen_val), j))
+    }
+    return Ok((@schema.TString(None, None), next))
   }
   if name == "Date" {
     let p = skip_ws_type(s, next)
@@ -982,16 +1032,22 @@ pub fn default_posts_collection(content_dir : String) -> CollectionDef {
     schema: {
       name: "posts",
       fields: [
-        { name: "title", field_type: @schema.TString, required: true },
+        {
+          name: "title",
+          field_type: @schema.TString(None, None),
+          required: true,
+        },
         { name: "date", field_type: @schema.TDate(None, None), required: true },
         {
           name: "description",
-          field_type: @schema.TOptional(@schema.TString),
+          field_type: @schema.TOptional(@schema.TString(None, None)),
           required: false,
         },
         {
           name: "tags",
-          field_type: @schema.TOptional(@schema.TArray(@schema.TString)),
+          field_type: @schema.TOptional(
+            @schema.TArray(@schema.TString(None, None)),
+          ),
           required: false,
         },
         {

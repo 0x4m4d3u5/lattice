@@ -12,7 +12,7 @@
 ///|
 /// Field type constraint.
 pub(all) enum FieldType {
-  TString
+  TString(Int?, Int?) // (minlen, maxlen) — both optional; TString(None, None) accepts any string
   TDate(String?, String?) // (after, before) — both optional; TDate(None, None) accepts any date
   TInt(Int?, Int?) // (min, max) — both optional; TInt(None, None) accepts any integer
   TFloat(Double?, Double?) // (min, max) — both optional; TFloat(None, None) accepts any float
@@ -52,7 +52,15 @@ pub(all) struct ValidationError {
 ///|
 fn field_type_name(ft : FieldType) -> String {
   match ft {
-    TString => "String"
+    TString(None, None) => "String"
+    TString(Some(minlen), None) => "String(minlen=" + minlen.to_string() + ")"
+    TString(None, Some(maxlen)) => "String(maxlen=" + maxlen.to_string() + ")"
+    TString(Some(minlen), Some(maxlen)) =>
+      "String(minlen=" +
+      minlen.to_string() +
+      ", maxlen=" +
+      maxlen.to_string() +
+      ")"
     TDate(None, None) => "Date"
     TDate(Some(after), None) => "Date(after=" + after + ")"
     TDate(None, Some(before)) => "Date(before=" + before + ")"
@@ -95,9 +103,19 @@ fn field_type_name(ft : FieldType) -> String {
 /// TOptional matches the inner type — absence is handled in validate().
 fn type_matches(val : @frontmatter.FrontmatterValue, ft : FieldType) -> Bool {
   match ft {
-    TString =>
+    TString(minlen, maxlen) =>
       match val {
-        @frontmatter.FStr(_) => true
+        @frontmatter.FStr(s) => {
+          let min_ok = match minlen {
+            Some(lo) => s.length() >= lo
+            None => true
+          }
+          let max_ok = match maxlen {
+            Some(hi) => s.length() <= hi
+            None => true
+          }
+          min_ok && max_ok
+        }
         _ => false
       }
     TDate(after, before) =>
@@ -264,6 +282,29 @@ pub fn validate(
         if not(type_matches(val, expected)) {
           // Specialized error message for enum and slug mismatches
           let error_msg = match (expected, val) {
+            (TString(minlen, maxlen), @frontmatter.FStr(s)) => {
+              // Construct a length constraint description for the error message.
+              // Truncate the actual value to ~30 chars for actionability.
+              let display = if s.length() > 30 {
+                @strutil.substr(s, 0, 30) + "..."
+              } else {
+                s
+              }
+              let constraint = match (minlen, maxlen) {
+                (Some(lo), Some(hi)) =>
+                  "minlen=" + lo.to_string() + ", maxlen=" + hi.to_string()
+                (Some(lo), None) => "minlen=" + lo.to_string()
+                (None, Some(hi)) => "maxlen=" + hi.to_string()
+                (None, None) => "" // unreachable: TString(None,None) matches everything
+              }
+              "expected String with " +
+              constraint +
+              ", got length " +
+              s.length().to_string() +
+              ": \"" +
+              display +
+              "\""
+            }
             (TEnum(_), @frontmatter.FStr(s)) =>
               "expected one of " +
               field_type_name(expected) +
