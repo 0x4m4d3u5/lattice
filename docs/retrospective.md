@@ -396,3 +396,60 @@ The `type_matches()` / `validate()` split pattern holds here as it does for all 
 The collections parser handles `String(minlen=...,maxlen=...)` syntax identically to `Int(min=...,max=...)` and `Date(after=...,before=...)` — key-value pairs inside parentheses, order-independent, both optional. The parser reuses the same `parse_int_literal_at()` function for the numeric bounds. The `parse_schema_fields()` function already tracks parenthesis depth for `(` and `)`, so `String(minlen=5,maxlen=160)` in a comma-separated schema declaration is correctly parsed as a single type token rather than being split at the comma inside the parentheses.
 
 With this change, every scalar type in the schema DSL carries optional domain constraints as type parameters. `TString(Int?, Int?)` is the final piece. The pattern is complete: `TInt(min, max)`, `TFloat(min, max)`, `TDate(after, before)`, `TString(minlen, maxlen)`. All four use the same parser infrastructure, the same validation architecture, and the same error message format. The consistency is itself a structural guarantee — adding a new bounded type in the future would follow the same seam mechanically, with no architectural surprises.
+\n\n### Type-Parameter Bounds — The Arc from Structural to Domain Guarantees
+
+The individual sections above document each bounded type separately: `TInt(min, max)` (commit `f2c2f38`), `TFloat(min, max)` (commit `187f1a6`), `TDate(after, before)` (commit `4f0dd85`), `TString(minlen, maxlen)` (commit `4d876db`). What deserves its own retrospective entry is the arc itself — the decision to express domain constraints as type parameters across all four scalar types, and why that pattern matters for the structural thesis.
+
+The starting state was that `FieldType` variants carried no domain information. `TInt` meant "this field is an integer." `TString` meant "this field is a string." The type system could enforce that the frontmatter value matched the declared type — an `FStr` where `TInt` was expected was caught at validation. But the type system could not enforce that the value was *reasonable* — `priority: -999` passed validation, `title: ""` passed validation, `date: 1900-01-01` passed validation. These are domain violations that flow silently through the build and produce wrong output at render time.
+
+The alternative approaches we considered were:
+
+1. **Runtime guard functions** — a `validate_priority(x: Int): Bool` that each template or build step calls. This is what dynamic SSGs do: validation is behavioral code that someone has to remember to call, in every relevant code path. The type system doesn't enforce it. Omit the guard, and the violation goes undetected.
+
+2. **Convention** — document that `priority` should be 1-100 and hope authors comply. This is not a guarantee at all. It's a comment.
+
+3. **Type parameters** — encode the domain constraint into the type itself: `Int(min=1, max=100)`. The constraint lives in the schema declaration, which is the single source of truth for content validation. The `type_matches()` function checks it. The build fails if the constraint is violated. The template never receives invalid input.
+
+Option 3 is what lattice chose. The reason is the structural thesis: a constraint that isn't enforced by the type system is a constraint that will be violated silently. The type-parameter pattern makes domain constraints visible to the validation pipeline in the same way that structural type constraints are visible. A schema that declares `Int(min=1, max=100)` is making a stronger claim than `Int` — it's asserting that the valid domain is bounded, and the build will enforce that assertion.
+
+The pattern's consistency is the architectural achievement, not any individual type. All four bounded types use the same parser infrastructure (`parse_key_value_params` for `min=`, `max=`, `after=`, `before=`, `minlen=`, `maxlen=`), the same validation shape (check lower bound, check upper bound, produce a range error), and the same error message format (include the constraint and the rejected value). Adding a fifth bounded type would require zero changes to the parser — only a new `FieldType` variant and a new `type_matches()` arm. The regularity means the pattern scales without growing complexity.
+
+The honest limitation is that type parameters encode *static* domain constraints — constraints known at schema-declaration time. They cannot encode constraints that depend on other field values (e.g., `end_date` must be after `start_date`) or constraints that depend on external state (e.g., this slug must not already exist). Those are relational constraints, not scalar constraints, and they require a different validation architecture (potentially a cross-field validation pass after individual field validation succeeds). The type-parameter pattern is complete for scalar domains. Relational domains are the next frontier, and the current architecture doesn't obstruct them — they would be an additional validation step, not a replacement.
+
+The four-commit sequence also illustrates the development pattern. `TInt` came first and established the pattern: extend the variant, add bounds parameters, update `type_matches()`, update `field_type_name()`, update the collections parser. `TFloat`, `TDate`, and `TString` each followed mechanically. The first one was an architectural decision; the remaining three were mechanical applications of a settled pattern. This is the kind of seam that makes a codebase tractable for both human and AI contributors — the first instance requires judgment; subsequent instances require discipline. The commit stream reflects that: `f2c2f38` is the largest change; the others are smaller deltas against the established pattern.
+
+
+
+### `lattice new` — Schema-Aware Content Scaffolding
+
+The `lattice new <collection> <slug>` subcommand (commit `b3f509b`) is the write-side companion to the build-side validation that defines lattice's structural thesis. The build pipeline rejects content that violates the schema. `lattice new` generates content that satisfies it. Together, they close the authoring loop: `init` → `new` → `build`.
+
+The implementation reads the collection schema from `lattice.conf` and generates a `.md` file with frontmatter stubs for all declared fields. `stub_for_field_type()` in `src/scaffold/scaffold.mbt` dispatches on `FieldType` and produces type-appropriate placeholder values:
+
+- `TInt(min=Some(n), _)` → `n` (starts at the declared minimum)
+- `TFloat(min=Some(n), _)` → `n` (same)
+- `TString(minlen=Some(n), _)` → `"placeholder"` padded to satisfy `minlen`
+- `TEnum(["draft","published"])` → `"draft"` (first allowed value)
+- `TUrl` → `"https://example.com"`
+- `TDate(_, _)` → `"2026-01-01"` (stable placeholder, easy to spot)
+- `TOptional(inner)` → delegates to the inner type
+
+The architectural point is that `stub_for_field_type()` pattern-matches on the same `FieldType` enum that `type_matches()` and `validate()` use. The schema is the single source of truth for both validation (read side) and scaffolding (write side). A new bounded type added to `FieldType` requires updates to three places: `type_matches()` for validation, `field_type_name()` for display, and `stub_for_field_type()` for scaffolding. The type system doesn't enforce this completeness — a new variant that's missing a scaffold case would fall through to a default or a compile-time match warning — but the pattern makes the surface area visible.
+
+The reason this matters for the structural thesis is that `lattice new` makes the structural contract *discoverable*. A new author running `lattice new posts my-first-post` gets a file with `title: placeholder`, `date: 2026-01-01`, `tags: []`, and a commented-out `description: ` line. The required fields are populated; the optional fields are visible as comments. The author knows exactly what the schema expects without reading documentation, because the scaffolded file *is* the documentation for that collection's schema. This is the UX thesis applied to onboarding: the tool bootstraps valid content, and the build validates it. The cycle is self-reinforcing.
+
+The honest trade-off is that `stub_for_field_type()` cannot generate *meaningful* default values. `"placeholder"` is structurally valid but semantically empty. The author still needs to replace every stub with real content. A more ambitious scaffold could accept CLI flags for field values (`lattice new posts my-post --title "Hello" --date 2026-03-31`), but that adds CLI complexity for marginal gain — the scaffold's job is to produce a file that passes validation so the author can edit it, not to produce final content. The current design optimizes for the common case: create a valid file, open it in an editor, fill in the real values.
+
+The 20 unit tests in `src/scaffold/scaffold_test.mbt` verify stub generation for every `FieldType` variant, including bounded types. They check that bounded stubs satisfy their own constraints — `TInt(min=Some(5), None)` produces `"5"`, which passes `Int(min=5)` validation. This is a subtle but important test property: the scaffold's output must be valid input for the build. If it weren't, the `lattice new` → `lattice build` cycle would break, and the structural contract would be undermined at the point where the author first interacts with the tool.
+
+### Shortcode strutil Migration — Closing the Tail of Cross-Package Redundancy
+
+The main `@strutil` migration (commit `11fed53`) eliminated 1081 local utility functions across 20 packages. The retrospective section "Migrating Away from Hand-Rolled String Utilities" documents the pattern: autonomous agents generate local helpers rather than importing from a shared package, and the duplication is invisible until a cross-package audit reveals the same five functions copy-pasted everywhere.
+
+Commit `ba6bee8` is the tail end of that same cleanup. The shortcode package (`src/shortcode/shortcode.mbt`) retained four local utility functions — `char_at_shortcode`, `substr_shortcode`, `trim_shortcode`, and `is_digit_shortcode` — that were semantically identical to `@strutil.char_at`, `@strutil.substr`, `@strutil.trim`, and `@strutil.is_digit`. The main migration missed them because it targeted the 20 packages with the highest helper counts; shortcode had only four, and the audit threshold didn't catch it.
+
+The fix replaced all four local helpers with `@strutil` calls, removing 69 lines. All 8 shortcode tests passed without modification — the functions were internal implementation details, not part of the public API.
+
+This tail-end cleanup is worth documenting because it illustrates the *persistence* of the duplication pattern. The main migration was a coordinated 20-package change. The shortcode fix was a separate session that noticed the remaining duplicates during unrelated work. The duplication wasn't visible in the commit that introduced the shortcode helpers — at that point, the helpers were a reasonable local convenience. It only became visible as redundancy after `@strutil` was established as the canonical source and the main migration set the expectation that all packages use it.
+
+The principle is: shared utility packages are a convention that must be maintained, not a state that can be achieved once and forgotten. New code (or code that was overlooked) will continue to introduce local helpers unless the convention is enforced. The type system doesn't help here — `starts_with` and `starts_with_shortcode` are different function names, so the compiler sees no duplication. The enforcement is human (or agent) discipline, aided by the retrospective documentation that says "use `@strutil`, don't write local helpers." The shortcode commit is evidence that the documentation wasn't enough to prevent the duplication; it took a second manual audit to catch the stragglers. The honest lesson is that consolidation is an ongoing process, not a one-time event.
