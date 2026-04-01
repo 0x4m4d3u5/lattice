@@ -271,7 +271,7 @@ pub fn frontmatter_to_arrays(
 /// Pages without dates get empty string (sorts last/first depending on order).
 fn extract_iso_date_prefix(date : String?) -> String {
   match date {
-    Some(d) => if d.length() >= 10 { substr_builder(d, 0, 10) } else { "" }
+    Some(d) => if d.length() >= 10 { @strutil.substr(d, 0, 10) } else { "" }
     None => ""
   }
 }
@@ -511,15 +511,15 @@ pub fn extract_year_month(date : String) -> (String, String)? {
   if n < 6 {
     return None
   }
-  if char_at_builder(date, 4) != '-' {
+  if @strutil.char_at(date, 4) != '-' {
     return None
   }
-  let year = substr_builder(date, 0, 4)
+  let year = @strutil.substr(date, 0, 4)
   // Month is two digits starting at index 5; pad single-digit months
   let month = if n >= 7 {
-    substr_builder(date, 5, 7)
+    @strutil.substr(date, 5, 7)
   } else {
-    "0" + substr_builder(date, 5, 6)
+    "0" + @strutil.substr(date, 5, 6)
   }
   Some((year, month))
 }
@@ -556,8 +556,8 @@ pub fn group_pages_by_year_month(
 
   let groups : Array[ArchiveGroup] = []
   for key, page_list in groups_map {
-    let year = substr_builder(key, 0, 4)
-    let month = substr_builder(key, 5, 7)
+    let year = @strutil.substr(key, 0, 4)
+    let month = @strutil.substr(key, 5, 7)
     groups.push({ year, month, pages: page_list })
   }
 
@@ -620,7 +620,7 @@ pub fn render_archive_page_content(pages : Array[@graph.GraphPage]) -> String {
     match page.date {
       Some(date_str) => {
         buf.write_string(" <small>(")
-        buf.write_string(escape_html_builder(date_str))
+        buf.write_string(@strutil.escape_html_attr(date_str))
         buf.write_string(")</small>")
       }
       None => ()
@@ -738,7 +738,7 @@ pub fn render_archive_index(
       }
       current_year = group.year
       buf.write_string("<h2>")
-      buf.write_string(escape_html_builder(group.year))
+      buf.write_string(@strutil.escape_html_attr(group.year))
       buf.write_string("</h2>\n<ul>\n")
     }
     let month_label = month_name(group.month) + " " + group.year
@@ -772,7 +772,7 @@ pub fn render_archive_index(
   slots.set(@template.SiteName, site.title)
   slots.set(
     @template.Url,
-    absolute_url_builder(site.base_url, "/" + collection_name + "/archive/"),
+    @strutil.absolute_url(site.base_url, "/" + collection_name + "/archive/"),
   )
   slots.set(@template.NavLinks, nav_links_html)
   slots.set(@template.CustomCss, custom_css)
@@ -1040,35 +1040,19 @@ fn month_name(month : String) -> String {
 }
 
 ///|
-fn char_at_builder(s : String, i : Int) -> Char {
-  s[i].to_int().unsafe_to_char()
-}
-
-///|
-fn substr_builder(s : String, start : Int, end_pos : Int) -> String {
-  let buf = StringBuilder::new()
-  let mut i = start
-  while i < end_pos {
-    buf.write_char(char_at_builder(s, i))
-    i = i + 1
-  }
-  buf.to_string()
-}
-
-///|
 fn path_basename_builder(path : String) -> String {
   let mut end_pos = path.length()
-  while end_pos > 0 && char_at_builder(path, end_pos - 1) == '/' {
+  while end_pos > 0 && @strutil.char_at(path, end_pos - 1) == '/' {
     end_pos = end_pos - 1
   }
   if end_pos == 0 {
     return ""
   }
   let mut start = end_pos
-  while start > 0 && char_at_builder(path, start - 1) != '/' {
+  while start > 0 && @strutil.char_at(path, start - 1) != '/' {
     start = start - 1
   }
-  substr_builder(path, start, end_pos)
+  @strutil.substr(path, start, end_pos)
 }
 
 ///|
@@ -1080,7 +1064,7 @@ pub fn redirect_url_to_output_path(url : String) -> String {
   // Strip leading slash (including the root "/" case → empty string)
   if clean_url.has_prefix("/") {
     clean_url = if clean_url.length() > 1 {
-      substr_builder(clean_url, 1, clean_url.length())
+      @strutil.substr(clean_url, 1, clean_url.length())
     } else {
       ""
     }
@@ -1091,7 +1075,7 @@ pub fn redirect_url_to_output_path(url : String) -> String {
   } else {
     // Strip trailing slash if present
     let stripped = if clean_url.has_suffix("/") && clean_url.length() > 1 {
-      substr_builder(clean_url, 0, clean_url.length() - 1)
+      @strutil.substr(clean_url, 0, clean_url.length() - 1)
     } else {
       clean_url
     }
@@ -1107,7 +1091,7 @@ pub fn redirect_url_to_output_path(url : String) -> String {
 /// Render a minimal HTML redirect page.
 /// Generates a page with meta-refresh pointing to the canonical URL.
 pub fn render_redirect_page(canonical_url : String) -> String {
-  let esc_url = escape_html_builder(canonical_url)
+  let esc_url = @strutil.escape_html_attr(canonical_url)
   "<!DOCTYPE html>\n" +
   "<html>\n" +
   "<head>\n" +
@@ -1128,94 +1112,6 @@ pub fn render_redirect_page(canonical_url : String) -> String {
   "</a>&#8230;</p>\n" +
   "</body>\n" +
   "</html>\n"
-}
-
-///|
-fn escape_html_builder(s : String) -> String {
-  let buf = StringBuilder::new()
-  let n = s.length()
-  let mut i = 0
-  while i < n {
-    let c = char_at_builder(s, i)
-    if c == '&' {
-      buf.write_string("&amp;")
-    } else if c == '<' {
-      buf.write_string("&lt;")
-    } else if c == '>' {
-      buf.write_string("&gt;")
-    } else if c == '"' {
-      buf.write_string("&quot;")
-    } else {
-      buf.write_char(c)
-    }
-    i = i + 1
-  }
-  buf.to_string()
-}
-
-///|
-fn trim_builder(s : String) -> String {
-  let n = s.length()
-  let mut lo = 0
-  while lo < n &&
-        (
-          char_at_builder(s, lo) == ' ' ||
-          char_at_builder(s, lo) == '\t' ||
-          char_at_builder(s, lo) == '\r'
-        ) {
-    lo = lo + 1
-  }
-  let mut hi = n
-  while hi > lo &&
-        (
-          char_at_builder(s, hi - 1) == ' ' ||
-          char_at_builder(s, hi - 1) == '\t' ||
-          char_at_builder(s, hi - 1) == '\r'
-        ) {
-    hi = hi - 1
-  }
-  let buf = StringBuilder::new()
-  let mut i = lo
-  while i < hi {
-    buf.write_char(char_at_builder(s, i))
-    i = i + 1
-  }
-  buf.to_string()
-}
-
-///|
-fn normalize_base_url_builder(base_url : String) -> String {
-  let trimmed = trim_builder(base_url)
-  if trimmed == "/" {
-    return ""
-  }
-  if trimmed.has_suffix("/") {
-    let buf = StringBuilder::new()
-    let mut i = 0
-    let end_pos = trimmed.length() - 1
-    while i < end_pos {
-      buf.write_char(char_at_builder(trimmed, i))
-      i = i + 1
-    }
-    return buf.to_string()
-  }
-  trimmed
-}
-
-///|
-fn absolute_url_builder(base_url : String, path : String) -> String {
-  let base = normalize_base_url_builder(base_url)
-  if base.length() == 0 {
-    return path
-  }
-  if path.length() == 0 {
-    return base
-  }
-  if char_at_builder(path, 0) == '/' {
-    base + path
-  } else {
-    base + "/" + path
-  }
 }
 
 ///|
@@ -1266,20 +1162,23 @@ fn collection_breadcrumb_structured_data_builder(
   items.push(
     breadcrumb_item_builder(
       site.title,
-      absolute_url_builder(site.base_url, "/"),
+      @strutil.absolute_url(site.base_url, "/"),
     ),
   )
   items.push(
     breadcrumb_item_builder(
       collection_name,
-      absolute_url_builder(site.base_url, collection_index_url(collection_name)),
+      @strutil.absolute_url(
+        site.base_url,
+        collection_index_url(collection_name),
+      ),
     ),
   )
   if page_number > 1 {
     items.push(
       breadcrumb_item_builder(
         "page " + page_number.to_string(),
-        absolute_url_builder(
+        @strutil.absolute_url(
           site.base_url,
           collection_index_page_url(collection_name, page_number),
         ),
@@ -1300,19 +1199,22 @@ fn content_breadcrumb_structured_data_builder(
   items.push(
     breadcrumb_item_builder(
       site.title,
-      absolute_url_builder(site.base_url, "/"),
+      @strutil.absolute_url(site.base_url, "/"),
     ),
   )
   items.push(
     breadcrumb_item_builder(
       collection_name,
-      absolute_url_builder(site.base_url, collection_index_url(collection_name)),
+      @strutil.absolute_url(
+        site.base_url,
+        collection_index_url(collection_name),
+      ),
     ),
   )
   items.push(
     breadcrumb_item_builder(
       page_title,
-      absolute_url_builder(site.base_url, page_url),
+      @strutil.absolute_url(site.base_url, page_url),
     ),
   )
   [@html.BreadcrumbList({ items, })]
@@ -1325,7 +1227,7 @@ fn website_structured_data_builder(
   [
     @html.WebSite({
       name: site.title,
-      url: absolute_url_builder(site.base_url, "/"),
+      url: @strutil.absolute_url(site.base_url, "/"),
       description: site.description,
     }),
   ]
@@ -1365,12 +1267,12 @@ fn load_template_file(path : String) -> Result[@template.Template?, String] {
     let mut last_slash = 0
     let mut i = 0
     while i < path.length() {
-      if char_at_builder(path, i) == '/' {
+      if @strutil.char_at(path, i) == '/' {
         last_slash = i
       }
       i = i + 1
     }
-    substr_builder(path, 0, last_slash)
+    @strutil.substr(path, 0, last_slash)
   } else {
     "."
   }
@@ -1449,42 +1351,6 @@ fn load_collection_page_template(
 }
 
 ///|
-fn parse_int_builder(s : String) -> Int? {
-  let n = s.length()
-  if n == 0 {
-    return None
-  }
-  let mut value = 0
-  let mut i = 0
-  while i < n {
-    let c = char_at_builder(s, i)
-    if c < '0' || c > '9' {
-      return None
-    }
-    value = value * 10 + (c.to_int() - '0'.to_int())
-    i = i + 1
-  }
-  Some(value)
-}
-
-///|
-fn starts_with_builder(s : String, prefix : String) -> Bool {
-  let n = s.length()
-  let plen = prefix.length()
-  if plen > n {
-    return false
-  }
-  let mut i = 0
-  while i < plen {
-    if char_at_builder(s, i) != char_at_builder(prefix, i) {
-      return false
-    }
-    i = i + 1
-  }
-  true
-}
-
-///|
 fn line_col_of_first(source : String, pattern : String) -> (Int?, Int?) {
   let n = source.length()
   let plen = pattern.length()
@@ -1496,7 +1362,7 @@ fn line_col_of_first(source : String, pattern : String) -> (Int?, Int?) {
     let mut matched = true
     let mut j = 0
     while j < plen {
-      if char_at_builder(source, i + j) != char_at_builder(pattern, j) {
+      if @strutil.char_at(source, i + j) != @strutil.char_at(pattern, j) {
         matched = false
         break
       }
@@ -1507,7 +1373,7 @@ fn line_col_of_first(source : String, pattern : String) -> (Int?, Int?) {
       let mut col = 1
       let mut k = 0
       while k < i {
-        if char_at_builder(source, k) == '\n' {
+        if @strutil.char_at(source, k) == '\n' {
           line = line + 1
           col = 1
         } else {
@@ -1531,15 +1397,15 @@ fn frontmatter_field_line(source : String, field : String) -> Int? {
 
 ///|
 fn frontmatter_line_from_error(msg : String) -> Int? {
-  if !starts_with_builder(msg, "line ") {
+  if !@strutil.starts_with(msg, "line ") {
     return None
   }
   let n = msg.length()
   let mut i = 5
   let mut end = i
   while end < n &&
-        char_at_builder(msg, end) >= '0' &&
-        char_at_builder(msg, end) <= '9' {
+        @strutil.char_at(msg, end) >= '0' &&
+        @strutil.char_at(msg, end) <= '9' {
     end = end + 1
   }
   if end == i {
@@ -1547,10 +1413,10 @@ fn frontmatter_line_from_error(msg : String) -> Int? {
   }
   let buf = StringBuilder::new()
   while i < end {
-    buf.write_char(char_at_builder(msg, i))
+    buf.write_char(@strutil.char_at(msg, i))
     i = i + 1
   }
-  parse_int_builder(buf.to_string())
+  @strutil.parse_int(buf.to_string())
 }
 
 ///|
@@ -1965,7 +1831,7 @@ fn inject_nav_before_main_close(body : String, nav : String) -> String {
   }
   let close_tag = "</main>\n"
   if body.has_suffix(close_tag) {
-    let without_close = substr_builder(
+    let without_close = @strutil.substr(
       body,
       0,
       body.length() - close_tag.length(),
@@ -1976,70 +1842,15 @@ fn inject_nav_before_main_close(body : String, nav : String) -> String {
 }
 
 ///|
-fn split_lines_builder(s : String) -> Array[String] {
-  let lines : Array[String] = []
-  let n = s.length()
-  let mut i = 0
-  while i <= n {
-    let mut end = i
-    while end < n && char_at_builder(s, end) != '\n' {
-      end = end + 1
-    }
-    let line = StringBuilder::new()
-    let mut j = i
-    while j < end {
-      line.write_char(char_at_builder(s, j))
-      j = j + 1
-    }
-    lines.push(line.to_string())
-    if end >= n {
-      break
-    }
-    i = end + 1
-  }
-  lines
-}
-
-///|
-fn join_lines_builder(lines : Array[String]) -> String {
-  let buf = StringBuilder::new()
-  let mut i = 0
-  while i < lines.length() {
-    if i > 0 {
-      buf.write_char('\n')
-    }
-    buf.write_string(lines[i])
-    i = i + 1
-  }
-  buf.to_string()
-}
-
-///|
 fn is_blank_builder(s : String) -> Bool {
-  trim_builder(s).length() == 0
-}
-
-///|
-fn starts_with_at_builder(s : String, pos : Int, prefix : String) -> Bool {
-  let plen = prefix.length()
-  if pos + plen > s.length() {
-    return false
-  }
-  let mut i = 0
-  while i < plen {
-    if char_at_builder(s, pos + i) != char_at_builder(prefix, i) {
-      return false
-    }
-    i = i + 1
-  }
-  true
+  @strutil.trim_h(s).length() == 0
 }
 
 ///|
 fn count_leading_hashes_builder(line : String) -> Int {
   let n = line.length()
   let mut count = 0
-  while count < n && char_at_builder(line, count) == '#' {
+  while count < n && @strutil.char_at(line, count) == '#' {
     count = count + 1
   }
   count
@@ -2051,19 +1862,19 @@ fn is_heading_line_builder(line : String) -> Bool {
   if hashes == 0 || hashes > 6 {
     return false
   }
-  hashes < line.length() && char_at_builder(line, hashes) == ' '
+  hashes < line.length() && @strutil.char_at(line, hashes) == ' '
 }
 
 ///|
 fn is_hrule_builder(line : String) -> Bool {
-  let t = trim_builder(line)
+  let t = @strutil.trim_h(line)
   t == "---" || t == "***" || t == "___"
 }
 
 ///|
 fn is_fence_start_builder(line : String) -> Bool {
-  starts_with_at_builder(line, 0, "```") ||
-  starts_with_at_builder(line, 0, "~~~")
+  @strutil.starts_with_at(line, 0, "```") ||
+  @strutil.starts_with_at(line, 0, "~~~")
 }
 
 ///|
@@ -2071,28 +1882,23 @@ fn fence_char_builder(line : String) -> Char {
   if line.length() == 0 {
     '`'
   } else {
-    char_at_builder(line, 0)
+    @strutil.char_at(line, 0)
   }
 }
 
 ///|
 fn is_fence_end_builder(line : String, fence_char : Char) -> Bool {
   line.length() >= 3 &&
-  char_at_builder(line, 0) == fence_char &&
-  char_at_builder(line, 1) == fence_char &&
-  char_at_builder(line, 2) == fence_char
+  @strutil.char_at(line, 0) == fence_char &&
+  @strutil.char_at(line, 1) == fence_char &&
+  @strutil.char_at(line, 2) == fence_char
 }
 
 ///|
 fn is_unordered_item_builder(line : String) -> Bool {
   line.length() >= 2 &&
-  (char_at_builder(line, 0) == '-' || char_at_builder(line, 0) == '*') &&
-  char_at_builder(line, 1) == ' '
-}
-
-///|
-fn is_digit_builder(c : Char) -> Bool {
-  c >= '0' && c <= '9'
+  (@strutil.char_at(line, 0) == '-' || @strutil.char_at(line, 0) == '*') &&
+  @strutil.char_at(line, 1) == ' '
 }
 
 ///|
@@ -2102,18 +1908,18 @@ fn is_ordered_item_builder(line : String) -> Bool {
     return false
   }
   let mut i = 0
-  while i < n && is_digit_builder(char_at_builder(line, i)) {
+  while i < n && @strutil.is_digit(@strutil.char_at(line, i)) {
     i = i + 1
   }
   i > 0 &&
   i + 1 < n &&
-  char_at_builder(line, i) == '.' &&
-  char_at_builder(line, i + 1) == ' '
+  @strutil.char_at(line, i) == '.' &&
+  @strutil.char_at(line, i + 1) == ' '
 }
 
 ///|
 fn is_blockquote_line_builder(line : String) -> Bool {
-  line.length() > 0 && char_at_builder(line, 0) == '>'
+  line.length() > 0 && @strutil.char_at(line, 0) == '>'
 }
 
 ///|
@@ -2166,7 +1972,7 @@ fn collapse_whitespace_builder(s : String) -> String {
   let mut prev_space = false
   let mut i = 0
   while i < s.length() {
-    let c = char_at_builder(s, i)
+    let c = @strutil.char_at(s, i)
     let is_space = c == ' ' || c == '\t' || c == '\n' || c == '\r'
     if is_space {
       if wrote_non_space && !prev_space {
@@ -2180,12 +1986,12 @@ fn collapse_whitespace_builder(s : String) -> String {
     }
     i = i + 1
   }
-  trim_builder(buf.to_string())
+  @strutil.trim_h(buf.to_string())
 }
 
 ///|
 fn extract_excerpt_builder(markdown_body : String) -> String {
-  let lines = split_lines_builder(markdown_body)
+  let lines = @strutil.split_lines(markdown_body)
   let mut i = 0
   while i < lines.length() {
     let line = lines[i]
@@ -2224,7 +2030,7 @@ fn extract_excerpt_builder(markdown_body : String) -> String {
         paragraph_lines.push(lines[i])
         i = i + 1
       }
-      let paragraph_text = join_lines_builder(paragraph_lines)
+      let paragraph_text = @strutil.join_lines(paragraph_lines)
       let inlines = @markdown.parse_inlines(
         paragraph_text,
         0,
@@ -2245,7 +2051,7 @@ fn extract_excerpt_builder(markdown_body : String) -> String {
 /// Count words in a markdown body, skipping fenced code blocks.
 /// Words are whitespace-delimited runs of non-whitespace characters.
 pub fn count_words_markdown(body : String) -> Int {
-  let ls = split_lines_builder(body)
+  let ls = @strutil.split_lines(body)
   let mut count = 0
   let mut i = 0
   while i < ls.length() {
@@ -2266,16 +2072,16 @@ pub fn count_words_markdown(body : String) -> Int {
     while j < n {
       while j < n &&
             (
-              char_at_builder(line, j) == ' ' ||
-              char_at_builder(line, j) == '\t'
+              @strutil.char_at(line, j) == ' ' ||
+              @strutil.char_at(line, j) == '\t'
             ) {
         j = j + 1
       }
       if j < n {
         count = count + 1
         while j < n &&
-              char_at_builder(line, j) != ' ' &&
-              char_at_builder(line, j) != '\t' {
+              @strutil.char_at(line, j) != ' ' &&
+              @strutil.char_at(line, j) != '\t' {
           j = j + 1
         }
       }
@@ -2308,7 +2114,7 @@ pub fn truncate_to_builder(s : String, max_len : Int) -> String {
   if s.length() <= max_len {
     s
   } else {
-    substr_builder(s, 0, max_len)
+    @strutil.substr(s, 0, max_len)
   }
 }
 
@@ -2426,7 +2232,7 @@ fn render_tag_page_html(
       }
     }
     None => {
-      let canonical = absolute_url_builder(
+      let canonical = @strutil.absolute_url(
         site.base_url,
         tag_page_url(page.slug, pagination.page_number),
       )
@@ -2434,7 +2240,7 @@ fn render_tag_page_html(
         title: full_title,
         description: Some(description),
         lang: "en",
-        stylesheet: Some(absolute_url_builder(site.base_url, "/style.css")),
+        stylesheet: Some(@strutil.absolute_url(site.base_url, "/style.css")),
         canonical_url: Some(canonical),
         og_image: site.og_image,
         feed_url: None,
@@ -2509,7 +2315,7 @@ fn render_tags_index_html(
       }
     }
     None => {
-      let canonical = absolute_url_builder(
+      let canonical = @strutil.absolute_url(
         site.base_url,
         tags_index_page_url(pagination.page_number),
       )
@@ -2517,7 +2323,7 @@ fn render_tags_index_html(
         title: full_title,
         description: Some(description),
         lang: "en",
-        stylesheet: Some(absolute_url_builder(site.base_url, "/style.css")),
+        stylesheet: Some(@strutil.absolute_url(site.base_url, "/style.css")),
         canonical_url: Some(canonical),
         og_image: site.og_image,
         feed_url: None,
@@ -2619,13 +2425,13 @@ fn render_404_page(
       }
     }
     None => {
-      let canonical = absolute_url_builder(config.site.base_url, url)
+      let canonical = @strutil.absolute_url(config.site.base_url, url)
       let meta : @html.PageMeta = {
         title: full_title,
         description: Some(description),
         lang: "en",
         stylesheet: Some(
-          absolute_url_builder(config.site.base_url, "/style.css"),
+          @strutil.absolute_url(config.site.base_url, "/style.css"),
         ),
         canonical_url: Some(canonical),
         og_image: config.site.og_image,
@@ -2660,7 +2466,7 @@ fn render_collection_index(
   let body = StringBuilder::new()
   body.write_string("<main>\n")
   body.write_string("<h1>")
-  body.write_string(escape_html_builder(collection_name))
+  body.write_string(@strutil.escape_html_attr(collection_name))
   body.write_string(" Index</h1>\n")
   if pagination.total_pages > 1 {
     body.write_string("<p>Page ")
@@ -2680,7 +2486,7 @@ fn render_collection_index(
     body.write_string("<li>")
     body.write_string(@html.anchor(p.url, p.title))
     body.write_string(" <code>")
-    body.write_string(escape_html_builder(p.slug))
+    body.write_string(@strutil.escape_html_attr(p.slug))
     body.write_string("</code></li>\n")
     i = i + 1
   }
@@ -2694,7 +2500,7 @@ fn render_collection_index(
     body.write_string(@html.anchor(p.url, p.title))
     body.write_string("</h3>\n")
     body.write_string("<p>Source slug: <code>")
-    body.write_string(escape_html_builder(p.slug))
+    body.write_string(@strutil.escape_html_attr(p.slug))
     body.write_string("</code></p>\n")
     if p.outgoing.length() == 0 {
       body.write_string("<p>No outgoing wikilinks.</p>\n")
@@ -2708,13 +2514,14 @@ fn render_collection_index(
           None => edge.title
         }
         let display_note = match edge.raw.display {
-          Some(d) => " (display: <code>" + escape_html_builder(d) + "</code>)"
+          Some(d) =>
+            " (display: <code>" + @strutil.escape_html_attr(d) + "</code>)"
           None => ""
         }
         body.write_string("<li>")
         body.write_string(@html.anchor(edge.url, target_title))
         body.write_string(" <code>")
-        body.write_string(escape_html_builder(edge.raw.target))
+        body.write_string(@strutil.escape_html_attr(edge.raw.target))
         body.write_string("</code>")
         body.write_string(display_note)
         body.write_string("</li>\n")
@@ -2792,7 +2599,7 @@ fn render_collection_index(
               pagination.page_number,
             ),
           )
-          let feed_url = absolute_url_builder(
+          let feed_url = @strutil.absolute_url(
             site.base_url,
             collection_index_url(collection_name) + "feed.xml",
           )
@@ -2809,11 +2616,11 @@ fn render_collection_index(
     None => ()
   }
 
-  let canonical = absolute_url_builder(
+  let canonical = @strutil.absolute_url(
     site.base_url,
     collection_index_page_url(collection_name, pagination.page_number),
   )
-  let feed_url = absolute_url_builder(
+  let feed_url = @strutil.absolute_url(
     site.base_url,
     collection_index_url(collection_name) + "feed.xml",
   )
@@ -2821,7 +2628,7 @@ fn render_collection_index(
     title: full_title,
     description: Some(description),
     lang: "en",
-    stylesheet: Some(absolute_url_builder(site.base_url, "/style.css")),
+    stylesheet: Some(@strutil.absolute_url(site.base_url, "/style.css")),
     canonical_url: Some(canonical),
     og_image: site.og_image,
     feed_url: Some(feed_url),
@@ -3300,7 +3107,7 @@ fn process_document(
           title: full_title,
           description: description_value,
           lang: "en",
-          stylesheet: Some(absolute_url_builder(site.base_url, "/style.css")),
+          stylesheet: Some(@strutil.absolute_url(site.base_url, "/style.css")),
           canonical_url: Some(canonical),
           og_image: page_og_image,
           feed_url: None,
@@ -3313,7 +3120,7 @@ fn process_document(
   let page_html = match
     render_variant(
       url,
-      absolute_url_builder(site.base_url, url),
+      @strutil.absolute_url(site.base_url, url),
       {
         let structured_data : Array[@html.StructuredData] = content_breadcrumb_structured_data_builder(
           site, collection_name, title, url,
@@ -3322,7 +3129,7 @@ fn process_document(
           @html.BlogPosting({
             headline: title,
             description: description_value,
-            url: absolute_url_builder(site.base_url, url),
+            url: @strutil.absolute_url(site.base_url, url),
             date_published: date_value,
             author: author_value,
             image: page_og_image,
@@ -3341,7 +3148,7 @@ fn process_document(
     match
       render_variant(
         "/",
-        absolute_url_builder(site.base_url, "/"),
+        @strutil.absolute_url(site.base_url, "/"),
         website_structured_data_builder(site),
       ) {
       Ok(html) => Some(html)
@@ -3821,7 +3628,7 @@ fn process_document_for_lint(
       }
     }
     None => {
-      let canonical = absolute_url_builder(site.base_url, url)
+      let canonical = @strutil.absolute_url(site.base_url, url)
       let page_og_image = match og_image_value {
         Some(img) => Some(img)
         None => site.og_image
@@ -3830,7 +3637,7 @@ fn process_document_for_lint(
         title: full_title,
         description: description_value,
         lang: "en",
-        stylesheet: Some(absolute_url_builder(site.base_url, "/style.css")),
+        stylesheet: Some(@strutil.absolute_url(site.base_url, "/style.css")),
         canonical_url: Some(canonical),
         og_image: page_og_image,
         feed_url: None,
@@ -3909,8 +3716,8 @@ fn ensure_dir(path : String) -> Unit raise @fs.IOError {
 fn ensure_parent_dirs_for_file(path : String) -> Unit raise @fs.IOError {
   let mut i = 0
   while i < path.length() {
-    if char_at_builder(path, i) == '/' && i > 0 {
-      let dir = substr_builder(path, 0, i)
+    if @strutil.char_at(path, i) == '/' && i > 0 {
+      let dir = @strutil.substr(path, 0, i)
       if !@fs.path_exists(dir) {
         @fs.create_dir(dir)
       }
@@ -4656,7 +4463,7 @@ pub fn build(
                       while k < urls.length() {
                         match urls[k] {
                           @frontmatter.FStr(redirect_url) => {
-                            let canonical = absolute_url_builder(
+                            let canonical = @strutil.absolute_url(
                               config.site.base_url,
                               doc.url,
                             )
@@ -4672,13 +4479,15 @@ pub fn build(
                                 let mut last_slash = 0
                                 let mut idx = 0
                                 while idx < redirect_out_path.length() {
-                                  if char_at_builder(redirect_out_path, idx) ==
+                                  if @strutil.char_at(redirect_out_path, idx) ==
                                     '/' {
                                     last_slash = idx
                                   }
                                   idx = idx + 1
                                 }
-                                substr_builder(redirect_out_path, 0, last_slash)
+                                @strutil.substr(
+                                  redirect_out_path, 0, last_slash,
+                                )
                               } else {
                                 "."
                               }
