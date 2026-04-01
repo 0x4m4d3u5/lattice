@@ -111,38 +111,35 @@ pub fn summarize(result : LintResult) -> ViolationSummary {
 
   // Group by type
   let type_counts : Map[ViolationType, Int] = Map::new()
-  let mut i = 0
-  while i < violations.length() {
-    let kind = violations[i].kind
-    match type_counts.get(kind) {
-      Some(count) => type_counts.set(kind, count + 1)
-      None => type_counts.set(kind, 1)
-    }
-    i = i + 1
+  for v in violations {
+    type_counts.update(v.kind, fn(prev) {
+      match prev {
+        Some(n) => Some(n + 1)
+        None => Some(1)
+      }
+    })
   }
   let by_type : Array[TypeCount] = []
   for kind, count in type_counts {
     by_type.push({ kind, count })
   }
-  // Sort by count descending
-  sort_type_counts(by_type)
+  by_type.sort_by((a, b) => b.count.compare(a.count))
 
   // Group by file
   let file_counts : Map[String, Int] = Map::new()
-  i = 0
-  while i < violations.length() {
-    let path = violations[i].path
-    match file_counts.get(path) {
-      Some(count) => file_counts.set(path, count + 1)
-      None => file_counts.set(path, 1)
-    }
-    i = i + 1
+  for v in violations {
+    file_counts.update(v.path, fn(prev) {
+      match prev {
+        Some(n) => Some(n + 1)
+        None => Some(1)
+      }
+    })
   }
   let by_file : Array[FileCount] = []
   for path, count in file_counts {
     by_file.push({ path, count })
   }
-  sort_file_counts(by_file)
+  by_file.sort_by((a, b) => b.count.compare(a.count))
 
   { total, by_type, by_file }
 }
@@ -168,65 +165,23 @@ pub fn format_summary(summary : ViolationSummary) -> String {
 
   if summary.by_type.length() > 0 {
     buf.write_string("\n  By type:")
-    let mut i = 0
-    while i < summary.by_type.length() {
-      let tc = summary.by_type[i]
+    for tc in summary.by_type {
       buf.write_string("\n    ")
       buf.write_string(violation_type_name(tc.kind))
       buf.write_string(": ")
       buf.write_string(tc.count.to_string())
-      i = i + 1
     }
   }
 
   if summary.by_file.length() > 0 {
     buf.write_string("\n  By file:")
-    let mut i = 0
-    while i < summary.by_file.length() {
-      let fc = summary.by_file[i]
+    for fc in summary.by_file {
       buf.write_string("\n    ")
       buf.write_string(fc.path)
       buf.write_string(": ")
       buf.write_string(fc.count.to_string())
-      i = i + 1
     }
   }
 
   buf.to_string()
-}
-
-///|
-fn sort_type_counts(items : Array[TypeCount]) -> Unit {
-  let n = items.length()
-  let mut i = 0
-  while i < n - 1 {
-    let mut j = i + 1
-    while j < n {
-      if items[j].count > items[i].count {
-        let tmp = items[i]
-        items[i] = items[j]
-        items[j] = tmp
-      }
-      j = j + 1
-    }
-    i = i + 1
-  }
-}
-
-///|
-fn sort_file_counts(items : Array[FileCount]) -> Unit {
-  let n = items.length()
-  let mut i = 0
-  while i < n - 1 {
-    let mut j = i + 1
-    while j < n {
-      if items[j].count > items[i].count {
-        let tmp = items[i]
-        items[i] = items[j]
-        items[j] = tmp
-      }
-      j = j + 1
-    }
-    i = i + 1
-  }
 }
