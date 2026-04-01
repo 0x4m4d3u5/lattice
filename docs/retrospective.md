@@ -467,3 +467,31 @@ This is the third instance of the "check stdlib before hand-rolling" pattern doc
 The `Map::update` substitution in the same commit is a secondary improvement. The original `summarize` functions used the `match get → set` pattern for counting: look up the current count, add one, write it back. This is correct but verbose. `Map::update` encodes the "modify or initialize" pattern as a single call, making the intent clearer. The tradeoff: the callback takes `V?` and returns `V?`, which requires a `match` inside — not dramatically shorter than the original, but semantically more precise. The commit uses it because it expresses the mutation pattern directly rather than decomposing it into read-then-write.
 
 The structural lesson is the same as the strutil migration, but at a smaller scale. The bubble sorts were invisible at the function level — each one worked, the tests passed, and the code was readable. The problem was visible only at the pattern level: four copies of the same algorithm doing what the stdlib already does better. AGENTS.md warns about this. The fix is to keep auditing for it.
+
+
+### builder.mbt strutil migration — the fourth cleanup
+
+`src/builder/builder.mbt` is the largest file in the codebase (~5700 lines). It contained 12 local utility functions with `_builder` suffixes that were exact or near-exact duplicates of functions already in `src/strutil/strutil.mbt`:
+
+**Migrated (12 functions):**
+- `char_at_builder` → `@strutil.char_at` (identical)
+- `substr_builder` → `@strutil.substr` (identical)
+- `trim_builder` → `@strutil.trim_h` (both trim horizontal whitespace only: space, tab, CR)
+- `escape_html_builder` → `@strutil.escape_html_attr` (both escape `& < > "`; `escape_html_body` only escapes `& < >`)
+- `normalize_base_url_builder` → `@strutil.normalize_base_url` (identical)
+- `absolute_url_builder` → `@strutil.absolute_url` (identical)
+- `starts_with_builder` → `@strutil.starts_with` (identical)
+- `split_lines_builder` → `@strutil.split_lines` (identical)
+- `join_lines_builder` → `@strutil.join_lines` (identical)
+- `is_digit_builder` → `@strutil.is_digit` (identical)
+- `starts_with_at_builder` → `@strutil.starts_with_at` (identical)
+- `parse_int_builder` → `@strutil.parse_int` (strutil is a superset — also handles negative numbers)
+
+**Kept as local (18+ functions, no strutil equivalent):**
+- `path_basename_builder`, `is_blank_builder`, `truncate_to_builder`, `collapse_whitespace_builder`, `count_leading_hashes_builder`, `is_heading_line_builder`, `is_hrule_builder`, `is_fence_start_builder`, `fence_char_builder`, `is_fence_end_builder`, `is_unordered_item_builder`, `is_ordered_item_builder`, `is_blockquote_line_builder`, `is_block_starter_builder`, `inline_text_builder`, `inlines_text_builder`, `extract_excerpt_builder`, `page_title_builder`, and all structured data helpers.
+
+**Why this keeps happening.** This is the fourth time the exact same duplication pattern has been found and cleaned up — after the shortcode migration, the main strutil migration, and the bubble sort cleanup. The root cause is that `builder.mbt` grew incrementally. Each utility was written inline during feature development because it was needed immediately, and the developer (whether human or AI) didn't audit the existing `@strutil` module before writing. The `_builder` suffix was even a naming convention that *should* have been a signal — "this probably belongs somewhere else" — but the convention normalized the duplication instead of preventing it.
+
+**The honest limitation.** MoonBit's type system can prevent many classes of bugs (schema mismatches, broken wikilinks, invalid dates), but it cannot detect *semantic duplication*. Two functions with different names, in different packages, that happen to do the same thing are invisible to the type checker. This is a linting concern, not a type-system concern. The fix is procedural: periodic audits, grep-based deduplication passes, and the discipline of checking `@strutil` before writing any new string utility. The fact that it took four passes to catch all instances in one file suggests we should add a CI check that flags new `_builder`-suffixed functions in any package that imports `@strutil`.
+
+Result: 191 lines removed, 85 call sites migrated to `@strutil`, all 475 tests passing.
