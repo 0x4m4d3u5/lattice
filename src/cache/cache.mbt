@@ -134,7 +134,7 @@ fn parse_entry_cache(
       raise ParseFailure("unterminated entry object")
     }
     if @strutil.char_at(source, i) == '}' {
-      if not(seen_slug) || not(seen_fingerprint) {
+      if !seen_slug || !seen_fingerprint {
         raise ParseFailure("entry missing required field")
       }
       return ({ slug, fingerprint }, i + 1)
@@ -159,7 +159,7 @@ fn parse_entry_cache(
       raise ParseFailure("unterminated entry object")
     }
     if @strutil.char_at(source, i) == '}' {
-      if not(seen_slug) || not(seen_fingerprint) {
+      if !seen_slug || !seen_fingerprint {
         raise ParseFailure("entry missing required field")
       }
       return ({ slug, fingerprint }, i + 1)
@@ -288,7 +288,7 @@ fn from_file(output_dir : String, file : CacheFile) -> CacheStore {
 ///|
 pub fn load(output_dir : String) -> Result[CacheStore, CacheError] {
   let path = cache_path(output_dir)
-  if not(@fs.path_exists(path)) {
+  if !@fs.path_exists(path) {
     return Ok(empty(output_dir))
   }
   let source = @fs.read_file_to_string(path) catch {
@@ -352,7 +352,7 @@ pub fn should_skip(
   if force_rebuild {
     return false
   }
-  if not(@fs.path_exists(output_path)) {
+  if !@fs.path_exists(output_path) {
     return false
   }
   match lookup(store, slug) {

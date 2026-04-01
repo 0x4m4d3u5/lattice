@@ -51,7 +51,7 @@ pub fn render_graph_json(pages : Array[GraphPage]) -> String {
     let mut j = 0
     while j < page.outgoing.length() {
       let edge = page.outgoing[j]
-      if not(first_edge) {
+      if !first_edge {
         buf.write_string(",\n")
       }
       buf.write_string("    {\"source\": ")
@@ -64,7 +64,7 @@ pub fn render_graph_json(pages : Array[GraphPage]) -> String {
     }
     i = i + 1
   }
-  if not(first_edge) {
+  if !first_edge {
     buf.write_char('\n')
   }
   buf.write_string("  ]\n")

@@ -85,8 +85,8 @@ test "lint format_summary empty" {
   let summary = summarize(result)
   let text = format_summary(summary)
   assert_true(text.contains("Summary: 0 violation(s)"))
-  assert_true(not(text.contains("By type:")))
-  assert_true(not(text.contains("By file:")))
+  assert_true(!text.contains("By type:"))
+  assert_true(!text.contains("By file:"))
 }
 
 ///|

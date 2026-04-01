@@ -153,7 +153,7 @@ fn slugify_heading_text(text : String) -> String {
       buf.write_char(lower)
       wrote_any = true
       wrote_dash = false
-    } else if wrote_any && not(wrote_dash) {
+    } else if wrote_any && !wrote_dash {
       buf.write_char('-')
       wrote_dash = true
     }
@@ -275,7 +275,7 @@ fn preprocess_callout_next_line(body : String) -> String {
         Ok(call) =>
           if call.name == "callout" &&
             i + 1 < ls.length() &&
-            not(is_blank(ls[i + 1])) {
+            !is_blank(ls[i + 1]) {
             let merged = @strutil.trim(line) +
               " " +
               @strutil.trim(ls[i + 1]) +
@@ -839,7 +839,7 @@ fn is_separator_cell(cell : String) -> Bool {
 ///|
 /// A separator row has at least one cell and every cell is a separator cell.
 fn is_separator_row(line : String) -> Bool {
-  if not(line.contains("|")) && not(line.contains("-")) {
+  if !line.contains("|") && !line.contains("-") {
     return false
   }
   let cells = split_table_row(line)
@@ -848,7 +848,7 @@ fn is_separator_row(line : String) -> Bool {
   }
   let mut i = 0
   while i < cells.length() {
-    if not(is_separator_cell(cells[i])) {
+    if !is_separator_cell(cells[i]) {
       return false
     }
     i = i + 1
@@ -891,7 +891,7 @@ fn is_definition_line(line : String) -> Bool {
 /// (a non-blank line followed by a definition line)
 fn is_definition_term_start(ls : Array[String], i : Int) -> Bool {
   i < ls.length() &&
-  not(is_blank(ls[i])) &&
+  !is_blank(ls[i]) &&
   i + 1 < ls.length() &&
   is_definition_line(ls[i + 1])
 }
@@ -942,7 +942,7 @@ pub fn parse_blocks_with_footnotes(
       let lang = fence_lang_tag(line)
       let code_lines : Array[String] = []
       i = i + 1
-      while i < n && not(is_fence_end(ls[i], fence_char)) {
+      while i < n && !is_fence_end(ls[i], fence_char) {
         code_lines.push(ls[i])
         i = i + 1
       }
@@ -1051,7 +1051,7 @@ pub fn parse_blocks_with_footnotes(
       i = i + 2 // consume header + separator
       // parse data rows until a non-table line or blank line
       let rows : Array[Array[Array[Inline]]] = []
-      while i < n && is_table_row_line(ls[i]) && not(is_blank(ls[i])) {
+      while i < n && is_table_row_line(ls[i]) && !is_blank(ls[i]) {
         let row_cells = split_table_row(ls[i])
         let row_inlines : Array[Array[Inline]] = []
         k = 0
@@ -1067,7 +1067,7 @@ pub fn parse_blocks_with_footnotes(
     } else {
       // paragraph: accumulate non-blank, non-block-starter lines
       let para_lines : Array[String] = []
-      while i < n && not(is_blank(ls[i])) && not(is_block_starter(ls[i])) {
+      while i < n && !is_blank(ls[i]) && !is_block_starter(ls[i]) {
         para_lines.push(ls[i])
         i = i + 1
       }

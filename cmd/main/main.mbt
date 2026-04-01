@@ -275,9 +275,7 @@ fn build_parser() -> @clap.Parser {
           "collection": @clap.Arg::positional(
             help="Collection name (e.g. posts)",
           ),
-          "slug": @clap.Arg::positional(
-            help="Content slug (e.g. my-new-post)",
-          ),
+          "slug": @clap.Arg::positional(help="Content slug (e.g. my-new-post)"),
           "config": @clap.Arg::named(
             short='c',
             nargs=One,
@@ -814,18 +812,14 @@ fn run_main() -> Unit {
   // Handle 'new' subcommand — load config + collections, then scaffold content file
   if subcmd_name == "new" {
     if subcmd_sv.positional_args.length() < 2 {
-      print_diagnostic_main(
-        cli_error("usage: lattice new <collection> <slug>"),
-      )
+      print_diagnostic_main(cli_error("usage: lattice new <collection> <slug>"))
       @sys.exit(1)
       return
     }
     let collection_name = subcmd_sv.positional_args[0]
     let slug = subcmd_sv.positional_args[1]
     let config_raw = safe_get_one(subcmd_sv, "config").unwrap_or("")
-    let collections_raw = safe_get_one(subcmd_sv, "collections").unwrap_or(
-      "",
-    )
+    let collections_raw = safe_get_one(subcmd_sv, "collections").unwrap_or("")
     // Load config to discover collections
     let config_path = if config_raw.length() > 0 {
       config_raw
@@ -905,11 +899,7 @@ fn run_main() -> Unit {
             "collection '" +
             collection_name +
             "' not found — available: " +
-            available
-              .iter()
-              .map(fn(n) { "'" + n + "'" })
-              .collect()
-              .to_string(),
+            available.iter().map(fn(n) { "'" + n + "'" }).collect().to_string(),
           ),
         )
         @sys.exit(1)
@@ -930,7 +920,7 @@ fn run_main() -> Unit {
   let options = cli_options_from_clap(subcmd_sv, subcmd_name)
 
   // Validate port for serve
-  if options.serve_mode && not(@serve.is_valid_port(options.serve_port)) {
+  if options.serve_mode && !@serve.is_valid_port(options.serve_port) {
     print_diagnostic_main(
       cli_error("invalid port: " + options.serve_port.to_string()),
     )
@@ -948,7 +938,7 @@ fn run_main() -> Unit {
 
   if options.serve_mode {
     let output_dir = state.build_config.output_dir
-    if not(@serve.start(options.serve_port, output_dir)) {
+    if !@serve.start(options.serve_port, output_dir) {
       print_diagnostic_main(
         cli_error(
           "failed to start dev server on port " +

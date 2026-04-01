@@ -39,7 +39,7 @@ fn parse_fixed_uint(s : String, start : Int, count : Int) -> Int? {
   let mut value = 0
   while i < count {
     let c = @strutil.char_at(s, start + i)
-    if not(@strutil.is_digit(c)) {
+    if !@strutil.is_digit(c) {
       return None
     }
     value = value * 10 + (c.to_int() - '0'.to_int())

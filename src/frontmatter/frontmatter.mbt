@@ -96,15 +96,15 @@ fn is_valid_iso8601_date(s : String) -> Bool {
     return false
   }
   // Extract and validate year (YYYY) - positions 0-3
-  if not(@strutil.is_digit(@strutil.char_at(s, 0))) ||
-    not(@strutil.is_digit(@strutil.char_at(s, 1))) ||
-    not(@strutil.is_digit(@strutil.char_at(s, 2))) ||
-    not(@strutil.is_digit(@strutil.char_at(s, 3))) {
+  if !@strutil.is_digit(@strutil.char_at(s, 0)) ||
+    !@strutil.is_digit(@strutil.char_at(s, 1)) ||
+    !@strutil.is_digit(@strutil.char_at(s, 2)) ||
+    !@strutil.is_digit(@strutil.char_at(s, 3)) {
     return false
   }
   // Extract and validate month (MM) - positions 5-6
-  if not(@strutil.is_digit(@strutil.char_at(s, 5))) ||
-    not(@strutil.is_digit(@strutil.char_at(s, 6))) {
+  if !@strutil.is_digit(@strutil.char_at(s, 5)) ||
+    !@strutil.is_digit(@strutil.char_at(s, 6)) {
     return false
   }
   let month_1 = @strutil.char_at(s, 5).to_int() - '0'.to_int()
@@ -114,8 +114,8 @@ fn is_valid_iso8601_date(s : String) -> Bool {
     return false
   }
   // Extract and validate day (DD) - positions 8-9
-  if not(@strutil.is_digit(@strutil.char_at(s, 8))) ||
-    not(@strutil.is_digit(@strutil.char_at(s, 9))) {
+  if !@strutil.is_digit(@strutil.char_at(s, 8)) ||
+    !@strutil.is_digit(@strutil.char_at(s, 9)) {
     return false
   }
   let day_1 = @strutil.char_at(s, 8).to_int() - '0'.to_int()
@@ -163,20 +163,20 @@ fn parse_float_str(s : String) -> Result[Double, String] {
       i = i + 1
       break
     }
-    if not(@strutil.is_digit(c)) {
+    if !@strutil.is_digit(c) {
       return Err("invalid character in float")
     }
     value = value * 10.0 + (c.to_int() - '0'.to_int()).to_double()
     i = i + 1
   }
-  if not(has_dot) {
+  if !has_dot {
     return Err("no decimal point in float")
   }
   // Parse fractional part
   let mut divisor = 10.0
   while i < n {
     let c = @strutil.char_at(s, i)
-    if not(@strutil.is_digit(c)) {
+    if !@strutil.is_digit(c) {
       return Err("invalid character in float fractional part")
     }
     value = value + (c.to_int() - '0'.to_int()).to_double() / divisor
@@ -207,7 +207,7 @@ fn parse_int_str(s : String) -> Result[Int, String] {
   let mut value = 0
   while i < n {
     let c = @strutil.char_at(s, i)
-    if not(@strutil.is_digit(c)) {
+    if !@strutil.is_digit(c) {
       return Err("invalid digit in integer")
     }
     value = value * 10 + (c.to_int() - '0'.to_int())
@@ -462,7 +462,7 @@ fn parse_yaml_assignment(
 /// Parse YAML frontmatter (--- delimited).
 pub fn parse_yaml(content : String) -> Result[Frontmatter, String] {
   let n = content.length()
-  if not(@strutil.starts_with_at(content, 0, "---")) {
+  if !@strutil.starts_with_at(content, 0, "---") {
     return Err("missing opening '---' delimiter")
   }
   let first_nl = next_newline(content, 3)
@@ -508,7 +508,7 @@ pub fn parse_yaml(content : String) -> Result[Frontmatter, String] {
 /// Parse TOML frontmatter (+++ delimited).
 pub fn parse_toml(content : String) -> Result[Frontmatter, String] {
   let n = content.length()
-  if not(@strutil.starts_with_at(content, 0, "+++")) {
+  if !@strutil.starts_with_at(content, 0, "+++") {
     return Err("missing opening '+++' delimiter")
   }
   let first_nl = next_newline(content, 3)

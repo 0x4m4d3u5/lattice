@@ -17,7 +17,7 @@ test "diagnostic formats file line severity and message on one line" {
       "\u001b[31m\u001b[1m[error]\u001b[0m missing required field 'title'",
     ),
   )
-  assert_true(not(rendered.contains("\n")))
+  assert_true(!rendered.contains("\n"))
 }
 
 ///|

@@ -1,6 +1,6 @@
 ///|
 fn ensure_dir_test(path : String) -> Unit {
-  if not(@fs.path_exists(path)) {
+  if !@fs.path_exists(path) {
     @fs.create_dir(path) catch {
       @fs.IOError(_) => ()
     }
@@ -442,7 +442,7 @@ test "build uses per-collection page template override" {
     @fs.IOError(_) => ""
   }
   assert_true(output.contains("override"))
-  assert_true(not(output.contains("default")))
+  assert_true(!output.contains("default"))
 }
 
 ///|
@@ -670,7 +670,7 @@ test "build uses per-collection page_size override from inline collections" {
   assert_eq(result.errors, 0)
 
   assert_true(@fs.path_exists(output_root + "/posts/page/2/index.html"))
-  assert_true(not(@fs.path_exists(output_root + "/notes/page/2/index.html")))
+  assert_true(!@fs.path_exists(output_root + "/notes/page/2/index.html"))
 }
 
 ///|
@@ -836,7 +836,7 @@ test "build inline collections without page_size does not paginate" {
   )
   assert_eq(result.errors, 0)
 
-  assert_true(not(@fs.path_exists(output_root + "/posts/page/2/index.html")))
+  assert_true(!@fs.path_exists(output_root + "/posts/page/2/index.html"))
 }
 
 ///|
@@ -1155,7 +1155,7 @@ test "build table_of_contents slot is empty when toc disabled" {
     @fs.IOError(_) => ""
   }
   assert_true(output.contains("<aside></aside>"))
-  assert_true(not(output.contains("table-of-contents")))
+  assert_true(!output.contains("table-of-contents"))
 }
 
 ///|
@@ -1243,7 +1243,7 @@ test "build table_of_contents depth filters deeper headings" {
     @fs.IOError(_) => ""
   }
   assert_true(output.contains("href=\"#intro\""))
-  assert_true(not(output.contains("href=\"#setup\"")))
+  assert_true(!output.contains("href=\"#setup\""))
 }
 
 ///|

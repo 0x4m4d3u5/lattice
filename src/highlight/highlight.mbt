@@ -228,7 +228,7 @@ fn tokenize_with_rules(
                 buf.write_char(@strutil.char_at(source, i))
                 i = i + 1
               }
-              if not(done) {
+              if !done {
                 i = n
               }
               push_token(tokens, TokenKind::Comment, buf)
@@ -998,7 +998,7 @@ pub fn tokenize_css(source : String) -> Array[Token] {
     }
     let text = buf.to_string()
     if text.length() > 0 {
-      if in_block && not(expect_value) {
+      if in_block && !expect_value {
         tokens.push({ kind: TokenKind::Keyword, text })
       } else if expect_value {
         tokens.push({ kind: TokenKind::StringLit, text })
