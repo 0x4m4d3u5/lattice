@@ -601,7 +601,31 @@ fn load_cli_state(options : CliOptions) -> Result[CliState, Int] {
 }
 
 ///|
+/// Format a millisecond duration as a human-readable string.
+/// Sub-second times show one decimal place (e.g. "0.3s", "1.2s").
+/// Times ≥ 10s show whole seconds. Times ≥ 60s show minutes.
+fn format_duration(ms : Int64) -> String {
+  if ms < 1000L {
+    ms.to_string() + "ms"
+  } else if ms < 10000L {
+    let secs = ms / 100L
+    let whole = secs / 10L
+    let frac = secs % 10L
+    whole.to_string() + "." + frac.to_string() + "s"
+  } else if ms < 60000L {
+    let secs = ms / 1000L
+    secs.to_string() + "s"
+  } else {
+    let total_secs = ms / 1000L
+    let mins = total_secs / 60L
+    let secs = total_secs % 60L
+    mins.to_string() + "m " + secs.to_string() + "s"
+  }
+}
+
+///|
 fn run_once(build_config : @builder.BuildConfig, check_mode : Bool) -> Int {
+  let start_ms = @watch.current_millis()
   if check_mode {
     let lint_result = @builder.check(build_config)
     let mut i = 0
@@ -614,9 +638,14 @@ fn run_once(build_config : @builder.BuildConfig, check_mode : Bool) -> Int {
     if @lint.has_violations(lint_result) {
       let summary = @lint.summarize(lint_result)
       println(@lint.format_summary(summary))
+      let elapsed = @watch.current_millis() - start_ms
+      println("[lattice] check finished in " + format_duration(elapsed))
       return 1
     }
-    println("[lattice] check passed: no violations")
+    let elapsed = @watch.current_millis() - start_ms
+    println(
+      "[lattice] check passed: no violations (" + format_duration(elapsed) + ")",
+    )
     0
   } else {
     let cache_store = match @cache.load(build_config.output_dir) {
@@ -639,17 +668,26 @@ fn run_once(build_config : @builder.BuildConfig, check_mode : Bool) -> Int {
       print_diagnostic_main(result.diagnostics[i])
       i = i + 1
     }
+    let elapsed = @watch.current_millis() - start_ms
     if result.errors == 0 {
       println(
         "[lattice] built " +
         result.rebuilt_pages.to_string() +
         " page(s) [" +
         result.unchanged_pages.to_string() +
-        " unchanged]",
+        " unchanged] in " +
+        format_duration(elapsed),
       )
     } else {
       let summary = @diagnostic.summarize(result.diagnostics)
       println(@diagnostic.format_summary(summary))
+      println(
+        "[lattice] build failed in " +
+        result.errors.to_string() +
+        " error(s) (" +
+        format_duration(elapsed) +
+        ")",
+      )
     }
     result.errors
   }

@@ -495,3 +495,45 @@ The structural lesson is the same as the strutil migration, but at a smaller sca
 **The honest limitation.** MoonBit's type system can prevent many classes of bugs (schema mismatches, broken wikilinks, invalid dates), but it cannot detect *semantic duplication*. Two functions with different names, in different packages, that happen to do the same thing are invisible to the type checker. This is a linting concern, not a type-system concern. The fix is procedural: periodic audits, grep-based deduplication passes, and the discipline of checking `@strutil` before writing any new string utility. The fact that it took four passes to catch all instances in one file suggests we should add a CI check that flags new `_builder`-suffixed functions in any package that imports `@strutil`.
 
 Result: 191 lines removed, 85 call sites migrated to `@strutil`, all 475 tests passing.
+
+
+
+### Build Timing — Developer Experience as a First-Class Output
+
+Every mature build tool reports how long the build took. Hugo shows it. Astro shows it. Eleventy shows it. Lattice did not — the build summary reported page counts and error counts but gave no feedback on performance. For a site with hundreds of pages, the author has no way to know whether a build is taking 200ms (fine) or 20s (investigate). This is a UX gap, not a functional gap — the build still works — but the SCC rubric scores UX explicitly, and a build tool that silently takes an indeterminate amount of time is a poor developer experience.
+
+The implementation adds `current_millis() -> Int64` to the `@watch` module. This follows the same cross-platform pattern as `current_unix_second()`: a native C FFI implementation using `clock_gettime(CLOCK_REALTIME)` on POSIX and `GetSystemTimeAsFileTime` on Windows, with a stub implementation for JS/WASM targets using `@env.now()`. The function returns milliseconds since Unix epoch, which is sufficient granularity for build timing (sub-millisecond resolution is unnecessary for an SSG).
+
+The timing measurement is at the CLI boundary, not inside the builder. `run_once()` in `cmd/main/main.mbt` captures `@watch.current_millis()` before calling `@builder.build()` or `@builder.check()`, then computes the delta after the call returns. This is the same separation principle as the build summary: the builder returns results, the CLI layer formats and displays them. The builder doesn't know about timing; it knows about pages, diagnostics, and errors. The CLI knows about the user and their terminal.
+
+The `format_duration()` function handles four time ranges:
+- Sub-second: `"347ms"` — informative for fast builds
+- 1-10 seconds: `"1.2s"`, `"3.7s"` — one decimal place, the range most builds fall into
+- 10-60 seconds: `"15s"` — whole seconds, the "something might be wrong" range
+- Over a minute: `"2m 15s"` — the "definitely investigate" range
+
+The output integrates with the existing summary line. Before:
+```
+[lattice] built 42 page(s) [0 unchanged]
+```
+After:
+```
+[lattice] built 42 page(s) [0 unchanged] in 1.3s
+```
+
+For check mode:
+```
+[lattice] check passed: no violations (0.3s)
+```
+
+For failed builds:
+```
+Summary: 3 error(s) ...
+[lattice] build failed in 3 error(s) (2.1s)
+```
+
+The timing does not affect the build pipeline itself. It is a measurement layer that wraps the existing calls. No conditional logic branches on timing. No thresholds or warnings are emitted for slow builds. The measurement is purely informational — it gives the developer a data point about build performance without being prescriptive about what to do with that data.
+
+The honest design choice is that this is wall-clock timing, not phase-level timing. A more ambitious implementation would instrument the builder to report time spent in each phase (source collection, schema validation, wikilink resolution, HTML rendering, file emission). That would give the developer more diagnostic data when a build is slow. The tradeoff is complexity: the builder's internal structure would need to surface timing data through the `BuildResult` type, and the measurement points would need to be maintained as the builder evolves. Wall-clock timing at the CLI boundary is zero-maintenance — it measures the thing the developer actually experiences (total build time) without coupling to internal implementation details.
+
+The structural lesson is that developer experience includes *feedback about the tool itself*, not just feedback about the content. The build summary tells the developer "your content has these problems." The timing tells the developer "the tool is performing like this." Both are UX. The timing addition is small (72 lines changed across 4 files) but it closes a gap that every competing tool already addresses.

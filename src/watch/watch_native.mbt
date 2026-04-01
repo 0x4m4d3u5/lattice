@@ -18,6 +18,9 @@ extern "C" fn watch_clear_interrupt_ffi() -> Unit = "lattice_watch_clear_interru
 extern "C" fn watch_current_unix_second_ffi() -> Int64 = "lattice_watch_current_unix_second"
 
 ///|
+extern "C" fn watch_current_millis_ffi() -> Int64 = "lattice_watch_current_millis"
+
+///|
 fn string_to_utf8_bytes_watch(str : String, is_filename : Bool) -> Bytes {
   let res : Array[Byte] = []
   let len = str.length()
@@ -81,4 +84,11 @@ pub fn clear_interrupt() -> Unit {
 ///|
 pub fn current_unix_second() -> Int64 {
   watch_current_unix_second_ffi()
+}
+
+///|
+/// Return current wall-clock time in milliseconds since Unix epoch.
+/// Used for build timing and performance measurement.
+pub fn current_millis() -> Int64 {
+  watch_current_millis_ffi()
 }

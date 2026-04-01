@@ -56,3 +56,10 @@ pub fn clear_interrupt() -> Unit {
 pub fn current_unix_second() -> Int64 {
   (@env.now() / 1000UL).reinterpret_as_int64()
 }
+
+///|
+/// Return current wall-clock time in milliseconds since Unix epoch.
+/// Used for build timing and performance measurement.
+pub fn current_millis() -> Int64 {
+  @env.now().reinterpret_as_int64()
+}
