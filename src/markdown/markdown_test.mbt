@@ -94,7 +94,7 @@ test "markdown fenced code unknown language stays plain" {
   let body = "```brainlang\nloop forever\n```"
   let rendered = render(body, empty_wl())
   assert_true(rendered.contains("<pre><code class=\"language-brainlang\">"))
-  assert_true(not(rendered.contains("hl-")))
+  assert_true(!rendered.contains("hl-"))
 }
 
 ///|
@@ -102,7 +102,7 @@ test "markdown fenced code empty language stays plain" {
   let body = "```\nplain text\n```"
   let rendered = render(body, empty_wl())
   assert_true(rendered.contains("<pre><code>plain text</code></pre>"))
-  assert_true(not(rendered.contains("hl-")))
+  assert_true(!rendered.contains("hl-"))
 }
 
 ///|
@@ -155,7 +155,7 @@ test "non-table pipe line not parsed as table" {
   // A line with | but no separator row should become a paragraph
   let body = "a | b | c\nno separator here"
   let rendered = render(body, empty_wl())
-  assert_true(not(rendered.contains("<table>")))
+  assert_true(!rendered.contains("<table>"))
   assert_true(rendered.contains("<p>"))
 }
 
@@ -199,7 +199,7 @@ test "markdown bare exclamation not image" {
   let body = "Hello! World"
   let rendered = render(body, empty_wl())
   assert_true(rendered.contains("Hello! World"))
-  assert_true(not(rendered.contains("<img")))
+  assert_true(!rendered.contains("<img"))
 }
 
 ///|
@@ -221,7 +221,7 @@ test "strikethrough unclosed falls back" {
   let body = "~~hello"
   let rendered = render(body, empty_wl())
   // Unclosed ~~ should be treated as literal text, no <del> tag
-  assert_true(not(rendered.contains("<del>")))
+  assert_true(!rendered.contains("<del>"))
   assert_true(rendered.contains("~~hello"))
 }
 
@@ -260,7 +260,7 @@ test "regular list unaffected" {
   let body = "- plain item"
   let rendered = render(body, empty_wl())
   // Should not have checkbox input
-  assert_true(not(rendered.contains("<input")))
+  assert_true(!rendered.contains("<input"))
   assert_true(rendered.contains("<li>"))
   assert_true(rendered.contains("plain item"))
 }
@@ -319,7 +319,7 @@ test "footnote in paragraph" {
   assert_true(rendered.contains("This is a paragraph with a footnote"))
   assert_true(rendered.contains("<sup><a href=\"#fn-note\""))
   // Footnote definition not in main content
-  assert_true(not(rendered.contains("<p>[^note]:")))
+  assert_true(!rendered.contains("<p>[^note]:"))
 }
 
 ///|
@@ -346,7 +346,7 @@ test "footnote unresolved reference falls back" {
   let rendered = render(body, empty_wl())
   // Unresolved footnote should render as plain text
   assert_true(rendered.contains("[^missing]"))
-  assert_true(not(rendered.contains("<sup><a href=\"#fn-missing\"")))
+  assert_true(!rendered.contains("<sup><a href=\"#fn-missing\""))
 }
 
 ///|
@@ -354,7 +354,7 @@ test "footnote no section when no definitions" {
   let body = "Text[^1] but no definition"
   let rendered = render(body, empty_wl())
   // Should not have footnotes section
-  assert_true(not(rendered.contains("<section class=\"footnotes\">")))
+  assert_true(!rendered.contains("<section class=\"footnotes\">"))
 }
 
 ///|

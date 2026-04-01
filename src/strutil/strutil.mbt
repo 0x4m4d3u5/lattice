@@ -436,7 +436,7 @@ pub fn parse_int(s : String) -> Int? {
   let mut value = 0
   while i < n {
     let c = char_at(s, i)
-    if not(is_digit(c)) {
+    if !is_digit(c) {
       return None
     }
     value = value * 10 + (c.to_int() - '0'.to_int())
@@ -474,7 +474,7 @@ pub fn parse_float(s : String) -> Double? {
       i = i + 1
       break
     }
-    if not(is_digit(c)) {
+    if !is_digit(c) {
       return None
     }
     value = value * 10.0 + (c.to_int() - '0'.to_int()).to_double()
@@ -485,7 +485,7 @@ pub fn parse_float(s : String) -> Double? {
   let mut divisor = 10.0
   while i < n {
     let c = char_at(s, i)
-    if not(is_digit(c)) {
+    if !is_digit(c) {
       return None
     }
     value = value + (c.to_int() - '0'.to_int()).to_double() / divisor
@@ -493,7 +493,7 @@ pub fn parse_float(s : String) -> Double? {
     has_digits = true
     i = i + 1
   }
-  if not(has_digits) {
+  if !has_digits {
     return None
   }
   if neg {
@@ -514,7 +514,7 @@ pub fn parse_positive_int(value : String) -> Int? {
   let mut i = 0
   while i < n {
     let c = char_at(value, i)
-    if not(is_digit(c)) {
+    if !is_digit(c) {
       return None
     }
     parsed = parsed * 10 + (c.to_int() - '0'.to_int())
@@ -612,13 +612,13 @@ pub fn is_valid_iso8601_date(s : String) -> Bool {
   if char_at(s, 4) != '-' || char_at(s, 7) != '-' {
     return false
   }
-  if not(is_digit(char_at(s, 0))) ||
-    not(is_digit(char_at(s, 1))) ||
-    not(is_digit(char_at(s, 2))) ||
-    not(is_digit(char_at(s, 3))) {
+  if !is_digit(char_at(s, 0)) ||
+    !is_digit(char_at(s, 1)) ||
+    !is_digit(char_at(s, 2)) ||
+    !is_digit(char_at(s, 3)) {
     return false
   }
-  if not(is_digit(char_at(s, 5))) || not(is_digit(char_at(s, 6))) {
+  if !is_digit(char_at(s, 5)) || !is_digit(char_at(s, 6)) {
     return false
   }
   let month = (char_at(s, 5).to_int() - '0'.to_int()) * 10 +
@@ -626,7 +626,7 @@ pub fn is_valid_iso8601_date(s : String) -> Bool {
   if month < 1 || month > 12 {
     return false
   }
-  if not(is_digit(char_at(s, 8))) || not(is_digit(char_at(s, 9))) {
+  if !is_digit(char_at(s, 8)) || !is_digit(char_at(s, 9)) {
     return false
   }
   let day = (char_at(s, 8).to_int() - '0'.to_int()) * 10 +

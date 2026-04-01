@@ -245,9 +245,9 @@ test "render_page_tags HTML escaping" {
     { value: "<script>", slug: "script" },
   ]
   let html = @tags.render_page_tags(tags)
-  inspect(not(html.contains("test & demo")), content="true")
+  inspect(!html.contains("test & demo"), content="true")
   inspect(html.contains("&amp;"), content="true")
-  inspect(not(html.contains("<script>")), content="true")
+  inspect(!html.contains("<script>"), content="true")
   inspect(html.contains("&lt;"), content="true")
   inspect(html.contains("href=\"/tags/test-demo/\""), content="true")
   inspect(html.contains("href=\"/tags/script/\""), content="true")
@@ -261,7 +261,7 @@ test "render_tag_page HTML escaping" {
     pages: [{ title: "Post & Test", url: "/posts/test/", slug: "test" }],
   }
   let html = @tags.render_tag_page(page)
-  inspect(not(html.contains("test & <tag>")), content="true")
+  inspect(!html.contains("test & <tag>"), content="true")
   inspect(html.contains("test &amp; &lt;tag&gt;"), content="true")
 }
 
@@ -271,6 +271,6 @@ test "render_tag_index HTML escaping" {
     tags: [{ tag: "test & demo", slug: "test-demo", count: 1 }],
   }
   let html = @tags.render_tag_index(index)
-  inspect(not(html.contains("test & demo")), content="true")
+  inspect(!html.contains("test & demo"), content="true")
   inspect(html.contains("&amp;"), content="true")
 }

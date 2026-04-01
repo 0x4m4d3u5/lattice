@@ -174,7 +174,7 @@ fn type_matches(val : @frontmatter.FrontmatterValue, ft : FieldType) -> Bool {
           let mut ok = true
           let mut i = 0
           while i < items.length() {
-            if not(type_matches(items[i], elem)) {
+            if !type_matches(items[i], elem) {
               ok = false
               break
             }
@@ -243,7 +243,7 @@ fn is_valid_slug(s : String) -> Bool {
     let is_lower = c >= 97 && c <= 122
     let is_digit = c >= 48 && c <= 57
     let is_hyphen = c == 45
-    if not(is_lower || is_digit || is_hyphen) {
+    if !(is_lower || is_digit || is_hyphen) {
       ok = false
       break
     }
@@ -279,7 +279,7 @@ pub fn validate(
           TOptional(inner) => inner
           t => t
         }
-        if not(type_matches(val, expected)) {
+        if !type_matches(val, expected) {
           // Specialized error message for enum and slug mismatches
           let error_msg = match (expected, val) {
             (TString(minlen, maxlen), @frontmatter.FStr(s)) => {

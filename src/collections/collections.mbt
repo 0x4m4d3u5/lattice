@@ -114,12 +114,12 @@ fn is_valid_field_name(name : String) -> Bool {
   if name.length() == 0 {
     return false
   }
-  if not(is_field_name_start(@strutil.char_at(name, 0))) {
+  if !is_field_name_start(@strutil.char_at(name, 0)) {
     return false
   }
   let mut i = 1
   while i < name.length() {
-    if not(is_field_name_char(@strutil.char_at(name, i))) {
+    if !is_field_name_char(@strutil.char_at(name, i)) {
       return false
     }
     i = i + 1
@@ -143,12 +143,12 @@ fn parse_section_header(
   }
   if starts_with_collections(section, "data.") {
     let name = @strutil.trim(@strutil.substr(section, 5, section.length()))
-    if not(is_valid_field_name(name)) {
+    if !is_valid_field_name(name) {
       return Err(InvalidLine(line_no, "invalid data schema name"))
     }
     return Ok(DataSection(name))
   }
-  if not(is_valid_field_name(section)) {
+  if !is_valid_field_name(section) {
     return Err(InvalidLine(line_no, "invalid collection name"))
   }
   Ok(CollectionSection(section))
@@ -353,7 +353,7 @@ fn parse_field_type_at(
       let mut maxlen_val : Int? = None
       let mut j = p + 1
       let mut done = false
-      while j < s.length() && not(done) {
+      while j < s.length() && !done {
         let q = skip_ws_type(s, j)
         if q < s.length() && @strutil.char_at(s, q) == ')' {
           j = q + 1
@@ -390,7 +390,7 @@ fn parse_field_type_at(
           return Err("unexpected content in String() bounds")
         }
       }
-      if not(done) {
+      if !done {
         return Err("expected ')' to close String bounds")
       }
       return Ok((@schema.TString(minlen_val, maxlen_val), j))
@@ -405,7 +405,7 @@ fn parse_field_type_at(
       let mut before_val : String? = None
       let mut j = p + 1
       let mut done = false
-      while j < s.length() && not(done) {
+      while j < s.length() && !done {
         let q = skip_ws_type(s, j)
         if q < s.length() && @strutil.char_at(s, q) == ')' {
           j = q + 1
@@ -442,7 +442,7 @@ fn parse_field_type_at(
           return Err("unexpected content in Date() bounds")
         }
       }
-      if not(done) {
+      if !done {
         return Err("expected ')' to close Date bounds")
       }
       return Ok((@schema.TDate(after_val, before_val), j))
@@ -458,7 +458,7 @@ fn parse_field_type_at(
       let mut j = p + 1
       // Parse key=value pairs separated by commas
       let mut done = false
-      while j < s.length() && not(done) {
+      while j < s.length() && !done {
         let q = skip_ws_type(s, j)
         if q < s.length() && @strutil.char_at(s, q) == ')' {
           j = q + 1
@@ -495,7 +495,7 @@ fn parse_field_type_at(
           return Err("unexpected content in Int() bounds")
         }
       }
-      if not(done) {
+      if !done {
         return Err("expected ')' to close Int bounds")
       }
       return Ok((@schema.TInt(min_val, max_val), j))
@@ -510,7 +510,7 @@ fn parse_field_type_at(
       let mut max_val : Double? = None
       let mut j = p + 1
       let mut done = false
-      while j < s.length() && not(done) {
+      while j < s.length() && !done {
         let q = skip_ws_type(s, j)
         if q < s.length() && @strutil.char_at(s, q) == ')' {
           j = q + 1
@@ -547,7 +547,7 @@ fn parse_field_type_at(
           return Err("unexpected content in Float() bounds")
         }
       }
-      if not(done) {
+      if !done {
         return Err("expected ')' to close Float bounds")
       }
       return Ok((@schema.TFloat(min_val, max_val), j))
@@ -642,24 +642,24 @@ fn parse_schema_fields(
   while i <= n {
     let at_end = i == n
     let c = if at_end { ',' } else { @strutil.char_at(schema_text, i) }
-    if not(at_end) && c == '[' {
+    if !at_end && c == '[' {
       depth = depth + 1
       i = i + 1
       continue
     }
-    if not(at_end) && c == ']' {
+    if !at_end && c == ']' {
       if depth > 0 {
         depth = depth - 1
       }
       i = i + 1
       continue
     }
-    if not(at_end) && c == '(' {
+    if !at_end && c == '(' {
       depth = depth + 1
       i = i + 1
       continue
     }
-    if not(at_end) && c == ')' {
+    if !at_end && c == ')' {
       if depth > 0 {
         depth = depth - 1
       }
@@ -688,7 +688,7 @@ fn parse_schema_fields(
         }
 
         let field_name = @strutil.trim(@strutil.substr(entry, 0, colon))
-        if not(is_valid_field_name(field_name)) {
+        if !is_valid_field_name(field_name) {
           return Err(
             InvalidSchema(collection_name, "invalid field name: " + field_name),
           )

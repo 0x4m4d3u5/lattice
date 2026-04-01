@@ -12,7 +12,7 @@ fn hash_bytes_watch(bytes : Bytes) -> Int64 {
 
 ///|
 fn mtime_millis_internal(path : String) -> Int64 {
-  if not(@fs.path_exists(path)) {
+  if !@fs.path_exists(path) {
     return -1L
   }
   let is_dir = @fs.is_dir(path) catch { @fs.IOError(_) => return -1L }

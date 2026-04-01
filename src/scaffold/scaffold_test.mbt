@@ -20,10 +20,7 @@ test "stub_for_field_type - TString with maxlen shorter than placeholder" {
 test "stub_for_field_type - TString with minlen requiring padding" {
   let result = stub_for_field_type(@schema.TString(Some(20), None))
   assert_eq(result.length(), 20)
-  assert_eq(
-    @strutil.substr(result, 0, 11),
-    "placeholder",
-  )
+  assert_eq(@strutil.substr(result, 0, 11), "placeholder")
 }
 
 ///|
@@ -94,9 +91,7 @@ test "stub_for_field_type - TRef" {
 
 ///|
 test "stub_for_field_type - TArray" {
-  let result = stub_for_field_type(
-    @schema.TArray(@schema.TString(None, None)),
-  )
+  let result = stub_for_field_type(@schema.TArray(@schema.TString(None, None)))
   assert_eq(result, "[]")
 }
 
@@ -135,32 +130,14 @@ test "generate_frontmatter - basic schema" {
   // Should start with ---
   assert_eq(lines[0], "---")
   // Required fields emitted as values
-  inspect(
-    lines[1],
-    content="title: placeholder",
-  )
-  inspect(
-    lines[2],
-    content="date: 2026-01-01",
-  )
+  inspect(lines[1], content="title: placeholder")
+  inspect(lines[2], content="date: 2026-01-01")
   // Optional fields emitted as comments
-  inspect(
-    lines[3],
-    content="# tags:",
-  )
-  inspect(
-    lines[4],
-    content="#   - value",
-  )
-  inspect(
-    lines[5],
-    content="# draft: ",
-  )
+  inspect(lines[3], content="# tags:")
+  inspect(lines[4], content="#   - value")
+  inspect(lines[5], content="# draft: ")
   // Should end with ---
-  inspect(
-    lines[6],
-    content="---",
-  )
+  inspect(lines[6], content="---")
 }
 
 ///|
@@ -180,14 +157,8 @@ test "generate_frontmatter - array field required" {
     .split("\n")
     .map(fn(sv) { sv.to_string() })
     .collect()
-  inspect(
-    lines[1],
-    content="items:",
-  )
-  inspect(
-    lines[2],
-    content="  - placeholder",
-  )
+  inspect(lines[1], content="items:")
+  inspect(lines[2], content="  - placeholder")
 }
 
 ///|
@@ -207,10 +178,7 @@ test "generate_frontmatter - TInt with min" {
     .split("\n")
     .map(fn(sv) { sv.to_string() })
     .collect()
-  inspect(
-    lines[1],
-    content="priority: 1",
-  )
+  inspect(lines[1], content="priority: 1")
 }
 
 ///|
@@ -237,18 +205,18 @@ test "new_content_file - refuses to overwrite existing file" {
       { name: "title", field_type: @schema.TString(None, None), required: true },
     ],
   }
-  @fs.create_dir(test_dir) catch { _ => () }
+  @fs.create_dir(test_dir) catch {
+    _ => ()
+  }
   let path = test_dir + "/existing.md"
   // Create the file first
-  @fs.write_string_to_file(path, "existing") catch { _ => () }
+  @fs.write_string_to_file(path, "existing") catch {
+    _ => ()
+  }
   let result = new_content_file(test_dir, schema, "existing")
   match result {
-    Err(msg) => {
-      assert_eq(
-        @strutil.starts_with(msg, "file already exists"),
-        true,
-      )
-    }
+    Err(msg) =>
+      assert_eq(@strutil.starts_with(msg, "file already exists"), true)
     Ok(_) => fail("expected error for existing file")
   }
   // Clean up

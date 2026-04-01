@@ -27,7 +27,7 @@ pub fn render_robots_txt(
   base_url : String,
   robots_txt_enabled : Bool,
 ) -> String {
-  if not(robots_txt_enabled) {
+  if !robots_txt_enabled {
     return ""
   }
 

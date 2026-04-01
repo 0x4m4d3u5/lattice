@@ -190,7 +190,7 @@ test "render_feed handles empty pages array" {
     content="true",
   )
   inspect(feed.contains("<title>Empty Site</title>"), content="true")
-  inspect(not(feed.contains("<entry>")), content="true")
+  inspect(!feed.contains("<entry>"), content="true")
 }
 
 ///|
@@ -210,9 +210,9 @@ test "render_feed XML character escaping" {
   inspect(feed.contains("&amp;"), content="true")
   inspect(feed.contains("&lt;"), content="true")
   inspect(feed.contains("&gt;"), content="true")
-  inspect(not(feed.contains(" & ")), content="true")
-  inspect(not(feed.contains(" < ")), content="true")
-  inspect(not(feed.contains(" > ")), content="true")
+  inspect(!feed.contains(" & "), content="true")
+  inspect(!feed.contains(" < "), content="true")
+  inspect(!feed.contains(" > "), content="true")
 }
 
 ///|
@@ -252,7 +252,7 @@ test "render_feed respects limit parameter" {
   )
   inspect(limited_feed.contains("<title>Post 3</title>"), content="true")
   inspect(limited_feed.contains("<title>Post 2</title>"), content="true")
-  inspect(not(limited_feed.contains("<title>Post 1</title>")), content="true")
+  inspect(!limited_feed.contains("<title>Post 1</title>"), content="true")
 
   let full_feed = @rss.render_feed("Test", "https://example.com", pages, None)
   inspect(full_feed.contains("<title>Post 3</title>"), content="true")
@@ -276,6 +276,6 @@ test "render_feed with limit of 1" {
   let feed = @rss.render_feed("Test", "https://example.com", pages, Some(1))
 
   inspect(feed.contains("<title>Second Post</title>"), content="true")
-  inspect(not(feed.contains("<title>First Post</title>")), content="true")
-  inspect(not(feed.contains("<title>Third Post</title>")), content="true")
+  inspect(!feed.contains("<title>First Post</title>"), content="true")
+  inspect(!feed.contains("<title>Third Post</title>"), content="true")
 }

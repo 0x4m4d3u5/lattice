@@ -25,13 +25,13 @@ fn collect_snapshot_entries(
   entries : Array[SnapshotEntry],
 ) -> Unit raise WatchError {
   entries.push({ path, stamp: file_mtime_millis(path) })
-  if not(@fs.path_exists(path)) {
+  if !@fs.path_exists(path) {
     return
   }
   let is_dir = @fs.is_dir(path) catch {
     @fs.IOError(msg) => raise IOError("cannot stat " + path + ": " + msg)
   }
-  if not(is_dir) {
+  if !is_dir {
     return
   }
   let children = @fs.read_dir(path) catch {

@@ -62,7 +62,7 @@ pub fn extract(
                 let tag_value = @strutil.trim(raw)
                 if tag_value.length() > 0 {
                   let tag_slug = @slug.filename_to_slug(tag_value)
-                  if not(seen.contains(tag_slug)) {
+                  if !seen.contains(tag_slug) {
                     seen.set(tag_slug, true)
                     tags.push({ value: tag_value, slug: tag_slug })
                   }

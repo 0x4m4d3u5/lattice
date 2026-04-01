@@ -401,7 +401,7 @@ pub fn load_from_dir(
   data_dir : String,
   schemas : Map[String, DataSchema],
 ) -> Result[DataStore, DataError] {
-  if not(@fs.path_exists(data_dir)) {
+  if !@fs.path_exists(data_dir) {
     return Err(FileNotFound(data_dir))
   }
   let entries = @fs.read_dir(data_dir) catch {

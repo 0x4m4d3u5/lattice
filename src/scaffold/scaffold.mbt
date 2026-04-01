@@ -410,7 +410,7 @@ let style_css : String =
   #|  color: var(--ink-muted);
   #|}
   #|
-  #|.prose__meta > *:not(:last-child)::after {
+  #|.prose__meta > *:!(:last-child)::after {
   #|  content: "\00b7";
   #|  margin-left: var(--space-sm);
   #|  color: var(--border-strong);
@@ -1141,7 +1141,7 @@ fn ensure_dir(path : String) -> Result[Unit, String] {
   while i < path.length() {
     if char_at(path, i) == '/' && i > 0 {
       let dir = substring(path, 0, i)
-      if not(@fs.path_exists(dir)) {
+      if !@fs.path_exists(dir) {
         @fs.create_dir(dir) catch {
           @fs.IOError(msg) =>
             return Err("cannot create directory '" + dir + "': " + msg)
@@ -1151,7 +1151,7 @@ fn ensure_dir(path : String) -> Result[Unit, String] {
     i = i + 1
   }
   // Create the final directory
-  if not(@fs.path_exists(path)) {
+  if !@fs.path_exists(path) {
     @fs.create_dir(path) catch {
       @fs.IOError(msg) =>
         return Err("cannot create directory '" + path + "': " + msg)
@@ -1292,7 +1292,6 @@ pub fn scaffold_site(target_dir : String) -> Result[Unit, String] {
   Ok(())
 }
 
-
 ///|
 /// Generate a default stub value for a schema field type.
 ///
@@ -1337,35 +1336,26 @@ pub fn stub_for_field_type(ft : @schema.FieldType) -> String {
         truncated
       }
     }
-    @schema.TDate(_, _) => {
+    @schema.TDate(_, _) =>
       // Use today's date or a reasonable placeholder
       // We can't access real time in scaffold without @watch/@time imports,
       // so use a stable placeholder that's easy to spot and replace.
       // TODO: accept current date as parameter for real usage
       "2026-01-01"
-    }
-    @schema.TInt(min_val, _) => {
+    @schema.TInt(min_val, _) =>
       match min_val {
         Some(n) => n.to_string()
         None => "0"
       }
-    }
-    @schema.TFloat(min_val, _) => {
+    @schema.TFloat(min_val, _) =>
       match min_val {
         Some(n) => n.to_string()
         None => "0.0"
       }
-    }
     @schema.TBool => "false"
     @schema.TArray(_) => "[]"
     @schema.TOptional(inner) => stub_for_field_type(inner)
-    @schema.TEnum(allowed) => {
-      if allowed.length() > 0 {
-        allowed[0]
-      } else {
-        ""
-      }
-    }
+    @schema.TEnum(allowed) => if allowed.length() > 0 { allowed[0] } else { "" }
     @schema.TUrl => "https://example.com"
     @schema.TSlug => "example-slug"
     @schema.TRef(_) => "example-slug"
@@ -1403,10 +1393,8 @@ pub fn generate_frontmatter(schema : @schema.Schema) -> String {
       match fdef.field_type {
         @schema.TOptional(@schema.TArray(_)) =>
           buf.write_string("# " + fdef.name + ":\n#   - value\n")
-        @schema.TOptional(_) =>
-          buf.write_string("# " + fdef.name + ": \n")
-        _ =>
-          buf.write_string("# " + fdef.name + ": \n")
+        @schema.TOptional(_) => buf.write_string("# " + fdef.name + ": \n")
+        _ => buf.write_string("# " + fdef.name + ": \n")
       }
     }
     i = i + 1

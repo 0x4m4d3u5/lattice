@@ -86,21 +86,21 @@ pub fn extract(content : String, source_file : String) -> Array[RawWikilink] {
         @strutil.char_at(content, probe) == '`' &&
         @strutil.char_at(content, probe + 1) == '`' &&
         @strutil.char_at(content, probe + 2) == '`' {
-        in_fence = not(in_fence)
+        in_fence = !in_fence
       }
       line_start = false
     }
     if @strutil.char_at(content, i) == '\n' {
       line_start = true
-      if not(in_fence) {
+      if !in_fence {
         in_inline = false
       }
       i = i + 1
-    } else if not(in_fence) && @strutil.char_at(content, i) == '`' {
-      in_inline = not(in_inline)
+    } else if !in_fence && @strutil.char_at(content, i) == '`' {
+      in_inline = !in_inline
       i = i + 1
-    } else if not(in_fence) &&
-      not(in_inline) &&
+    } else if !in_fence &&
+      !in_inline &&
       @strutil.char_at(content, i) == '[' &&
       @strutil.char_at(content, i + 1) == '[' {
       let inner_start = i + 2
@@ -120,7 +120,7 @@ pub fn extract(content : String, source_file : String) -> Array[RawWikilink] {
         }
         j = j + 1
       }
-      if not(found) {
+      if !found {
         i = i + 1
       }
     } else {

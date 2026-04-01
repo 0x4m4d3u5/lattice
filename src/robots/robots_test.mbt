@@ -32,10 +32,7 @@ test "render_robots_txt handles base_url with trailing slash" {
     robots2.contains("Sitemap: https://example.com/sitemap.xml"),
     content="true",
   )
-  inspect(
-    not(robots2.contains("https://example.com//sitemap.xml")),
-    content="true",
-  )
+  inspect(!robots2.contains("https://example.com//sitemap.xml"), content="true")
 }
 
 ///|
@@ -44,7 +41,7 @@ test "render_robots_txt skips sitemap when base_url is empty" {
 
   inspect(robots.contains("User-agent: *"), content="true")
   inspect(robots.contains("Allow: /"), content="true")
-  inspect(not(robots.contains("Sitemap:")), content="true")
+  inspect(!robots.contains("Sitemap:"), content="true")
 }
 
 ///|
@@ -53,7 +50,7 @@ test "render_robots_txt skips sitemap when base_url is just slash" {
 
   inspect(robots.contains("User-agent: *"), content="true")
   inspect(robots.contains("Allow: /"), content="true")
-  inspect(not(robots.contains("Sitemap:")), content="true")
+  inspect(!robots.contains("Sitemap:"), content="true")
 }
 
 ///|

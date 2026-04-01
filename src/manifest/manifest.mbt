@@ -175,7 +175,7 @@ fn parse_entry_manifest(
       raise ParseError("unterminated entry object")
     }
     if @strutil.char_at(source, i) == '}' {
-      if not(seen_src) || not(seen_mtime) || not(seen_out) {
+      if !seen_src || !seen_mtime || !seen_out {
         raise ParseError("entry missing required field")
       }
       return ({ src, mtime, out, targets }, i + 1)
@@ -210,10 +210,10 @@ fn parse_entry_manifest(
       raise ParseError("unterminated entry object")
     }
     if @strutil.char_at(source, i) == '}' {
-      if not(seen_src) || not(seen_mtime) || not(seen_out) {
+      if !seen_src || !seen_mtime || !seen_out {
         raise ParseError("entry missing required field")
       }
-      if not(seen_targets) {
+      if !seen_targets {
         targets = []
       }
       return ({ src, mtime, out, targets }, i + 1)

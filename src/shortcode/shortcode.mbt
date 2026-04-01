@@ -43,7 +43,7 @@ fn parse_int_shortcode(s : String) -> Int? {
   let mut value = 0
   while i < s.length() {
     let c = @strutil.char_at(s, i)
-    if not(@strutil.is_digit(c)) {
+    if !@strutil.is_digit(c) {
       return None
     }
     value = value * 10 + (c.to_int() - '0'.to_int())
@@ -120,7 +120,7 @@ fn parse_value_shortcode(
     }
   } else {
     let mut i = pos
-    while i < s.length() && not(@strutil.is_whitespace(@strutil.char_at(s, i))) {
+    while i < s.length() && !@strutil.is_whitespace(@strutil.char_at(s, i)) {
       i = i + 1
     }
     let raw = @strutil.trim(@strutil.substr(s, pos, i))
@@ -365,12 +365,10 @@ fn render_callout(call : ShortcodeCall) -> Result[String, ShortcodeError] {
     Ok(v) => v
     Err(e) => return Err(e)
   }
-  if not(
-      callout_type == "note" ||
-      callout_type == "warning" ||
-      callout_type == "tip" ||
-      callout_type == "danger",
-    ) {
+  if !(callout_type == "note" ||
+    callout_type == "warning" ||
+    callout_type == "tip" ||
+    callout_type == "danger") {
     return Err(InvalidParamType(call.name, "type", "note|warning|tip|danger"))
   }
   let title = match optional_string_param(call, "title") {

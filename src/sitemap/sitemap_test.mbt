@@ -96,7 +96,7 @@ test "render_sitemap omits lastmod when date is absent" {
   ]
   let xml = @sitemap.render_sitemap("https://example.com", pages)
 
-  inspect(not(xml.contains("<lastmod>")), content="true")
+  inspect(!xml.contains("<lastmod>"), content="true")
 }
 
 ///|
@@ -168,7 +168,7 @@ test "render_sitemap handles empty pages array" {
     ),
     content="true",
   )
-  inspect(not(xml.contains("<url>")), content="true")
+  inspect(!xml.contains("<url>"), content="true")
 }
 
 ///|
@@ -186,7 +186,7 @@ test "render_sitemap XML-escapes special characters in URLs" {
   let xml = @sitemap.render_sitemap("https://example.com", pages)
 
   inspect(xml.contains("&amp;"), content="true")
-  inspect(not(xml.contains(" & ")), content="true")
+  inspect(!xml.contains(" & "), content="true")
 }
 
 ///|
@@ -223,5 +223,5 @@ test "render_sitemap rejects malformed date" {
   ]
   let xml = @sitemap.render_sitemap("https://example.com", pages)
 
-  inspect(not(xml.contains("<lastmod>")), content="true")
+  inspect(!xml.contains("<lastmod>"), content="true")
 }

@@ -389,7 +389,7 @@ fn extract_link_targets(source : String, slug : String) -> Array[String] {
   let mut i = 0
   while i < raw_links.length() {
     let target = @wikilink.lookup_key(raw_links[i].target)
-    if not(unique.contains(target)) {
+    if !unique.contains(target) {
       unique.set(target, true)
       targets.push(target)
     }
@@ -844,7 +844,7 @@ fn build_archive_pages(
     found
   }
 
-  if not(has_dates) {
+  if !has_dates {
     return (0, 0)
   }
 
@@ -1353,7 +1353,7 @@ fn templates_dir_for_build(config : BuildConfig) -> String {
 
 ///|
 fn load_template_file(path : String) -> Result[@template.Template?, String] {
-  if not(@fs.path_exists(path)) {
+  if !@fs.path_exists(path) {
     return Ok(None)
   }
   let source = @fs.read_file_to_string(path) catch {
@@ -1400,7 +1400,7 @@ fn load_template_file(path : String) -> Result[@template.Template?, String] {
 ///|
 fn load_templates(config : BuildConfig) -> Result[BuildTemplates, String] {
   let base = templates_dir_for_build(config)
-  if not(@fs.path_exists(base)) {
+  if !@fs.path_exists(base) {
     return Ok({
       page: None,
       index: None,
@@ -1531,7 +1531,7 @@ fn frontmatter_field_line(source : String, field : String) -> Int? {
 
 ///|
 fn frontmatter_line_from_error(msg : String) -> Int? {
-  if not(starts_with_builder(msg, "line ")) {
+  if !starts_with_builder(msg, "line ") {
     return None
   }
   let n = msg.length()
@@ -1624,7 +1624,7 @@ fn template_violation(path : String, message : String) -> @lint.LintViolation {
 fn load_templates_for_lint(config : BuildConfig) -> TemplateLoadResult {
   let violations : Array[@lint.LintViolation] = []
   let base = templates_dir_for_build(config)
-  if not(@fs.path_exists(base)) {
+  if !@fs.path_exists(base) {
     return {
       templates: {
         page: None,
@@ -2169,7 +2169,7 @@ fn collapse_whitespace_builder(s : String) -> String {
     let c = char_at_builder(s, i)
     let is_space = c == ' ' || c == '\t' || c == '\n' || c == '\r'
     if is_space {
-      if wrote_non_space && not(prev_space) {
+      if wrote_non_space && !prev_space {
         buf.write_char(' ')
         prev_space = true
       }
@@ -2195,8 +2195,7 @@ fn extract_excerpt_builder(markdown_body : String) -> String {
       if is_fence_start_builder(line) {
         let fence_char = fence_char_builder(line)
         i = i + 1
-        while i < lines.length() &&
-              not(is_fence_end_builder(lines[i], fence_char)) {
+        while i < lines.length() && !is_fence_end_builder(lines[i], fence_char) {
           i = i + 1
         }
         if i < lines.length() {
@@ -2220,8 +2219,8 @@ fn extract_excerpt_builder(markdown_body : String) -> String {
     } else {
       let paragraph_lines : Array[String] = []
       while i < lines.length() &&
-            not(is_blank_builder(lines[i])) &&
-            not(is_block_starter_builder(lines[i])) {
+            !is_blank_builder(lines[i]) &&
+            !is_block_starter_builder(lines[i]) {
         paragraph_lines.push(lines[i])
         i = i + 1
       }
@@ -2254,7 +2253,7 @@ pub fn count_words_markdown(body : String) -> Int {
     if is_fence_start_builder(line) {
       let fence_char = fence_char_builder(line)
       i = i + 1
-      while i < ls.length() && not(is_fence_end_builder(ls[i], fence_char)) {
+      while i < ls.length() && !is_fence_end_builder(ls[i], fence_char) {
         i = i + 1
       }
       if i < ls.length() {
@@ -2335,7 +2334,7 @@ fn collect_tag_catalog(
                 let mut k = 0
                 while k < tag_refs.length() {
                   let tag = tag_refs[k]
-                  if not(name_by_slug.contains(tag.slug)) {
+                  if !name_by_slug.contains(tag.slug) {
                     name_by_slug.set(tag.slug, tag.value)
                     ordered_slugs.push(tag.slug)
                   }
@@ -3106,7 +3105,7 @@ fn process_document(
   let mut i = 0
   while i < page_tags.length() {
     let tag = page_tags[i]
-    if not(known_tags.contains(tag.slug)) {
+    if !known_tags.contains(tag.slug) {
       let (line, col) = line_col_of_first(source, tag.value)
       diagnostics.push(
         build_error(
@@ -3152,7 +3151,7 @@ fn process_document(
   let date_value = extract_date(fm)
   let author_value = extract_author(fm)
   let og_image_value = extract_og_image(fm)
-  if not(render_page_html) {
+  if !render_page_html {
     return {
       document: Some({
         html: "",
@@ -3659,7 +3658,7 @@ fn process_document_for_lint(
   i = 0
   while i < page_tags.length() {
     let tag = page_tags[i]
-    if not(known_tags.contains(tag.slug)) {
+    if !known_tags.contains(tag.slug) {
       let (line, col) = line_col_of_first(source, tag.value)
       violations.push({
         path: source_path,
@@ -3901,7 +3900,7 @@ pub fn collect_sources(
 ///|
 /// Ensure a single-level directory exists, creating it if absent.
 fn ensure_dir(path : String) -> Unit raise @fs.IOError {
-  if not(@fs.path_exists(path)) {
+  if !@fs.path_exists(path) {
     @fs.create_dir(path)
   }
 }
@@ -3912,7 +3911,7 @@ fn ensure_parent_dirs_for_file(path : String) -> Unit raise @fs.IOError {
   while i < path.length() {
     if char_at_builder(path, i) == '/' && i > 0 {
       let dir = substr_builder(path, 0, i)
-      if not(@fs.path_exists(dir)) {
+      if !@fs.path_exists(dir) {
         @fs.create_dir(dir)
       }
     }
@@ -3990,7 +3989,7 @@ fn dependency_roots_for_build(
 ///|
 fn load_manifest(config : BuildConfig) -> @manifest.ManifestFile? {
   let path = manifest_path_for_build(config)
-  if not(@fs.path_exists(path)) {
+  if !@fs.path_exists(path) {
     return None
   }
   let source = @fs.read_file_to_string(path) catch {
@@ -4086,13 +4085,13 @@ fn build_incremental_state(
     let entry = manifest.entries[i]
     if entry.out == "" {
       found_previous_dependency = true
-      if not(current_dependencies.contains(entry.src)) {
+      if !current_dependencies.contains(entry.src) {
         return { force_full_rebuild: true, previous_entries, changed_sources }
       }
     }
     i = i + 1
   }
-  if not(found_previous_dependency) {
+  if !found_previous_dependency {
     return { force_full_rebuild: true, previous_entries, changed_sources }
   }
 
@@ -4104,12 +4103,12 @@ fn build_incremental_state(
       let src = coll.sources[j]
       let out = page_output_path(config, coll.definition.name, src.slug)
       let root_out_missing = is_root_page_for_site(config.site, src.slug) &&
-        not(@fs.path_exists(root_page_output_path(config)))
+        !@fs.path_exists(root_page_output_path(config))
       let changed = match previous_entries.get(src.path) {
         Some(previous) =>
           previous.mtime != src.stamp ||
           previous.out != out ||
-          not(@fs.path_exists(out)) ||
+          !@fs.path_exists(out) ||
           root_out_missing
         None => true
       }
@@ -4414,7 +4413,7 @@ pub fn build(
       false
     }
   }
-  if not(dir_ok) {
+  if !dir_ok {
     return {
       errors: 1,
       diagnostics,
@@ -4427,7 +4426,7 @@ pub fn build(
 
   // Write default CSS (once, if not already present)
   let css_path = config.output_dir + "/style.css"
-  if not(@fs.path_exists(css_path)) {
+  if !@fs.path_exists(css_path) {
     let write_ok = try {
       @fs.write_string_to_file(css_path, custom_css)
       true
@@ -4502,7 +4501,7 @@ pub fn build(
         false
       }
     }
-    if not(collection_dir_ok) {
+    if !collection_dir_ok {
       diagnostics.push(
         build_error(
           Some(collection_root),
@@ -4545,7 +4544,7 @@ pub fn build(
       let should_rebuild = incremental.force_full_rebuild ||
         incremental.changed_sources.contains(src.path) ||
         backlink_affected.contains(src.slug) ||
-        not(cache_hit)
+        !cache_hit
       let page_backlinks_html = match backlink_index.get(src.slug) {
         Some(refs) => render_backlinks_html(refs)
         None => ""
@@ -4594,13 +4593,13 @@ pub fn build(
             Ok(fm) => is_draft(fm)
             Err(_) => false
           }
-          let should_skip_draft = is_draft_post && not(config.include_drafts)
+          let should_skip_draft = is_draft_post && !config.include_drafts
 
-          let write_result = if should_skip_draft || not(should_rebuild) {
+          let write_result = if should_skip_draft || !should_rebuild {
             // Skip output for drafts (unless --drafts flag is set)
             if should_skip_draft {
               println("[skip draft] " + page_context)
-            } else if not(should_rebuild) {
+            } else if !should_rebuild {
               println("[skip] " + page_context)
               unchanged = unchanged + 1
             }
@@ -4634,14 +4633,14 @@ pub fn build(
           }
           match write_result {
             Some(_) => {
-              if should_rebuild && not(should_skip_draft) {
+              if should_rebuild && !should_skip_draft {
                 println("[build] " + page_context)
                 rebuilt = rebuilt + 1
               } else if should_skip_draft {
                 // Draft skipped, don't count as rebuilt or unchanged
                 skipped_drafts = skipped_drafts + 1
                 ()
-              } else if not(should_rebuild) {
+              } else if !should_rebuild {
                 println("[skip] " + page_context)
                 unchanged = unchanged + 1
               }
@@ -4713,7 +4712,7 @@ pub fn build(
               redirect_count = redirect_count + redirects_generated
 
               // Only include non-draft posts in indexes
-              if not(should_skip_draft) {
+              if !should_skip_draft {
                 let page : @graph.GraphPage = {
                   slug: src.slug,
                   title: doc.title,
@@ -4813,7 +4812,7 @@ pub fn build(
           false
         }
       }
-      if not(feed_write_ok) {
+      if !feed_write_ok {
         error_count = error_count + 1
       }
 
@@ -4895,7 +4894,7 @@ pub fn build(
             }
           None => false
         }
-        if not(index_write_ok) {
+        if !index_write_ok {
           error_count = error_count + 1
         }
         page_idx = page_idx + 1
@@ -5052,7 +5051,7 @@ pub fn build(
                       false
                     }
                   }
-                  if not(tag_write_ok) {
+                  if !tag_write_ok {
                     error_count = error_count + 1
                   }
                 }
@@ -5150,7 +5149,7 @@ pub fn build(
                 }
               None => false
             }
-            if not(tags_index_ok) {
+            if !tags_index_ok {
               error_count = error_count + 1
             }
             page_idx = page_idx + 1
@@ -5184,7 +5183,7 @@ pub fn build(
           false
         }
       }
-      if not(sitemap_write_ok) {
+      if !sitemap_write_ok {
         error_count = error_count + 1
       }
     }
@@ -5216,7 +5215,7 @@ pub fn build(
             false
           }
         }
-        if not(robots_write_ok) {
+        if !robots_write_ok {
           error_count = error_count + 1
         }
       } else {
@@ -5248,7 +5247,7 @@ pub fn build(
           false
         }
       }
-      if not(search_write_ok) {
+      if !search_write_ok {
         error_count = error_count + 1
       }
     }
@@ -5272,7 +5271,7 @@ pub fn build(
           false
         }
       }
-      if not(graph_write_ok) {
+      if !graph_write_ok {
         error_count = error_count + 1
       }
     }
@@ -5390,7 +5389,7 @@ pub fn build(
     error_count.to_string() +
     " errors",
   )
-  if skipped_drafts > 0 && not(config.include_drafts) {
+  if skipped_drafts > 0 && !config.include_drafts {
     println(
       "[lattice] skipped " +
       skipped_drafts.to_string() +

@@ -34,7 +34,7 @@ fn normalize_lastmod(raw : String?) -> String? {
         let mut k = 0
         while k < 10 {
           if k != 4 && k != 7 {
-            if not(@strutil.is_digit(@strutil.char_at(s, k))) {
+            if !@strutil.is_digit(@strutil.char_at(s, k)) {
               all_digits = false
             }
           }

@@ -226,7 +226,7 @@ pub fn parse_template(input : String) -> Result[Template, TemplateError] {
       while i < parts.length() {
         match parts[i] {
           Slot(slot) =>
-            if not(required_slots.contains(slot)) {
+            if !required_slots.contains(slot) {
               required_slots.push(slot)
             }
           _ => () // ConditionalBlock, DataEachBlock, LoopItemSlot are NOT required
@@ -1247,7 +1247,7 @@ pub fn parse_template_with_includes(
   while i < final_parts.length() {
     match final_parts[i] {
       Slot(slot) =>
-        if not(required_slots.contains(slot)) {
+        if !required_slots.contains(slot) {
           required_slots.push(slot)
         }
       _ => () // ConditionalBlock slots are NOT required
@@ -1306,15 +1306,15 @@ fn collect_refs_from_parts(
 ///|
 fn collect_refs_from_part(part : TemplatePart, refs : Array[String]) -> Unit {
   match part {
-    FrontmatterSlot(field) => if not(refs.contains(field)) { refs.push(field) }
+    FrontmatterSlot(field) => if !refs.contains(field) { refs.push(field) }
     FrontmatterConditionalBlock(field, body) => {
-      if not(refs.contains(field)) {
+      if !refs.contains(field) {
         refs.push(field)
       }
       collect_refs_from_parts(body, refs)
     }
     FrontmatterEachBlock(field, body) => {
-      if not(refs.contains(field)) {
+      if !refs.contains(field) {
         refs.push(field)
       }
       collect_refs_from_parts(body, refs)

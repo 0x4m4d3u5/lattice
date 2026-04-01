@@ -161,7 +161,7 @@ pub fn check_static(site_root : String, static_dir : String) -> AssetValidation 
   let errors : Array[AssetCopyError] = []
   let source_root = @strutil.join_path(site_root, static_dir)
 
-  if not(@fs.path_exists(source_root)) {
+  if !@fs.path_exists(source_root) {
     return { errors, }
   }
 
@@ -171,7 +171,7 @@ pub fn check_static(site_root : String, static_dir : String) -> AssetValidation 
       return { errors, }
     }
   }
-  if not(is_source_dir) {
+  if !is_source_dir {
     errors.push(SourceNotDirectory(source_root))
     return { errors, }
   }
@@ -190,14 +190,14 @@ pub fn copy_static(
   static_dir : String,
 ) -> Result[Int, AssetCopyError] {
   let source_root = @strutil.join_path(site_root, static_dir)
-  if not(@fs.path_exists(source_root)) {
+  if !@fs.path_exists(source_root) {
     return Ok(0)
   }
 
   let source_is_dir = @fs.is_dir(source_root) catch {
     @fs.IOError(msg) => return Err(SourceReadError(source_root, msg))
   }
-  if not(source_is_dir) {
+  if !source_is_dir {
     return Err(SourceNotDirectory(source_root))
   }
 

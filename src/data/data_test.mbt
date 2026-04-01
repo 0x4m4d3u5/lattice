@@ -1,6 +1,6 @@
 ///|
 fn ensure_dir_test(path : String) -> Unit {
-  if not(@fs.path_exists(path)) {
+  if !@fs.path_exists(path) {
     @fs.create_dir(path) catch {
       @fs.IOError(_) => ()
     }

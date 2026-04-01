@@ -353,7 +353,7 @@ test "template layout extension" {
         }
         i = i + 1
       }
-      assert_true(not(has_layout_directive))
+      assert_true(!has_layout_directive)
     }
     Err(_) => assert_true(false)
   }
@@ -839,7 +839,7 @@ test "template conditional multiple conditionals in template" {
   slots_next.set(NextPostUrl, "/next.html")
   match render_template(tpl, slots_next, Map::new()) {
     Ok(html) => {
-      assert_true(not(html.contains("Previous")))
+      assert_true(!html.contains("Previous"))
       assert_true(html.contains("<a href=\"/next.html\">Next</a>"))
       assert_true(html.contains(" | ")) // Separator text is still present
     }
@@ -1083,7 +1083,7 @@ test "{{?page.field}} conditional with multiple page fields" {
   match render_template(tpl, slots, page_fields_image) {
     Ok(html) => {
       assert_true(html.contains("<img src=\"/images/og.png\">"))
-      assert_true(not(html.contains("og:description")))
+      assert_true(!html.contains("og:description"))
     }
     Err(_) => assert_true(false)
   }
