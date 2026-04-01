@@ -62,13 +62,11 @@ pub fn warning(message : String) -> Diagnostic {
 ///|
 pub fn count_errors(items : Array[Diagnostic]) -> Int {
   let mut total = 0
-  let mut i = 0
-  while i < items.length() {
-    match items[i].severity {
+  for d in items {
+    match d.severity {
       Error => total = total + 1
       Warning => ()
     }
-    i = i + 1
   }
   total
 }
@@ -259,43 +257,44 @@ pub fn summarize(diagnostics : Array[Diagnostic]) -> DiagnosticSummary {
   let code_counts : Map[String, Int] = Map::new()
   let file_counts : Map[String, Int] = Map::new()
 
-  let mut i = 0
-  while i < diagnostics.length() {
-    let d = diagnostics[i]
+  for d in diagnostics {
     match d.severity {
       Error => error_count = error_count + 1
       Warning => warning_count = warning_count + 1
     }
     match d.code {
       Some(code) =>
-        match code_counts.get(code) {
-          Some(count) => code_counts.set(code, count + 1)
-          None => code_counts.set(code, 1)
-        }
+        code_counts.update(code, fn(prev) {
+          match prev {
+            Some(n) => Some(n + 1)
+            None => Some(1)
+          }
+        })
       None => ()
     }
     match d.path {
       Some(path) =>
-        match file_counts.get(path) {
-          Some(count) => file_counts.set(path, count + 1)
-          None => file_counts.set(path, 1)
-        }
+        file_counts.update(path, fn(prev) {
+          match prev {
+            Some(n) => Some(n + 1)
+            None => Some(1)
+          }
+        })
       None => ()
     }
-    i = i + 1
   }
 
   let by_code : Array[CodeCount] = []
   for code, count in code_counts {
     by_code.push({ code, count })
   }
-  sort_code_counts(by_code)
+  by_code.sort_by((a, b) => b.count.compare(a.count))
 
   let by_file : Array[DiagnosticFileCount] = []
   for path, count in file_counts {
     by_file.push({ path, count })
   }
-  sort_diagnostic_file_counts(by_file)
+  by_file.sort_by((a, b) => b.count.compare(a.count))
 
   { error_count, warning_count, by_code, by_file }
 }
@@ -322,65 +321,23 @@ pub fn format_summary(summary : DiagnosticSummary) -> String {
 
   if summary.by_code.length() > 0 {
     buf.write_string("\n  By code:")
-    let mut i = 0
-    while i < summary.by_code.length() {
-      let cc = summary.by_code[i]
+    for cc in summary.by_code {
       buf.write_string("\n    ")
       buf.write_string(cc.code)
       buf.write_string(": ")
       buf.write_string(cc.count.to_string())
-      i = i + 1
     }
   }
 
   if summary.by_file.length() > 0 {
     buf.write_string("\n  By file:")
-    let mut i = 0
-    while i < summary.by_file.length() {
-      let fc = summary.by_file[i]
+    for fc in summary.by_file {
       buf.write_string("\n    ")
       buf.write_string(fc.path)
       buf.write_string(": ")
       buf.write_string(fc.count.to_string())
-      i = i + 1
     }
   }
 
   buf.to_string()
-}
-
-///|
-fn sort_code_counts(items : Array[CodeCount]) -> Unit {
-  let n = items.length()
-  let mut i = 0
-  while i < n - 1 {
-    let mut j = i + 1
-    while j < n {
-      if items[j].count > items[i].count {
-        let tmp = items[i]
-        items[i] = items[j]
-        items[j] = tmp
-      }
-      j = j + 1
-    }
-    i = i + 1
-  }
-}
-
-///|
-fn sort_diagnostic_file_counts(items : Array[DiagnosticFileCount]) -> Unit {
-  let n = items.length()
-  let mut i = 0
-  while i < n - 1 {
-    let mut j = i + 1
-    while j < n {
-      if items[j].count > items[i].count {
-        let tmp = items[i]
-        items[i] = items[j]
-        items[j] = tmp
-      }
-      j = j + 1
-    }
-    i = i + 1
-  }
 }
