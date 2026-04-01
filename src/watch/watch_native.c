@@ -60,3 +60,16 @@ void lattice_watch_clear_interrupt(void) {
 int64_t lattice_watch_current_unix_second(void) {
   return (int64_t)time(NULL);
 }
+
+int64_t lattice_watch_current_millis(void) {
+#if defined(_WIN32)
+  FILETIME ft;
+  GetSystemTimeAsFileTime(&ft);
+  uint64_t t = ((uint64_t)ft.dwHighDateTime << 32) | ft.dwLowDateTime;
+  return (int64_t)((t - 116444736000000000ULL) / 10000ULL);
+#else
+  struct timespec ts;
+  clock_gettime(CLOCK_REALTIME, &ts);
+  return (int64_t)ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
+#endif
+}
