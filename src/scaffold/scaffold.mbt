@@ -1112,23 +1112,7 @@ let nav_toml : String =
   #|links = ["posts"]
   #|
 
-///|
-/// Get character at position as Char.
-fn char_at(s : String, i : Int) -> Char {
-  s[i].to_int().unsafe_to_char()
-}
 
-///|
-/// Substring returning owned String.
-fn substring(s : String, start : Int, end : Int) -> String {
-  let buf = StringBuilder::new()
-  let mut i = start
-  while i < end {
-    buf.write_char(char_at(s, i))
-    i = i + 1
-  }
-  buf.to_string()
-}
 
 ///|
 /// Ensure a directory exists, creating parent dirs as needed.
@@ -1139,8 +1123,8 @@ fn ensure_dir(path : String) -> Result[Unit, String] {
   // Create parent dirs first
   let mut i = 0
   while i < path.length() {
-    if char_at(path, i) == '/' && i > 0 {
-      let dir = substring(path, 0, i)
+    if @strutil.char_at(path, i) == '/' && i > 0 {
+      let dir = @strutil.substr(path, 0, i)
       if !@fs.path_exists(dir) {
         @fs.create_dir(dir) catch {
           @fs.IOError(msg) =>
@@ -1167,13 +1151,13 @@ fn write_file(path : String, content : String) -> Result[Unit, String] {
   let mut last_slash = -1
   let mut i = 0
   while i < path.length() {
-    if char_at(path, i) == '/' {
+    if @strutil.char_at(path, i) == '/' {
       last_slash = i
     }
     i = i + 1
   }
   if last_slash > 0 {
-    let parent = substring(path, 0, last_slash)
+    let parent = @strutil.substr(path, 0, last_slash)
     match ensure_dir(parent) {
       Ok(_) => ()
       Err(e) => return Err(e)
