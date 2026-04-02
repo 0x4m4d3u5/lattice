@@ -1698,3 +1698,77 @@ test "collect_frontmatter_refs collects refs from mixed expression types" {
   assert_true(refs.contains("hero"))
   assert_true(refs.contains("authors"))
 }
+
+///|
+test "template parse body_no_h1 slot" {
+  let tpl = match parse_template("<div>{{body_no_h1}}</div>") {
+    Ok(v) => v
+    Err(_) => {
+      assert_true(false)
+      { parts: [], required_slots: [], layout: None }
+    }
+  }
+  let mut has_body_no_h1 = false
+  for part in tpl.parts {
+    match part {
+      Slot(BodyNoH1) => has_body_no_h1 = true
+      _ => ()
+    }
+  }
+  assert_true(has_body_no_h1)
+}
+
+///|
+test "template render body_no_h1 slot" {
+  let tpl = match parse_template("<article>{{body_no_h1}}</article>") {
+    Ok(v) => v
+    Err(_) => {
+      assert_true(false)
+      { parts: [], required_slots: [], layout: None }
+    }
+  }
+  let slots : Map[TemplateSlot, String] = Map::new()
+  slots.set(BodyNoH1, "<p>Content without H1</p>")
+  match render_template(tpl, slots, Map::new()) {
+    Ok(html) => assert_eq(html, "<article><p>Content without H1</p></article>")
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "template parse head_meta slot" {
+  let tpl = match parse_template("{{head_meta}}") {
+    Ok(v) => v
+    Err(_) => {
+      assert_true(false)
+      { parts: [], required_slots: [], layout: None }
+    }
+  }
+  match tpl.parts[0] {
+    Slot(HeadMeta) => ()
+    _ => assert_true(false)
+  }
+}
+
+///|
+test "template render head_meta slot" {
+  let tpl = match parse_template("<head>{{head_meta}}</head>") {
+    Ok(v) => v
+    Err(_) => {
+      assert_true(false)
+      { parts: [], required_slots: [], layout: None }
+    }
+  }
+  let slots : Map[TemplateSlot, String] = Map::new()
+  slots.set(
+    HeadMeta,
+    "  <meta property=\"og:title\" content=\"Test\" />\n  <link rel=\"canonical\" href=\"https://example.com/\" />\n",
+  )
+  match render_template(tpl, slots, Map::new()) {
+    Ok(html) => {
+      assert_true(html.contains("og:title"))
+      assert_true(html.contains("canonical"))
+    }
+    Err(_) => assert_true(false)
+  }
+}

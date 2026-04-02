@@ -653,11 +653,24 @@ fn render_archive_page(
     collection_name + " — " + year + "-" + month
   }
 
+  // Collect all tags from pages
+  let tags_html = ""
+  let description = if month == "" {
+    "Archive for " + collection_name + " — " + year
+  } else {
+    "Archive for " + collection_name + " — " + year + "-" + month
+  }
+  let archive_url = site.base_url + "/" + collection_name
   let slots = Map::new()
   slots.set(@template.Title, title)
   slots.set(@template.Content, content)
+  slots.set(@template.BodyNoH1, @html.strip_leading_h1(content))
+  slots.set(
+    @template.HeadMeta,
+    @html.render_head_meta(title, Some(description), archive_url),
+  )
   slots.set(@template.SiteName, site.title)
-  slots.set(@template.Url, site.base_url + "/" + collection_name)
+  slots.set(@template.Url, archive_url)
   slots.set(@template.NavLinks, nav_links_html)
   slots.set(@template.CustomCss, custom_css)
   slots.set(@template.Collection, collection_name)
@@ -668,15 +681,7 @@ fn render_archive_page(
     slots.set(@template.Month, month)
   }
   slots.set(@template.Day, "")
-
-  // Collect all tags from pages
-  let tags_html = ""
   slots.set(@template.Tags, tags_html)
-  let description = if month == "" {
-    "Archive for " + collection_name + " — " + year
-  } else {
-    "Archive for " + collection_name + " — " + year + "-" + month
-  }
   slots.set(@template.Description, description)
 
   match archive_template {
@@ -766,14 +771,24 @@ pub fn render_archive_index(
   }
   let content = buf.to_string()
 
+  let all_archive_url = @strutil.absolute_url(
+    site.base_url,
+    "/" + collection_name + "/archive/",
+  )
   let slots = Map::new()
   slots.set(@template.Title, "Archive")
   slots.set(@template.Content, content)
-  slots.set(@template.SiteName, site.title)
+  slots.set(@template.BodyNoH1, @html.strip_leading_h1(content))
   slots.set(
-    @template.Url,
-    @strutil.absolute_url(site.base_url, "/" + collection_name + "/archive/"),
+    @template.HeadMeta,
+    @html.render_head_meta(
+      "Archive",
+      Some("Archive for " + collection_name),
+      all_archive_url,
+    ),
   )
+  slots.set(@template.SiteName, site.title)
+  slots.set(@template.Url, all_archive_url)
   slots.set(@template.NavLinks, nav_links_html)
   slots.set(@template.CustomCss, custom_css)
   slots.set(@template.Collection, collection_name)
@@ -1572,10 +1587,17 @@ fn build_template_slots(
   custom_css : String,
   tag_name : String,
   tag_count : String,
+  base_url : String,
 ) -> Map[@template.TemplateSlot, String] {
   let slots : Map[@template.TemplateSlot, String] = Map::new()
   slots.set(@template.Title, title)
   slots.set(@template.Content, content)
+  slots.set(@template.BodyNoH1, @html.strip_leading_h1(content))
+  let canonical = @strutil.absolute_url(base_url, url)
+  slots.set(
+    @template.HeadMeta,
+    @html.render_head_meta(title, Some(description), canonical),
+  )
   slots.set(@template.Date, date)
   slots.set(@template.Description, description)
   slots.set(@template.Url, url)
@@ -2210,6 +2232,7 @@ fn render_tag_page_html(
         custom_css,
         page.tag,
         page.pages.length().to_string(),
+        site.base_url,
       )
       set_pagination_slots(
         slots,
@@ -2293,6 +2316,7 @@ fn render_tags_index_html(
         custom_css,
         "",
         index.tags.length().to_string(),
+        site.base_url,
       )
       set_pagination_slots(
         slots,
@@ -2401,6 +2425,7 @@ fn render_404_page(
         custom_css,
         "",
         "",
+        config.site.base_url,
       )
       // 404 pages have no tags, collection, date, or prev/next components
       slots.set(@template.Tags, "")
@@ -2574,6 +2599,7 @@ fn render_collection_index(
         custom_css,
         "",
         "",
+        site.base_url,
       )
       set_pagination_slots(
         slots,
@@ -3039,6 +3065,7 @@ fn process_document(
           custom_css,
           "",
           "",
+          site.base_url,
         )
         slots.set(@template.Backlinks, backlinks_html)
         slots.set(@template.TableOfContents, toc_html)
@@ -3560,6 +3587,7 @@ fn process_document_for_lint(
         custom_css,
         "",
         "",
+        site.base_url,
       )
       slots.set(@template.Backlinks, backlinks_html)
       slots.set(@template.TableOfContents, toc_html)

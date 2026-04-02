@@ -56,6 +56,115 @@ pub(all) enum StructuredData {
 // ── helpers ───────────────────────────────────────────────────────────────────
 
 ///|
+/// Strip the first `<h1>...</h1>` block from an HTML string if the body
+/// starts with it (after optional whitespace). Returns the body with the
+/// leading H1 removed and trailing whitespace trimmed.
+///
+/// Used by the `body_no_h1` template slot to avoid duplicate H1 elements
+/// when the template already renders the title as an H1.
+pub fn strip_leading_h1(html : String) -> String {
+  let n = html.length()
+  // Skip leading whitespace
+  let mut i = 0
+  while i < n &&
+        (
+          @strutil.char_at(html, i) == ' ' ||
+          @strutil.char_at(html, i) == '\t' ||
+          @strutil.char_at(html, i) == '\n' ||
+          @strutil.char_at(html, i) == '\r'
+        ) {
+    i = i + 1
+  }
+  // Check for "<h1>"
+  let h1_open = "<h1>"
+  let h1_open_len = h1_open.length()
+  if i + h1_open_len > n {
+    return html
+  }
+  let mut j = 0
+  while j < h1_open_len {
+    if @strutil.char_at(html, i + j) != @strutil.char_at(h1_open, j) {
+      return html
+    }
+    j = j + 1
+  }
+  // Found "<h1>" at position i. Now find "</h1>"
+  let after_open = i + h1_open_len
+  let h1_close = "</h1>"
+  let h1_close_len = h1_close.length()
+  let mut k = after_open
+  let mut found_close = -1
+  while k + h1_close_len <= n {
+    let mut matched = true
+    let mut l = 0
+    while l < h1_close_len {
+      if @strutil.char_at(html, k + l) != @strutil.char_at(h1_close, l) {
+        matched = false
+        break
+      }
+      l = l + 1
+    }
+    if matched {
+      found_close = k
+      break
+    }
+    k = k + 1
+  }
+  if found_close < 0 {
+    return html
+  }
+  // Return everything after "</h1>", trimmed of leading whitespace
+  let rest_start = found_close + h1_close_len
+  let mut m = rest_start
+  while m < n &&
+        (
+          @strutil.char_at(html, m) == ' ' ||
+          @strutil.char_at(html, m) == '\t' ||
+          @strutil.char_at(html, m) == '\n' ||
+          @strutil.char_at(html, m) == '\r'
+        ) {
+    m = m + 1
+  }
+  if m >= n {
+    return ""
+  }
+  @strutil.substr(html, m, n)
+}
+
+///|
+/// Render OG meta tags and canonical link for a page.
+///
+/// Generates Open Graph meta tags and a canonical `<link>` for use in `<head>`.
+/// Returns the HTML fragment as a string. Used by the `head_meta` template slot.
+pub fn render_head_meta(
+  title : String,
+  description : String?,
+  url : String,
+) -> String {
+  let tags = StringBuilder::new()
+  tags.write_string("  <meta property=\"og:title\" content=\"")
+  tags.write_string(@strutil.escape_html_attr(title))
+  tags.write_string("\" />\n")
+  match description {
+    Some(desc) =>
+      if desc.length() > 0 {
+        tags.write_string("  <meta property=\"og:description\" content=\"")
+        tags.write_string(@strutil.escape_html_attr(desc))
+        tags.write_string("\" />\n")
+      }
+    None => ()
+  }
+  tags.write_string("  <meta property=\"og:url\" content=\"")
+  tags.write_string(@strutil.escape_html_attr(url))
+  tags.write_string("\" />\n")
+  tags.write_string("  <meta property=\"og:type\" content=\"article\" />\n")
+  tags.write_string("  <link rel=\"canonical\" href=\"")
+  tags.write_string(@strutil.escape_html_attr(url))
+  tags.write_string("\" />\n")
+  tags.to_string()
+}
+
+///|
 
 ///|
 /// Escape text for HTML body context (&, <, >).

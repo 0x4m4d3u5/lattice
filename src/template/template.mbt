@@ -28,6 +28,8 @@ pub(all) enum TemplateSlot {
   TotalPages
   PageUrl
   Body
+  BodyNoH1
+  HeadMeta
   ReadingTime
   WordCount
   TableOfContents
@@ -169,6 +171,12 @@ fn slot_from_name(name : String) -> Result[TemplateSlot, TemplateError] {
   }
   if name == "body" {
     return Ok(Body)
+  }
+  if name == "body_no_h1" {
+    return Ok(BodyNoH1)
+  }
+  if name == "head_meta" {
+    return Ok(HeadMeta)
   }
   if name == "reading_time" {
     return Ok(ReadingTime)

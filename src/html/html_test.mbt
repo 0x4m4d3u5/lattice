@@ -351,3 +351,122 @@ test "render_page with feed_url includes atom discovery link" {
   assert_true(html.contains("<link rel=\"canonical\""))
   assert_true(html.contains("<meta property=\"og:title\""))
 }
+
+///|
+test "strip_leading_h1 removes leading h1 from body" {
+  let html = "<h1>Title</h1>\n<p>Content</p>"
+  let result = @html.strip_leading_h1(html)
+  assert_eq(result, "<p>Content</p>")
+}
+
+///|
+test "strip_leading_h1 removes h1 with leading whitespace" {
+  let html = "  \n  <h1>Title</h1>\n<p>Content</p>"
+  let result = @html.strip_leading_h1(html)
+  assert_eq(result, "<p>Content</p>")
+}
+
+///|
+test "strip_leading_h1 does not strip h1 not at start" {
+  let html = "<p>Intro</p>\n<h1>Title</h1>\n<p>Content</p>"
+  let result = @html.strip_leading_h1(html)
+  assert_eq(result, "<p>Intro</p>\n<h1>Title</h1>\n<p>Content</p>")
+}
+
+///|
+test "strip_leading_h1 returns empty when only h1" {
+  let html = "<h1>Title</h1>"
+  let result = @html.strip_leading_h1(html)
+  assert_eq(result, "")
+}
+
+///|
+test "strip_leading_h1 returns empty when h1 and whitespace" {
+  let html = "<h1>Title</h1>\n"
+  let result = @html.strip_leading_h1(html)
+  assert_eq(result, "")
+}
+
+///|
+test "strip_leading_h1 preserves h1 with attributes in body" {
+  // The stripping only handles plain <h1>...</h1>, not <h1 class="...">
+  // This test verifies that a body with only a non-matching start is unchanged
+  let html = "<h2>Subtitle</h2>\n<p>Content</p>"
+  let result = @html.strip_leading_h1(html)
+  assert_eq(result, "<h2>Subtitle</h2>\n<p>Content</p>")
+}
+
+///|
+test "strip_leading_h1 with complex h1 content" {
+  let html = "<h1>Title with <em>emphasis</em></h1>\n<p>Content</p>"
+  let result = @html.strip_leading_h1(html)
+  assert_eq(result, "<p>Content</p>")
+}
+
+///|
+test "strip_leading_h1 on empty string" {
+  let result = @html.strip_leading_h1("")
+  assert_eq(result, "")
+}
+
+///|
+test "strip_leading_h1 on whitespace only" {
+  let result = @html.strip_leading_h1("  \n\t  ")
+  assert_eq(result, "  \n\t  ")
+}
+
+///|
+test "render_head_meta with all fields" {
+  let result = @html.render_head_meta(
+    "My Page",
+    Some("A description"),
+    "https://example.com/my-page/",
+  )
+  assert_true(
+    result.contains("<meta property=\"og:title\" content=\"My Page\" />"),
+  )
+  assert_true(
+    result.contains(
+      "<meta property=\"og:description\" content=\"A description\" />",
+    ),
+  )
+  assert_true(
+    result.contains(
+      "<meta property=\"og:url\" content=\"https://example.com/my-page/\" />",
+    ),
+  )
+  assert_true(
+    result.contains("<meta property=\"og:type\" content=\"article\" />"),
+  )
+  assert_true(
+    result.contains(
+      "<link rel=\"canonical\" href=\"https://example.com/my-page/\" />",
+    ),
+  )
+}
+
+///|
+test "render_head_meta without description" {
+  let result = @html.render_head_meta("My Page", None, "https://example.com/")
+  assert_true(
+    result.contains("<meta property=\"og:title\" content=\"My Page\" />"),
+  )
+  assert_true(!result.contains("og:description"))
+  assert_true(
+    result.contains(
+      "<meta property=\"og:url\" content=\"https://example.com/\" />",
+    ),
+  )
+}
+
+///|
+test "render_head_meta escapes special characters" {
+  let result = @html.render_head_meta(
+    "Test & Page",
+    Some("A \"quoted\" description"),
+    "https://example.com/test?q=1&x=2",
+  )
+  assert_true(result.contains("content=\"Test &amp; Page\""))
+  assert_true(result.contains("content=\"A &quot;quoted&quot; description\""))
+  assert_true(result.contains("href=\"https://example.com/test?q=1&amp;x=2\""))
+}
