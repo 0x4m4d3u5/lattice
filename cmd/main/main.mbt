@@ -944,7 +944,13 @@ fn run_main() -> Unit {
         return
       }
     }
-    match @scaffold.new_content_file(coll.content_dir, coll.schema, slug) {
+    match
+      @scaffold.new_content_file(
+        coll.content_dir,
+        coll.schema,
+        slug,
+        @watch.today_ymd(),
+      ) {
       Ok(path) => println("[lattice] created " + path)
       Err(msg) => {
         print_diagnostic_main(cli_error(msg))
