@@ -536,4 +536,42 @@ The timing does not affect the build pipeline itself. It is a measurement layer 
 
 The honest design choice is that this is wall-clock timing, not phase-level timing. A more ambitious implementation would instrument the builder to report time spent in each phase (source collection, schema validation, wikilink resolution, HTML rendering, file emission). That would give the developer more diagnostic data when a build is slow. The tradeoff is complexity: the builder's internal structure would need to surface timing data through the `BuildResult` type, and the measurement points would need to be maintained as the builder evolves. Wall-clock timing at the CLI boundary is zero-maintenance — it measures the thing the developer actually experiences (total build time) without coupling to internal implementation details.
 
-The structural lesson is that developer experience includes *feedback about the tool itself*, not just feedback about the content. The build summary tells the developer "your content has these problems." The timing tells the developer "the tool is performing like this." Both are UX. The timing addition is small (72 lines changed across 4 files) but it closes a gap that every competing tool already addresses.
+The structural lesson is that developer experience includes *feedback about the tool itself*, not just feedback about the content. The build summary tells the developer "your content has these problems." The timing tells the developer "the tool is performing like this." Both are UX. The timing addition is small (72 lines changed across 4 files) but it closes a gap that every competing tool already addresses.\n\n### Scaffold strutil Migration — The Fifth Instance
+
+Commit `6bc61fc` ("refactor(scaffold): migrate local char_at/substring to @strutil — fifth instance of duplication pattern") removed two local helper functions from `src/scaffold/scaffold.mbt` that were semantically identical to `@strutil` functions despite the package already importing `@strutil`:
+
+- `fn char_at(s : String, i : Int) -> Char` — identical to `@strutil.char_at`
+- `fn substring(s : String, start : Int, end : Int) -> String` — identical to `@strutil.substr`
+
+These were used exclusively in two path-manipulation functions: `ensure_dir()` (iterates a path string character by character to find `/` separators and build parent directory strings) and `write_file()` (iterates a path to find the last `/` for parent directory extraction). Neither function is hot-path-critical — they run during `lattice init` and `lattice new`, not during the build pipeline — so the duplication had zero performance consequence. It was purely a maintenance and code-hygiene issue.
+
+This is the **fifth time** the same pattern has been found and fixed across the codebase. The sequence:
+
+1. **Main strutil migration** (commit `11fed53`) — 1081 local helpers across 20 packages replaced with `@strutil` calls. The original coordinated cleanup.
+2. **Shortcode migration** (commit `ba6bee8`) — four local helpers (`char_at_shortcode`, `substr_shortcode`, `trim_shortcode`, `is_digit_shortcode`) that the main migration missed because the audit threshold didn't catch packages with low helper counts.
+3. **Bubble sort → stdlib** (commit `146486f`) — four hand-rolled O(n²) sorts replaced with `Array::sort_by`. Same class of problem (hand-rolling what the stdlib provides), different manifestation.
+4. **builder.mbt migration** — 12 `_builder`-suffixed local helpers in the largest file (~5700 lines) that had accumulated incrementally during feature development.
+5. **Scaffold migration** (commit `6bc61fc`) — two local helpers in a package that *already imported `@strutil`* but still had its own copies.
+
+The honest lesson about why this keeps happening is that the duplication is invisible at the function level. Each individual helper is small (3–8 lines), locally correct, and serves an immediate need. The problem only becomes visible at the pattern level: look across all packages and see the same three string operations implemented everywhere. MoonBit's type system cannot detect this — `char_at` in scaffold and `char_at` in strutil are different symbols to the compiler. The enforcement is procedural, not structural.
+
+What would actually stop it? Three options, none implemented:
+
+1. **A linter rule** that flags any function matching the signature of an `@strutil` function in a package that imports `@strutil`. MoonBit doesn't have a custom-lint plugin system at the time of writing.
+2. **A CI check** that greps for `_builder`, `_shortcode`, `_scaffold`-suffixed local helpers in any package importing `@strutil`. A naming convention becomes a detection convention.
+3. **Discipline** — the AGENTS.md warning and this retrospective section. This is the weakest option but the only one currently in place.
+
+The fact that scaffold had these helpers *despite already importing `@strutil`* suggests the duplication isn't even driven by "I didn't know the module existed." It's driven by "I needed a helper, wrote it inline, and didn't check whether I was already importing the canonical version." The import was there; the developer just didn't look. This is the honest AI-assisted development failure mode: agents optimize for immediate correctness within the current function scope, not for cross-package consistency.
+
+
+### today_ymd in `lattice new` — Live Dates in Scaffolding
+
+Commit `33c7b54` ("feat(scaffold): wire today's date into lattice new") changed `stub_for_field_type()` to use the actual system date for `TDate` fields instead of a hardcoded `"2026-01-01"` placeholder. The `generate_frontmatter()` function now receives a `today` parameter from `@watch.today_ymd()`, which returns the current UTC date as `YYYY-MM-DD` using the same `@watch` FFI module already used for file watching and `current_millis()`.
+
+Before this change, running `lattice new posts my-post` would generate frontmatter with `date: 2026-01-01`. That stub is structurally valid — it's a correct ISO 8601 date — but it becomes *semantically* invalid if the collection schema declares `Date(after=2025-01-01)`. As of March 2026, `"2026-01-01"` still satisfies that constraint, but the structural point is broader: a hardcoded date is a frozen value that drifts from reality over time. If an author runs `lattice new posts my-post` in December 2026, they'd get a date from eleven months ago.
+
+The fix makes the scaffold generate `date: 2026-04-08` (or whatever today is). The actual date is always within reasonable bounds because it's the real current date. A schema like `Date(after=2025-01-01)` will accept it. A schema like `Date(after=2030-01-01)` would reject it — but that's a schema authoring error (a future-bound date constraint on a scaffold makes no sense), not a scaffold error.
+
+The implementation is clean: `stub_for_field_type()` takes `today` as a parameter rather than calling `@watch.today_ymd()` internally. This makes the function testable — the test suite passes fixed date strings like `"2026-04-01"` and verifies the stub output without depending on the system clock. The `@watch.today_ymd()` call happens at the CLI boundary, in the command handler, and the date string flows down through `generate_frontmatter()` → `stub_for_field_type()`. The same separation principle as build timing: the scaffold doesn't know about clocks; it knows about dates as strings.
+
+The structural point is that `lattice new` generates frontmatter that is *valid for today*. The `lattice new` → `lattice build` cycle works immediately — no manual date editing required. This matters because every friction point in the content-creation workflow is a place where an author might abandon the tool or introduce an error. A scaffolded file that fails validation on the first build is the worst possible first experience. The live-date fix ensures the scaffold produces a structurally valid file that passes the full validation pipeline, including `TDate` bounds, without the author needing to touch the date field at all.
