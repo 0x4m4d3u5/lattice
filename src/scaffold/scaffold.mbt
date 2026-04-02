@@ -1303,7 +1303,7 @@ pub fn scaffold_site(target_dir : String) -> Result[Unit, String] {
 /// - TInt(min=N) → N
 /// - TFloat(min=N) → N
 /// - TEnum → first allowed value
-pub fn stub_for_field_type(ft : @schema.FieldType) -> String {
+pub fn stub_for_field_type(ft : @schema.FieldType, today : String) -> String {
   match ft {
     @schema.TString(minlen, maxlen) => {
       // Start with "placeholder" and pad if minlen requires more characters
@@ -1336,12 +1336,7 @@ pub fn stub_for_field_type(ft : @schema.FieldType) -> String {
         truncated
       }
     }
-    @schema.TDate(_, _) =>
-      // Use today's date or a reasonable placeholder
-      // We can't access real time in scaffold without @watch/@time imports,
-      // so use a stable placeholder that's easy to spot and replace.
-      // TODO: accept current date as parameter for real usage
-      "2026-01-01"
+    @schema.TDate(_, _) => today
     @schema.TInt(min_val, _) =>
       match min_val {
         Some(n) => n.to_string()
@@ -1354,7 +1349,7 @@ pub fn stub_for_field_type(ft : @schema.FieldType) -> String {
       }
     @schema.TBool => "false"
     @schema.TArray(_) => "[]"
-    @schema.TOptional(inner) => stub_for_field_type(inner)
+    @schema.TOptional(inner) => stub_for_field_type(inner, today)
     @schema.TEnum(allowed) => if allowed.length() > 0 { allowed[0] } else { "" }
     @schema.TUrl => "https://example.com"
     @schema.TSlug => "example-slug"
@@ -1367,7 +1362,7 @@ pub fn stub_for_field_type(ft : @schema.FieldType) -> String {
 ///
 /// Produces a YAML frontmatter block with stub values for all required fields.
 /// Optional fields are included as comments so the author knows they exist.
-pub fn generate_frontmatter(schema : @schema.Schema) -> String {
+pub fn generate_frontmatter(schema : @schema.Schema, today : String) -> String {
   let buf = StringBuilder::new()
   buf.write_string("---\n")
   let mut i = 0
@@ -1375,16 +1370,16 @@ pub fn generate_frontmatter(schema : @schema.Schema) -> String {
     let fdef = schema.fields[i]
     if fdef.required {
       // Emit required fields with stub values
-      let stub = stub_for_field_type(fdef.field_type)
+      let stub = stub_for_field_type(fdef.field_type, today)
       // For array values, emit a single-element array using the inner type's stub
       match fdef.field_type {
         @schema.TArray(inner) =>
           buf.write_string(
-            fdef.name + ":\n  - " + stub_for_field_type(inner) + "\n",
+            fdef.name + ":\n  - " + stub_for_field_type(inner, today) + "\n",
           )
         @schema.TOptional(@schema.TArray(inner)) =>
           buf.write_string(
-            fdef.name + ":\n  - " + stub_for_field_type(inner) + "\n",
+            fdef.name + ":\n  - " + stub_for_field_type(inner, today) + "\n",
           )
         _ => buf.write_string(fdef.name + ": " + stub + "\n")
       }
@@ -1415,6 +1410,7 @@ pub fn new_content_file(
   content_dir : String,
   schema : @schema.Schema,
   slug : String,
+  today : String,
 ) -> Result[String, String] {
   // Validate the slug is non-empty
   if slug.length() == 0 {
@@ -1432,7 +1428,7 @@ pub fn new_content_file(
   }
 
   // Generate frontmatter
-  let frontmatter = generate_frontmatter(schema)
+  let frontmatter = generate_frontmatter(schema, today)
 
   // Build the full file content: frontmatter + body stub
   let content = frontmatter + "\n\n# \n"

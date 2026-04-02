@@ -1,103 +1,118 @@
 ///|
 test "stub_for_field_type - TString unbounded" {
-  let result = stub_for_field_type(@schema.TString(None, None))
+  let result = stub_for_field_type(@schema.TString(None, None), "2026-04-01")
   assert_eq(result, "placeholder")
 }
 
 ///|
 test "stub_for_field_type - TString with minlen" {
-  let result = stub_for_field_type(@schema.TString(Some(5), None))
+  let result = stub_for_field_type(@schema.TString(Some(5), None), "2026-04-01")
   assert_eq(result, "placeholder")
 }
 
 ///|
 test "stub_for_field_type - TString with maxlen shorter than placeholder" {
-  let result = stub_for_field_type(@schema.TString(None, Some(5)))
+  let result = stub_for_field_type(@schema.TString(None, Some(5)), "2026-04-01")
   assert_eq(result, "place")
 }
 
 ///|
 test "stub_for_field_type - TString with minlen requiring padding" {
-  let result = stub_for_field_type(@schema.TString(Some(20), None))
+  let result = stub_for_field_type(
+    @schema.TString(Some(20), None),
+    "2026-04-01",
+  )
   assert_eq(result.length(), 20)
   assert_eq(@strutil.substr(result, 0, 11), "placeholder")
 }
 
 ///|
 test "stub_for_field_type - TDate" {
-  let result = stub_for_field_type(@schema.TDate(None, None))
-  assert_eq(result, "2026-01-01")
+  let result = stub_for_field_type(@schema.TDate(None, None), "2026-04-01")
+  assert_eq(result, "2026-04-01")
 }
 
 ///|
 test "stub_for_field_type - TInt unbounded" {
-  let result = stub_for_field_type(@schema.TInt(None, None))
+  let result = stub_for_field_type(@schema.TInt(None, None), "2026-04-01")
   assert_eq(result, "0")
 }
 
 ///|
 test "stub_for_field_type - TInt with min" {
-  let result = stub_for_field_type(@schema.TInt(Some(10), None))
+  let result = stub_for_field_type(@schema.TInt(Some(10), None), "2026-04-01")
   assert_eq(result, "10")
 }
 
 ///|
 test "stub_for_field_type - TFloat unbounded" {
-  let result = stub_for_field_type(@schema.TFloat(None, None))
+  let result = stub_for_field_type(@schema.TFloat(None, None), "2026-04-01")
   assert_eq(result, "0.0")
 }
 
 ///|
 test "stub_for_field_type - TFloat with min" {
-  let result = stub_for_field_type(@schema.TFloat(Some(1.5), None))
+  let result = stub_for_field_type(
+    @schema.TFloat(Some(1.5), None),
+    "2026-04-01",
+  )
   assert_eq(result, "1.5")
 }
 
 ///|
 test "stub_for_field_type - TBool" {
-  let result = stub_for_field_type(@schema.TBool)
+  let result = stub_for_field_type(@schema.TBool, "2026-04-01")
   assert_eq(result, "false")
 }
 
 ///|
 test "stub_for_field_type - TEnum" {
-  let result = stub_for_field_type(@schema.TEnum(["draft", "published"]))
+  let result = stub_for_field_type(
+    @schema.TEnum(["draft", "published"]),
+    "2026-04-01",
+  )
   assert_eq(result, "draft")
 }
 
 ///|
 test "stub_for_field_type - TEnum empty" {
-  let result = stub_for_field_type(@schema.TEnum([]))
+  let result = stub_for_field_type(@schema.TEnum([]), "2026-04-01")
   assert_eq(result, "")
 }
 
 ///|
 test "stub_for_field_type - TUrl" {
-  let result = stub_for_field_type(@schema.TUrl)
+  let result = stub_for_field_type(@schema.TUrl, "2026-04-01")
   assert_eq(result, "https://example.com")
 }
 
 ///|
 test "stub_for_field_type - TSlug" {
-  let result = stub_for_field_type(@schema.TSlug)
+  let result = stub_for_field_type(@schema.TSlug, "2026-04-01")
   assert_eq(result, "example-slug")
 }
 
 ///|
 test "stub_for_field_type - TRef" {
-  let result = stub_for_field_type(@schema.TRef(Some("posts")))
+  let result = stub_for_field_type(@schema.TRef(Some("posts")), "2026-04-01")
   assert_eq(result, "example-slug")
 }
 
 ///|
 test "stub_for_field_type - TArray" {
-  let result = stub_for_field_type(@schema.TArray(@schema.TString(None, None)))
+  let result = stub_for_field_type(
+    @schema.TArray(@schema.TString(None, None)),
+    "2026-04-01",
+  )
   assert_eq(result, "[]")
 }
 
 ///|
 test "stub_for_field_type - TOptional delegates to inner" {
-  let result = stub_for_field_type(@schema.TOptional(@schema.TBool))
+  let result = stub_for_field_type(
+    @schema.TOptional(@schema.TBool),
+    "2026-04-01",
+  )
   assert_eq(result, "false")
 }
 
@@ -122,7 +137,7 @@ test "generate_frontmatter - basic schema" {
       },
     ],
   }
-  let result = generate_frontmatter(schema)
+  let result = generate_frontmatter(schema, "2026-04-01")
   let lines : Array[String] = result
     .split("\n")
     .map(fn(sv) { sv.to_string() })
@@ -131,7 +146,7 @@ test "generate_frontmatter - basic schema" {
   assert_eq(lines[0], "---")
   // Required fields emitted as values
   inspect(lines[1], content="title: placeholder")
-  inspect(lines[2], content="date: 2026-01-01")
+  inspect(lines[2], content="date: 2026-04-01")
   // Optional fields emitted as comments
   inspect(lines[3], content="# tags:")
   inspect(lines[4], content="#   - value")
@@ -152,7 +167,7 @@ test "generate_frontmatter - array field required" {
       },
     ],
   }
-  let result = generate_frontmatter(schema)
+  let result = generate_frontmatter(schema, "2026-04-01")
   let lines : Array[String] = result
     .split("\n")
     .map(fn(sv) { sv.to_string() })
@@ -173,7 +188,7 @@ test "generate_frontmatter - TInt with min" {
       },
     ],
   }
-  let result = generate_frontmatter(schema)
+  let result = generate_frontmatter(schema, "2026-04-01")
   let lines : Array[String] = result
     .split("\n")
     .map(fn(sv) { sv.to_string() })
@@ -189,7 +204,9 @@ test "new_content_file - empty slug rejected" {
       { name: "title", field_type: @schema.TString(None, None), required: true },
     ],
   }
-  let result = new_content_file("/tmp/lattice-test-new", schema, "")
+  let result = new_content_file(
+    "/tmp/lattice-test-new", schema, "", "2026-04-01",
+  )
   match result {
     Err(msg) => assert_eq(msg, "slug must not be empty")
     Ok(_) => fail("expected error for empty slug")
@@ -213,7 +230,7 @@ test "new_content_file - refuses to overwrite existing file" {
   @fs.write_string_to_file(path, "existing") catch {
     _ => ()
   }
-  let result = new_content_file(test_dir, schema, "existing")
+  let result = new_content_file(test_dir, schema, "existing", "2026-04-01")
   match result {
     Err(msg) =>
       assert_eq(@strutil.starts_with(msg, "file already exists"), true)
