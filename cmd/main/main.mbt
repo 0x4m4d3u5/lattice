@@ -3,7 +3,7 @@
 ///
 /// Subcommands:
 ///   lattice build [content-dir] [-o <dir>] [--config <path>] [--collections <path>] [--drafts] [--watch]
-///   lattice check [content-dir] [-o <dir>] [--config <path>] [--collections <path>]
+///   lattice check [content-dir] [-o <dir>] [--config <path>] [--collections <path>] [--drafts]
 ///   lattice serve [content-dir] [-o <dir>] [--port <N>] [--config <path>] [--collections <path>] [--drafts]
 ///
 /// Defaults:
@@ -225,6 +225,7 @@ fn build_parser() -> @clap.Parser {
             defaults=[""],
             help="Override collections config file",
           ),
+          "drafts": @clap.Arg::flag(help="Include draft posts in the check"),
         },
         help="Run validation/lint pipeline only",
       ),
@@ -370,7 +371,7 @@ fn cli_options_from_clap(
         force_rebuild: false,
         watch_mode: false,
         watch_interval_ms: 500,
-        include_drafts: false,
+        include_drafts,
         serve_mode: false,
         serve_port: @serve.default_port(),
       }
