@@ -5673,6 +5673,7 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
 fn default_css() -> String {
   "/* lattice default styles */\n" +
   "*, *::before, *::after { box-sizing: border-box; }\n" +
+  "@media (prefers-color-scheme: light) {\n" +
   "body {\n" +
   "  font-family: system-ui, -apple-system, sans-serif;\n" +
   "  max-width: 780px;\n" +
@@ -5682,9 +5683,22 @@ fn default_css() -> String {
   "  color: #1a1a2e;\n" +
   "  background: #fafafa;\n" +
   "}\n" +
+  "}\n" +
+  "@media (prefers-color-scheme: dark) {\n" +
+  "body {\n" +
+  "  font-family: system-ui, -apple-system, sans-serif;\n" +
+  "  max-width: 780px;\n" +
+  "  margin: 0 auto;\n" +
+  "  padding: 2rem 1.5rem;\n" +
+  "  line-height: 1.7;\n" +
+  "  color: #e2e8f0;\n" +
+  "  background: #0f172a;\n" +
+  "}\n" +
+  "}\n" +
   "h1, h2, h3 { line-height: 1.3; margin-top: 2rem; }\n" +
   "a { color: #2563eb; text-decoration-thickness: 1px; }\n" +
   "a:hover { text-decoration-thickness: 2px; }\n" +
+  "@media (prefers-color-scheme: light) {\n" +
   "code {\n" +
   "  background: #f1f5f9;\n" +
   "  padding: 0.15em 0.35em;\n" +
@@ -5692,8 +5706,24 @@ fn default_css() -> String {
   "  font-family: ui-monospace, monospace;\n" +
   "  font-size: 0.9em;\n" +
   "}\n" +
-  "pre { background: #f1f5f9; padding: 1.25rem; border-radius: 6px; overflow-x: auto; }\n" +
-  "pre code { background: none; padding: 0; font-size: 1em; }\n" +
+  "}\n" +
+  "@media (prefers-color-scheme: dark) {\n" +
+  "code {\n" +
+  "  background: #1e293b;\n" +
+  "  padding: 0.15em 0.35em;\n" +
+  "  border-radius: 3px;\n" +
+  "  font-family: ui-monospace, monospace;\n" +
+  "  font-size: 0.9em;\n" +
+  "}\n" +
+  "}\n" +
+  "pre { padding: 1.25rem; border-radius: 6px; overflow-x: auto; }\n" +
+  "@media (prefers-color-scheme: light) {\n" +
+  "pre { background: #f1f5f9; }\n" +
+  "}\n" +
+  "@media (prefers-color-scheme: dark) {\n" +
+  "pre { background: #1e293b; }\n" +
+  "}\n" +
+  "pre code { background: none; padding: 0; font-size: 1em; color: inherit; }\n" +
   "blockquote {\n" +
   "  border-left: 3px solid #cbd5e1;\n" +
   "  margin: 0;\n" +
