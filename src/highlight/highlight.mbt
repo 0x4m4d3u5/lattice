@@ -31,42 +31,16 @@ fn is_pascal_case_ident(s : String) -> Bool {
 }
 
 ///|
+/// Check if a word is in an array of strings.
+/// Delegates to stdlib Array::contains.
 fn is_member(word : String, items : Array[String]) -> Bool {
-  let mut i = 0
-  while i < items.length() {
-    if items[i] == word {
-      return true
-    }
-    i = i + 1
-  }
-  false
+  items.contains(word)
 }
 
 ///|
+/// Case-insensitive string equality using stdlib String::to_lower().
 fn equals_case_insensitive(a : String, b : String) -> Bool {
-  if a.length() != b.length() {
-    return false
-  }
-  let mut i = 0
-  while i < a.length() {
-    let ca = @strutil.char_at(a, i)
-    let cb = @strutil.char_at(b, i)
-    let ca_lower = if ca >= 'A' && ca <= 'Z' {
-      ca.to_int() + 32
-    } else {
-      ca.to_int()
-    }
-    let cb_lower = if cb >= 'A' && cb <= 'Z' {
-      cb.to_int() + 32
-    } else {
-      cb.to_int()
-    }
-    if ca_lower != cb_lower {
-      return false
-    }
-    i = i + 1
-  }
-  true
+  a.to_lower() == b.to_lower()
 }
 
 ///|
