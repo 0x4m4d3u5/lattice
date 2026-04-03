@@ -701,6 +701,79 @@ pub fn find_str(s : String, from : Int, needle : String, limit : Int) -> Int {
 }
 
 ///|
+/// Strip HTML tags from a string, decode basic entities (&amp; &lt; &gt; &quot;
+/// &#39; &apos;), and collapse whitespace into single spaces. Returns clean
+/// plaintext suitable for content indexing or LLM/agent consumption.
+pub fn strip_html_tags(s : String) -> String {
+  // Pass 1: remove tags — replace each <...> with a space
+  let buf = StringBuilder::new()
+  let n = s.length()
+  let mut i = 0
+  let mut in_tag = false
+  while i < n {
+    let c = char_at(s, i)
+    if in_tag {
+      if c == '>' {
+        in_tag = false
+        buf.write_char(' ')
+      }
+    } else if c == '<' {
+      in_tag = true
+    } else {
+      buf.write_char(c)
+    }
+    i = i + 1
+  }
+  // Pass 2: decode basic entities and collapse runs of whitespace
+  let stripped = buf.to_string()
+  let out = StringBuilder::new()
+  let m = stripped.length()
+  let mut j = 0
+  let mut prev_ws = true // treat leading whitespace as already-spaced
+  while j < m {
+    let c = char_at(stripped, j)
+    if c == '&' {
+      // Attempt entity decode; fall back to literal '&' if unknown
+      let mut decoded_char = '&'
+      let mut skip = 1
+      if starts_with_at(stripped, j, "&amp;") {
+        decoded_char = '&'
+        skip = 5
+      } else if starts_with_at(stripped, j, "&lt;") {
+        decoded_char = '<'
+        skip = 4
+      } else if starts_with_at(stripped, j, "&gt;") {
+        decoded_char = '>'
+        skip = 4
+      } else if starts_with_at(stripped, j, "&quot;") {
+        decoded_char = '"'
+        skip = 6
+      } else if starts_with_at(stripped, j, "&apos;") {
+        decoded_char = '\''
+        skip = 6
+      } else if starts_with_at(stripped, j, "&#39;") {
+        decoded_char = '\''
+        skip = 5
+      }
+      out.write_char(decoded_char)
+      prev_ws = false
+      j = j + skip
+    } else if c == ' ' || c == '\n' || c == '\t' || c == '\r' {
+      if !prev_ws {
+        out.write_char(' ')
+        prev_ws = true
+      }
+      j = j + 1
+    } else {
+      out.write_char(c)
+      prev_ws = false
+      j = j + 1
+    }
+  }
+  trim(out.to_string())
+}
+
+///|
 /// Sort an array in place using insertion sort with the given comparator.
 ///
 /// This is a simple O(n²) sort suitable for small arrays (e.g., feed entries).

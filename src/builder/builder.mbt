@@ -491,6 +491,7 @@ priv struct ProcessedDocument {
   description : String?
   date : String?
   excerpt : String
+  body_text : String
   resolved_links : Array[@wikilink.ResolvedWikilink]
   tags : Array[@tags.TagRef]
 }
@@ -1729,6 +1730,11 @@ fn search_index_file_name(site : @config.SiteConfig) -> String {
     Some(path) => path
     None => "search-index.json"
   }
+}
+
+///|
+fn content_index_file_name(site : @config.SiteConfig) -> String? {
+  site.content_index_file
 }
 
 ///|
@@ -2994,6 +3000,7 @@ fn process_document(
         description: description_value,
         date: date_value,
         excerpt,
+        body_text: "",
         resolved_links: resolved,
         tags: page_tags,
       }),
@@ -3196,6 +3203,7 @@ fn process_document(
       description: description_value,
       date: date_value,
       excerpt,
+      body_text: @strutil.strip_html_tags(body_html),
       resolved_links: resolved,
       tags: page_tags,
     }),
@@ -3690,6 +3698,7 @@ fn process_document_for_lint(
       description: description_value,
       date: date_value,
       excerpt,
+      body_text: @strutil.strip_html_tags(body_html),
       resolved_links: resolved,
       tags: page_tags,
     }),
@@ -4291,6 +4300,7 @@ pub fn build(
   let mut redirect_count = 0
   let graph_pages : Array[@graph.GraphPage] = []
   let search_entries : Array[@search.SearchEntry] = []
+  let content_entries : Array[@search.ContentEntry] = []
   let tag_pages_by_slug : Map[String, Array[@tags.TaggedPage]] = Map::new()
   let rendered_collections : Array[CollectionRenderResult] = []
   i = 0
@@ -4598,6 +4608,18 @@ pub fn build(
                     search_tags,
                     collection_name,
                     doc.excerpt,
+                  ),
+                )
+                content_entries.push(
+                  @search.new_content_entry(
+                    doc.title,
+                    src.slug,
+                    doc.url,
+                    search_tags,
+                    collection_name,
+                    match doc.date { Some(d) => d; None => "" },
+                    match doc.description { Some(d) => d; None => "" },
+                    doc.body_text,
                   ),
                 )
               }
@@ -5086,6 +5108,36 @@ pub fn build(
       }
       if !search_write_ok {
         error_count = error_count + 1
+      }
+    }
+    if error_count == 0 {
+      match content_index_file_name(config.site) {
+        Some(fname) => {
+          let content_write_ok = try {
+            let content_json = @search.render_content_index(content_entries)
+            let out_path = config.output_dir + "/" + fname
+            ensure_parent_dirs_for_file(out_path)
+            @fs.write_string_to_file(out_path, content_json)
+            println("[lattice] wrote " + out_path)
+            true
+          } catch {
+            @fs.IOError(msg) => {
+              diagnostics.push(
+                build_error(
+                  Some(config.output_dir + "/" + fname),
+                  None,
+                  None,
+                  "content index: write failed: " + msg,
+                ),
+              )
+              false
+            }
+          }
+          if !content_write_ok {
+            error_count = error_count + 1
+          }
+        }
+        None => ()
       }
     }
     if error_count == 0 {

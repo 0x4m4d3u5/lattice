@@ -1,0 +1,6 @@
+# Author metadata for the example site.
+# Used in templates via {{data.authors.team_lead}} etc.
+
+team_lead = "Lattice Team"
+team_size = 3
+contributing = true
