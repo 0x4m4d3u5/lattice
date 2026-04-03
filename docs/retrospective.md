@@ -575,3 +575,46 @@ The fix makes the scaffold generate `date: 2026-04-08` (or whatever today is). T
 The implementation is clean: `stub_for_field_type()` takes `today` as a parameter rather than calling `@watch.today_ymd()` internally. This makes the function testable — the test suite passes fixed date strings like `"2026-04-01"` and verifies the stub output without depending on the system clock. The `@watch.today_ymd()` call happens at the CLI boundary, in the command handler, and the date string flows down through `generate_frontmatter()` → `stub_for_field_type()`. The same separation principle as build timing: the scaffold doesn't know about clocks; it knows about dates as strings.
 
 The structural point is that `lattice new` generates frontmatter that is *valid for today*. The `lattice new` → `lattice build` cycle works immediately — no manual date editing required. This matters because every friction point in the content-creation workflow is a place where an author might abandon the tool or introduce an error. A scaffolded file that fails validation on the first build is the worst possible first experience. The live-date fix ensures the scaffold produces a structurally valid file that passes the full validation pipeline, including `TDate` bounds, without the author needing to touch the date field at all.
+
+
+
+### `{{body_no_h1}}` Template Slot — Eliminating Duplicate H1 as a Structural Concern
+
+Commit `c2e4ac1` ("fix(template): add {{body_no_h1}} slot to eliminate duplicate H1 in rendered pages") addresses a content-integrity bug that the template system's expressiveness made easy to fix — and that the lack of the slot made invisible.
+
+The bug manifested as two `<h1>` tags on rendered article pages. The article template (`example/templates/article.html`) renders the page title as `<h1>{{title}}</h1>` in the hero section. But when a content author writes a markdown file that starts with `# My Title`, the markdown renderer produces `<h1>My Title</h1>` as the first element of the body. The template then substitutes `{{content}}` with this rendered body, resulting in:
+
+```html
+<h1>My Post Title</h1>  <!-- from the template -->
+<!-- ... hero section ... -->
+<div class="prose__body">
+  <h1>My Post Title</h1>  <!-- from the markdown body -->
+  <p>Content begins here...</p>
+</div>
+```
+
+Two H1 tags on a single page is both an SEO violation (search engines treat the first H1 as the primary topic) and an accessibility violation (screen readers use H1 for page-level navigation). This is exactly the kind of content-integrity bug that lattice's structural thesis should prevent — but it slipped through because the template system's slot vocabulary didn't include a way to express "the body without its leading H1."
+
+The fix adds a `BodyNoH1` variant to the `TemplateSlot` enum and a `strip_leading_h1()` function in `src/html/html.mbt`. The function operates on the rendered HTML string, not on the markdown AST — it skips leading whitespace, checks for a literal `<h1>` opening tag, finds the matching `</h1>` close tag, and returns everything after it. This is a post-render transform, not a parse-time transform. The choice is deliberate: the markdown renderer is agnostic about template context, and the template layer is agnostic about markdown rendering internals. The HTML-level strip keeps the two concerns separated.
+
+The article template now uses `{{body_no_h1}}` instead of `{{content}}` for the prose body. The `{{content}}` slot remains available for templates that want the full body including any H1. Every other render path in the builder (archive pages, tag pages, collection indices, the 404 page) also sets the `BodyNoH1` slot alongside the `Content` slot — the builder always provides both, and the template chooses which to use.
+
+The structural lesson is about slot vocabulary as a design surface. The template slot enum (`TemplateSlot`) is the type contract between the builder and the template. Before `BodyNoH1`, the contract could express "the full rendered content" but not "the content with its first H1 stripped." The bug existed because the vocabulary was incomplete. Adding the slot didn't change the rendering pipeline — it added a new named output that the builder populates and the template can reference. The template system's expressiveness (named slots that the builder populates as a map) made the fix clean: one new enum variant, one new string-to-slot mapping, one new HTML helper, and the builder populates it everywhere it populates `Content`.
+
+The same commit also adds a `HeadMeta` slot that renders OG meta tags and a canonical link into `<head>`. The two additions are related: `body_no_h1` prevents structural duplication in the page body, and `head_meta` ensures the correct structural metadata is always present. Together they close two integrity gaps (duplicate H1, missing OG tags) that were not type errors in the content but were structural violations in the rendered output.
+
+### `--drafts` Flag for `lattice check` — Separating Build-Time Content from In-Progress Content
+
+Commit `a96930e` ("feat(check): add --drafts flag to lattice check for draft content validation") is a three-line change that completes the `--drafts` CLI surface across all three subcommands. Before this commit, `lattice build --drafts` and `lattice serve --drafts` both included draft posts, but `lattice check` had no `--drafts` flag — running check always excluded drafts, meaning there was no way to validate draft content's schema or wikilinks without building the full site.
+
+The architectural context is that draft content occupies a deliberate grey zone in lattice's content model. Posts with `draft: true` in frontmatter are excluded from normal builds. This is correct behavior — drafts are intentionally incomplete. A draft might reference a wikilink target that hasn't been written yet, or omit a required frontmatter field that the author plans to fill in later. Excluding drafts from the normal validation pipeline prevents the build from failing on content that is explicitly not ready.
+
+But the exclusion creates a validation gap. An author working on a draft has no way to check whether their in-progress content has schema violations, broken wikilinks to existing pages, or frontmatter type errors. They'd have to either remove the `draft: true` flag (changing the content's status to run the check) or run a full build with `--drafts` (which includes all drafts, not just the one they're editing). Neither workflow is ergonomic.
+
+The `--drafts` flag on `check` closes this gap. Running `lattice check --drafts` includes draft posts in the validation pipeline — schema validation, wikilink resolution, frontmatter type checking — without building the full site. The author gets the same diagnostic stream (individual violations + structured summary) for draft content that they get for published content. The key architectural property is that `check` and `build` use the same validation code path — the only difference is that `check` stops after validation and doesn't render HTML or emit files. Adding `--drafts` to `check` means the `include_drafts` flag flows through the same code in both commands.
+
+The implementation is minimal because the `@clap` parser already supports the `--drafts` flag on the `build` and `serve` subcommands. Adding it to the `check` subcommand definition and routing the parsed value to `include_drafts` in `cli_options_from_clap()` is all that's required. The three lines are: one line in the help comment (updating the usage string), one line in the parser definition (adding the `@clap.Arg::flag`), and one line in the CLI options extraction (passing `include_drafts` through from the parsed result).
+
+The structural choice this reflects is about separating build-time content from in-progress content as a first-class concept in the tool. Drafts are not "content that fails validation." They are "content that is excluded from the normal pipeline by default, but can be opted in for validation." The `--drafts` flag on all three subcommands (`build`, `serve`, `check`) gives the author explicit control over this boundary. The default (no `--drafts`) is the safe state: only validated, published content is processed. The opt-in (`--drafts`) is the authoring state: in-progress content gets the same diagnostic treatment without entering the render pipeline.
+
+This is the UX thesis applied to the draft workflow. The tool doesn't force the author to choose between "publish broken content" and "never check drafts." It provides a dedicated check path that respects the draft boundary while still running the full validation suite against the draft content.
