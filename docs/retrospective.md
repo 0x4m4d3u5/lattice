@@ -643,3 +643,73 @@ The implementation is minimal because the `@clap` parser already supports the `-
 The structural choice this reflects is about separating build-time content from in-progress content as a first-class concept in the tool. Drafts are not "content that fails validation." They are "content that is excluded from the normal pipeline by default, but can be opted in for validation." The `--drafts` flag on all three subcommands (`build`, `serve`, `check`) gives the author explicit control over this boundary. The default (no `--drafts`) is the safe state: only validated, published content is processed. The opt-in (`--drafts`) is the authoring state: in-progress content gets the same diagnostic treatment without entering the render pipeline.
 
 This is the UX thesis applied to the draft workflow. The tool doesn't force the author to choose between "publish broken content" and "never check drafts." It provides a dedicated check path that respects the draft boundary while still running the full validation suite against the draft content.
+
+## Shortcode Parameter Types — Structural Validation at the Authoring Surface
+
+Commit `321c968` ("fix(example): use unquoted width=800 in image shortcode — IntParam vs StringParam distinction") is a one-line fix in `example/content/posts/rich-content-demo.md` that demonstrates something the retrospective should have documented earlier: the shortcode parameter system is a type contract between the content author and the render pipeline, and violations are build errors, not silent degradation.
+
+### The ShortcodeParam enum
+
+The shortcode system defines three parameter types in `src/shortcode/shortcode.mbt`:
+
+```moonbit
+pub(all) enum ShortcodeParam {
+  StringParam(String)
+  IntParam(Int)
+  BoolParam(Bool)
+}
+```
+
+When a content author writes `{{< image src="photo.jpg" alt="A photo" width=800 >}}`, the parser produces a `ShortcodeCall` with a `Map[String, ShortcodeParam]`. Each parameter value goes through `parse_value_shortcode`, which classifies the raw text into one of the three variants:
+
+1. **Quoted values** (`"..."`) → `StringParam`. The presence of opening `"` triggers `parse_quoted_shortcode`, which handles escape sequences and returns the string contents wrapped in `StringParam`.
+2. **Unquoted `true` or `false`** → `BoolParam`. The parser checks the unquoted token against these two literals before attempting integer parsing.
+3. **Unquoted digit sequences** (with optional leading `-`) → `IntParam` via `parse_int_shortcode`. This is a manual digit-by-digit parser — it walks the characters, rejects anything non-digit, and returns `Some(value)` or `None`.
+4. **Anything else** (unquoted non-boolean, non-integer) → `StringParam`. The fallback.
+
+This classification is strict. There is no implicit coercion. `"800"` is a `StringParam`. `800` is an `IntParam`. `true` is a `BoolParam`. The quotes are not decorative — they are part of the type syntax.
+
+### How render_image uses the type contract
+
+The `render_image` function retrieves the `width` parameter using `optional_int_param`:
+
+```moonbit
+fn optional_int_param(
+  call : ShortcodeCall,
+  key : String,
+) -> Result[Int?, ShortcodeError] {
+  match call.params.get(key) {
+    Some(IntParam(v)) => Ok(Some(v))
+    Some(_) => Err(InvalidParamType(call.name, key, "Int"))
+    None => Ok(None)
+  }
+}
+```
+
+The match is explicit: `Some(IntParam(v))` succeeds. `Some(_)` — meaning the parameter exists but is not an `IntParam` — returns `InvalidParamType`. `None` — parameter absent — is fine (it's optional).
+
+This means `render_image` will never produce `<img ... width="" .../>`. It will never silently emit a string value in a numeric attribute. If the author provides `width="800"` (a `StringParam`), the renderer rejects it with: `shortcode 'image' param 'width' expected Int`. The build fails. The diagnostic names the shortcode, the parameter, and the expected type.
+
+### The real example: `width="800"` vs `width=800`
+
+The `rich-content-demo.md` post in the example site had an image shortcode with `width="800"`. This built fine initially because the post didn't exist — it was added as part of the rich content demo. The build error appeared immediately:
+
+```
+shortcode 'image' param 'width' expected Int
+```
+
+The fix was removing the quotes: `width=800`. One character deleted per quote. But the important thing is what happened before the fix: the build stopped. It did not produce HTML with `width=""` or `width="800"` (which would be technically valid HTML but semantically wrong — the `width` attribute on `<img>` should be an integer, and string coercion in HTML is a source of subtle rendering bugs). It did not silently drop the parameter. It produced a diagnostic that named the exact problem and the exact location.
+
+This is the authoring-surface consequence of the type contract. Content authors don't write MoonBit. They write Markdown with shortcode calls. The shortcode syntax is their type system. Quotes mean string. No quotes mean literal (integer, boolean, or bare identifier). The syntax is minimal — there are no type annotations — but it is unambiguous. The parser resolves the type from the token shape, and the renderer enforces the type it expects.
+
+### The structural thesis, again
+
+This is the same pattern as frontmatter schema validation. The frontmatter system defines a schema (e.g., `status: Enum["active","archived","planned"]`), and content that violates the schema produces a build error before any HTML is rendered. The shortcode system defines a type contract (e.g., `width: IntParam`), and content that violates the contract produces a build error before any HTML is rendered.
+
+The common architectural property is: **type checking at the boundary between author-provided content and the render pipeline**. The content author provides data (frontmatter fields, shortcode parameters). The render pipeline expects data of a specific shape. The validation layer sits between them and rejects mismatches before the render pipeline can produce incorrect output.
+
+In a behavioral SSG (Astro, Hugo, Jekyll), this boundary is checked at render time or not at all. A Hugo shortcode template might do `width := .Get "width"` and emit it directly into the HTML. If the author wrote `width="abc"`, the HTML gets `width="abc"`. If the author wrote `width=""`, the HTML gets `width=""`. The template has no way to express "this parameter must be an integer" because the parameter system is a string map — `Get` always returns a string. Type validation, if it happens at all, is manual string parsing inside the template.
+
+In lattice, the shortcode parameter system is a typed map. The parser classifies values into `ShortcodeParam` variants at parse time. The renderer pattern-matches on the variant it expects. Mismatches are `ShortcodeError::InvalidParamType`, which becomes a build diagnostic. The type contract is expressed in the code — `optional_int_param(call, "width")` says "width must be IntParam or absent" — not in documentation or conventions.
+
+The `321c968` commit message documents this directly: "type mismatch between what the shortcode renderer expects and what the content author provided is a build error, not a silently dropped attribute." That's the structural thesis in one sentence. The retrospective exists to expand that sentence into an architectural narrative.
