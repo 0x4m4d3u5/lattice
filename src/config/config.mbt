@@ -26,6 +26,7 @@ pub struct SiteConfig {
   templates_dir : String?
   tags_field : String?
   search_index_file : String?
+  content_index_file : String?
   static_dir : String?
   data_dir : String?
   root_page : String?
@@ -156,6 +157,7 @@ fn parse_bool_config(value : String) -> Bool? {
 /// - `templates_dir`
 /// - `tags_field`
 /// - `search_index_file`
+/// - `content_index_file`
 /// - `static_dir`
 /// - `data_dir`
 /// - `root_page`
@@ -180,6 +182,7 @@ pub fn parse(input : String) -> Result[SiteConfig, ConfigError] {
   let mut templates_dir : String? = None
   let mut tags_field : String? = None
   let mut search_index_file : String? = None
+  let mut content_index_file : String? = None
   let mut static_dir : String? = None
   let mut data_dir : String? = None
   let mut root_page : String? = None
@@ -331,6 +334,12 @@ pub fn parse(input : String) -> Result[SiteConfig, ConfigError] {
           } else {
             search_index_file = Some(string_value)
           }
+        } else if key == "content_index_file" {
+          if string_value.length() == 0 {
+            content_index_file = None
+          } else {
+            content_index_file = Some(string_value)
+          }
         } else if key == "static_dir" {
           if string_value.length() == 0 {
             static_dir = None
@@ -425,6 +434,7 @@ pub fn parse(input : String) -> Result[SiteConfig, ConfigError] {
     templates_dir,
     tags_field,
     search_index_file,
+    content_index_file,
     static_dir,
     data_dir,
     root_page,

@@ -217,3 +217,62 @@ test "render_search_index empty collection string" {
   let result = render_search_index([entry])
   inspect(result.contains("\"collection\": \"\""), content="true")
 }
+
+// ── ContentEntry / render_content_index ──────────────────────────────────────
+
+///|
+test "render_content_index empty array produces empty JSON array" {
+  let entries : Array[ContentEntry] = []
+  let result = render_content_index(entries)
+  inspect(result, content="[\n]\n")
+}
+
+///|
+test "render_content_index single entry contains required fields" {
+  let entry = new_content_entry(
+    "Hello",
+    "hello",
+    "/posts/hello/",
+    ["moonbit"],
+    "posts",
+    "2026-01-01",
+    "A page about hello.",
+    "This is the full body text.",
+  )
+  let result = render_content_index([entry])
+  inspect(result.contains("\"title\""), content="true")
+  inspect(result.contains("\"slug\""), content="true")
+  inspect(result.contains("\"url\""), content="true")
+  inspect(result.contains("\"tags\""), content="true")
+  inspect(result.contains("\"collection\""), content="true")
+  inspect(result.contains("\"date\""), content="true")
+  inspect(result.contains("\"description\""), content="true")
+  inspect(result.contains("\"body\""), content="true")
+}
+
+///|
+test "render_content_index body field stores full text" {
+  let entry = new_content_entry(
+    "Full Text",
+    "full-text",
+    "/full-text/",
+    [],
+    "posts",
+    "2026-03-01",
+    "desc",
+    "This is a long body with multiple sentences. It covers the entire article.",
+  )
+  let result = render_content_index([entry])
+  inspect(
+    result.contains("\"This is a long body with multiple sentences."),
+    content="true",
+  )
+}
+
+///|
+test "render_content_index two entries no trailing comma after last" {
+  let e1 = new_content_entry("A", "a", "/a/", [], "x", "", "", "body a")
+  let e2 = new_content_entry("B", "b", "/b/", [], "x", "", "", "body b")
+  let result = render_content_index([e1, e2])
+  inspect(result.contains("  }\n]"), content="true")
+}
