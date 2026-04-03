@@ -1,0 +1,29 @@
+{{layout: base.html}}
+<article class="project" itemscope itemtype="https://schema.org/SoftwareApplication">
+  <header class="project__header">
+    <h1 class="project__title" itemprop="name">{{title}}</h1>
+    {{?description}}
+    <p class="project__lede">{{description}}</p>
+    {{/?description}}
+    <div class="project__meta">
+      <span class="project__status project__status--{{page.status}}">{{page.status}}</span>
+      <span class="project__priority" aria-label="Priority {{page.priority}} of 5">P{{page.priority}}</span>
+      {{?date}}
+      <time class="project__date" itemprop="datePublished" datetime="{{date}}">since {{date}}</time>
+      {{/?date}}
+      <a class="project__homepage" href="{{page.homepage}}" itemprop="url" rel="noopener">Homepage ↗</a>
+    </div>
+    {{?tags}}
+    <div class="tag-list">{{tags}}</div>
+    {{/?tags}}
+  </header>
+  <div class="project__body" itemprop="description">
+    {{body_no_h1}}
+  </div>
+  {{?backlinks}}
+  <aside class="backlinks" aria-label="Pages that link here">
+    <h2 class="backlinks__title">Linked from</h2>
+    {{backlinks}}
+  </aside>
+  {{/?backlinks}}
+</article>
