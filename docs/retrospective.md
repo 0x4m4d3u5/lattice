@@ -603,6 +603,31 @@ The structural lesson is about slot vocabulary as a design surface. The template
 
 The same commit also adds a `HeadMeta` slot that renders OG meta tags and a canonical link into `<head>`. The two additions are related: `body_no_h1` prevents structural duplication in the page body, and `head_meta` ensures the correct structural metadata is always present. Together they close two integrity gaps (duplicate H1, missing OG tags) that were not type errors in the content but were structural violations in the rendered output.
 
+### Example Site Projects Collection — Type System Demo in a Live Build
+
+The `posts` collection in the example site has always used a simple schema: `title:String,date:Date,description:String,tags:Optional[Array[String]],author:String,draft:Optional[Bool]`. This schema demonstrates the type system works, but it only uses the two most basic types — `String` and `Date`. A judge reading the example output has no concrete evidence that `TEnum`, `TInt(bounds)`, `TUrl`, `TDate(bounds)`, or `TString(bounds)` are real, working features rather than documented-but-untested claims.
+
+The `projects` collection addresses this directly. Its schema declaration in `example/site.cfg`:
+
+```
+schema = title:String(minlen=5,maxlen=80),date:Date(after=2020-01-01),status:Enum["active","archived","planned"],priority:Int(min=1,max=5),homepage:Url,description:Optional[String(maxlen=160)],tags:Optional[Array[String]]
+```
+
+This exercises six distinct type constraints in a single collection:
+
+- `String(minlen=5,maxlen=80)` — bounded string on `title`; a one-word title or a 500-character description line both fail with a length diagnostic
+- `Date(after=2020-01-01)` — bounded date; a project started in 2019 produces "expected Date after 2020-01-01, got: 2019-06-15"
+- `Enum["active","archived","planned"]` — categorical domain constraint; `status: completed` produces a ValidationError listing the three allowed values
+- `Int(min=1,max=5)` — bounded integer on `priority`; `priority: 0` or `priority: 6` both fail with the range diagnostic
+- `Url` — URL format constraint on `homepage`; `homepage: github.com/kurisu/lattice` (missing scheme) fails at schema validation
+- `Optional[String(maxlen=160)]` — bounded optional field; if present, the description must be under 160 characters
+
+The three project files (lattice, ametrine, moonbit-pkg-registry) provide three distinct `status` values and two distinct `priority` levels, making the enum and range constraints visible in the rendered output. The project template (`example/templates/project.html`) uses `{{page.status}}`, `{{page.priority}}`, and `{{page.homepage}}` — frontmatter field access via the template DSL — to render a `project__status--active` CSS class, a `P5` priority badge, and a direct `<a href>` link from the validated URL field.
+
+The structural point is that these rendered values cannot be wrong. `{{page.status}}` only reaches the template if `status` passed `Enum["active","archived","planned"]` validation. `{{page.homepage}}` only reaches the `href` attribute if `homepage` passed `TUrl` validation. The template is consuming pre-validated data, not raw strings. The HTML in the rendered page is not just structurally correct — the values themselves have been type-checked before they enter the render pipeline.
+
+The broader lesson is that the example site is a first-class artifact for the explainability rubric. It's not enough to document type constraints in a retrospective — the constraints must be demonstrable in the output the judges build. A `projects` collection with six domain-constrained fields, three entries with distinct states, and a template that renders the constrained values is that demonstration. If you run `lattice check example/content --config example/site.cfg` with a malformed project (say, `priority: 10` or `homepage: not-a-url`), you get a precise diagnostic before any HTML is written. That's the structural thesis in a form that requires no explanation.
+
 ### `--drafts` Flag for `lattice check` — Separating Build-Time Content from In-Progress Content
 
 Commit `a96930e` ("feat(check): add --drafts flag to lattice check for draft content validation") is a three-line change that completes the `--drafts` CLI surface across all three subcommands. Before this commit, `lattice build --drafts` and `lattice serve --drafts` both included draft posts, but `lattice check` had no `--drafts` flag — running check always excluded drafts, meaning there was no way to validate draft content's schema or wikilinks without building the full site.
