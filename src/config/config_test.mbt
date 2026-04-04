@@ -131,3 +131,30 @@ test "config parse backward compatibility with collections_file" {
     Err(_) => assert_true(false)
   }
 }
+
+
+///|
+test "config parse [[collections]] with description" {
+  let src = "title = Example\n" +
+    "base_url = https://example.test\n" +
+    "[[collections]]\n" +
+    "name = posts\n" +
+    "dir = ./content/posts\n" +
+    "schema = title:String\n" +
+    "description = \"Blog posts about interesting things.\"\n" +
+    "[[collections]]\n" +
+    "name = pages\n" +
+    "dir = ./content/pages\n" +
+    "schema = title:String\n"
+  match parse(src) {
+    Ok(cfg) => {
+      assert_eq(cfg.collections.length(), 2)
+      assert_eq!(
+        cfg.collections[0].description,
+        Some("Blog posts about interesting things."),
+      )
+      assert_eq!(cfg.collections[1].description, None)
+    }
+    Err(_) => assert_true(false)
+  }
+}

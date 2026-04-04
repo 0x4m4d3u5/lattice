@@ -27,6 +27,7 @@ pub(all) struct CollectionDef {
   template : String?
   page_size : Int?
   sort_order : SortOrder
+  description : String?
 }
 
 ///|
@@ -787,6 +788,7 @@ fn finalize_collection(
   template_text : String?,
   page_size : Int?,
   sort_order : SortOrder,
+  description : String?,
 ) -> Result[Unit, CollectionsError] {
   if seen.get(name) != None {
     return Err(DuplicateCollection(name))
@@ -811,6 +813,7 @@ fn finalize_collection(
     template: template_text,
     page_size,
     sort_order,
+    description,
   })
   seen.set(name, true)
   Ok(())
@@ -872,7 +875,7 @@ pub fn parse(input : String) -> Result[CollectionsConfig, CollectionsError] {
           match
             finalize_collection(
               defs, seen_collections, name, current_schema, current_dir, current_template,
-              current_page_size, current_sort_order,
+              current_page_size, current_sort_order, None,
             ) {
             Err(e) => return Err(e)
             Ok(_) => ()
@@ -984,7 +987,7 @@ pub fn parse(input : String) -> Result[CollectionsConfig, CollectionsError] {
       match
         finalize_collection(
           defs, seen_collections, name, current_schema, current_dir, current_template,
-          current_page_size, current_sort_order,
+          current_page_size, current_sort_order, None,
         ) {
         Err(e) => return Err(e)
         Ok(_) => ()
@@ -1061,6 +1064,7 @@ pub fn default_posts_collection(content_dir : String) -> CollectionDef {
     template: None,
     page_size: None,
     sort_order: DateDesc,
+    description: None,
   }
 }
 

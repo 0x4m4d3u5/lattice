@@ -55,6 +55,7 @@ priv struct CollectionRenderResult {
   name : String
   pages : Array[@graph.GraphPage]
   page_size : Int?
+  description : String?
 }
 
 ///|
@@ -2484,6 +2485,7 @@ fn render_collection_index(
   nav_links_html : String,
   custom_css : String,
   data_store : @data.DataStore,
+  collection_description : String?,
 ) -> Result[String, String] {
   let pages = pagination.documents
   let title_by_slug : Map[String, String] = Map::new()
@@ -2582,11 +2584,15 @@ fn render_collection_index(
     collection_name + " index" + title_suffix,
     site.title,
   )
-  let description = "Generated page graph for collection " +
-    collection_name +
-    " in " +
-    site.title +
-    "."
+  let description = match collection_description {
+    Some(d) => d
+    None =>
+      "Generated page graph for collection " +
+        collection_name +
+        " in " +
+        site.title +
+        "."
+  }
   let page_url = collection_index_page_url(
     collection_name,
     pagination.page_number,
@@ -2732,6 +2738,7 @@ fn load_project_layout(config : BuildConfig) -> Result[ProjectLayout, String] {
         template: entry.template,
         page_size: entry.page_size,
         sort_order: @collections.DateDesc,
+        description: entry.description,
       })
       i = i + 1
     }
@@ -4324,6 +4331,7 @@ pub fn build(
           name: coll.definition.name,
           pages: coll_pages,
           page_size: page_size_for_collection(config.site, coll.definition),
+          description: coll.definition.description,
         })
         i = i + 1
         continue
@@ -4360,6 +4368,7 @@ pub fn build(
         name: coll.definition.name,
         pages: coll_pages,
         page_size: page_size_for_collection(config.site, coll.definition),
+        description: coll.definition.description,
       })
       i = i + 1
       continue
@@ -4636,6 +4645,7 @@ pub fn build(
       name: coll.definition.name,
       pages: coll_pages,
       page_size: page_size_for_collection(config.site, coll.definition),
+      description: coll.definition.description,
     })
     i = i + 1
   }
@@ -4692,6 +4702,7 @@ pub fn build(
             nav_links_html,
             custom_css,
             data_store,
+            coll.description,
           ) {
           Ok(html) => Some(html)
           Err(msg) => {
@@ -5554,6 +5565,7 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
       name: coll.definition.name,
       pages: coll_pages,
       page_size: page_size_for_collection(config.site, coll.definition),
+      description: coll.definition.description,
     })
     i = i + 1
   }
@@ -5585,6 +5597,7 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
           nav_links_html,
           custom_css,
           data_store,
+          coll.description,
         ) {
         Ok(_) => ()
         Err(msg) =>
