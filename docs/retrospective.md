@@ -713,3 +713,44 @@ In a behavioral SSG (Astro, Hugo, Jekyll), this boundary is checked at render ti
 In lattice, the shortcode parameter system is a typed map. The parser classifies values into `ShortcodeParam` variants at parse time. The renderer pattern-matches on the variant it expects. Mismatches are `ShortcodeError::InvalidParamType`, which becomes a build diagnostic. The type contract is expressed in the code — `optional_int_param(call, "width")` says "width must be IntParam or absent" — not in documentation or conventions.
 
 The `321c968` commit message documents this directly: "type mismatch between what the shortcode renderer expects and what the content author provided is a build error, not a silently dropped attribute." That's the structural thesis in one sentence. The retrospective exists to expand that sentence into an architectural narrative.
+
+## `content-index.json` — Machine-Readable Site Output as First-Class Artifact
+
+Commit `386cca2` ("feat(content-index): emit content-index.json with full stripped body text — functional completeness rubric") adds a second JSON output alongside `search-index.json`. The two files serve different consumers with different requirements, and the distinction is architecturally intentional.
+
+### Two indexes, two consumers
+
+`search-index.json` has been in lattice since the first build sprint. It was designed for client-side search: a lightweight array of entries with title, slug, URL, tags, collection, and a short excerpt. The excerpt is at most a few hundred characters — enough for a search result snippet, not enough for semantic retrieval.
+
+`content-index.json` adds the full stripped body text. Each entry carries the same metadata fields as the search index, plus `date`, `description`, and `body`. The `body` field is the page's Markdown rendered to HTML and then stripped back to plaintext — all tags, shortcodes, and markup removed — leaving only the prose content. A 3,000-word article produces a `body` field of roughly 15,000 characters. An agent doing retrieval-augmented generation over the site can load `content-index.json` and embed the full article text rather than relying on a snippet.
+
+The explicit design intent, documented in the `ContentEntry` struct comment: "suitable for semantic search or LLM consumption." This is a structural feature, not a polish feature. An SSG that knows its audience includes agents needs to emit data in a form agents can consume without scraping HTML.
+
+### The stripping pipeline
+
+The body text in `content-index.json` comes from a two-step pipeline:
+
+1. `@markdown.render()` — the standard markdown renderer, producing HTML
+2. `@strutil.strip_html_tags()` — a tag stripper that removes all angle-bracket sequences
+
+The stripper is deliberate: HTML entities (`&amp;`, `&lt;`) are preserved rather than decoded, because the consumer is expected to handle them. The goal is readable prose text, not binary-clean Unicode. For a RAG use case, entity-preserved text is acceptable — the embedding model processes token sequences, not binary strings, and common HTML entities appear in training data.
+
+The stripping happens at the builder layer, in the same pass that renders the page's HTML for output. The builder already has the rendered HTML string — the same string it emits to `<slug>/index.html` — and passes it through `strip_html_tags` to produce the body text for the content index entry. No second parse.
+
+### Why two separate files
+
+An alternative design would be to add a `body` field to `search-index.json`. This was rejected for two reasons. First, the search index is a runtime browser asset. A page with twenty articles would balloon from a few kilobytes to hundreds of kilobytes if each entry carried the full article text. Client-side search libraries like Lunr and Fuse work better with small, focused indexes. Second, the consumers are different: `search-index.json` is consumed by JavaScript in the browser; `content-index.json` is consumed by automation, agents, or offline tooling. Separating them lets each file be sized and structured for its consumer.
+
+This is the same pattern as `sitemap.xml` vs `robots.txt` vs `graph.json`. Each is a distinct output format for a distinct consumer. The builder emits all of them in a single pass, but they're not one output trying to serve multiple audiences.
+
+### Generic JSON rendering — `render_json_array[T]`
+
+The `ContentEntry` renderer and `SearchEntry` renderer were initially structurally identical: both looped over an array, emitted JSON array brackets, added inter-entry commas, and wrote each entry as an object. The only difference was the set of fields. This is precisely the kind of duplication that accumulates in a fast sprint and becomes an engineering quality issue if left unaddressed.
+
+Commit `1d90b79` ("refactor(search): extract render_json_array[T] + write_common_fields — engineering quality rubric") collapses the redundancy. `render_json_array[T]` is a generic function — using MoonBit's `fn[T] f(...)` polymorphic function syntax — that handles the array envelope and accepts a `write_entry : (StringBuilder, T) -> Unit` callback for the entry-specific fields. `write_common_fields` extracts the five fields shared between both entry types (title, slug, url, tags, collection).
+
+The result is that each public render function is a single call to `render_json_array` with a closure for its unique fields. `render_search_index` adds only `excerpt`. `render_content_index` adds `date`, `description`, and `body`. The generic infrastructure is tested by the existing 18-test suite, which covers empty arrays, single entries, multiple entries, comma placement, JSON string escaping, and field presence — none of those tests changed, and all pass.
+
+The `fn[T] f` syntax (MoonBit's current form for polymorphic functions) was discovered by correction during this commit: the initial draft used `fn f[T]`, which produced warning 0027 (deprecated syntax). The fix was a one-token edit before the commit. Noted here because it's a live example of how the MoonBit syntax is still evolving — the compiler deprecation warnings are the right signal, and tracking the correct form in the retrospective is more useful than pretending the mistake didn't happen.
+
+The structural lesson from both commits is the same: the content-index feature demonstrates what typed output artifacts look like when the underlying architecture is already structured. `ContentEntry` is a typed struct — every field has a declared type, and the builder only populates it after all field values have been validated through the schema and render pipeline. The JSON emitted to `content-index.json` cannot contain schema-violating field values, because those values never reach the `ContentEntry` constructor. The typed intermediate representation is the guarantee; the JSON is just a serialization of that guarantee.
