@@ -158,3 +158,27 @@ test "config parse [[collections]] with description" {
     Err(_) => assert_true(false)
   }
 }
+
+///|
+test "config parse standalone_dir" {
+  let src = "title = Example\n" +
+    "base_url = https://example.test\n" +
+    "standalone_dir = content/standalone\n"
+  match parse(src) {
+    Ok(cfg) =>
+      match cfg.standalone_dir {
+        Some(value) => assert_eq(value, "content/standalone")
+        None => assert_true(false)
+      }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "config standalone_dir defaults to None when omitted" {
+  let src = "title = Example\n" + "base_url = https://example.test\n"
+  match parse(src) {
+    Ok(cfg) => assert_eq(cfg.standalone_dir, None)
+    Err(_) => assert_true(false)
+  }
+}

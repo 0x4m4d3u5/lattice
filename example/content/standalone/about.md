@@ -10,6 +10,7 @@ The purpose of this site is breadth, not depth.
 It exists to show that lattice can build:
 
 - multiple collections
+- standalone pages (like this one — not in any collection)
 - paginated indexes
 - tag indexes
 - RSS feeds

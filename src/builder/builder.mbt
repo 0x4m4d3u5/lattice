@@ -1664,6 +1664,54 @@ fn collection_index_url(collection_name : String) -> String {
 }
 
 ///|
+/// Build the default standalone page schema: requires only `title:String`.
+///
+/// Standalone pages are not part of any collection so they have no
+/// user-defined schema. The minimal contract is that every page has a title
+/// for HTML output and the sitemap. All other frontmatter fields are
+/// silently accepted.
+fn standalone_default_schema() -> @schema.Schema {
+  {
+    name: "_standalone",
+    fields: [
+      { name: "title", field_type: @schema.TString(None, None), required: true },
+      { name: "description", field_type: @schema.TOptional(
+          @schema.TString(None, None),
+        ), required: false },
+      { name: "date", field_type: @schema.TOptional(
+          @schema.TDate(None, None),
+        ), required: false },
+      { name: "tags", field_type: @schema.TOptional(
+          @schema.TArray(@schema.TString(None, None)),
+        ), required: false },
+      { name: "author", field_type: @schema.TOptional(
+          @schema.TString(None, None),
+        ), required: false },
+      { name: "redirect_from", field_type: @schema.TOptional(
+          @schema.TArray(@schema.TString(None, None)),
+        ), required: false },
+      { name: "og_image", field_type: @schema.TOptional(
+          @schema.TString(None, None),
+        ), required: false },
+    ],
+  }
+}
+
+///|
+/// URL for a standalone page (no collection prefix).
+///
+/// e.g. slug "about" → "/about/"
+fn standalone_page_url(slug : String) -> String {
+  "/" + slug + "/"
+}
+
+///|
+/// Output file path for a standalone page.
+fn standalone_output_path(output_dir : String, slug : String) -> String {
+  output_dir + "/" + slug + "/index.html"
+}
+
+///|
 pub fn collection_index_lookup_alias(
   collection : @collections.CollectionDef,
 ) -> String? {
@@ -1751,6 +1799,18 @@ fn data_dir_for_build(config : BuildConfig) -> String {
   match config.site.data_dir {
     Some(path) => path
     None => config.content_dir + "/data"
+  }
+}
+
+///|
+/// Resolve the standalone pages directory.
+///
+/// Defaults to `<content_dir>/standalone` when not explicitly configured.
+/// Returns `None` when standalone pages are disabled (no directory exists).
+fn standalone_dir_for_build(config : BuildConfig) -> String {
+  match config.site.standalone_dir {
+    Some(path) => path
+    None => config.content_dir + "/standalone"
   }
 }
 
@@ -4120,11 +4180,105 @@ pub fn build(
   }
   register_collection_index_aliases(collection_sources, page_index)
 
+  // Collect standalone pages (not in any collection) and register in page_index
+  let standalone_dir = standalone_dir_for_build(config)
+  let standalone_sources : Array[SourceFile] = if @fs.path_exists(
+    standalone_dir,
+  ) {
+    collect_sources(standalone_dir) catch {
+      @fs.IOError(msg) => {
+        diagnostics.push(
+          build_error(
+            Some(standalone_dir),
+            None,
+            None,
+            "cannot read standalone pages directory: " + msg,
+          ),
+        )
+        return {
+          errors: 1,
+          diagnostics,
+          rebuilt_pages: 0,
+          unchanged_pages: 0,
+          skipped_drafts: 0,
+          redirect_count: 0,
+        }
+      }
+    }
+  } else {
+    []
+  }
+  i = 0
+  while i < standalone_sources.length() {
+    let src = standalone_sources[i]
+    match slug_owner.get(src.slug) {
+      Some(owner) => {
+        diagnostics.push(
+          build_error(
+            Some(src.path),
+            None,
+            None,
+            "standalone page slug '" +
+            src.slug +
+            "' conflicts with collection '" +
+            owner +
+            "'",
+          ),
+        )
+        return {
+          errors: 1,
+          diagnostics,
+          rebuilt_pages: 0,
+          unchanged_pages: 0,
+          skipped_drafts: 0,
+          redirect_count: 0,
+        }
+      }
+      None => {
+        slug_owner.set(src.slug, "_standalone")
+        page_index.set(src.slug, standalone_page_url(src.slug))
+      }
+    }
+    i = i + 1
+  }
+  if standalone_sources.length() > 0 {
+    println(
+      "[lattice] found " +
+      standalone_sources.length().to_string() +
+      " standalone page(s)",
+    )
+  }
+
   let tags_field = tags_field_name(config.site)
   let tag_catalog = collect_tag_catalog(collection_sources, tags_field)
   let known_tags = tag_catalog.name_by_slug
   let page_size = page_size_for_site(config.site)
-  let backlink_index = build_backlink_index(collection_sources, page_index)
+  // Include standalone pages in backlink index so wikilinks between standalone
+  // and collection pages are resolved correctly in both directions.
+  let all_sources_for_backlinks : Array[CollectionSources] = []
+  i = 0
+  while i < collection_sources.length() {
+    all_sources_for_backlinks.push(collection_sources[i])
+    i = i + 1
+  }
+  if standalone_sources.length() > 0 {
+    all_sources_for_backlinks.push({
+      definition: {
+        name: "_standalone",
+        schema: standalone_default_schema(),
+        content_dir: standalone_dir,
+        template: None,
+        page_size: None,
+        sort_order: @collections.DateDesc,
+        description: None,
+      },
+      sources: standalone_sources,
+    })
+  }
+  let backlink_index = build_backlink_index(
+    all_sources_for_backlinks,
+    page_index,
+  )
   let incremental = build_incremental_state(
     config, collection_sources, collections,
   )
@@ -4672,6 +4826,110 @@ pub fn build(
       }
 
       i = i + 1
+    }
+
+    // Render standalone pages (not in any collection)
+    if error_count == 0 && standalone_sources.length() > 0 {
+      let standalone_schema = standalone_default_schema()
+      let mut si = 0
+      while si < standalone_sources.length() {
+        let src = standalone_sources[si]
+        let page_url = standalone_page_url(src.slug)
+        let out_path = standalone_output_path(config.output_dir, src.slug)
+        let page_backlinks_html = match backlink_index.get(src.slug) {
+          Some(refs) => render_backlinks_html(refs)
+          None => ""
+        }
+        let doc_outcome = process_document(
+          src.content,
+          src.path,
+          src.slug,
+          "_standalone",
+          page_url,
+          page_index,
+          slug_owner,
+          known_tags,
+          tags_field,
+          standalone_schema,
+          config.site,
+          data_store,
+          templates.page,
+          templates_dir_for_build(config),
+          nav_links_html,
+          custom_css,
+          page_backlinks_html,
+          true, // always rebuild standalone pages (no incremental for now)
+          "", "", "", "", // no prev/next for standalone pages
+        )
+        let mut diag_idx = 0
+        while diag_idx < doc_outcome.diagnostics.length() {
+          diagnostics.push(doc_outcome.diagnostics[diag_idx])
+          diag_idx = diag_idx + 1
+        }
+        match doc_outcome.document {
+          None => error_count = error_count + 1
+          Some(doc) => {
+            let page_dir = config.output_dir + "/" + src.slug
+            let write_ok = try {
+              ensure_dir(page_dir)
+              @fs.write_string_to_file(out_path, doc.html)
+              println("[lattice] wrote " + out_path)
+              true
+            } catch {
+              @fs.IOError(msg) => {
+                diagnostics.push(
+                  build_error(
+                    Some(out_path),
+                    None,
+                    None,
+                    "standalone/" + src.slug + ": write failed: " + msg,
+                  ),
+                )
+                false
+              }
+            }
+            if write_ok {
+              rebuilt = rebuilt + 1
+              // Add to graph for sitemap and search
+              let page : @graph.GraphPage = {
+                slug: src.slug,
+                title: doc.title,
+                url: doc.url,
+                description: doc.description,
+                date: doc.date,
+                outgoing: doc.resolved_links,
+              }
+              graph_pages.push(page)
+              let search_tags : Array[String] = []
+              search_entries.push(
+                @search.new_entry(
+                  doc.title,
+                  src.slug,
+                  doc.url,
+                  search_tags,
+                  "_standalone",
+                  doc.excerpt,
+                ),
+              )
+              content_entries.push(
+                @search.new_content_entry(
+                  doc.title,
+                  src.slug,
+                  doc.url,
+                  search_tags,
+                  "_standalone",
+                  match doc.date { Some(d) => d; None => "" },
+                  match doc.description { Some(d) => d; None => "" },
+                  doc.body_text,
+                ),
+              )
+            } else {
+              error_count = error_count + 1
+            }
+          }
+        }
+        si = si + 1
+      }
     }
 
     if error_count == 0 {
@@ -5308,11 +5566,79 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
   }
   register_collection_index_aliases(collection_sources, page_index)
 
+  // Collect standalone pages for validation
+  let standalone_dir = standalone_dir_for_build(config)
+  let standalone_sources : Array[SourceFile] = if @fs.path_exists(
+    standalone_dir,
+  ) {
+    collect_sources(standalone_dir) catch {
+      @fs.IOError(msg) => {
+        violations.push({
+          path: standalone_dir,
+          line: None,
+          column: None,
+          kind: @lint.IOError,
+          message: "cannot read standalone pages directory: " + msg,
+        })
+        []
+      }
+    }
+  } else {
+    []
+  }
+  i = 0
+  while i < standalone_sources.length() {
+    let src = standalone_sources[i]
+    match slug_owner.get(src.slug) {
+      Some(owner) =>
+        violations.push({
+          path: src.path,
+          line: None,
+          column: None,
+          kind: @lint.DuplicateSlug,
+          message: "standalone page slug '" +
+          src.slug +
+          "' conflicts with collection '" +
+          owner +
+          "'",
+        })
+      None => {
+        slug_owner.set(src.slug, "_standalone")
+        page_index.set(src.slug, standalone_page_url(src.slug))
+      }
+    }
+    i = i + 1
+  }
+
   let tags_field = tags_field_name(config.site)
   let tag_catalog = collect_tag_catalog(collection_sources, tags_field)
   let known_tags = tag_catalog.name_by_slug
   let page_size = page_size_for_site(config.site)
-  let backlink_index = build_backlink_index(collection_sources, page_index)
+  // Include standalone pages in backlink validation
+  let all_sources_for_backlinks : Array[CollectionSources] = []
+  i = 0
+  while i < collection_sources.length() {
+    all_sources_for_backlinks.push(collection_sources[i])
+    i = i + 1
+  }
+  if standalone_sources.length() > 0 {
+    all_sources_for_backlinks.push({
+      definition: {
+        name: "_standalone",
+        schema: standalone_default_schema(),
+        content_dir: standalone_dir,
+        template: None,
+        page_size: None,
+        sort_order: @collections.DateDesc,
+        description: None,
+      },
+      sources: standalone_sources,
+    })
+  }
+  let backlink_index = build_backlink_index(
+    all_sources_for_backlinks,
+    page_index,
+  )
 
   let graph_pages : Array[@graph.GraphPage] = []
   let tag_pages_by_slug : Map[String, Array[@tags.TaggedPage]] = Map::new()
@@ -5454,6 +5780,59 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
       description: coll.definition.description,
     })
     i = i + 1
+  }
+
+  // Lint standalone pages
+  if standalone_sources.length() > 0 {
+    let standalone_schema = standalone_default_schema()
+    let mut si = 0
+    while si < standalone_sources.length() {
+      let src = standalone_sources[si]
+      let page_url = standalone_page_url(src.slug)
+      let lint_backlinks_html = match backlink_index.get(src.slug) {
+        Some(refs) => render_backlinks_html(refs)
+        None => ""
+      }
+      let lint_outcome = process_document_for_lint(
+        src.content,
+        src.path,
+        src.slug,
+        "_standalone",
+        page_url,
+        page_index,
+        slug_owner,
+        known_tags,
+        tags_field,
+        standalone_schema,
+        config.site,
+        data_store,
+        templates.page,
+        templates_dir_for_build(config),
+        nav_links_html,
+        custom_css,
+        lint_backlinks_html,
+        "", "", "", "",
+      )
+      let mut k = 0
+      while k < lint_outcome.violations.length() {
+        violations.push(lint_outcome.violations[k])
+        k = k + 1
+      }
+      match lint_outcome.document {
+        Some(doc) => {
+          graph_pages.push({
+            slug: src.slug,
+            title: doc.title,
+            url: doc.url,
+            description: doc.description,
+            date: doc.date,
+            outgoing: doc.resolved_links,
+          })
+        }
+        None => ()
+      }
+      si = si + 1
+    }
   }
 
   i = 0

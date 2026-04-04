@@ -30,6 +30,7 @@ pub struct SiteConfig {
   content_index_file : String?
   static_dir : String?
   data_dir : String?
+  standalone_dir : String?
   root_page : String?
   robots_txt : Bool?
   archive_pages : Bool?
@@ -161,6 +162,7 @@ fn parse_bool_config(value : String) -> Bool? {
 /// - `content_index_file`
 /// - `static_dir`
 /// - `data_dir`
+/// - `standalone_dir`
 /// - `root_page`
 /// - `robots_txt`
 /// - `archive_pages`
@@ -187,6 +189,7 @@ pub fn parse(input : String) -> Result[SiteConfig, ConfigError] {
   let mut content_index_file : String? = None
   let mut static_dir : String? = None
   let mut data_dir : String? = None
+  let mut standalone_dir : String? = None
   let mut root_page : String? = None
   let mut robots_txt : Bool? = None
   let mut archive_pages : Bool? = None
@@ -359,6 +362,12 @@ pub fn parse(input : String) -> Result[SiteConfig, ConfigError] {
           } else {
             data_dir = Some(string_value)
           }
+        } else if key == "standalone_dir" {
+          if string_value.length() == 0 {
+            standalone_dir = None
+          } else {
+            standalone_dir = Some(string_value)
+          }
         } else if key == "root_page" {
           if string_value.length() == 0 {
             root_page = None
@@ -445,6 +454,7 @@ pub fn parse(input : String) -> Result[SiteConfig, ConfigError] {
     content_index_file,
     static_dir,
     data_dir,
+    standalone_dir,
     root_page,
     robots_txt,
     archive_pages,
