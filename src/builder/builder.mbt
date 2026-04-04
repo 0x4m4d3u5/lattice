@@ -1871,127 +1871,13 @@ fn inject_nav_before_main_close(body : String, nav : String) -> String {
 }
 
 ///|
-fn is_blank_builder(s : String) -> Bool {
-  @strutil.trim_h(s).length() == 0
-}
-
-///|
-fn count_leading_hashes_builder(line : String) -> Int {
-  let n = line.length()
-  let mut count = 0
-  while count < n && @strutil.char_at(line, count) == '#' {
-    count = count + 1
-  }
-  count
-}
-
-///|
-fn is_heading_line_builder(line : String) -> Bool {
-  let hashes = count_leading_hashes_builder(line)
-  if hashes == 0 || hashes > 6 {
-    return false
-  }
-  hashes < line.length() && @strutil.char_at(line, hashes) == ' '
-}
-
-///|
-fn is_hrule_builder(line : String) -> Bool {
-  let t = @strutil.trim_h(line)
-  t == "---" || t == "***" || t == "___"
-}
-
-///|
-fn is_fence_start_builder(line : String) -> Bool {
-  @strutil.starts_with_at(line, 0, "```") ||
-  @strutil.starts_with_at(line, 0, "~~~")
-}
-
-///|
-fn fence_char_builder(line : String) -> Char {
-  if line.length() == 0 {
-    '`'
-  } else {
-    @strutil.char_at(line, 0)
-  }
-}
-
-///|
-fn is_fence_end_builder(line : String, fence_char : Char) -> Bool {
-  line.length() >= 3 &&
-  @strutil.char_at(line, 0) == fence_char &&
-  @strutil.char_at(line, 1) == fence_char &&
-  @strutil.char_at(line, 2) == fence_char
-}
-
-///|
-fn is_unordered_item_builder(line : String) -> Bool {
-  line.length() >= 2 &&
-  (@strutil.char_at(line, 0) == '-' || @strutil.char_at(line, 0) == '*') &&
-  @strutil.char_at(line, 1) == ' '
-}
-
-///|
-fn is_ordered_item_builder(line : String) -> Bool {
-  let n = line.length()
-  if n < 3 {
-    return false
-  }
-  let mut i = 0
-  while i < n && @strutil.is_digit(@strutil.char_at(line, i)) {
-    i = i + 1
-  }
-  i > 0 &&
-  i + 1 < n &&
-  @strutil.char_at(line, i) == '.' &&
-  @strutil.char_at(line, i + 1) == ' '
-}
-
-///|
-fn is_blockquote_line_builder(line : String) -> Bool {
-  line.length() > 0 && @strutil.char_at(line, 0) == '>'
-}
-
-///|
 fn is_block_starter_builder(line : String) -> Bool {
-  is_heading_line_builder(line) ||
-  is_hrule_builder(line) ||
-  is_fence_start_builder(line) ||
-  is_unordered_item_builder(line) ||
-  is_ordered_item_builder(line) ||
-  is_blockquote_line_builder(line)
-}
-
-///|
-fn inline_text_builder(inline : @markdown.Inline) -> String {
-  match inline {
-    @markdown.Text(t) => t
-    @markdown.Bold(inlines) => inlines_text_builder(inlines)
-    @markdown.Italic(inlines) => inlines_text_builder(inlines)
-    @markdown.BoldItalic(inlines) => inlines_text_builder(inlines)
-    @markdown.Strikethrough(inlines) => inlines_text_builder(inlines)
-    @markdown.InlineCode(text) => text
-    @markdown.Link(text, _) => text
-    @markdown.Image(alt, _) => alt
-    @markdown.WikiRef(target, display) =>
-      match display {
-        Some(text) => text
-        None => target
-      }
-    @markdown.FootnoteRef(_) => ""
-    @markdown.Shortcode(call) => call.name
-    @markdown.HardBreak => " "
-  }
-}
-
-///|
-fn inlines_text_builder(inlines : Array[@markdown.Inline]) -> String {
-  let buf = StringBuilder::new()
-  let mut i = 0
-  while i < inlines.length() {
-    buf.write_string(inline_text_builder(inlines[i]))
-    i = i + 1
-  }
-  buf.to_string()
+  @markdown.is_heading_line(line) ||
+  @markdown.is_hrule(line) ||
+  @markdown.is_fence_start(line) ||
+  @markdown.is_unordered_item(line) ||
+  @markdown.is_ordered_item(line) ||
+  @markdown.is_blockquote_line(line)
 }
 
 ///|
@@ -2024,28 +1910,28 @@ fn extract_excerpt_builder(markdown_body : String) -> String {
   let mut i = 0
   while i < lines.length() {
     let line = lines[i]
-    if is_blank_builder(line) {
+    if @markdown.is_blank(line) {
       i = i + 1
     } else if is_block_starter_builder(line) {
-      if is_fence_start_builder(line) {
-        let fence_char = fence_char_builder(line)
+      if @markdown.is_fence_start(line) {
+        let fence_char = @markdown.fence_char_of(line)
         i = i + 1
-        while i < lines.length() && !is_fence_end_builder(lines[i], fence_char) {
+        while i < lines.length() && !@markdown.is_fence_end(lines[i], fence_char) {
           i = i + 1
         }
         if i < lines.length() {
           i = i + 1
         }
-      } else if is_blockquote_line_builder(line) {
-        while i < lines.length() && is_blockquote_line_builder(lines[i]) {
+      } else if @markdown.is_blockquote_line(line) {
+        while i < lines.length() && @markdown.is_blockquote_line(lines[i]) {
           i = i + 1
         }
-      } else if is_unordered_item_builder(line) {
-        while i < lines.length() && is_unordered_item_builder(lines[i]) {
+      } else if @markdown.is_unordered_item(line) {
+        while i < lines.length() && @markdown.is_unordered_item(lines[i]) {
           i = i + 1
         }
-      } else if is_ordered_item_builder(line) {
-        while i < lines.length() && is_ordered_item_builder(lines[i]) {
+      } else if @markdown.is_ordered_item(line) {
+        while i < lines.length() && @markdown.is_ordered_item(lines[i]) {
           i = i + 1
         }
       } else {
@@ -2054,7 +1940,7 @@ fn extract_excerpt_builder(markdown_body : String) -> String {
     } else {
       let paragraph_lines : Array[String] = []
       while i < lines.length() &&
-            !is_blank_builder(lines[i]) &&
+            !@markdown.is_blank(lines[i]) &&
             !is_block_starter_builder(lines[i]) {
         paragraph_lines.push(lines[i])
         i = i + 1
@@ -2066,7 +1952,7 @@ fn extract_excerpt_builder(markdown_body : String) -> String {
         paragraph_text.length(),
       )
       let plain_text = collapse_whitespace_builder(
-        inlines_text_builder(inlines),
+        @markdown.plain_text_inlines(inlines),
       )
       if plain_text.length() > 0 {
         return plain_text
@@ -2085,10 +1971,10 @@ pub fn count_words_markdown(body : String) -> Int {
   let mut i = 0
   while i < ls.length() {
     let line = ls[i]
-    if is_fence_start_builder(line) {
-      let fence_char = fence_char_builder(line)
+    if @markdown.is_fence_start(line) {
+      let fence_char = @markdown.fence_char_of(line)
       i = i + 1
-      while i < ls.length() && !is_fence_end_builder(ls[i], fence_char) {
+      while i < ls.length() && !@markdown.is_fence_end(ls[i], fence_char) {
         i = i + 1
       }
       if i < ls.length() {

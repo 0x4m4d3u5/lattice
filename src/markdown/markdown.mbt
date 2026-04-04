@@ -107,7 +107,7 @@ pub struct RenderResult {
 // literals type-check correctly.
 
 ///|
-fn is_blank(s : String) -> Bool {
+pub fn is_blank(s : String) -> Bool {
   @strutil.trim(s).length() == 0
 }
 // ── line splitting ────────────────────────────────────────────────────────────
@@ -171,7 +171,7 @@ fn slugify_heading_text(text : String) -> String {
 }
 
 ///|
-fn plain_text_inline(inline : Inline) -> String {
+pub fn plain_text_inline(inline : Inline) -> String {
   match inline {
     Text(t) => t
     Bold(inner) => plain_text_inlines(inner)
@@ -193,7 +193,7 @@ fn plain_text_inline(inline : Inline) -> String {
 }
 
 ///|
-fn plain_text_inlines(inlines : Array[Inline]) -> String {
+pub fn plain_text_inlines(inlines : Array[Inline]) -> String {
   let buf = StringBuilder::new()
   let mut i = 0
   while i < inlines.length() {
@@ -575,7 +575,7 @@ pub fn parse_inlines(s : String, from : Int, to : Int) -> Array[Inline] {
 // ── block parsing helpers ─────────────────────────────────────────────────────
 
 ///|
-fn count_leading_hashes(line : String) -> Int {
+pub fn count_leading_hashes(line : String) -> Int {
   let n = line.length()
   let mut count = 0
   while count < n && @strutil.char_at(line, count) == '#' {
@@ -585,7 +585,7 @@ fn count_leading_hashes(line : String) -> Int {
 }
 
 ///|
-fn is_heading_line(line : String) -> Bool {
+pub fn is_heading_line(line : String) -> Bool {
   let hashes = count_leading_hashes(line)
   if hashes == 0 || hashes > 6 {
     return false
@@ -602,13 +602,13 @@ fn heading_level_and_text(line : String) -> (Int, String) {
 }
 
 ///|
-fn is_hrule(line : String) -> Bool {
+pub fn is_hrule(line : String) -> Bool {
   let t = @strutil.trim(line)
   t == "---" || t == "***" || t == "___"
 }
 
 ///|
-fn is_fence_start(line : String) -> Bool {
+pub fn is_fence_start(line : String) -> Bool {
   @strutil.starts_with_at(line, 0, "```") ||
   @strutil.starts_with_at(line, 0, "~~~")
 }
@@ -628,7 +628,7 @@ fn fence_lang_tag(line : String) -> String? {
 }
 
 ///|
-fn fence_char_of(line : String) -> Char {
+pub fn fence_char_of(line : String) -> Char {
   if line.length() > 0 {
     @strutil.char_at(line, 0)
   } else {
@@ -637,7 +637,7 @@ fn fence_char_of(line : String) -> Char {
 }
 
 ///|
-fn is_fence_end(line : String, fence_char : Char) -> Bool {
+pub fn is_fence_end(line : String, fence_char : Char) -> Bool {
   let n = line.length()
   n >= 3 &&
   @strutil.char_at(line, 0) == fence_char &&
@@ -648,7 +648,7 @@ fn is_fence_end(line : String, fence_char : Char) -> Bool {
 ///|
 
 ///|
-fn is_unordered_item(line : String) -> Bool {
+pub fn is_unordered_item(line : String) -> Bool {
   let n = line.length()
   n >= 2 &&
   (@strutil.char_at(line, 0) == '-' || @strutil.char_at(line, 0) == '*') &&
@@ -656,7 +656,7 @@ fn is_unordered_item(line : String) -> Bool {
 }
 
 ///|
-fn is_ordered_item(line : String) -> Bool {
+pub fn is_ordered_item(line : String) -> Bool {
   let n = line.length()
   if n < 3 {
     return false
@@ -705,7 +705,7 @@ fn ordered_item_text(line : String) -> String {
 }
 
 ///|
-fn is_blockquote_line(line : String) -> Bool {
+pub fn is_blockquote_line(line : String) -> Bool {
   line.length() > 0 && @strutil.char_at(line, 0) == '>'
 }
 
