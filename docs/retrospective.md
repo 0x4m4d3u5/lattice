@@ -754,3 +754,67 @@ The result is that each public render function is a single call to `render_json_
 The `fn[T] f` syntax (MoonBit's current form for polymorphic functions) was discovered by correction during this commit: the initial draft used `fn f[T]`, which produced warning 0027 (deprecated syntax). The fix was a one-token edit before the commit. Noted here because it's a live example of how the MoonBit syntax is still evolving — the compiler deprecation warnings are the right signal, and tracking the correct form in the retrospective is more useful than pretending the mistake didn't happen.
 
 The structural lesson from both commits is the same: the content-index feature demonstrates what typed output artifacts look like when the underlying architecture is already structured. `ContentEntry` is a typed struct — every field has a declared type, and the builder only populates it after all field values have been validated through the schema and render pipeline. The JSON emitted to `content-index.json` cannot contain schema-violating field values, because those values never reach the `ContentEntry` constructor. The typed intermediate representation is the guarantee; the JSON is just a serialization of that guarantee.
+
+## Reading Time and Word Count — Derived Metrics from the Content Pipeline
+
+Commit `ed694cd` ("feat(config): add description field to CollectionEntry + CollectionDef — use in collection index meta — functional completeness rubric") includes two related additions: `{{reading_time}}` and `{{word_count}}` template slots on individual content pages, and a `description` field on collection config entries. These share a common architectural thread: they are both places where the build pipeline was computing something useful but not surfacing it as a first-class output.
+
+### Why prose word count is not trivial in an SSG
+
+A naive word count counts every token in the Markdown source. This includes frontmatter fields, code fence content, HTML tags, shortcode syntax, and link URLs — none of which are prose the reader reads. A reading time estimate built on raw source word count is misleading: a post with three 50-line code samples looks far longer than it reads.
+
+`count_words_markdown` addresses this by operating on the raw Markdown body (before rendering) and skipping code fence content entirely. The algorithm:
+
+1. Split the body on newlines.
+2. When a fenced code block delimiter is encountered (detected by `is_fence_start_builder` — a line that starts with three or more backticks or tildes), advance the line index past the fence, skipping all content until the matching closing delimiter.
+3. For prose lines, count word-shaped tokens (contiguous non-whitespace runs separated by spaces or tabs).
+
+The result is that a post with extensive code examples counts only the prose surrounding the code, not the code itself. The function is tested in `builder_test.mbt` with cases that cover empty input, single words, multiple words, mixed whitespace, and — critically — content with fenced code blocks, verifying that code lines are excluded from the count.
+
+### Reading speed and minimum floor
+
+`reading_time_str` converts a word count to a display string using 225 words per minute — the midpoint of the commonly cited 200–250 wpm adult reading speed range. The formula is integer ceiling division:
+
+```
+raw = (word_count + 224) / 225
+```
+
+This is a standard ceiling-division pattern in integer arithmetic: `ceil(a / b) = (a + b - 1) / b`. For a 225-word article: `(225 + 224) / 225 = 449 / 225 = 1`. For a 226-word article: `(226 + 224) / 225 = 450 / 225 = 2`. The minimum result is clamped to 1 min — a post with five words is not a "0 min read."
+
+The display format is `"N min"`, rendered in the article template as `"N min read"` (the word "read" is literal text in the template, outside the slot). This separation keeps the slot value as a bare number string, making it composable: a template could display just the number, or use it differently without needing to strip the word.
+
+### Conditional template slots — `{{?reading_time}}` pattern
+
+The `{{reading_time}}` slot is set to an empty string on pages where it isn't meaningful (collection index pages, archive pages, tag pages). The article template wraps the display in a `{{?reading_time}}` / `{{/?reading_time}}` conditional block — lattice's conditional slot syntax. If the slot value is empty, the entire block is suppressed; if non-empty, it renders.
+
+This is the same pattern used for `{{?date}}`, `{{?author}}`, and `{{?description}}` on article pages. The conditional slot mechanism means adding a new derived metric to individual pages but not to index pages requires no template branching — the slot is just empty where it doesn't apply, and the template handles the absence without special-casing.
+
+The `{{word_count}}` slot follows the same pattern. Both slots are set in the same pass in `render_collection_page_html` and `render_pages_collection_page_html`, immediately after computing `wc = count_words_markdown(fm.body)`. The two metrics are a single word-count pass shared between both slots.
+
+### Collection `description` — closing the meta-description gap
+
+Before this commit, collection index pages had a hardcoded meta description: `"Generated page graph for collection posts in Lattice Example Site."` This is recognizably placeholder text — the phrase "Generated page graph" has no meaning to a site visitor, and it appears in the HTML `<meta name="description">` tag visible to search engines and link-preview renderers.
+
+The fix is a `description` field on `CollectionEntry` (the config struct parsed from `[[collections]]` blocks in `site.cfg`) and `CollectionDef` (the resolved struct used at build time). The builder uses `coll.description` when available, falling back to the generated string when no description is configured.
+
+The `example/site.cfg` now includes:
+```
+[[collections]]
+name = posts
+...
+description = "All blog posts with tags, feeds, and navigation."
+
+[[collections]]
+name = pages
+...
+description = "Static pages including the site landing page."
+
+[[collections]]
+name = projects
+...
+description = "Project showcase with typed schema constraints."
+```
+
+The structural point is that this description is an authoring-time decision — the site author knows what their collection is for, and that intent should be expressible in the config rather than auto-generated by the build tool. The build tool's job is to surface the description, not to invent one. Providing a meaningful default when no description is configured is pragmatic; treating the generated string as sufficient is not.
+
+The config parser addition follows the established `[[collections]]` parse pattern: when parsing key-value pairs inside a `[[collections]]` block, a new `"description"` branch sets `coll_desc = Some(value)`. The test in `src/config/config_test.mbt` verifies that a `[[collections]]` block with an explicit `description` field parses correctly, and that a block without one yields `None`.
