@@ -12,6 +12,7 @@ pub(all) struct CollectionEntry {
   schema : String?
   template : String?
   page_size : Int?
+  description : String?
 }
 
 ///|
@@ -171,6 +172,7 @@ fn parse_bool_config(value : String) -> Bool? {
 /// - `schema`: optional, schema string (e.g., "title:String,date:Date")
 /// - `template`: optional, template name
 /// - `page_size`: optional, positive integer override for collection pagination
+/// - `description`: optional, meta description for collection index pages
 pub fn parse(input : String) -> Result[SiteConfig, ConfigError] {
   let mut title : String? = None
   let mut base_url : String? = None
@@ -197,6 +199,7 @@ pub fn parse(input : String) -> Result[SiteConfig, ConfigError] {
   let mut current_collection_schema : String? = None
   let mut current_collection_template : String? = None
   let mut current_collection_page_size : Int? = None
+  let mut current_collection_description : String? = None
 
   let lines = split_lines_config(input)
   let mut i = 0
@@ -226,6 +229,7 @@ pub fn parse(input : String) -> Result[SiteConfig, ConfigError] {
           schema: current_collection_schema,
           template: current_collection_template,
           page_size: current_collection_page_size,
+          description: current_collection_description,
         })
       }
       // Start new collection
@@ -235,6 +239,7 @@ pub fn parse(input : String) -> Result[SiteConfig, ConfigError] {
       current_collection_schema = None
       current_collection_template = None
       current_collection_page_size = None
+      current_collection_description = None
       i = i + 1
       continue
     }
@@ -270,6 +275,8 @@ pub fn parse(input : String) -> Result[SiteConfig, ConfigError] {
                   ),
                 )
             }
+          } else if key == "description" {
+            current_collection_description = Some(string_value)
           } else {
             // Unknown keys in collections block are ignored
             ()
@@ -411,6 +418,7 @@ pub fn parse(input : String) -> Result[SiteConfig, ConfigError] {
       schema: current_collection_schema,
       template: current_collection_template,
       page_size: current_collection_page_size,
+      description: current_collection_description,
     })
   }
 

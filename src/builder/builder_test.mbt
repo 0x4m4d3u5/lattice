@@ -64,6 +64,7 @@ test "collection index lookup alias uses numeric prefix directory basename" {
     template: None,
     page_size: None,
     sort_order: @collections.DateDesc,
+    description: None,
   }
   match @builder.collection_index_lookup_alias(collection) {
     Some(lookup_key) => assert_eq(lookup_key, "10---projects")
@@ -80,6 +81,7 @@ test "collection index lookup alias skips matching directory names" {
     template: None,
     page_size: None,
     sort_order: @collections.DateDesc,
+    description: None,
   }
   match @builder.collection_index_lookup_alias(collection) {
     Some(_) => assert_true(false)
@@ -96,6 +98,7 @@ test "collection index lookup alias skips basename that normalizes to collection
     template: None,
     page_size: None,
     sort_order: @collections.DateDesc,
+    description: None,
   }
   match @builder.collection_index_lookup_alias(collection) {
     Some(_) => assert_true(false)

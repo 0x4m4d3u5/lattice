@@ -496,6 +496,7 @@ fn load_inline_collections(
       template: entry.template,
       page_size: entry.page_size,
       sort_order: @collections.DateDesc,
+      description: None,
     })
     i = i + 1
   }
