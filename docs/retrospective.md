@@ -1004,3 +1004,75 @@ The scaffold system (`src/scaffold/scaffold.mbt`) provides two commands: `lattic
 The safety guard is that `new_content_file()` refuses to overwrite existing files. If `posts/my-post.md` already exists, the command returns an error rather than silently replacing the content. This is the same principle as `scaffold_site()` refusing to run in a directory that already has `lattice.conf`. The scaffold commands are write-once: they create starting points, not ongoing generators. This is a deliberate scope limitation — a content management workflow (draft → publish, rename, restructure) is a different problem than initial scaffolding and would require different tooling.
 
 The connection to the structural thesis is that `lattice new` makes schema compliance the path of least resistance. A new post generated from the schema already has the right types for every required field. The author starts from a structurally valid state rather than a blank page. Missing a required field is impossible because the scaffold filled it in. Wrong type for a field is impossible because `stub_for_field_type()` respects the declared type. The schema becomes a constructive tool, not just a validation constraint.
+
+## `lattice check` — Content Validation Without Rendering
+
+The `check` subcommand (`builder.mbt:5810`) runs the full structural validation pipeline but produces no output files. It reports all violations — schema errors, broken wikilinks, duplicate slugs, template problems, data errors — then exits with a non-zero status code if any are found. No `dist/` directory is created or modified.
+
+### Why Check-Only Mode Exists
+
+Build and check serve different points in a workflow. A build is expensive: it renders every page, writes every file, computes every backlink and tag page. For a site with hundreds of pages, a full build after each file save is too slow for an editor feedback loop. Check runs pass 1 (collect sources, parse frontmatter, validate schemas, resolve wikilinks) without triggering pass 2 (render markdown, apply templates, write output). The time difference grows with content size — for small sites the delta is minimal, but for large sites with hundreds of pages and expensive template rendering, check is meaningfully faster.
+
+The CI use case is even clearer: a repository wants to fail pull requests that introduce broken wikilinks or schema violations, but doesn't need to actually regenerate the output. `lattice check content/` exits 0 on clean content and non-zero on violations. The exit code is the signal — CI doesn't need to parse the output.
+
+### What Check Validates
+
+Check runs six validation phases in sequence:
+
+1. **Collections config** — parses `lattice.conf` (or `--collections <path>`). If this fails, check exits immediately with a `CollectionsError` violation. There's no point validating sources whose collection definitions can't be read.
+
+2. **Template syntax** — loads every template file and validates it compiles without errors. `TemplateSlotError` violations are emitted for any template that fails to parse. This catches typos in slot names, unclosed conditionals, and malformed template syntax before they cause a render failure.
+
+3. **Data files** — loads the `data/` directory and validates TOML files against declared schemas. A `DataError` violation is emitted if any data file fails to parse or fails schema validation.
+
+4. **Schema compliance** — for each source file in each collection (and standalone/root pages), parses frontmatter and validates it against the collection schema. `SchemaError` and `MissingRequiredFrontmatter` violations are emitted with file path and line number so the author can jump directly to the problem.
+
+5. **Wikilink resolution** — for each source file, extracts `[[target]]` links and resolves them against the page index. `BrokenWikilink` violations include the exact file path, line number, and column of the `[[` syntax so editors with error-jumping support can navigate directly to the broken link. This is the most direct expression of the structural thesis: a wikilink to a non-existent page is a type error, reported at the link site, not at render time or at reader time.
+
+6. **Shortcode validation** — shortcodes in markdown are parsed and their parameter types are validated. `ShortcodeError` violations are emitted for unknown shortcodes or wrong parameter types.
+
+The violation output format (`path:line:column: type: message`) is the same as compiler error output, which is intentional. Most editor LSP integrations and CI tools understand this format. A future language server could feed `lattice check` output directly into editor diagnostics.
+
+### The Structural Thesis in Miniature
+
+The `LintViolation` struct (`src/lint/lint.mbt`) carries a `ViolationType` enum — `SchemaError | MissingRequiredFrontmatter | BrokenWikilink | DanglingTagReference | TemplateSlotError | DataError | ShortcodeError | FrontmatterError | CollectionsError | DuplicateSlug | IOError`. Each variant names a distinct structural failure mode. This is a closed sum type: you cannot emit a violation without classifying it. There's no "other" bucket, no string-only error that slips through unclassified.
+
+`summarize()` groups violations by type and by file, producing a `ViolationSummary` with `by_type` and `by_file` arrays sorted by count. The summary gives a site with 47 violations — "23 broken_wikilink across 12 files, 19 schema across 8 files, 5 missing_required_field across 5 files" — without requiring the operator to count lines of output manually.
+
+The check-only mode makes the tool usable in contexts where output generation is either unwanted or impossible: CI pipelines, pre-commit hooks, editor file-save triggers, and content review workflows where the goal is validation, not publication.
+
+## `lattice stats` — Read-Only Metrics via Pass-1 Reuse
+
+Commit `6e0db96` adds `lattice stats [content-dir]`, which reports word counts, page counts per collection, total reading time, and unique tag count without rendering anything. The implementation (`builder.mbt:6497`) is structurally identical to check: it runs pass 1 (collect sources, parse frontmatter) and then computes aggregates, skipping pass 2 entirely.
+
+### Reusing the Build Pipeline for Metrics
+
+The stats function is not a separate content scanner. It calls `load_project_layout()` (the same function used by build and check), `collect_sources()` per collection, `@frontmatter.parse()` per source, `@strutil.count_words_text()` on each body, and `collect_tag_catalog()` to count unique tags. It reuses existing functions end-to-end. The word count is the same `count_words_text()` that computes `reading_time` in `content-index.json` — a single source of truth for word counting across the entire tool.
+
+The design decision was that `stats` should use the same code path as the build pipeline rather than implementing a separate file-walking loop. A separate loop would need its own frontmatter parser, its own collection config loader, its own error handling. The reuse means that any bug fix to `collect_sources()` or `@frontmatter.parse()` automatically applies to stats. Consistency is a structural property of the implementation, not a testing guarantee.
+
+### Why Stats Counts Words, Not Lines
+
+Line count is a meaningless metric for prose content — a post with 100 terse lines and a post with 20 flowing paragraphs might have identical word counts but completely different line counts depending on wrapping and formatting style. Word count is the conventional metric for prose volume. The 225 words-per-minute reading time estimate (the same used in `content-index.json`) gives the reading time in actionable minutes rather than raw counts.
+
+The current `stats` output is deliberately minimal: one line per collection, a total line, and a reading time line. This mirrors the philosophy of the build output — only emit lines that carry information. A stats command that prints a 30-line report for a site with three posts would obscure the signal in noise. If a future use case needs richer output (per-page word counts, median post length, tag frequency histogram), those are additive — the current design doesn't prevent them.
+
+### The Standalone and Root Page Accounting
+
+The stats function accounts for all three content categories: collection pages, standalone pages, and root pages. Standalone and root word counts are totalled separately and summed into `total_words`. This matters for sites where the bulk of content is in standalone pages (documentation-style sites) rather than dated collection posts. The per-category breakdown in `StatsResult` is also available for callers who want finer-grained metrics, though the current CLI output only shows the aggregate. A future `--verbose` flag could expose the full breakdown without changing the data model.
+
+## `graph.json` — The Link Graph as a Build Artifact
+
+Every build emits `dist/graph.json` alongside the HTML output. The file encodes the site's wikilink structure as a directed graph with two top-level arrays: `nodes` (one entry per page: slug, title, URL) and `edges` (one entry per wikilink: source slug → target slug). The format is designed for direct consumption by graph visualization libraries — D3 force-directed layouts, Cytoscape.js, Obsidian-style canvas tools — without any post-processing.
+
+### Why the Graph Is a First-Class Output
+
+Most SSGs treat wikilinks as a rendering detail: resolve to URL, emit anchor tag, done. Lattice emits the graph explicitly because the wikilink structure is structural metadata about the content, not just a rendering instruction. Which posts link to which other posts is a signal about topical clustering, hub pages, and orphaned content. An author working on a large site benefits from being able to visualize the link structure and identify: which pages have no incoming links (orphaned content), which pages are heavily linked (hub pages that might need to be kept current), and which topics form clusters.
+
+The `GraphPage` struct (`src/graph/graph.mbt:6`) is shared across the builder, the content index, and the RSS emitter. It carries `slug`, `title`, `url`, `description`, `date`, and `outgoing` (an array of `ResolvedWikilink`). This is deliberately typed data rather than a string template — every downstream emitter receives structured page information, not a pre-formatted HTML string. The graph.json emitter only uses `slug`, `title`, `url`, and `outgoing`; the RSS emitter uses `date` and `description`. The shared type prevents the two emitters from drifting apart in their understanding of what a page is.
+
+### Nodes and Edges as a Stable Contract
+
+The `nodes` / `edges` format is a deliberate choice over more complex representations (GraphML, Gephi GEXF, adjacency lists). D3 and Cytoscape both accept this format directly. The format is also trivially parseable without a schema — any JSON library can load it, and the fields are self-documenting. The format excludes description, date, and other page metadata from nodes intentionally: `graph.json` is for topology, not page content. If an external tool needs page metadata alongside graph structure, it can join `graph.json` with `content-index.json` on the `slug` key — two files with clean separation of concerns rather than one file attempting to serve all use cases.
+
+The only resolved links appear in edges. Broken wikilinks (`[[target]]` that didn't resolve during build) are not emitted as edges — they're errors, reported via the lint pipeline. `graph.json` represents the valid link structure of the site, not the set of link attempts. This is another instance of the structural property: the graph output reflects what the build validated, not what the author wrote.
