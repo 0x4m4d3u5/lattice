@@ -291,6 +291,32 @@ fn build_parser() -> @clap.Parser {
         },
         help="Create a new content file from a collection schema",
       ),
+      "stats": @clap.SubCommand::new(
+        args={
+          "content-dir": @clap.Arg::positional(
+            defaults=["./content"],
+            help="Content directory",
+          ),
+          "output-dir": @clap.Arg::named(
+            short='o',
+            nargs=One,
+            defaults=[""],
+            help="Output directory (default: config.output_dir or ./dist)",
+          ),
+          "config": @clap.Arg::named(
+            short='c',
+            nargs=One,
+            defaults=[""],
+            help="Override site config file",
+          ),
+          "collections": @clap.Arg::named(
+            nargs=One,
+            defaults=[""],
+            help="Override collections config file",
+          ),
+        },
+        help="Print site statistics without building",
+      ),
     },
   )
 }
@@ -959,6 +985,75 @@ fn run_main() -> Unit {
         @sys.exit(1)
         return
       }
+    }
+    return
+  }
+
+  // Handle 'stats' subcommand — collect and print site statistics
+  if subcmd_name == "stats" {
+    let options = cli_options_from_clap(subcmd_sv, "build")
+    let state = match load_cli_state(options) {
+      Ok(state) => state
+      Err(code) => {
+        @sys.exit(code)
+        return
+      }
+    }
+    let result = @builder.stats(state.build_config)
+    if result.errors.length() > 0 {
+      let mut ei = 0
+      while ei < result.errors.length() {
+        print_diagnostic_main(result.errors[ei])
+        ei += 1
+      }
+      @sys.exit(1)
+      return
+    }
+    // Print formatted summary
+    println("")
+    println("Site Statistics")
+    println("──────────────")
+    let mut i = 0
+    while i < result.collection_stats.length() {
+      let cs = result.collection_stats[i]
+      println(
+        "  " +
+        cs.name +
+        ": " +
+        cs.page_count.to_string() +
+        " pages, " +
+        cs.word_count.to_string() +
+        " words",
+      )
+      i += 1
+    }
+    if result.standalone_count > 0 {
+      println(
+        "  standalone: " +
+        result.standalone_count.to_string() +
+        " pages, " +
+        result.standalone_words.to_string() +
+        " words",
+      )
+    }
+    if result.root_count > 0 {
+      println(
+        "  root: " +
+        result.root_count.to_string() +
+        " pages, " +
+        result.root_words.to_string() +
+        " words",
+      )
+    }
+    println("")
+    println("Total: " + result.total_words.to_string() + " words")
+    println(
+      "Estimated reading time: " +
+      result.reading_time_minutes.to_string() +
+      " min",
+    )
+    if result.unique_tags > 0 {
+      println("Unique tags: " + result.unique_tags.to_string())
     }
     return
   }

@@ -6459,6 +6459,232 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
   { violations, }
 }
 
+///|
+/// Result of a stats query: aggregated metrics about the site content.
+pub(all) struct StatsResult {
+  /// Per-collection page count and word count
+  collection_stats : Array[CollectionStats]
+  /// Standalone page count
+  standalone_count : Int
+  /// Standalone word count
+  standalone_words : Int
+  /// Root page count
+  root_count : Int
+  /// Root page word count
+  root_words : Int
+  /// Total word count across all prose pages
+  total_words : Int
+  /// Estimated reading time in minutes (ceil(words / 225))
+  reading_time_minutes : Int
+  /// Number of unique tags
+  unique_tags : Int
+  /// Any errors encountered during stats collection
+  errors : Array[@diagnostic.Diagnostic]
+}
+
+///|
+pub(all) struct CollectionStats {
+  name : String
+  page_count : Int
+  word_count : Int
+}
+
+///|
+/// Collect site statistics by running pass 1 (source collection) without rendering.
+///
+/// Returns aggregated metrics: page counts per collection, word counts,
+/// estimated reading time, and unique tag count.
+pub fn stats(config : BuildConfig) -> StatsResult {
+  println("[lattice] collecting stats for " + config.content_dir)
+  let errors : Array[@diagnostic.Diagnostic] = []
+
+  let layout = match load_project_layout(config) {
+    Ok(parsed) => parsed
+    Err(msg) => {
+      errors.push(
+        build_error(config.collections_path, None, None, "collections: " + msg),
+      )
+      return {
+        collection_stats: [],
+        standalone_count: 0,
+        standalone_words: 0,
+        root_count: 0,
+        root_words: 0,
+        total_words: 0,
+        reading_time_minutes: 0,
+        unique_tags: 0,
+        errors,
+      }
+    }
+  }
+  let collections = layout.collections
+  println(
+    "[lattice] using " + collections.length().to_string() + " collections",
+  )
+
+  // Pass 1: collect sources for each collection
+  let collection_sources : Array[CollectionSources] = []
+  let mut i = 0
+  while i < collections.length() {
+    let collection_def = collections[i]
+    let sources = collect_sources(collection_def.content_dir) catch {
+      @fs.IOError(msg) => {
+        errors.push(
+          build_error(
+            Some(collection_def.content_dir),
+            None,
+            None,
+            "cannot read collection directory (" +
+            collection_def.name +
+            "): " +
+            msg,
+          ),
+        )
+        []
+      }
+    }
+    collection_sources.push({ definition: collection_def, sources })
+    i = i + 1
+  }
+
+  // Compute per-collection stats
+  let collection_stats : Array[CollectionStats] = []
+  i = 0
+  while i < collection_sources.length() {
+    let coll = collection_sources[i]
+    let mut word_count = 0
+    let mut j = 0
+    while j < coll.sources.length() {
+      let body = match @frontmatter.parse(coll.sources[j].content) {
+        Ok(fm) => fm.body
+        Err(_) => coll.sources[j].content
+      }
+      word_count += @strutil.count_words_text(body)
+      j += 1
+    }
+    collection_stats.push({
+      name: coll.definition.name,
+      page_count: coll.sources.length(),
+      word_count,
+    })
+    i += 1
+  }
+
+  // Collect standalone pages
+  let standalone_dir = standalone_dir_for_build(config)
+  let standalone_sources : Array[SourceFile] = if @fs.path_exists(standalone_dir) {
+    collect_sources(standalone_dir) catch {
+      @fs.IOError(msg) => {
+        errors.push(
+          build_error(
+            Some(standalone_dir),
+            None,
+            None,
+            "cannot read standalone pages directory: " + msg,
+          ),
+        )
+        []
+      }
+    }
+  } else {
+    []
+  }
+  let mut standalone_words = 0
+  i = 0
+  while i < standalone_sources.length() {
+    let body = match @frontmatter.parse(standalone_sources[i].content) {
+      Ok(fm) => fm.body
+      Err(_) => standalone_sources[i].content
+    }
+    standalone_words += @strutil.count_words_text(body)
+    i += 1
+  }
+
+  // Collect root pages
+  let slug_owner : Map[String, String] = Map::new()
+  // Register all collection slugs so root pages don't double-count
+  i = 0
+  while i < collection_sources.length() {
+    let coll = collection_sources[i]
+    let mut j = 0
+    while j < coll.sources.length() {
+      slug_owner.set(coll.sources[j].slug, coll.definition.name)
+      j += 1
+    }
+    i += 1
+  }
+  // Register standalone slugs
+  i = 0
+  while i < standalone_sources.length() {
+    slug_owner.set(standalone_sources[i].slug, "_standalone")
+    i += 1
+  }
+
+  let root_sources : Array[SourceFile] = collect_root_sources(
+    config.content_dir,
+    slug_owner,
+  ) catch {
+    @fs.IOError(msg) => {
+      errors.push(
+        build_error(
+          Some(config.content_dir),
+          None,
+          None,
+          "cannot read content root: " + msg,
+        ),
+      )
+      []
+    }
+  }
+  let mut root_words = 0
+  i = 0
+  while i < root_sources.length() {
+    let body = match @frontmatter.parse(root_sources[i].content) {
+      Ok(fm) => fm.body
+      Err(_) => root_sources[i].content
+    }
+    root_words += @strutil.count_words_text(body)
+    i += 1
+  }
+
+  // Compute total words
+  let mut total_words = standalone_words + root_words
+  i = 0
+  while i < collection_stats.length() {
+    total_words += collection_stats[i].word_count
+    i += 1
+  }
+
+  // Reading time (225 words/minute, ceil, minimum 1 if any words)
+  let reading_time_minutes = if total_words == 0 {
+    0
+  } else {
+    let minutes = total_words / 225
+    if total_words % 225 > 0 {
+      minutes + 1
+    } else {
+      minutes
+    }
+  }
+
+  // Count unique tags across all collections
+  let tags_field = tags_field_name(config.site)
+  let tag_catalog = collect_tag_catalog(collection_sources, tags_field)
+  let unique_tags = tag_catalog.ordered_slugs.length()
+
+  {
+    collection_stats,
+    standalone_count: standalone_sources.length(),
+    standalone_words,
+    root_count: root_sources.length(),
+    root_words,
+    total_words,
+    reading_time_minutes,
+    unique_tags,
+    errors,
+  }
+}
+
 // ── default CSS ───────────────────────────────────────────────────────────────
 
 ///|
