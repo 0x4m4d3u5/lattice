@@ -3105,3 +3105,174 @@ test "404.md in content root is not treated as root page" {
   }
   assert_true(notfound_html.contains("Not Found"))
 }
+
+///|
+test "reading_time_minutes returns None for zero" {
+  assert_eq(@builder.reading_time_minutes(0), None)
+}
+
+///|
+test "reading_time_minutes returns Some(1) for small count" {
+  assert_eq(@builder.reading_time_minutes(50), Some(1))
+}
+
+///|
+test "reading_time_minutes returns Some(2) for 450 words" {
+  assert_eq(@builder.reading_time_minutes(450), Some(2))
+}
+
+///|
+test "reading_time_minutes returns Some(10) for 2250 words" {
+  assert_eq(@builder.reading_time_minutes(2250), Some(10))
+}
+
+///|
+test "build emits content-index.json with kind and reading_time" {
+  let root = "./_tmp_builder_content_index"
+  let content_root = root + "/content"
+  let posts_root = content_root + "/posts"
+  let data_root = content_root + "/data"
+  let output_root = root + "/dist"
+  ensure_dir_test(root)
+  ensure_dir_test(content_root)
+  ensure_dir_test(posts_root)
+  ensure_dir_test(data_root)
+  ensure_dir_test(output_root)
+
+  assert_true(
+    write_file_test(
+      posts_root + "/hello.md",
+      "---\n" +
+      "title: Hello World\n" +
+      "date: 2026-03-11\n" +
+      "description: A test post\n" +
+      "tags: [demo]\n" +
+      "---\n\n" +
+      "This is the body of the test post. " +
+      "It has several words to provide content for reading time calculation. " +
+      "More words here to pad it out a bit.\n",
+    ),
+  )
+  let site_cfg = "title = Test\n" +
+    "base_url = /\n" +
+    "data_dir = " +
+    data_root +
+    "\n" +
+    "content_index_file = content-index.json\n" +
+    "output_dir = " +
+    output_root +
+    "\n" +
+    "[[collections]]\n" +
+    "name = posts\n" +
+    "dir = " +
+    posts_root +
+    "\n" +
+    "schema = title:String,date:Date,description:String,tags:Optional[Array[String]]\n"
+  assert_true(write_file_test(root + "/site.cfg", site_cfg))
+  let site = match @config.parse(site_cfg) {
+    Ok(parsed) => parsed
+    Err(_) => {
+      assert_true(false)
+      abort("config parse failed")
+    }
+  }
+  let result = @builder.build(
+    {
+      content_dir: content_root,
+      output_dir: output_root,
+      config_path: root + "/site.cfg",
+      site,
+      collections_path: None,
+      force_rebuild: true,
+      include_drafts: false,
+    },
+    @cache.empty(output_root),
+  )
+  assert_eq(result.errors, 0)
+
+  // content-index.json should be emitted
+  let content_index = @fs.read_file_to_string(
+    output_root + "/content-index.json",
+  ) catch {
+    @fs.IOError(_) => ""
+  }
+  assert_true(content_index.length() > 0)
+  // Verify the JSON array structure
+  assert_true(content_index.contains("\"url\": \"/posts/hello/\""))
+  assert_true(content_index.contains("\"title\": \"Hello World\""))
+  assert_true(content_index.contains("\"kind\": \"post\""))
+  assert_true(content_index.contains("\"reading_time\":"))
+  assert_true(content_index.contains("\"collection\": \"posts\""))
+  assert_true(content_index.contains("\"date\": \"2026-03-11\""))
+  assert_true(content_index.contains("\"description\": \"A test post\""))
+  assert_true(content_index.contains("\"tags\": [\"demo\"]"))
+}
+
+///|
+test "build content-index standalone page has kind standalone" {
+  let root = "./_tmp_builder_content_index_standalone"
+  let content_root = root + "/content"
+  let standalone_root = root + "/standalone"
+  let data_root = content_root + "/data"
+  let output_root = root + "/dist"
+  ensure_dir_test(root)
+  ensure_dir_test(content_root)
+  ensure_dir_test(standalone_root)
+  ensure_dir_test(data_root)
+  ensure_dir_test(output_root)
+
+  assert_true(
+    write_file_test(
+      standalone_root + "/about.md",
+      "---\n" +
+      "title: About Page\n" +
+      "description: An about page\n" +
+      "---\n\n" +
+      "This is the about page body.\n",
+    ),
+  )
+  let site_cfg = "title = Test\n" +
+    "base_url = /\n" +
+    "data_dir = " +
+    data_root +
+    "\n" +
+    "standalone_dir = " +
+    standalone_root +
+    "\n" +
+    "content_index_file = content-index.json\n" +
+    "output_dir = " +
+    output_root +
+    "\n"
+  assert_true(write_file_test(root + "/site.cfg", site_cfg))
+  let site = match @config.parse(site_cfg) {
+    Ok(parsed) => parsed
+    Err(_) => {
+      assert_true(false)
+      abort("config parse failed")
+    }
+  }
+  let result = @builder.build(
+    {
+      content_dir: content_root,
+      output_dir: output_root,
+      config_path: root + "/site.cfg",
+      site,
+      collections_path: None,
+      force_rebuild: true,
+      include_drafts: false,
+    },
+    @cache.empty(output_root),
+  )
+  assert_eq(result.errors, 0)
+
+  let content_index = @fs.read_file_to_string(
+    output_root + "/content-index.json",
+  ) catch {
+    @fs.IOError(_) => ""
+  }
+  assert_true(content_index.length() > 0)
+  assert_true(content_index.contains("\"url\": \"/about/\""))
+  assert_true(content_index.contains("\"title\": \"About Page\""))
+  assert_true(content_index.contains("\"kind\": \"standalone\""))
+  assert_true(content_index.contains("\"reading_time\":"))
+}

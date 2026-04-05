@@ -1596,9 +1596,14 @@ fn build_template_slots(
   slots.set(@template.Content, content)
   slots.set(@template.BodyNoH1, @html.strip_leading_h1(content))
   let canonical = @strutil.absolute_url(base_url, url)
+  let description_opt : String? = if description.length() > 0 {
+    Some(description)
+  } else {
+    None
+  }
   slots.set(
     @template.HeadMeta,
-    @html.render_head_meta(title, Some(description), canonical),
+    @html.render_head_meta(title, description_opt, canonical),
   )
   slots.set(@template.Date, date)
   slots.set(@template.Description, description)
@@ -2164,6 +2169,51 @@ pub fn reading_time_str(word_count : Int) -> String {
     }
   }
   mins.to_string() + " min"
+}
+
+///|
+/// Return integer reading time in minutes from a word count at ~225 wpm.
+/// Minimum result is 1. Returns None for empty/zero word count.
+pub fn reading_time_minutes(word_count : Int) -> Int? {
+  if word_count <= 0 {
+    None
+  } else {
+    let raw = (word_count + 224) / 225
+    if raw < 1 {
+      Some(1)
+    } else {
+      Some(raw)
+    }
+  }
+}
+
+///|
+/// Count words in a plain-text string by splitting on whitespace.
+fn count_words_text(text : String) -> Int {
+  if text.length() == 0 {
+    return 0
+  }
+  let mut count = 0
+  let mut in_word = false
+  let n = text.length()
+  let mut i = 0
+  while i < n {
+    let c = @strutil.char_at(text, i)
+    let is_ws = c == ' ' || c == '\t' || c == '\n' || c == '\r'
+    if is_ws {
+      if in_word {
+        count = count + 1
+        in_word = false
+      }
+    } else {
+      in_word = true
+    }
+    i = i + 1
+  }
+  if in_word {
+    count = count + 1
+  }
+  count
 }
 
 ///|
@@ -4810,6 +4860,10 @@ pub fn build(
                     doc.excerpt,
                   ),
                 )
+                let content_kind = match doc.date {
+                  Some(_) => "post"
+                  None => "page"
+                }
                 content_entries.push(
                   @search.new_content_entry(
                     doc.title,
@@ -4825,6 +4879,8 @@ pub fn build(
                       Some(d) => d
                       None => ""
                     },
+                    content_kind,
+                    reading_time_minutes(count_words_text(doc.body_text)),
                     doc.body_text,
                   ),
                 )
@@ -5086,6 +5142,8 @@ pub fn build(
                     Some(d) => d
                     None => ""
                   },
+                  "standalone",
+                  reading_time_minutes(count_words_text(doc.body_text)),
                   doc.body_text,
                 ),
               )
@@ -5220,6 +5278,8 @@ pub fn build(
                     Some(d) => d
                     None => ""
                   },
+                  "page",
+                  reading_time_minutes(count_words_text(doc.body_text)),
                   doc.body_text,
                 ),
               )

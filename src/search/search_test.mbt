@@ -237,6 +237,8 @@ test "render_content_index single entry contains required fields" {
     "posts",
     "2026-01-01",
     "A page about hello.",
+    "post",
+    Some(3),
     "This is the full body text.",
   )
   let result = render_content_index([entry])
@@ -247,6 +249,8 @@ test "render_content_index single entry contains required fields" {
   inspect(result.contains("\"collection\""), content="true")
   inspect(result.contains("\"date\""), content="true")
   inspect(result.contains("\"description\""), content="true")
+  inspect(result.contains("\"kind\""), content="true")
+  inspect(result.contains("\"reading_time\""), content="true")
   inspect(result.contains("\"body\""), content="true")
 }
 
@@ -260,6 +264,8 @@ test "render_content_index body field stores full text" {
     "posts",
     "2026-03-01",
     "desc",
+    "post",
+    None,
     "This is a long body with multiple sentences. It covers the entire article.",
   )
   let result = render_content_index([entry])
@@ -271,8 +277,120 @@ test "render_content_index body field stores full text" {
 
 ///|
 test "render_content_index two entries no trailing comma after last" {
-  let e1 = new_content_entry("A", "a", "/a/", [], "x", "", "", "body a")
-  let e2 = new_content_entry("B", "b", "/b/", [], "x", "", "", "body b")
+  let e1 = new_content_entry(
+    "A",
+    "a",
+    "/a/",
+    [],
+    "x",
+    "",
+    "",
+    "page",
+    None,
+    "body a",
+  )
+  let e2 = new_content_entry(
+    "B",
+    "b",
+    "/b/",
+    [],
+    "x",
+    "",
+    "",
+    "page",
+    None,
+    "body b",
+  )
   let result = render_content_index([e1, e2])
   inspect(result.contains("  }\n]"), content="true")
+}
+
+///|
+test "render_content_index kind field rendered as JSON string" {
+  let entry = new_content_entry(
+    "Standalone",
+    "standalone",
+    "/standalone/",
+    [],
+    "_standalone",
+    "",
+    "",
+    "standalone",
+    None,
+    "body text",
+  )
+  let result = render_content_index([entry])
+  inspect(result.contains("\"kind\": \"standalone\""), content="true")
+}
+
+///|
+test "render_content_index reading_time null rendered as JSON null" {
+  let entry = new_content_entry(
+    "No RT",
+    "no-rt",
+    "/no-rt/",
+    [],
+    "x",
+    "",
+    "",
+    "page",
+    None,
+    "body",
+  )
+  let result = render_content_index([entry])
+  inspect(result.contains("\"reading_time\": null"), content="true")
+}
+
+///|
+test "render_content_index reading_time integer rendered as JSON number" {
+  let entry = new_content_entry(
+    "With RT",
+    "with-rt",
+    "/with-rt/",
+    [],
+    "x",
+    "",
+    "",
+    "post",
+    Some(5),
+    "body",
+  )
+  let result = render_content_index([entry])
+  inspect(result.contains("\"reading_time\": 5"), content="true")
+}
+
+///|
+test "render_content_index deterministic field ordering" {
+  let entry = new_content_entry(
+    "Order",
+    "order",
+    "/order/",
+    ["a"],
+    "posts",
+    "2026-01-01",
+    "desc",
+    "post",
+    Some(1),
+    "body",
+  )
+  let result = render_content_index([entry])
+  // Verify all expected fields are present
+  inspect(result.contains("\"title\": \"Order\""), content="true")
+  inspect(result.contains("\"kind\": \"post\""), content="true")
+  inspect(result.contains("\"reading_time\": 1"), content="true")
+  inspect(result.contains("\"body\": \"body\""), content="true")
+  // Verify kind comes after description and before reading_time
+  // by checking for the literal field ordering in the output
+  inspect(
+    result.contains("\"description\": \"desc\",\n    \"kind\": \"post\""),
+    content="true",
+  )
+  inspect(
+    result.contains("\"kind\": \"post\",\n    \"reading_time\": 1"),
+    content="true",
+  )
+  inspect(
+    result.contains("\"reading_time\": 1,\n    \"body\": \"body\""),
+    content="true",
+  )
 }

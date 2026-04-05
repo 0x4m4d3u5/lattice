@@ -26,7 +26,15 @@ pub fn new_entry(
 ///|
 /// A full-text content index entry — includes the stripped plaintext body so
 /// agents and LLMs can RAG over the complete page content, not just an excerpt.
-pub struct ContentEntry {
+///
+/// The `kind` field classifies the page for agent consumption:
+///   - "post" — collection member with a date
+///   - "page" — collection member without a date
+///   - "standalone" — standalone page outside collections
+///   - "collection_index" — auto-generated index page for a collection
+///
+/// The `reading_time` field is an integer number of minutes (null if unknown).
+pub(all) struct ContentEntry {
   title : String
   slug : String
   url : String
@@ -34,6 +42,8 @@ pub struct ContentEntry {
   collection : String
   date : String
   description : String
+  kind : String
+  reading_time : Int?
   body : String
 }
 
@@ -46,9 +56,22 @@ pub fn new_content_entry(
   collection : String,
   date : String,
   description : String,
+  kind : String,
+  reading_time : Int?,
   body : String,
 ) -> ContentEntry {
-  { title, slug, url, tags, collection, date, description, body }
+  {
+    title,
+    slug,
+    url,
+    tags,
+    collection,
+    date,
+    description,
+    kind,
+    reading_time,
+    body,
+  }
 }
 
 ///|
@@ -127,6 +150,8 @@ fn write_common_fields(
 ///
 /// Unlike the search index (excerpt only), the content index stores the full
 /// stripped plaintext body — suitable for semantic search or LLM consumption.
+/// Includes `kind` (page type classification) and `reading_time` (integer
+/// minutes or null) for agent-first programmatic consumption.
 pub fn render_content_index(entries : Array[ContentEntry]) -> String {
   render_json_array(entries, fn(buf, entry) {
     write_common_fields(
@@ -142,6 +167,15 @@ pub fn render_content_index(entries : Array[ContentEntry]) -> String {
     buf.write_string(",\n")
     buf.write_string("    \"description\": ")
     @strutil.write_json_string(buf, entry.description)
+    buf.write_string(",\n")
+    buf.write_string("    \"kind\": ")
+    @strutil.write_json_string(buf, entry.kind)
+    buf.write_string(",\n")
+    buf.write_string("    \"reading_time\": ")
+    match entry.reading_time {
+      Some(mins) => buf.write_string(mins.to_string())
+      None => buf.write_string("null")
+    }
     buf.write_string(",\n")
     buf.write_string("    \"body\": ")
     @strutil.write_json_string(buf, entry.body)
