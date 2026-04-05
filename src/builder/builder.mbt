@@ -2188,35 +2188,6 @@ pub fn reading_time_minutes(word_count : Int) -> Int? {
 }
 
 ///|
-/// Count words in a plain-text string by splitting on whitespace.
-fn count_words_text(text : String) -> Int {
-  if text.length() == 0 {
-    return 0
-  }
-  let mut count = 0
-  let mut in_word = false
-  let n = text.length()
-  let mut i = 0
-  while i < n {
-    let c = @strutil.char_at(text, i)
-    let is_ws = c == ' ' || c == '\t' || c == '\n' || c == '\r'
-    if is_ws {
-      if in_word {
-        count = count + 1
-        in_word = false
-      }
-    } else {
-      in_word = true
-    }
-    i = i + 1
-  }
-  if in_word {
-    count = count + 1
-  }
-  count
-}
-
-///|
 /// Truncate a string to at most max_len characters.
 pub fn truncate_to_builder(s : String, max_len : Int) -> String {
   if s.length() <= max_len {
@@ -4880,7 +4851,9 @@ pub fn build(
                       None => ""
                     },
                     content_kind,
-                    reading_time_minutes(count_words_text(doc.body_text)),
+                    reading_time_minutes(
+                      @strutil.count_words_text(doc.body_text),
+                    ),
                     doc.body_text,
                   ),
                 )
@@ -4988,6 +4961,26 @@ pub fn build(
               ensure_parent_dirs_for_file(out_path)
               @fs.write_string_to_file(out_path, html)
               println("[lattice] wrote " + out_path)
+              // Emit a content-index entry for page 1 of the collection index
+              if pagination.page_number == 1 {
+                content_entries.push(
+                  @search.new_content_entry(
+                    coll.name + " Index",
+                    coll.name,
+                    collection_index_url(coll.name),
+                    [],
+                    coll.name,
+                    "",
+                    match coll.description {
+                      Some(d) => d
+                      None => ""
+                    },
+                    "collection_index",
+                    None,
+                    @strutil.strip_html_tags(html),
+                  ),
+                )
+              }
               true
             } catch {
               @fs.IOError(msg) => {
@@ -5143,7 +5136,7 @@ pub fn build(
                     None => ""
                   },
                   "standalone",
-                  reading_time_minutes(count_words_text(doc.body_text)),
+                  reading_time_minutes(@strutil.count_words_text(doc.body_text)),
                   doc.body_text,
                 ),
               )
@@ -5279,7 +5272,7 @@ pub fn build(
                     None => ""
                   },
                   "page",
-                  reading_time_minutes(count_words_text(doc.body_text)),
+                  reading_time_minutes(@strutil.count_words_text(doc.body_text)),
                   doc.body_text,
                 ),
               )

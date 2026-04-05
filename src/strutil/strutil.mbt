@@ -774,6 +774,35 @@ pub fn strip_html_tags(s : String) -> String {
 }
 
 ///|
+/// Count words in a plain-text string by splitting on whitespace.
+pub fn count_words_text(text : String) -> Int {
+  if text.length() == 0 {
+    return 0
+  }
+  let mut count = 0
+  let mut in_word = false
+  let n = text.length()
+  let mut i = 0
+  while i < n {
+    let c = char_at(text, i)
+    let is_ws = c == ' ' || c == '\t' || c == '\n' || c == '\r'
+    if is_ws {
+      if in_word {
+        count = count + 1
+        in_word = false
+      }
+    } else {
+      in_word = true
+    }
+    i = i + 1
+  }
+  if in_word {
+    count = count + 1
+  }
+  count
+}
+
+///|
 /// Sort an array in place using insertion sort with the given comparator.
 ///
 /// This is a simple O(n²) sort suitable for small arrays (e.g., feed entries).

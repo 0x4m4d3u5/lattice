@@ -76,3 +76,38 @@ test "strip_html_tags collapses multiple internal spaces" {
   let result = strip_html_tags("  hello   world  ")
   inspect(result, content="hello world")
 }
+
+///|
+test "count_words_text empty string" {
+  assert_eq(count_words_text(""), 0)
+}
+
+///|
+test "count_words_text single word" {
+  assert_eq(count_words_text("hello"), 1)
+}
+
+///|
+test "count_words_text multiple words" {
+  assert_eq(count_words_text("hello world foo bar"), 4)
+}
+
+///|
+test "count_words_text tabs and newlines" {
+  assert_eq(count_words_text("hello\tworld\nfoo\t\tbar\n\nbaz"), 5)
+}
+
+///|
+test "count_words_text leading and trailing whitespace" {
+  assert_eq(count_words_text("  hello world  "), 2)
+}
+
+///|
+test "count_words_text multiple spaces between words" {
+  assert_eq(count_words_text("hello   world"), 2)
+}
+
+///|
+test "count_words_text only whitespace" {
+  assert_eq(count_words_text("   \t\n  "), 0)
+}

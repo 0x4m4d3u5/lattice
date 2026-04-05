@@ -3276,3 +3276,81 @@ test "build content-index standalone page has kind standalone" {
   assert_true(content_index.contains("\"kind\": \"standalone\""))
   assert_true(content_index.contains("\"reading_time\":"))
 }
+
+///|
+test "build emits collection_index entry in content-index.json" {
+  let root = "./_tmp_builder_content_index_coll_idx"
+  let content_root = root + "/content"
+  let posts_root = content_root + "/posts"
+  let data_root = content_root + "/data"
+  let output_root = root + "/dist"
+  ensure_dir_test(root)
+  ensure_dir_test(content_root)
+  ensure_dir_test(posts_root)
+  ensure_dir_test(data_root)
+  ensure_dir_test(output_root)
+
+  assert_true(
+    write_file_test(
+      posts_root + "/hello.md",
+      "---\n" +
+      "title: Hello World\n" +
+      "date: 2026-03-11\n" +
+      "description: A test post\n" +
+      "tags: [demo]\n" +
+      "---\n\n" +
+      "This is the body of the test post.\n",
+    ),
+  )
+  let site_cfg = "title = Test\n" +
+    "base_url = /\n" +
+    "data_dir = " +
+    data_root +
+    "\n" +
+    "content_index_file = content-index.json\n" +
+    "output_dir = " +
+    output_root +
+    "\n" +
+    "[[collections]]\n" +
+    "name = posts\n" +
+    "dir = " +
+    posts_root +
+    "\n" +
+    "schema = title:String,date:Date,description:String,tags:Optional[Array[String]]\n"
+  assert_true(write_file_test(root + "/site.cfg", site_cfg))
+  let site = match @config.parse(site_cfg) {
+    Ok(parsed) => parsed
+    Err(_) => {
+      assert_true(false)
+      abort("config parse failed")
+    }
+  }
+  let result = @builder.build(
+    {
+      content_dir: content_root,
+      output_dir: output_root,
+      config_path: root + "/site.cfg",
+      site,
+      collections_path: None,
+      force_rebuild: true,
+      include_drafts: false,
+    },
+    @cache.empty(output_root),
+  )
+  assert_eq(result.errors, 0)
+
+  // content-index.json should contain a collection_index entry
+  let content_index = @fs.read_file_to_string(
+    output_root + "/content-index.json",
+  ) catch {
+    @fs.IOError(_) => ""
+  }
+  assert_true(content_index.length() > 0)
+  assert_true(content_index.contains("\"kind\": \"collection_index\""))
+  assert_true(content_index.contains("\"slug\": \"posts\""))
+  assert_true(content_index.contains("\"title\": \"posts Index\""))
+  assert_true(content_index.contains("\"url\": \"/posts/\""))
+  assert_true(content_index.contains("\"collection\": \"posts\""))
+  assert_true(content_index.contains("\"date\": \"\""))
+  assert_true(content_index.contains("\"reading_time\": null"))
+}
