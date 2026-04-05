@@ -1117,8 +1117,6 @@ let nav_toml : String =
   #|links = ["posts"]
   #|
 
-
-
 ///|
 /// Ensure a directory exists, creating parent dirs as needed.
 fn ensure_dir(path : String) -> Result[Unit, String] {

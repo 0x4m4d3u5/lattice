@@ -132,7 +132,6 @@ test "config parse backward compatibility with collections_file" {
   }
 }
 
-
 ///|
 test "config parse [[collections]] with description" {
   let src = "title = Example\n" +
@@ -149,11 +148,11 @@ test "config parse [[collections]] with description" {
   match parse(src) {
     Ok(cfg) => {
       assert_eq(cfg.collections.length(), 2)
-      assert_eq!(
+      assert_eq(
         cfg.collections[0].description,
         Some("Blog posts about interesting things."),
       )
-      assert_eq!(cfg.collections[1].description, None)
+      assert_eq(cfg.collections[1].description, None)
     }
     Err(_) => assert_true(false)
   }

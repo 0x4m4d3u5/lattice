@@ -874,8 +874,15 @@ pub fn parse(input : String) -> Result[CollectionsConfig, CollectionsError] {
         Some(CollectionSection(name)) =>
           match
             finalize_collection(
-              defs, seen_collections, name, current_schema, current_dir, current_template,
-              current_page_size, current_sort_order, None,
+              defs,
+              seen_collections,
+              name,
+              current_schema,
+              current_dir,
+              current_template,
+              current_page_size,
+              current_sort_order,
+              None,
             ) {
             Err(e) => return Err(e)
             Ok(_) => ()
@@ -986,8 +993,15 @@ pub fn parse(input : String) -> Result[CollectionsConfig, CollectionsError] {
     Some(CollectionSection(name)) =>
       match
         finalize_collection(
-          defs, seen_collections, name, current_schema, current_dir, current_template,
-          current_page_size, current_sort_order, None,
+          defs,
+          seen_collections,
+          name,
+          current_schema,
+          current_dir,
+          current_template,
+          current_page_size,
+          current_sort_order,
+          None,
         ) {
         Err(e) => return Err(e)
         Ok(_) => ()

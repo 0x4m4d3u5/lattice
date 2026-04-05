@@ -129,7 +129,14 @@ fn write_common_fields(
 /// stripped plaintext body — suitable for semantic search or LLM consumption.
 pub fn render_content_index(entries : Array[ContentEntry]) -> String {
   render_json_array(entries, fn(buf, entry) {
-    write_common_fields(buf, entry.title, entry.slug, entry.url, entry.tags, entry.collection)
+    write_common_fields(
+      buf,
+      entry.title,
+      entry.slug,
+      entry.url,
+      entry.tags,
+      entry.collection,
+    )
     buf.write_string("    \"date\": ")
     @strutil.write_json_string(buf, entry.date)
     buf.write_string(",\n")
@@ -146,7 +153,14 @@ pub fn render_content_index(entries : Array[ContentEntry]) -> String {
 /// Render `search-index.json` from typed search entries.
 pub fn render_search_index(entries : Array[SearchEntry]) -> String {
   render_json_array(entries, fn(buf, entry) {
-    write_common_fields(buf, entry.title, entry.slug, entry.url, entry.tags, entry.collection)
+    write_common_fields(
+      buf,
+      entry.title,
+      entry.slug,
+      entry.url,
+      entry.tags,
+      entry.collection,
+    )
     buf.write_string("    \"excerpt\": ")
     @strutil.write_json_string(buf, entry.excerpt)
     buf.write_string("\n")

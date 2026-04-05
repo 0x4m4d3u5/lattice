@@ -1675,24 +1675,40 @@ fn standalone_default_schema() -> @schema.Schema {
     name: "_standalone",
     fields: [
       { name: "title", field_type: @schema.TString(None, None), required: true },
-      { name: "description", field_type: @schema.TOptional(
-          @schema.TString(None, None),
-        ), required: false },
-      { name: "date", field_type: @schema.TOptional(
-          @schema.TDate(None, None),
-        ), required: false },
-      { name: "tags", field_type: @schema.TOptional(
+      {
+        name: "description",
+        field_type: @schema.TOptional(@schema.TString(None, None)),
+        required: false,
+      },
+      {
+        name: "date",
+        field_type: @schema.TOptional(@schema.TDate(None, None)),
+        required: false,
+      },
+      {
+        name: "tags",
+        field_type: @schema.TOptional(
           @schema.TArray(@schema.TString(None, None)),
-        ), required: false },
-      { name: "author", field_type: @schema.TOptional(
-          @schema.TString(None, None),
-        ), required: false },
-      { name: "redirect_from", field_type: @schema.TOptional(
+        ),
+        required: false,
+      },
+      {
+        name: "author",
+        field_type: @schema.TOptional(@schema.TString(None, None)),
+        required: false,
+      },
+      {
+        name: "redirect_from",
+        field_type: @schema.TOptional(
           @schema.TArray(@schema.TString(None, None)),
-        ), required: false },
-      { name: "og_image", field_type: @schema.TOptional(
-          @schema.TString(None, None),
-        ), required: false },
+        ),
+        required: false,
+      },
+      {
+        name: "og_image",
+        field_type: @schema.TOptional(@schema.TString(None, None)),
+        required: false,
+      },
     ],
   }
 }
@@ -1709,6 +1725,31 @@ fn standalone_page_url(slug : String) -> String {
 /// Output file path for a standalone page.
 fn standalone_output_path(output_dir : String, slug : String) -> String {
   output_dir + "/" + slug + "/index.html"
+}
+
+///|
+/// URL for a root-level page (content root .md file, not in any collection).
+///
+/// `index` maps to `/` (the true homepage). All other slugs use `/<slug>/`.
+fn root_page_url(slug : String) -> String {
+  if slug == "index" {
+    "/"
+  } else {
+    "/" + slug + "/"
+  }
+}
+
+///|
+/// Output file path for a root-level page.
+///
+/// `index.md` writes to `dist/index.html` (not `dist/index/index.html`).
+/// All others use `dist/<slug>/index.html`.
+fn root_output_path(output_dir : String, slug : String) -> String {
+  if slug == "index" {
+    output_dir + "/index.html"
+  } else {
+    output_dir + "/" + slug + "/index.html"
+  }
 }
 
 ///|
@@ -1812,6 +1853,47 @@ fn standalone_dir_for_build(config : BuildConfig) -> String {
     Some(path) => path
     None => config.content_dir + "/standalone"
   }
+}
+
+///|
+/// Collect root-level .md files from the content directory.
+///
+/// These are files like `content/index.md` or `content/about.md` that sit
+/// directly in the content root but aren't part of any defined collection.
+/// Excludes `404.md` (handled separately) and files whose slugs are already
+/// claimed by collections or standalone pages.
+fn collect_root_sources(
+  content_dir : String,
+  slug_owner : Map[String, String],
+) -> Array[SourceFile] raise @fs.IOError {
+  let entries = @fs.read_dir(content_dir)
+  let sources : Array[SourceFile] = []
+  let mut i = 0
+  while i < entries.length() {
+    let filename = entries[i]
+    if filename.has_suffix(".md") && filename != "404.md" {
+      let file_slug = @slug.filename_to_slug(filename)
+      // Only include if no collection or standalone page has claimed this slug
+      match slug_owner.get(file_slug) {
+        None => {
+          let path = content_dir + "/" + filename
+          let content = @fs.read_file_to_string(path)
+          sources.push({
+            path,
+            filename,
+            slug: file_slug,
+            content,
+            fingerprint: @cache.fingerprint_for_source(path, content),
+            stamp: @watch.file_stamp(path),
+            link_targets: extract_link_targets(content, file_slug),
+          })
+        }
+        Some(_) => () // slug already claimed, skip
+      }
+    }
+    i = i + 1
+  }
+  sources
 }
 
 ///|
@@ -1976,7 +2058,8 @@ fn extract_excerpt_builder(markdown_body : String) -> String {
       if @markdown.is_fence_start(line) {
         let fence_char = @markdown.fence_char_of(line)
         i = i + 1
-        while i < lines.length() && !@markdown.is_fence_end(lines[i], fence_char) {
+        while i < lines.length() &&
+              !@markdown.is_fence_end(lines[i], fence_char) {
           i = i + 1
         }
         if i < lines.length() {
@@ -2532,12 +2615,7 @@ fn render_collection_index(
   )
   let description = match collection_description {
     Some(d) => d
-    None =>
-      "Generated page graph for collection " +
-        collection_name +
-        " in " +
-        site.title +
-        "."
+    None => ""
   }
   let page_url = collection_index_page_url(
     collection_name,
@@ -4183,8 +4261,8 @@ pub fn build(
   // Collect standalone pages (not in any collection) and register in page_index
   let standalone_dir = standalone_dir_for_build(config)
   let standalone_sources : Array[SourceFile] = if @fs.path_exists(
-    standalone_dir,
-  ) {
+      standalone_dir,
+    ) {
     collect_sources(standalone_dir) catch {
       @fs.IOError(msg) => {
         diagnostics.push(
@@ -4249,6 +4327,66 @@ pub fn build(
     )
   }
 
+  // Collect root-level .md files (not in any collection or standalone dir)
+  // e.g. content/index.md → /, content/about.md → /about/
+  let root_sources : Array[SourceFile] = collect_root_sources(
+    config.content_dir,
+    slug_owner,
+  ) catch {
+    @fs.IOError(msg) => {
+      diagnostics.push(
+        build_error(
+          Some(config.content_dir),
+          None,
+          None,
+          "cannot read content root directory: " + msg,
+        ),
+      )
+      return {
+        errors: 1,
+        diagnostics,
+        rebuilt_pages: 0,
+        unchanged_pages: 0,
+        skipped_drafts: 0,
+        redirect_count: 0,
+      }
+    }
+  }
+  i = 0
+  while i < root_sources.length() {
+    let src = root_sources[i]
+    match slug_owner.get(src.slug) {
+      Some(owner) => {
+        diagnostics.push(
+          build_error(
+            Some(src.path),
+            None,
+            None,
+            "root page slug '" + src.slug + "' conflicts with '" + owner + "'",
+          ),
+        )
+        return {
+          errors: 1,
+          diagnostics,
+          rebuilt_pages: 0,
+          unchanged_pages: 0,
+          skipped_drafts: 0,
+          redirect_count: 0,
+        }
+      }
+      None => {
+        slug_owner.set(src.slug, "_root")
+        page_index.set(src.slug, root_page_url(src.slug))
+      }
+    }
+    i = i + 1
+  }
+  if root_sources.length() > 0 {
+    println(
+      "[lattice] found " + root_sources.length().to_string() + " root page(s)",
+    )
+  }
+
   let tags_field = tags_field_name(config.site)
   let tag_catalog = collect_tag_catalog(collection_sources, tags_field)
   let known_tags = tag_catalog.name_by_slug
@@ -4275,9 +4413,22 @@ pub fn build(
       sources: standalone_sources,
     })
   }
+  if root_sources.length() > 0 {
+    all_sources_for_backlinks.push({
+      definition: {
+        name: "_root",
+        schema: standalone_default_schema(),
+        content_dir: config.content_dir,
+        template: None,
+        page_size: None,
+        sort_order: @collections.DateDesc,
+        description: None,
+      },
+      sources: root_sources,
+    })
+  }
   let backlink_index = build_backlink_index(
-    all_sources_for_backlinks,
-    page_index,
+    all_sources_for_backlinks, page_index,
   )
   let incremental = build_incremental_state(
     config, collection_sources, collections,
@@ -4666,8 +4817,14 @@ pub fn build(
                     doc.url,
                     search_tags,
                     collection_name,
-                    match doc.date { Some(d) => d; None => "" },
-                    match doc.description { Some(d) => d; None => "" },
+                    match doc.date {
+                      Some(d) => d
+                      None => ""
+                    },
+                    match doc.description {
+                      Some(d) => d
+                      None => ""
+                    },
                     doc.body_text,
                   ),
                 )
@@ -4859,7 +5016,10 @@ pub fn build(
           custom_css,
           page_backlinks_html,
           true, // always rebuild standalone pages (no incremental for now)
-          "", "", "", "", // no prev/next for standalone pages
+          "",
+          "",
+          "",
+          "", // no prev/next for standalone pages
         )
         let mut diag_idx = 0
         while diag_idx < doc_outcome.diagnostics.length() {
@@ -4918,8 +5078,14 @@ pub fn build(
                   doc.url,
                   search_tags,
                   "_standalone",
-                  match doc.date { Some(d) => d; None => "" },
-                  match doc.description { Some(d) => d; None => "" },
+                  match doc.date {
+                    Some(d) => d
+                    None => ""
+                  },
+                  match doc.description {
+                    Some(d) => d
+                    None => ""
+                  },
                   doc.body_text,
                 ),
               )
@@ -4929,6 +5095,140 @@ pub fn build(
           }
         }
         si = si + 1
+      }
+    }
+
+    // Render root-level pages (content/index.md, content/about.md, etc.)
+    if error_count == 0 && root_sources.length() > 0 {
+      let root_schema = standalone_default_schema()
+      let mut ri = 0
+      while ri < root_sources.length() {
+        let src = root_sources[ri]
+        let page_url = root_page_url(src.slug)
+        let out_path = root_output_path(config.output_dir, src.slug)
+        let page_backlinks_html = match backlink_index.get(src.slug) {
+          Some(refs) => render_backlinks_html(refs)
+          None => ""
+        }
+        let doc_outcome = process_document(
+          src.content,
+          src.path,
+          src.slug,
+          "_root",
+          page_url,
+          page_index,
+          slug_owner,
+          known_tags,
+          tags_field,
+          root_schema,
+          config.site,
+          data_store,
+          templates.page,
+          templates_dir_for_build(config),
+          nav_links_html,
+          custom_css,
+          page_backlinks_html,
+          true, // always rebuild root pages (no incremental for now)
+          "",
+          "",
+          "",
+          "", // no prev/next for root pages
+        )
+        let mut diag_idx = 0
+        while diag_idx < doc_outcome.diagnostics.length() {
+          diagnostics.push(doc_outcome.diagnostics[diag_idx])
+          diag_idx = diag_idx + 1
+        }
+        match doc_outcome.document {
+          None => error_count = error_count + 1
+          Some(doc) => {
+            // index.md writes to dist/index.html (no subdirectory)
+            // everything else writes to dist/<slug>/index.html
+            let write_ok = if src.slug == "index" {
+              try {
+                @fs.write_string_to_file(out_path, doc.html)
+                println("[lattice] wrote " + out_path + " (root homepage)")
+                true
+              } catch {
+                @fs.IOError(msg) => {
+                  diagnostics.push(
+                    build_error(
+                      Some(out_path),
+                      None,
+                      None,
+                      "root page index: write failed: " + msg,
+                    ),
+                  )
+                  false
+                }
+              }
+            } else {
+              let page_dir = config.output_dir + "/" + src.slug
+              try {
+                ensure_dir(page_dir)
+                @fs.write_string_to_file(out_path, doc.html)
+                println("[lattice] wrote " + out_path)
+                true
+              } catch {
+                @fs.IOError(msg) => {
+                  diagnostics.push(
+                    build_error(
+                      Some(out_path),
+                      None,
+                      None,
+                      "root/" + src.slug + ": write failed: " + msg,
+                    ),
+                  )
+                  false
+                }
+              }
+            }
+            if write_ok {
+              rebuilt = rebuilt + 1
+              let page : @graph.GraphPage = {
+                slug: src.slug,
+                title: doc.title,
+                url: doc.url,
+                description: doc.description,
+                date: doc.date,
+                outgoing: doc.resolved_links,
+              }
+              graph_pages.push(page)
+              let search_tags : Array[String] = []
+              search_entries.push(
+                @search.new_entry(
+                  doc.title,
+                  src.slug,
+                  doc.url,
+                  search_tags,
+                  "_root",
+                  doc.excerpt,
+                ),
+              )
+              content_entries.push(
+                @search.new_content_entry(
+                  doc.title,
+                  src.slug,
+                  doc.url,
+                  search_tags,
+                  "_root",
+                  match doc.date {
+                    Some(d) => d
+                    None => ""
+                  },
+                  match doc.description {
+                    Some(d) => d
+                    None => ""
+                  },
+                  doc.body_text,
+                ),
+              )
+            } else {
+              error_count = error_count + 1
+            }
+          }
+        }
+        ri = ri + 1
       }
     }
 
@@ -5569,8 +5869,8 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
   // Collect standalone pages for validation
   let standalone_dir = standalone_dir_for_build(config)
   let standalone_sources : Array[SourceFile] = if @fs.path_exists(
-    standalone_dir,
-  ) {
+      standalone_dir,
+    ) {
     collect_sources(standalone_dir) catch {
       @fs.IOError(msg) => {
         violations.push({
@@ -5610,6 +5910,46 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
     i = i + 1
   }
 
+  // Collect root-level .md files for validation
+  let root_sources : Array[SourceFile] = collect_root_sources(
+    config.content_dir,
+    slug_owner,
+  ) catch {
+    @fs.IOError(msg) => {
+      violations.push({
+        path: config.content_dir,
+        line: None,
+        column: None,
+        kind: @lint.IOError,
+        message: "cannot read content root directory: " + msg,
+      })
+      []
+    }
+  }
+  i = 0
+  while i < root_sources.length() {
+    let src = root_sources[i]
+    match slug_owner.get(src.slug) {
+      Some(owner) =>
+        violations.push({
+          path: src.path,
+          line: None,
+          column: None,
+          kind: @lint.DuplicateSlug,
+          message: "root page slug '" +
+          src.slug +
+          "' conflicts with '" +
+          owner +
+          "'",
+        })
+      None => {
+        slug_owner.set(src.slug, "_root")
+        page_index.set(src.slug, root_page_url(src.slug))
+      }
+    }
+    i = i + 1
+  }
+
   let tags_field = tags_field_name(config.site)
   let tag_catalog = collect_tag_catalog(collection_sources, tags_field)
   let known_tags = tag_catalog.name_by_slug
@@ -5635,9 +5975,22 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
       sources: standalone_sources,
     })
   }
+  if root_sources.length() > 0 {
+    all_sources_for_backlinks.push({
+      definition: {
+        name: "_root",
+        schema: standalone_default_schema(),
+        content_dir: config.content_dir,
+        template: None,
+        page_size: None,
+        sort_order: @collections.DateDesc,
+        description: None,
+      },
+      sources: root_sources,
+    })
+  }
   let backlink_index = build_backlink_index(
-    all_sources_for_backlinks,
-    page_index,
+    all_sources_for_backlinks, page_index,
   )
 
   let graph_pages : Array[@graph.GraphPage] = []
@@ -5811,7 +6164,10 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
         nav_links_html,
         custom_css,
         lint_backlinks_html,
-        "", "", "", "",
+        "",
+        "",
+        "",
+        "",
       )
       let mut k = 0
       while k < lint_outcome.violations.length() {
@@ -5819,7 +6175,7 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
         k = k + 1
       }
       match lint_outcome.document {
-        Some(doc) => {
+        Some(doc) =>
           graph_pages.push({
             slug: src.slug,
             title: doc.title,
@@ -5828,10 +6184,64 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
             date: doc.date,
             outgoing: doc.resolved_links,
           })
-        }
         None => ()
       }
       si = si + 1
+    }
+  }
+
+  // Lint root-level pages
+  if root_sources.length() > 0 {
+    let root_schema = standalone_default_schema()
+    let mut ri = 0
+    while ri < root_sources.length() {
+      let src = root_sources[ri]
+      let page_url = root_page_url(src.slug)
+      let lint_backlinks_html = match backlink_index.get(src.slug) {
+        Some(refs) => render_backlinks_html(refs)
+        None => ""
+      }
+      let lint_outcome = process_document_for_lint(
+        src.content,
+        src.path,
+        src.slug,
+        "_root",
+        page_url,
+        page_index,
+        slug_owner,
+        known_tags,
+        tags_field,
+        root_schema,
+        config.site,
+        data_store,
+        templates.page,
+        templates_dir_for_build(config),
+        nav_links_html,
+        custom_css,
+        lint_backlinks_html,
+        "",
+        "",
+        "",
+        "",
+      )
+      let mut k = 0
+      while k < lint_outcome.violations.length() {
+        violations.push(lint_outcome.violations[k])
+        k = k + 1
+      }
+      match lint_outcome.document {
+        Some(doc) =>
+          graph_pages.push({
+            slug: src.slug,
+            title: doc.title,
+            url: doc.url,
+            description: doc.description,
+            date: doc.date,
+            outgoing: doc.resolved_links,
+          })
+        None => ()
+      }
+      ri = ri + 1
     }
   }
 

@@ -2575,7 +2575,6 @@ test "check reports no TemplateSlotError when template fields match schema" {
   assert_eq(slot_errors.length(), 0)
 }
 
-
 ///|
 test "standalone pages render to root-level URLs without collection prefix" {
   let root = "./_tmp_builder_standalone"
@@ -2617,10 +2616,7 @@ test "standalone pages render to root-level URLs without collection prefix" {
   assert_true(
     write_file_test(
       standalone_root + "/contact.md",
-      "---\n" +
-      "title: Contact\n" +
-      "---\n\n" +
-      "# Contact\n\nReach us here.\n",
+      "---\n" + "title: Contact\n" + "---\n\n" + "# Contact\n\nReach us here.\n",
     ),
   )
   assert_true(
@@ -2704,9 +2700,7 @@ test "standalone pages render to root-level URLs without collection prefix" {
   assert_true(post_html.contains("Hello Post"))
 
   // Standalone pages should NOT appear in collection index
-  let posts_index = @fs.read_file_to_string(
-    output_root + "/posts/index.html",
-  ) catch {
+  let posts_index = @fs.read_file_to_string(output_root + "/posts/index.html") catch {
     @fs.IOError(_) => ""
   }
   assert_true(!posts_index.contains("About"))
@@ -2782,8 +2776,332 @@ test "standalone page missing title reports build error" {
   )
   // Should report errors because title is required for standalone pages
   assert_true(result.errors > 0)
-  let found_title_error = result.diagnostics.iter().any(fn(d) {
-    d.message.contains("title")
-  })
+  let found_title_error = result.diagnostics
+    .iter()
+    .any(fn(d) { d.message.contains("title") })
   assert_true(found_title_error)
+}
+
+///|
+test "root-level index.md renders to dist/index.html as homepage" {
+  let root = "./_tmp_builder_root_index"
+  let content_root = root + "/content"
+  let posts_root = content_root + "/posts"
+  let data_root = content_root + "/data"
+  let templates_root = root + "/templates"
+  let output_root = root + "/dist"
+  ensure_dir_test(root)
+  ensure_dir_test(content_root)
+  ensure_dir_test(posts_root)
+  ensure_dir_test(data_root)
+  ensure_dir_test(templates_root)
+  ensure_dir_test(output_root)
+
+  // Create a root-level index.md in the content directory
+  assert_true(
+    write_file_test(
+      content_root + "/index.md",
+      "---\n" +
+      "title: Welcome\n" +
+      "description: The homepage.\n" +
+      "---\n\n" +
+      "# Hello World\n\nThis is the homepage.\n",
+    ),
+  )
+  // Create a root-level about.md
+  assert_true(
+    write_file_test(
+      content_root + "/about.md",
+      "---\n" + "title: About\n" + "---\n\n" + "# About\n\nAbout this site.\n",
+    ),
+  )
+  // Create a collection page to verify coexistence
+  assert_true(
+    write_file_test(
+      posts_root + "/hello.md",
+      "---\n" +
+      "title: Hello Post\n" +
+      "date: 2026-03-17\n" +
+      "---\n\n" +
+      "Post content.\n",
+    ),
+  )
+  assert_true(
+    write_file_test(
+      templates_root + "/page.html",
+      "<html><head><title>{{title}}</title></head><body>{{content}}</body></html>\n",
+    ),
+  )
+  assert_true(
+    write_file_test(
+      root + "/collections.cfg",
+      "[posts]\n" +
+      "schema = title:String,date:Date\n" +
+      "dir = " +
+      posts_root +
+      "\n",
+    ),
+  )
+
+  let site_cfg = "title = RootTest\n" +
+    "base_url = https://example.test\n" +
+    "templates_dir = " +
+    templates_root +
+    "\n" +
+    "data_dir = " +
+    data_root +
+    "\n" +
+    "collections_file = " +
+    root +
+    "/collections.cfg\n" +
+    "output_dir = " +
+    output_root +
+    "\n"
+  assert_true(write_file_test(root + "/site.cfg", site_cfg))
+
+  let site = match @config.parse(site_cfg) {
+    Ok(parsed) => parsed
+    Err(_) => {
+      assert_true(false)
+      abort("site config parse failed")
+    }
+  }
+  let result = @builder.build(
+    {
+      content_dir: content_root,
+      output_dir: output_root,
+      config_path: root + "/site.cfg",
+      site,
+      collections_path: Some(root + "/collections.cfg"),
+      force_rebuild: true,
+      include_drafts: false,
+    },
+    @cache.empty(output_root),
+  )
+  assert_eq(result.errors, 0)
+
+  // index.md → dist/index.html (not dist/index/index.html)
+  let index_html = @fs.read_file_to_string(output_root + "/index.html") catch {
+    @fs.IOError(_) => ""
+  }
+  assert_true(index_html.contains("Welcome"))
+  assert_true(index_html.contains("homepage"))
+
+  // about.md → dist/about/index.html
+  let about_html = @fs.read_file_to_string(output_root + "/about/index.html") catch {
+    @fs.IOError(_) => ""
+  }
+  assert_true(about_html.contains("About"))
+  assert_true(about_html.contains("About this site"))
+
+  // Collection page still works at its normal URL
+  let post_html = @fs.read_file_to_string(
+    output_root + "/posts/hello/index.html",
+  ) catch {
+    @fs.IOError(_) => ""
+  }
+  assert_true(post_html.contains("Hello Post"))
+
+  // Root pages should appear in sitemap
+  let sitemap = @fs.read_file_to_string(output_root + "/sitemap.xml") catch {
+    @fs.IOError(_) => ""
+  }
+  assert_true(sitemap.contains("https://example.test/"))
+  assert_true(sitemap.contains("https://example.test/about/"))
+}
+
+///|
+test "root page slug conflicts with collection slug reports error" {
+  let root = "./_tmp_builder_root_conflict"
+  let content_root = root + "/content"
+  let posts_root = content_root + "/posts"
+  let data_root = content_root + "/data"
+  let templates_root = root + "/templates"
+  let output_root = root + "/dist"
+  ensure_dir_test(root)
+  ensure_dir_test(content_root)
+  ensure_dir_test(posts_root)
+  ensure_dir_test(data_root)
+  ensure_dir_test(templates_root)
+  ensure_dir_test(output_root)
+
+  // Create a root-level file whose slug matches a collection post
+  // (slug "hello" is claimed by posts collection)
+  assert_true(
+    write_file_test(
+      content_root + "/hello.md",
+      "---\n" + "title: Hello\n" + "---\n\n" + "Root hello page.\n",
+    ),
+  )
+  assert_true(
+    write_file_test(
+      posts_root + "/hello.md",
+      "---\n" +
+      "title: Hello Post\n" +
+      "date: 2026-03-17\n" +
+      "---\n\n" +
+      "Post content.\n",
+    ),
+  )
+  assert_true(
+    write_file_test(
+      templates_root + "/page.html",
+      "<html><head><title>{{title}}</title></head><body>{{content}}</body></html>\n",
+    ),
+  )
+  assert_true(
+    write_file_test(
+      root + "/collections.cfg",
+      "[posts]\n" +
+      "schema = title:String,date:Date\n" +
+      "dir = " +
+      posts_root +
+      "\n",
+    ),
+  )
+
+  let site_cfg = "title = ConflictTest\n" +
+    "base_url = https://example.test\n" +
+    "templates_dir = " +
+    templates_root +
+    "\n" +
+    "data_dir = " +
+    data_root +
+    "\n" +
+    "collections_file = " +
+    root +
+    "/collections.cfg\n" +
+    "output_dir = " +
+    output_root +
+    "\n"
+  assert_true(write_file_test(root + "/site.cfg", site_cfg))
+
+  let site = match @config.parse(site_cfg) {
+    Ok(parsed) => parsed
+    Err(_) => {
+      assert_true(false)
+      abort("site config parse failed")
+    }
+  }
+  let result = @builder.build(
+    {
+      content_dir: content_root,
+      output_dir: output_root,
+      config_path: root + "/site.cfg",
+      site,
+      collections_path: Some(root + "/collections.cfg"),
+      force_rebuild: true,
+      include_drafts: false,
+    },
+    @cache.empty(output_root),
+  )
+  // The root hello.md should be skipped because the slug is already claimed
+  // by the posts collection — so no error, it just silently doesn't get rendered
+  assert_eq(result.errors, 0)
+}
+
+///|
+test "404.md in content root is not treated as root page" {
+  let root = "./_tmp_builder_root_404"
+  let content_root = root + "/content"
+  let posts_root = content_root + "/posts"
+  let data_root = content_root + "/data"
+  let templates_root = root + "/templates"
+  let output_root = root + "/dist"
+  ensure_dir_test(root)
+  ensure_dir_test(content_root)
+  ensure_dir_test(posts_root)
+  ensure_dir_test(data_root)
+  ensure_dir_test(templates_root)
+  ensure_dir_test(output_root)
+
+  // Create 404.md in content root — should be handled by the 404 pipeline, not root pages
+  assert_true(
+    write_file_test(
+      content_root + "/404.md",
+      "---\n" + "title: Not Found\n" + "---\n\n" + "# 404\n\nPage not found.\n",
+    ),
+  )
+  // Also create a genuine root page
+  assert_true(
+    write_file_test(
+      content_root + "/index.md",
+      "---\n" + "title: Home\n" + "---\n\n" + "# Home\n\nWelcome.\n",
+    ),
+  )
+  assert_true(
+    write_file_test(
+      posts_root + "/hello.md",
+      "---\n" +
+      "title: Hello\n" +
+      "date: 2026-03-17\n" +
+      "---\n\n" +
+      "Content.\n",
+    ),
+  )
+  assert_true(
+    write_file_test(
+      templates_root + "/page.html",
+      "<html><head><title>{{title}}</title></head><body>{{content}}</body></html>\n",
+    ),
+  )
+  assert_true(
+    write_file_test(
+      root + "/collections.cfg",
+      "[posts]\n" +
+      "schema = title:String,date:Date\n" +
+      "dir = " +
+      posts_root +
+      "\n",
+    ),
+  )
+
+  let site_cfg = "title = Test404\n" +
+    "base_url = https://example.test\n" +
+    "templates_dir = " +
+    templates_root +
+    "\n" +
+    "data_dir = " +
+    data_root +
+    "\n" +
+    "collections_file = " +
+    root +
+    "/collections.cfg\n" +
+    "output_dir = " +
+    output_root +
+    "\n"
+  assert_true(write_file_test(root + "/site.cfg", site_cfg))
+
+  let site = match @config.parse(site_cfg) {
+    Ok(parsed) => parsed
+    Err(_) => {
+      assert_true(false)
+      abort("site config parse failed")
+    }
+  }
+  let result = @builder.build(
+    {
+      content_dir: content_root,
+      output_dir: output_root,
+      config_path: root + "/site.cfg",
+      site,
+      collections_path: Some(root + "/collections.cfg"),
+      force_rebuild: true,
+      include_drafts: false,
+    },
+    @cache.empty(output_root),
+  )
+  assert_eq(result.errors, 0)
+
+  // index.md should be rendered
+  let index_html = @fs.read_file_to_string(output_root + "/index.html") catch {
+    @fs.IOError(_) => ""
+  }
+  assert_true(index_html.contains("Home"))
+
+  // 404.md should be rendered as the 404 page
+  let notfound_html = @fs.read_file_to_string(output_root + "/404.html") catch {
+    @fs.IOError(_) => ""
+  }
+  assert_true(notfound_html.contains("Not Found"))
 }
