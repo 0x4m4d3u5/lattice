@@ -903,3 +903,61 @@ The three integration tests verify: `index.md` renders to `dist/index.html` as t
 ### The Structural Thesis Connection
 
 Root pages use `standalone_default_schema()` — the same schema as standalone pages. This is deliberate reuse, not an accident of implementation. Both content categories are "uncollected content with minimal structural requirements." The schema enforces that every page (collection, standalone, or root) has a title. The wikilink resolution, backlink indexing, search-index generation, content-index generation, and sitemap inclusion all treat root pages identically to other content. The builder's pass structure (collect everything in pass 1, render in pass 2) means root pages participate in cross-reference validation just like collection pages. A wikilink from a root page to a collection page resolves. A wikilink from a collection page to a root page resolves. The structural guarantees are uniform across all three content categories, even though the routing logic (URL computation, output path) differs. The thesis holds: content integrity is a structural property, regardless of where the content file lives in the directory tree.
+
+## Agent-First Content Index — kind, reading_time, and the collection_index Gap
+
+Commits `eb7c45c` and `38343ec` extend `content-index.json` from a raw text dump into a structured feed designed for programmatic consumption by LLM agents and search tools.
+
+### The Problem With a Flat Content Dump
+
+The first `content-index.json` implementation (commit `386cca2`) stored full stripped body text alongside title, slug, URL, tags, collection, date, and description. This was sufficient for keyword search and basic RAG retrieval. But for an agent that wants to distinguish "show me all blog posts" from "show me navigation pages" from "show me collection indices," all entries looked identical — the only structural signal was the presence or absence of a date string.
+
+The `kind` field makes the page type a first-class data property:
+- `"post"` — a collection member with a date (blog-style)
+- `"page"` — a collection member without a date (evergreen content)
+- `"standalone"` — a page outside any collection
+- `"collection_index"` — an auto-generated index listing all pages in a collection
+
+Before this addition, `kind` was documented in a code comment but never emitted. The `ContentEntry` struct accepted it as a parameter, callers passed it, but `content-index.json` only carried the four values it received from the builder. The gap between the documented API and the actual output was a bug of omission: `collection_index` appeared in the docstring, was never instantiated in the builder pipeline.
+
+### Closing the Gap — Collection Index Entries
+
+The builder emits collection index pages into `dist/<collection>/index.html` but was not adding those pages to `content_entries`. This meant an agent reading `content-index.json` had no way to discover that a `posts` collection index existed at `/posts/` — the URL was reachable, the page was rendered, but the content index was silent about it.
+
+Commit `38343ec` closes this gap. Inside the collection rendering loop, after writing `dist/<collection>/index.html`, the builder now pushes a `ContentEntry` for `pagination.page_number == 1` (page 1 only — for paginated collections, the index entry represents the root listing, not each paginated shard). The entry uses:
+
+- title: `"<collection-name> Index"` — the canonical display name
+- slug: the collection name — e.g., `"posts"`
+- url: `collection_index_url(coll.name)` — e.g., `/posts/`
+- kind: `"collection_index"` — the previously-uninstantiated value
+- reading_time: `None` — index pages are auto-generated lists, not prose; a reading time would be misleading
+- body: `@strutil.strip_html_tags(html)` — the rendered page text, stripped of markup so agents can read the page list
+
+The body-stripping is reused from the same `@strutil.strip_html_tags` function that already strips collection page bodies. The consistency matters: every entry in `content-index.json` has the same body field semantics (stripped plaintext), regardless of page type.
+
+### reading_time — Integer Minutes for Programmatic Consumption
+
+The `reading_time` field stores an integer number of minutes (null if the page has no prose). The word count is computed by `count_words_text()`, which counts whitespace-separated tokens in the stripped body text. Reading time is then `ceil(word_count / 225)` — 225 words per minute is a conservative reading speed estimate that rounds up to the minimum of 1 minute. The formula deliberately returns `None` for empty pages rather than `0` or `1`, so agents can distinguish "no prose" from "very short prose."
+
+Collection index and tag index pages use `None` for reading_time. This is correct: a list of links and slugs has no meaningful reading time. Emitting a reading time for auto-generated index pages would create a false signal.
+
+### count_words_text Belongs in strutil
+
+The initial implementation put `count_words_text` as a private `fn` in `builder.mbt`. This was wrong placement: the function takes a `String` and returns an `Int` — no dependency on any builder type. It's a general text utility.
+
+Commit `38343ec` moves it to `src/strutil/strutil.mbt` as `pub fn count_words_text(text : String) -> Int`. The builder calls `@strutil.count_words_text(doc.body_text)`. Strutil tests cover the edge cases: empty string returns 0; a single word returns 1; multiple whitespace types (spaces, tabs, newlines) are all treated as separators.
+
+This is the same logic that motivated the `render_json_array[T]` extraction and the markdown line-classification promotion: utility code that encodes a general fact (how to count words) belongs in a general library, not in the 6500-line builder module that owns the SSG pipeline.
+
+### The Conditional Description Meta Tag
+
+A separate fix (`fix(template): 724bd5e`) removes a subtle SEO issue. The original `head.html` template emitted `<meta name="description" content="{{description}}" />` unconditionally. For collection index pages and other auto-generated pages without a description field, this rendered as `<meta name="description" content="" />` — a content attribute with an empty string. Search engines may penalize or ignore empty description meta tags; the HTML itself is technically valid but semantically incorrect.
+
+The fix replaces the unconditional tag with a conditional block:
+
+```html
+{{?description}}<meta name="description" content="{{description}}" />
+{{/?description}}
+```
+
+The `{{?slot}}...{{/?slot}}` conditional syntax, already present in the template engine, renders its content only when the named slot is non-empty. When `description` is an empty string (the default for pages without the field), the block renders nothing. When `description` is non-empty, the tag is emitted normally. No template engine changes required — the existing conditional slot mechanism was already the right abstraction. The only change was applying it to the one place it was needed.
