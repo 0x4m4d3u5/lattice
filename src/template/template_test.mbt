@@ -1772,3 +1772,80 @@ test "template render head_meta slot" {
     Err(_) => assert_true(false)
   }
 }
+
+///|
+test "head.html conditional description - with description" {
+  // Simulates the head.html template with conditional meta description
+  let source =
+    #|<meta charset="utf-8" />
+    #|<title>{{title}}</title>
+    #|{{?description}}<meta name="description" content="{{description}}" />
+    #|{{/?description}}{{head_meta}}
+    #|
+  let resolver = fn(filename : String) -> Result[String, String] {
+    Err("not found")
+  }
+  let tpl = match parse_template_with_includes(source, resolver) {
+    Ok(v) => v
+    Err(_) => {
+      assert_true(false)
+      { parts: [], required_slots: [], layout: None }
+    }
+  }
+  let slots : Map[TemplateSlot, String] = Map::new()
+  slots.set(Title, "My Article")
+  slots.set(Description, "An article about MoonBit")
+  slots.set(
+    HeadMeta,
+    "  <meta property=\"og:title\" content=\"My Article\" />\n",
+  )
+  match render_template(tpl, slots, Map::new()) {
+    Ok(html) => {
+      assert_true(
+        html.contains(
+          "<meta name=\"description\" content=\"An article about MoonBit\" />",
+        ),
+      )
+      assert_true(html.contains("og:title"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "head.html conditional description - empty description omits meta tag" {
+  // Simulates collection page with no description configured
+  let source =
+    #|<meta charset="utf-8" />
+    #|<title>{{title}}</title>
+    #|{{?description}}<meta name="description" content="{{description}}" />
+    #|{{/?description}}{{head_meta}}
+    #|
+  let resolver = fn(filename : String) -> Result[String, String] {
+    Err("not found")
+  }
+  let tpl = match parse_template_with_includes(source, resolver) {
+    Ok(v) => v
+    Err(_) => {
+      assert_true(false)
+      { parts: [], required_slots: [], layout: None }
+    }
+  }
+  let slots : Map[TemplateSlot, String] = Map::new()
+  slots.set(Title, "posts index")
+  slots.set(Description, "") // Empty description — collection page without configured description
+  slots.set(
+    HeadMeta,
+    "  <meta property=\"og:title\" content=\"posts index\" />\n  <link rel=\"canonical\" href=\"https://example.com/posts/\" />\n",
+  )
+  match render_template(tpl, slots, Map::new()) {
+    Ok(html) => {
+      // The meta description tag must NOT appear
+      assert_true(!html.contains("meta name=\"description\""))
+      // But head_meta (og:title, canonical) should still be present
+      assert_true(html.contains("og:title"))
+      assert_true(html.contains("canonical"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
