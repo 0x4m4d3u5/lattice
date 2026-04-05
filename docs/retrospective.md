@@ -842,3 +842,64 @@ One builder utility, `collapse_whitespace_builder`, has no equivalent in the mar
 ### Result
 
 After the refactor: 114 net lines removed, 509 tests unchanged, all passing. The builder functions now read as a set of calls to `@markdown.*` predicates with a local `is_block_starter_builder` that composes them. The markdown module's `pub` surface is now the authoritative vocabulary for line-level Markdown structure — usable by any future consumer without duplication.
+
+
+
+
+## Standalone Pages — Content Outside Collections Gets the Same Structural Guarantees
+
+Commit `3de4738` (`feat(builder): standalone pages — content not in any collection renders to root-level URLs`) introduces a content category that most SSGs handle implicitly and poorly: markdown files that don't belong to any collection but still need to render as real pages. An `about.md`, a `contact.md`, a `privacy-policy.md` — these are top-level site pages, not blog posts, not project entries, not tag indices. In Hugo, they're "leaf bundles" or "headless content" depending on configuration. In Astro, they're just files that happen to exist outside `src/content/`. In both cases, they bypass whatever structural validation the content layer provides.
+
+Lattice's design makes them a first-class content category with the same schema enforcement as collection pages. The key decision is `standalone_default_schema()` — a synthetic schema that requires only `title:String` and marks `description`, `date`, `tags`, `author`, `redirect_from`, and `og_image` as optional. Every standalone page runs through `process_document()` with this schema. A standalone page missing a title produces the same `ValidationError` as a collection page missing a required field. The render pipeline structurally cannot produce output from a standalone page that lacks a title — the same guarantee that applies to typed collections now extends to uncollected content.
+
+The `standalone_dir` configuration field in `SiteConfig` controls where standalone pages live. It defaults to `<content_dir>/standalone` when not explicitly configured, or `None` when the directory doesn't exist. This is a deliberate directory-based boundary: standalone pages are identified by location (they live in the standalone directory), not by frontmatter annotation. A content author creates `content/standalone/about.md` and it automatically becomes a standalone page. No `layout: page` frontmatter, no special filename convention. The directory structure is the schema.
+
+### Slug Conflict Detection Between Standalone Pages and Collections
+
+The builder registers standalone page slugs in the shared `slug_owner` map before processing them. If a standalone page slug (e.g., `about`) collides with an existing collection slug, the builder emits a `DuplicateSlug` violation. This prevents two pages from claiming the same URL — a structural guarantee that would be a silent override in most SSGs. In Hugo, a top-level `about.md` and a collection entry with slug `about` would both try to write to `/about/index.html`, and the winner depends on processing order. In lattice, the collision is a build error.
+
+The slug registration happens in pass 1, alongside collection source collection. Standalone pages are added to the page index (`slug → URL`) using `standalone_page_url()`, which produces `/<slug>/` URLs — no collection prefix. They're also added to `all_sources_for_backlinks` so the backlink index covers them. A standalone page that wikilinks to a collection page gets resolved. A collection page that wikilinks to a standalone page gets resolved. The cross-reference validation is uniform.
+
+### The Test Surface
+
+The integration tests (~213 lines in `builder_test.mbt`) cover five scenarios: standalone pages render to root-level URLs without collection prefix; standalone pages don't appear in collection indices; a standalone page missing the required `title` field reports a build error; standalone pages coexist with collection pages without URL conflicts; and the standalone directory is optional (sites without one build fine). Each test creates a full filesystem layout with content, templates, config, and collections, runs `@builder.build()`, and asserts on output files and diagnostics.
+
+The missing-title test is the structural thesis in miniature. It creates a standalone page with `description: No title page` but no `title` field, then asserts `result.errors > 0` and checks that at least one diagnostic message contains `"title"`. The standalone schema's `required: true` on the `title` field is what makes this work — the same `Schema.validate()` call that enforces collection schemas enforces the standalone schema. No separate validation path, no special case.
+
+## Root Page Pipeline — Homepage and Site-Root Content as a Structural Category
+
+Commit `dda1e82` (`feat(builder): root page URL/path helpers + 3 integration tests`) adds a third content category alongside collections and standalone pages: root-level `.md` files in the content directory itself (e.g., `content/index.md`, `content/about.md`). These are files that sit directly in the content root, not in any subdirectory, not in the standalone directory. They represent the true top-level pages of the site.
+
+### The Homepage as a Special Case
+
+The key design decision is in `root_page_url()` and `root_output_path()`. A file named `index.md` at the content root maps to the URL `/` and the output path `dist/index.html`. This is the true homepage — not `dist/index/index.html`, not a redirect, but the root document. Every other root-level file maps to `/<slug>/index.html` using the standard slug derivation. This asymmetry is intentional: the homepage is semantically distinct from other pages. It's the entry point. Its URL is `/`, not `/index/`. The function encodes this as a pattern match:
+
+```moonbit
+fn root_page_url(slug : String) -> String {
+  if slug == "index" { "/" } else { "/" + slug + "/" }
+}
+
+fn root_output_path(output_dir : String, slug : String) -> String {
+  if slug == "index" {
+    output_dir + "/index.html"
+  } else {
+    output_dir + "/" + slug + "/index.html"
+  }
+}
+```
+
+The structural property is that there can be exactly one homepage. Two files can't both claim the `/` URL because the slug `index` is registered in `slug_owner` during pass 1. If a collection already has a page with slug `index`, the root file is silently skipped. If a standalone page claims `index`, same outcome. The first registrant wins; subsequent claimants are excluded. This prevents the silent-overwrite problem that plagues SSGs where multiple content sources can target the same output path.
+
+### Excluding `404.md` from Root Page Processing
+
+The `collect_root_sources()` function explicitly excludes `404.md` via the condition `filename != "404.md"`. This is because `404.md` is handled by a dedicated 404 pipeline that renders it to `dist/404.html` (not `dist/404/index.html`). Without this exclusion, `404.md` would be processed as a regular root page and produce `dist/404/index.html` — a URL that web servers don't check for custom 404 pages. The exclusion is a single boolean check, but it encodes a structural distinction: error pages are not content pages, even though they're authored as markdown files in the content directory.
+
+### Slug Conflict with Collections — Silent Skip, Not Error
+
+Root pages whose slugs are already claimed by collections are silently skipped, not reported as errors. This is a deliberate choice different from the standalone page behavior (which reports `DuplicateSlug` violations). The rationale is that root-level files are opportunistic — they exist in a shared directory and may overlap with collection names by coincidence. A file `content/posts.md` when a `posts` collection exists shouldn't be an error; it's just a file that happens to share a name. The root page pipeline respects the ownership established during pass 1 and gracefully defers.
+
+The three integration tests verify: `index.md` renders to `dist/index.html` as the homepage with URL `/`; `about.md` renders to `dist/about/index.html` with URL `/about/`; a root file whose slug conflicts with a collection slug is silently skipped (no error, no duplicate output); `404.md` is excluded from root page processing and doesn't produce a root-level page; root pages appear in the sitemap with correct URLs. Each test creates a full build environment and asserts on file existence, content, and sitemap entries — the same integration-test pattern used throughout the builder test suite.
+
+### The Structural Thesis Connection
+
+Root pages use `standalone_default_schema()` — the same schema as standalone pages. This is deliberate reuse, not an accident of implementation. Both content categories are "uncollected content with minimal structural requirements." The schema enforces that every page (collection, standalone, or root) has a title. The wikilink resolution, backlink indexing, search-index generation, content-index generation, and sitemap inclusion all treat root pages identically to other content. The builder's pass structure (collect everything in pass 1, render in pass 2) means root pages participate in cross-reference validation just like collection pages. A wikilink from a root page to a collection page resolves. A wikilink from a collection page to a root page resolves. The structural guarantees are uniform across all three content categories, even though the routing logic (URL computation, output path) differs. The thesis holds: content integrity is a structural property, regardless of where the content file lives in the directory tree.
