@@ -3354,3 +3354,242 @@ test "build emits collection_index entry in content-index.json" {
   assert_true(content_index.contains("\"date\": \"\""))
   assert_true(content_index.contains("\"reading_time\": null"))
 }
+
+
+
+///|
+test "build accumulates validation errors across collection and standalone pages" {
+  // Engineering quality: the builder must collect ALL errors across ALL source
+  // files before reporting, not stop at the first failure. This test creates
+  // a collection page with a missing required field AND a standalone page with
+  // a missing required field, then asserts both errors appear in diagnostics.
+  let root = "./_tmp_builder_accumulate_errors"
+  let content_root = root + "/content"
+  let posts_root = content_root + "/posts"
+  let standalone_root = content_root + "/standalone"
+  let data_root = content_root + "/data"
+  let templates_root = root + "/templates"
+  let output_root = root + "/dist"
+  ensure_dir_test(root)
+  ensure_dir_test(content_root)
+  ensure_dir_test(posts_root)
+  ensure_dir_test(standalone_root)
+  ensure_dir_test(data_root)
+  ensure_dir_test(templates_root)
+  ensure_dir_test(output_root)
+
+  // Collection page missing required 'date' field
+  assert_true(
+    write_file_test(
+      posts_root + "/no-date.md",
+      "---\ntitle: Missing Date\n---\nBody.\n",
+    ),
+  )
+  // Standalone page missing required 'title' field
+  assert_true(
+    write_file_test(
+      standalone_root + "/no-title.md",
+      "---\ndescription: No title\n---\nBody.\n",
+    ),
+  )
+  assert_true(
+    write_file_test(
+      templates_root + "/page.html",
+      "<html><body>{{content}}</body></html>\n",
+    ),
+  )
+  assert_true(
+    write_file_test(
+      root + "/collections.cfg",
+      "[posts]\nschema = title:String,date:Date\ndir = " + posts_root + "\n",
+    ),
+  )
+
+  let site_cfg = "title = AccumulateTest\n" +
+    "base_url = https://example.test\n" +
+    "templates_dir = " +
+    templates_root +
+    "\n" +
+    "data_dir = " +
+    data_root +
+    "\n" +
+    "standalone_dir = " +
+    standalone_root +
+    "\n" +
+    "collections_file = " +
+    root +
+    "/collections.cfg\n" +
+    "output_dir = " +
+    output_root +
+    "\n"
+  assert_true(write_file_test(root + "/site.cfg", site_cfg))
+
+  let site = match @config.parse(site_cfg) {
+    Ok(parsed) => parsed
+    Err(_) => {
+      assert_true(false)
+      abort("site config parse failed")
+    }
+  }
+  let result = @builder.build(
+    {
+      content_dir: content_root,
+      output_dir: output_root,
+      config_path: root + "/site.cfg",
+      site,
+      collections_path: Some(root + "/collections.cfg"),
+      force_rebuild: true,
+      include_drafts: false,
+    },
+    @cache.empty(output_root),
+  )
+
+  // Both errors must be present — one for the collection page, one for standalone
+  assert_true(result.errors >= 2)
+
+  // The collection page error should mention 'date'
+  let collection_errors = result.diagnostics
+    .iter()
+    .filter(fn(d) {
+      match d.path {
+        Some(p) => p.contains("no-date")
+        None => false
+      }
+    })
+    .to_array()
+  assert_true(collection_errors.length() > 0)
+  let has_date_error = collection_errors
+    .iter()
+    .any(fn(d) { d.message.contains("date") })
+  assert_true(has_date_error)
+
+  // The standalone page error should mention 'title'
+  let standalone_errors = result.diagnostics
+    .iter()
+    .filter(fn(d) {
+      match d.path {
+        Some(p) => p.contains("no-title")
+        None => false
+      }
+    })
+    .to_array()
+  assert_true(standalone_errors.length() > 0)
+  let has_title_error = standalone_errors
+    .iter()
+    .any(fn(d) { d.message.contains("title") })
+  assert_true(has_title_error)
+}
+
+///|
+test "build accumulates validation errors across collection and root pages" {
+  // Same as above but with root-level pages instead of standalone.
+  // Root pages (content/*.md) should also be validated even when
+  // collection pages have errors.
+  let root = "./_tmp_builder_accumulate_root_errors"
+  let content_root = root + "/content"
+  let posts_root = content_root + "/posts"
+  let data_root = content_root + "/data"
+  let templates_root = root + "/templates"
+  let output_root = root + "/dist"
+  ensure_dir_test(root)
+  ensure_dir_test(content_root)
+  ensure_dir_test(posts_root)
+  ensure_dir_test(data_root)
+  ensure_dir_test(templates_root)
+  ensure_dir_test(output_root)
+
+  // Collection page missing required 'date' field
+  assert_true(
+    write_file_test(
+      posts_root + "/no-date.md",
+      "---\ntitle: Missing Date\n---\nBody.\n",
+    ),
+  )
+  // Root page (content/about.md) missing required 'title' field
+  // Root pages use standalone_default_schema which requires title
+  assert_true(
+    write_file_test(
+      content_root + "/notitle.md",
+      "---\ndescription: No title\n---\nBody.\n",
+    ),
+  )
+  assert_true(
+    write_file_test(
+      templates_root + "/page.html",
+      "<html><body>{{content}}</body></html>\n",
+    ),
+  )
+  assert_true(
+    write_file_test(
+      root + "/collections.cfg",
+      "[posts]\nschema = title:String,date:Date\ndir = " + posts_root + "\n",
+    ),
+  )
+
+  let site_cfg = "title = AccumulateRootTest\n" +
+    "base_url = https://example.test\n" +
+    "templates_dir = " +
+    templates_root +
+    "\n" +
+    "data_dir = " +
+    data_root +
+    "\n" +
+    "collections_file = " +
+    root +
+    "/collections.cfg\n" +
+    "output_dir = " +
+    output_root +
+    "\n"
+  assert_true(write_file_test(root + "/site.cfg", site_cfg))
+
+  let site = match @config.parse(site_cfg) {
+    Ok(parsed) => parsed
+    Err(_) => {
+      assert_true(false)
+      abort("site config parse failed")
+    }
+  }
+  let result = @builder.build(
+    {
+      content_dir: content_root,
+      output_dir: output_root,
+      config_path: root + "/site.cfg",
+      site,
+      collections_path: Some(root + "/collections.cfg"),
+      force_rebuild: true,
+      include_drafts: false,
+    },
+    @cache.empty(output_root),
+  )
+
+  // Both errors must be present
+  assert_true(result.errors >= 2)
+
+  // The collection page error should mention 'date'
+  let collection_errors = result.diagnostics
+    .iter()
+    .filter(fn(d) {
+      match d.path {
+        Some(p) => p.contains("no-date")
+        None => false
+      }
+    })
+    .to_array()
+  assert_true(collection_errors.length() > 0)
+
+  // The root page error should mention 'title'
+  let root_errors = result.diagnostics
+    .iter()
+    .filter(fn(d) {
+      match d.path {
+        Some(p) => p.contains("notitle")
+        None => false
+      }
+    })
+    .to_array()
+  assert_true(root_errors.length() > 0)
+  let has_title_error = root_errors
+    .iter()
+    .any(fn(d) { d.message.contains("title") })
+  assert_true(has_title_error)
+}
