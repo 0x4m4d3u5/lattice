@@ -1,8 +1,11 @@
 ---
-title = "Welcome to Lattice"
-date = "2026-03-08"
-description = "A static site generator where structural violations are type errors."
-tags = ["lattice", "moonbit", "ssg"]
+title: Welcome to Lattice
+date: 2026-03-08
+description: A static site generator where structural violations are type errors.
+tags:
+  - lattice
+  - moonbit
+  - ssg
 ---
 # Welcome to Lattice
 

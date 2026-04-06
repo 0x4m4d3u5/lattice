@@ -1,8 +1,11 @@
 ---
-title = "About Lattice"
-date = "2026-03-08"
-description = "Design decisions and motivation behind the lattice SSG."
-tags = ["lattice", "design", "moonbit"]
+title: About Lattice
+date: 2026-03-08
+description: Design decisions and motivation behind the lattice SSG.
+tags:
+  - lattice
+  - design
+  - moonbit
 ---
 # About Lattice
 

@@ -484,3 +484,26 @@ test "frontmatter distinguishes float from int" {
     Err(_) => assert_true(false)
   }
 }
+
+///|
+test "yaml frontmatter with = separator gives actionable error" {
+  // Using --- delimiters with TOML-style key = value is a common mistake.
+  // The error should hint at using +++ delimiters or switching to key: value.
+  let src = "---\ntitle = \"Hello\"\n---\nbody"
+  match @frontmatter.parse(src) {
+    Ok(_) => assert_true(false)
+    Err(e) => {
+      assert_true(e.contains("+++ delimiters"))
+      assert_true(e.contains("TOML"))
+    }
+  }
+}
+
+///|
+test "yaml frontmatter missing colon gives clear error" {
+  let src = "---\ntitle\n---\nbody"
+  match @frontmatter.parse(src) {
+    Ok(_) => assert_true(false)
+    Err(e) => assert_true(e.contains("':' separator"))
+  }
+}

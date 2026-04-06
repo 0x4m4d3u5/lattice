@@ -416,7 +416,24 @@ fn parse_yaml_assignment(
     i = i + 1
   }
   if colon < 0 {
-    return Err("no '=' or ':' found in line")
+    // Check whether the line uses '=' instead of ':' — a common mistake when
+    // using TOML-style key = value inside --- delimiters (which expect YAML).
+    let mut has_eq = false
+    let mut k = 0
+    while k < line.length() {
+      if @strutil.char_at(line, k) == '=' {
+        has_eq = true
+        break
+      }
+      k = k + 1
+    }
+    if has_eq {
+      return Err(
+        "YAML frontmatter (--- delimiters) uses 'key: value' format; " +
+        "use +++ delimiters for TOML 'key = value' format",
+      )
+    }
+    return Err("missing ':' separator in frontmatter line")
   }
   let key = trim_ws(@strutil.substr(line, 0, colon))
   if key.length() == 0 {

@@ -1076,3 +1076,40 @@ The `GraphPage` struct (`src/graph/graph.mbt:6`) is shared across the builder, t
 The `nodes` / `edges` format is a deliberate choice over more complex representations (GraphML, Gephi GEXF, adjacency lists). D3 and Cytoscape both accept this format directly. The format is also trivially parseable without a schema — any JSON library can load it, and the fields are self-documenting. The format excludes description, date, and other page metadata from nodes intentionally: `graph.json` is for topology, not page content. If an external tool needs page metadata alongside graph structure, it can join `graph.json` with `content-index.json` on the `slug` key — two files with clean separation of concerns rather than one file attempting to serve all use cases.
 
 The only resolved links appear in edges. Broken wikilinks (`[[target]]` that didn't resolve during build) are not emitted as edges — they're errors, reported via the lint pipeline. `graph.json` represents the valid link structure of the site, not the set of link attempts. This is another instance of the structural property: the graph output reflects what the build validated, not what the author wrote.
+
+## Frontmatter Format Auto-Detection and Actionable Error Messages — UX Rubric
+
+Lattice supports two frontmatter formats, distinguished by delimiter:
+
+- `---` ... `---` → YAML format: `key: value`, block arrays with `- item`
+- `+++` ... `+++` → TOML format: `key = value`, inline arrays with `["a", "b"]`
+
+The auto-detection in `parse()` (`src/frontmatter/frontmatter.mbt`) is a single prefix check: if the content starts with `---`, dispatch to `parse_yaml()`; if it starts with `+++`, dispatch to `parse_toml()`. No configuration required, no file extension heuristic. The delimiter is the format declaration.
+
+### The Mixed-Format Footgun
+
+The most common mistake is writing TOML-style `key = value` inside `---` delimiters. This happens because many SSGs use `---` for YAML but some content authors are familiar with Hugo's TOML frontmatter (which uses `+++`), or because editors autocomplete `---` by default. The result is a frontmatter block that looks syntactically plausible but is semantically wrong:
+
+```markdown
+---
+title = "My Post"    ← TOML syntax inside YAML delimiters
+date = 2026-03-11
+---
+```
+
+Before the improvement in this commit, the error message for this case was generic: `"no '=' or ':' found in line"` — which is wrong on two counts. It says "no '=' found" when `=` is clearly present; and it says "no ':' found" which is the actual condition (the YAML parser looks for `:`), but gives no hint about why. A user seeing this error has no path forward other than guessing.
+
+The improved `parse_yaml_assignment()` detects whether the problematic line contains `=` and emits a targeted error:
+
+```
+YAML frontmatter (--- delimiters) uses 'key: value' format;
+use +++ delimiters for TOML 'key = value' format
+```
+
+This error names the delimiter, names the format, and gives the exact fix. Two tests cover the two failure modes: the TOML-in-YAML case (checks that the error mentions `+++ delimiters` and `TOML`) and the bare-key case with no separator at all (checks that the error mentions `':' separator`).
+
+### Error Message as Documentation
+
+The decision to name both formats in the error message — rather than just saying "use YAML format" — reflects a pattern throughout the error pipeline: error messages should be self-contained. A user who has never read the Lattice documentation should be able to recover from a frontmatter format error without looking anything up. The error names the wrong thing, names the right thing, and names the fix. This is the same standard applied to wikilink errors (which include the exact slug that wasn't found), schema errors (which include the field name and declared type), and shortcode errors (which include the shortcode name and the expected parameter types).
+
+The engineering discipline here is treating error messages as first-class output, not as internal debugging strings. A parse error that reaches a human author is a user interface interaction, and it should be designed with the same care as any other interface.
