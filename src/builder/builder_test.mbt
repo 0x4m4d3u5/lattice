@@ -3355,8 +3355,6 @@ test "build emits collection_index entry in content-index.json" {
   assert_true(content_index.contains("\"reading_time\": null"))
 }
 
-
-
 ///|
 test "build accumulates validation errors across collection and standalone pages" {
   // Engineering quality: the builder must collect ALL errors across ALL source

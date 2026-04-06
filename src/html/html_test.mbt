@@ -7,6 +7,7 @@ test "render_page without canonical_url or og_image" {
     stylesheet: Some("/style.css"),
     canonical_url: None,
     og_image: None,
+    og_type: None,
     feed_url: None,
     structured_data: [],
   }
@@ -40,6 +41,7 @@ test "render_page with canonical_url only" {
     stylesheet: Some("/style.css"),
     canonical_url: Some("https://example.com/test-page/"),
     og_image: None,
+    og_type: None,
     feed_url: None,
     structured_data: [],
   }
@@ -104,6 +106,7 @@ test "render_page with canonical_url and og_image" {
     stylesheet: Some("/style.css"),
     canonical_url: Some("https://example.com/test-page/"),
     og_image: Some("https://example.com/images/og.png"),
+    og_type: None,
     feed_url: None,
     structured_data: [],
   }
@@ -168,6 +171,7 @@ test "render_page without description should skip og:description" {
     stylesheet: Some("/style.css"),
     canonical_url: Some("https://example.com/test-page/"),
     og_image: None,
+    og_type: None,
     feed_url: None,
     structured_data: [],
   }
@@ -204,6 +208,7 @@ test "render_page escapes special characters in canonical_url and og_image" {
     stylesheet: Some("/style.css"),
     canonical_url: Some("https://example.com/test-page/?q=1&lang=en"),
     og_image: Some("https://example.com/img/og.png?v=1&x=2"),
+    og_type: None,
     feed_url: None,
     structured_data: [],
   }
@@ -248,6 +253,7 @@ test "render_page emits blog posting json ld in head" {
     stylesheet: Some("/style.css"),
     canonical_url: Some("https://example.com/test-page/"),
     og_image: Some("https://example.com/images/og.png"),
+    og_type: None,
     feed_url: None,
     structured_data: [
       @html.BlogPosting({
@@ -337,6 +343,7 @@ test "render_page with feed_url includes atom discovery link" {
     stylesheet: Some("/style.css"),
     canonical_url: Some("https://example.com/posts/"),
     og_image: None,
+    og_type: None,
     feed_url: Some("https://example.com/posts/feed.xml"),
     structured_data: [],
   }
@@ -469,4 +476,80 @@ test "render_head_meta escapes special characters" {
   assert_true(result.contains("content=\"Test &amp; Page\""))
   assert_true(result.contains("content=\"A &quot;quoted&quot; description\""))
   assert_true(result.contains("href=\"https://example.com/test?q=1&amp;x=2\""))
+}
+
+///|
+test "render_page uses og_type website for index pages" {
+  let meta : @html.PageMeta = {
+    title: "Home",
+    description: Some("Welcome"),
+    lang: "en",
+    stylesheet: None,
+    canonical_url: Some("https://example.com/"),
+    og_image: None,
+    og_type: Some("website"),
+    feed_url: None,
+    structured_data: [],
+  }
+  let html = @html.render_page(meta, "<p>Body</p>")
+  assert_true(
+    html.contains("<meta property=\"og:type\" content=\"website\" />"),
+  )
+  assert_true(
+    html.contains("<meta name=\"twitter:card\" content=\"summary\" />"),
+  )
+}
+
+///|
+test "render_page defaults og_type to article when None" {
+  let meta : @html.PageMeta = {
+    title: "My Post",
+    description: Some("A post"),
+    lang: "en",
+    stylesheet: None,
+    canonical_url: Some("https://example.com/post/"),
+    og_image: None,
+    og_type: None,
+    feed_url: None,
+    structured_data: [],
+  }
+  let html = @html.render_page(meta, "<p>Body</p>")
+  assert_true(
+    html.contains("<meta property=\"og:type\" content=\"article\" />"),
+  )
+}
+
+///|
+test "render_head_meta accepts custom og_type" {
+  let result = @html.render_head_meta(
+    "Home",
+    Some("Welcome home"),
+    "https://example.com/",
+    og_type="website",
+  )
+  assert_true(
+    result.contains("<meta property=\"og:type\" content=\"website\" />"),
+  )
+  assert_true(
+    result.contains("<meta property=\"og:title\" content=\"Home\" />"),
+  )
+}
+
+///|
+test "render_page defaults og_type to article when empty string" {
+  let meta : @html.PageMeta = {
+    title: "Post",
+    description: Some("desc"),
+    lang: "en",
+    stylesheet: None,
+    canonical_url: Some("https://example.com/post/"),
+    og_image: None,
+    og_type: Some(""),
+    feed_url: None,
+    structured_data: [],
+  }
+  let html = @html.render_page(meta, "<p>Body</p>")
+  assert_true(
+    html.contains("<meta property=\"og:type\" content=\"article\" />"),
+  )
 }

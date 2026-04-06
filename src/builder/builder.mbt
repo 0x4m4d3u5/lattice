@@ -669,7 +669,12 @@ fn render_archive_page(
   slots.set(@template.BodyNoH1, @html.strip_leading_h1(content))
   slots.set(
     @template.HeadMeta,
-    @html.render_head_meta(title, Some(description), archive_url),
+    @html.render_head_meta(
+      title,
+      Some(description),
+      archive_url,
+      og_type="website",
+    ),
   )
   slots.set(@template.SiteName, site.title)
   slots.set(@template.Url, archive_url)
@@ -787,6 +792,7 @@ pub fn render_archive_index(
       "Archive",
       Some("Archive for " + collection_name),
       all_archive_url,
+      og_type="website",
     ),
   )
   slots.set(@template.SiteName, site.title)
@@ -1590,6 +1596,7 @@ fn build_template_slots(
   tag_name : String,
   tag_count : String,
   base_url : String,
+  og_type? : String = "article",
 ) -> Map[@template.TemplateSlot, String] {
   let slots : Map[@template.TemplateSlot, String] = Map::new()
   slots.set(@template.Title, title)
@@ -1603,7 +1610,7 @@ fn build_template_slots(
   }
   slots.set(
     @template.HeadMeta,
-    @html.render_head_meta(title, description_opt, canonical),
+    @html.render_head_meta(title, description_opt, canonical, og_type~),
   )
   slots.set(@template.Date, date)
   slots.set(@template.Description, description)
@@ -2323,6 +2330,7 @@ fn render_tag_page_html(
         stylesheet: Some(@strutil.absolute_url(site.base_url, "/style.css")),
         canonical_url: Some(canonical),
         og_image: site.og_image,
+        og_type: None, // defaults to "article" for tag pages
         feed_url: None,
         structured_data: [],
       }
@@ -2374,6 +2382,7 @@ fn render_tags_index_html(
         "",
         index.tags.length().to_string(),
         site.base_url,
+        og_type="website",
       )
       set_pagination_slots(
         slots,
@@ -2407,6 +2416,7 @@ fn render_tags_index_html(
         stylesheet: Some(@strutil.absolute_url(site.base_url, "/style.css")),
         canonical_url: Some(canonical),
         og_image: site.og_image,
+        og_type: Some("website"), // index page
         feed_url: None,
         structured_data: [],
       }
@@ -2483,6 +2493,7 @@ fn render_404_page(
         "",
         "",
         config.site.base_url,
+        og_type="website",
       )
       // 404 pages have no tags, collection, date, or prev/next components
       slots.set(@template.Tags, "")
@@ -2517,6 +2528,7 @@ fn render_404_page(
         ),
         canonical_url: Some(canonical),
         og_image: config.site.og_image,
+        og_type: Some("website"), // error page
         feed_url: None,
         structured_data: [],
       }
@@ -2657,6 +2669,7 @@ fn render_collection_index(
         "",
         "",
         site.base_url,
+        og_type="website",
       )
       set_pagination_slots(
         slots,
@@ -2714,6 +2727,7 @@ fn render_collection_index(
     stylesheet: Some(@strutil.absolute_url(site.base_url, "/style.css")),
     canonical_url: Some(canonical),
     og_image: site.og_image,
+    og_type: Some("website"), // collection index page
     feed_url: Some(feed_url),
     structured_data: collection_breadcrumb_structured_data_builder(
       site,
@@ -3125,6 +3139,7 @@ fn process_document(
           "",
           "",
           site.base_url,
+          og_type="website",
         )
         slots.set(@template.Backlinks, backlinks_html)
         slots.set(@template.TableOfContents, toc_html)
@@ -3196,6 +3211,7 @@ fn process_document(
           stylesheet: Some(@strutil.absolute_url(site.base_url, "/style.css")),
           canonical_url: Some(canonical),
           og_image: page_og_image,
+          og_type: Some("website"), // standalone page
           feed_url: None,
           structured_data,
         }
@@ -3728,6 +3744,7 @@ fn process_document_for_lint(
         stylesheet: Some(@strutil.absolute_url(site.base_url, "/style.css")),
         canonical_url: Some(canonical),
         og_image: page_og_image,
+        og_type: None, // defaults to "article" for collection content pages
         feed_url: None,
         structured_data: blog_posting_structured_data_builder(
           title, description_value, canonical, date_value, author_value, page_og_image,
@@ -6575,7 +6592,9 @@ pub fn stats(config : BuildConfig) -> StatsResult {
 
   // Collect standalone pages
   let standalone_dir = standalone_dir_for_build(config)
-  let standalone_sources : Array[SourceFile] = if @fs.path_exists(standalone_dir) {
+  let standalone_sources : Array[SourceFile] = if @fs.path_exists(
+      standalone_dir,
+    ) {
     collect_sources(standalone_dir) catch {
       @fs.IOError(msg) => {
         errors.push(

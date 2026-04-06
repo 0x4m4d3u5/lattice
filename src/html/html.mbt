@@ -14,6 +14,7 @@ pub(all) struct PageMeta {
   stylesheet : String? // optional <link rel="stylesheet"> href
   canonical_url : String? // absolute URL, renders as <link rel="canonical"> + og:url
   og_image : String? // absolute image URL, renders as og:image
+  og_type : String? // Open Graph type; defaults to "article" when unset
   feed_url : String? // absolute Atom feed URL, renders as <link rel="alternate" type="application/atom+xml">
   structured_data : Array[StructuredData] // optional JSON-LD objects
 }
@@ -136,10 +137,14 @@ pub fn strip_leading_h1(html : String) -> String {
 ///
 /// Generates Open Graph meta tags and a canonical `<link>` for use in `<head>`.
 /// Returns the HTML fragment as a string. Used by the `head_meta` template slot.
+///
+/// `og_type` controls the `og:type` meta tag — use "website" for index/root
+/// pages and "article" for collection/tag pages.
 pub fn render_head_meta(
   title : String,
   description : String?,
   url : String,
+  og_type? : String = "article",
 ) -> String {
   let tags = StringBuilder::new()
   tags.write_string("  <meta property=\"og:title\" content=\"")
@@ -157,7 +162,9 @@ pub fn render_head_meta(
   tags.write_string("  <meta property=\"og:url\" content=\"")
   tags.write_string(@strutil.escape_html_attr(url))
   tags.write_string("\" />\n")
-  tags.write_string("  <meta property=\"og:type\" content=\"article\" />\n")
+  tags.write_string("  <meta property=\"og:type\" content=\"")
+  tags.write_string(@strutil.escape_html_attr(og_type))
+  tags.write_string("\" />\n")
   tags.write_string("  <link rel=\"canonical\" href=\"")
   tags.write_string(@strutil.escape_html_attr(url))
   tags.write_string("\" />\n")
@@ -549,6 +556,10 @@ pub fn render_page(meta : PageMeta, body_html : String) -> String {
       "\" />\n"
     None => ""
   }
+  let effective_og_type = match meta.og_type {
+    Some(t) if t.length() > 0 => t
+    _ => "article"
+  }
   let social_tags = match meta.canonical_url {
     Some(url) => {
       let og_desc = match meta.description {
@@ -595,7 +606,9 @@ pub fn render_page(meta : PageMeta, body_html : String) -> String {
       "  <link rel=\"canonical\" href=\"" +
       @strutil.escape_html_attr(url) +
       "\" />\n" +
-      "  <meta property=\"og:type\" content=\"article\" />\n" +
+      "  <meta property=\"og:type\" content=\"" +
+      @strutil.escape_html_attr(effective_og_type) +
+      "\" />\n" +
       "  <meta property=\"og:title\" content=\"" +
       @strutil.escape_html_attr(meta.title) +
       "\" />\n" +
