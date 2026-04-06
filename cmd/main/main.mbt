@@ -24,6 +24,7 @@ pub(all) struct CliOptions {
   config_path : String?
   collections_path : String?
   check_mode : Bool
+  check_json : Bool
   force_rebuild : Bool
   watch_mode : Bool
   watch_interval_ms : Int
@@ -226,6 +227,11 @@ fn build_parser() -> @clap.Parser {
             help="Override collections config file",
           ),
           "drafts": @clap.Arg::flag(help="Include draft posts in the check"),
+          "format": @clap.Arg::named(
+            nargs=One,
+            defaults=["text"],
+            help="Output format: text (default) or json",
+          ),
         },
         help="Run validation/lint pipeline only",
       ),
@@ -379,6 +385,7 @@ fn cli_options_from_clap(
         config_path,
         collections_path,
         check_mode: false,
+        check_json: false,
         force_rebuild,
         watch_mode,
         watch_interval_ms,
@@ -387,13 +394,16 @@ fn cli_options_from_clap(
         serve_port: @serve.default_port(),
       }
     }
-    "check" =>
+    "check" => {
+      let format_raw = safe_get_one(sv, "format").unwrap_or("text")
+      let check_json = format_raw == "json"
       {
         content_dir,
         output_dir,
         config_path,
         collections_path,
         check_mode: true,
+        check_json,
         force_rebuild: false,
         watch_mode: false,
         watch_interval_ms: 500,
@@ -401,6 +411,7 @@ fn cli_options_from_clap(
         serve_mode: false,
         serve_port: @serve.default_port(),
       }
+    }
     "serve" => {
       let port_str = safe_get_one(sv, "port").unwrap_or("4321")
       let serve_port = match parse_positive_int(port_str) {
@@ -418,6 +429,7 @@ fn cli_options_from_clap(
         config_path,
         collections_path,
         check_mode: false,
+        check_json: false,
         force_rebuild: false,
         watch_mode: true,
         watch_interval_ms: 500,
@@ -433,6 +445,7 @@ fn cli_options_from_clap(
         config_path,
         collections_path,
         check_mode: false,
+        check_json: false,
         force_rebuild: false,
         watch_mode: false,
         watch_interval_ms: 500,
@@ -652,10 +665,18 @@ fn format_duration(ms : Int64) -> String {
 }
 
 ///|
-fn run_once(build_config : @builder.BuildConfig, check_mode : Bool) -> Int {
+fn run_once(
+  build_config : @builder.BuildConfig,
+  check_mode : Bool,
+  check_json : Bool,
+) -> Int {
   let start_ms = @watch.current_millis()
   if check_mode {
     let lint_result = @builder.check(build_config)
+    if check_json {
+      println(@lint.format_violations_json(lint_result))
+      return if @lint.has_violations(lint_result) { 1 } else { 0 }
+    }
     let mut i = 0
     while i < lint_result.violations.length() {
       print_diagnostic_main(
@@ -742,7 +763,11 @@ fn run_watch(options : CliOptions, initial_state : CliState) -> Unit {
   @watch.clear_interrupt()
   @watch.install_sigint_handler()
 
-  let initial_result = run_once(initial_state.build_config, options.check_mode)
+  let initial_result = run_once(
+    initial_state.build_config,
+    options.check_mode,
+    options.check_json,
+  )
   if initial_result > 0 {
     println(
       "[lattice] initial build finished with errors; watching for changes",
@@ -790,7 +815,7 @@ fn run_watch(options : CliOptions, initial_state : CliState) -> Unit {
     )
     match load_cli_state(options) {
       Ok(state) => {
-        let _ = run_once(state.build_config, options.check_mode)
+        let _ = run_once(state.build_config, options.check_mode, options.check_json)
         current_roots = state.watch_roots
         if options.serve_mode {
           @serve.broadcast_reload()
@@ -1107,7 +1132,7 @@ fn run_main() -> Unit {
     return
   }
 
-  let exit_code = run_once(state.build_config, options.check_mode)
+  let exit_code = run_once(state.build_config, options.check_mode, options.check_json)
   if exit_code > 0 {
     @sys.exit(1)
   }

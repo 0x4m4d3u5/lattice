@@ -119,6 +119,73 @@ test "lint format_summary with violations" {
 }
 
 ///|
+test "lint format_violations_json empty" {
+  let result = empty_result()
+  let json = format_violations_json(result)
+  assert_true(json.contains("\"violations\": []"))
+  assert_true(json.contains("\"total\": 0"))
+  assert_true(json.contains("\"by_type\": []"))
+  assert_true(json.contains("\"by_file\": []"))
+}
+
+///|
+test "lint format_violations_json with line and column" {
+  let violations : Array[LintViolation] = [
+    {
+      path: "content/posts/foo.md",
+      line: Some(12),
+      column: Some(5),
+      kind: BrokenWikilink,
+      message: "unknown slug 'bar'",
+    },
+  ]
+  let result : LintResult = { violations, }
+  let json = format_violations_json(result)
+  assert_true(json.contains("\"path\": \"content/posts/foo.md\""))
+  assert_true(json.contains("\"line\": 12"))
+  assert_true(json.contains("\"column\": 5"))
+  assert_true(json.contains("\"kind\": \"broken_wikilink\""))
+  assert_true(json.contains("\"message\": \"unknown slug 'bar'\""))
+  assert_true(json.contains("\"total\": 1"))
+}
+
+///|
+test "lint format_violations_json null line and column" {
+  let violations : Array[LintViolation] = [
+    {
+      path: "content/posts/bar.md",
+      line: None,
+      column: None,
+      kind: SchemaError,
+      message: "field error",
+    },
+  ]
+  let result : LintResult = { violations, }
+  let json = format_violations_json(result)
+  assert_true(json.contains("\"line\": null"))
+  assert_true(json.contains("\"column\": null"))
+  assert_true(json.contains("\"kind\": \"schema\""))
+}
+
+///|
+test "lint format_violations_json escapes special chars in message" {
+  let violations : Array[LintViolation] = [
+    {
+      path: "a.md",
+      line: None,
+      column: None,
+      kind: DataError,
+      message: "field \"x\" contains \\backslash",
+    },
+  ]
+  let result : LintResult = { violations, }
+  let json = format_violations_json(result)
+  // backslash and quote must be escaped in JSON
+  assert_true(json.contains("\\\"x\\\""))
+  assert_true(json.contains("\\\\backslash"))
+}
+
+///|
 test "lint summarize single violation" {
   let violations : Array[LintViolation] = [
     {

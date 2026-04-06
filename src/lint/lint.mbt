@@ -145,6 +145,94 @@ pub fn summarize(result : LintResult) -> ViolationSummary {
 }
 
 ///|
+/// Render a `LintResult` as a JSON string for machine-readable output.
+///
+/// Output format:
+/// ```json
+/// {
+///   "violations": [
+///     {"path": "...", "line": 12, "column": null, "kind": "schema", "message": "..."}
+///   ],
+///   "summary": {
+///     "total": 1,
+///     "by_type": [{"kind": "schema", "count": 1}],
+///     "by_file": [{"path": "...", "count": 1}]
+///   }
+/// }
+/// ```
+///
+/// The `kind` field uses the same stable string names as `violation_type_name`.
+/// `line` and `column` are integers when present, `null` when absent.
+pub fn format_violations_json(result : LintResult) -> String {
+  let buf = StringBuilder::new()
+  buf.write_string("{\n  \"violations\": [")
+  let vs = result.violations
+  let mut i = 0
+  while i < vs.length() {
+    let v = vs[i]
+    if i > 0 {
+      buf.write_string(",")
+    }
+    buf.write_string("\n    {")
+    buf.write_string("\"path\": ")
+    @strutil.write_json_string(buf, v.path)
+    buf.write_string(", \"line\": ")
+    match v.line {
+      Some(n) => buf.write_string(n.to_string())
+      None => buf.write_string("null")
+    }
+    buf.write_string(", \"column\": ")
+    match v.column {
+      Some(n) => buf.write_string(n.to_string())
+      None => buf.write_string("null")
+    }
+    buf.write_string(", \"kind\": ")
+    @strutil.write_json_string(buf, violation_type_name(v.kind))
+    buf.write_string(", \"message\": ")
+    @strutil.write_json_string(buf, v.message)
+    buf.write_string("}")
+    i = i + 1
+  }
+  if vs.length() > 0 {
+    buf.write_string("\n  ")
+  }
+  buf.write_string("],\n  \"summary\": ")
+  let summary = summarize(result)
+  buf.write_string("{")
+  buf.write_string("\"total\": ")
+  buf.write_string(summary.total.to_string())
+  buf.write_string(", \"by_type\": [")
+  let mut j = 0
+  while j < summary.by_type.length() {
+    if j > 0 {
+      buf.write_string(", ")
+    }
+    buf.write_string("{\"kind\": ")
+    @strutil.write_json_string(buf, violation_type_name(summary.by_type[j].kind))
+    buf.write_string(", \"count\": ")
+    buf.write_string(summary.by_type[j].count.to_string())
+    buf.write_string("}")
+    j = j + 1
+  }
+  buf.write_string("], \"by_file\": [")
+  let mut k = 0
+  while k < summary.by_file.length() {
+    if k > 0 {
+      buf.write_string(", ")
+    }
+    buf.write_string("{\"path\": ")
+    @strutil.write_json_string(buf, summary.by_file[k].path)
+    buf.write_string(", \"count\": ")
+    buf.write_string(summary.by_file[k].count.to_string())
+    buf.write_string("}")
+    k = k + 1
+  }
+  buf.write_string("]}")
+  buf.write_string("\n}")
+  buf.to_string()
+}
+
+///|
 /// Format a `ViolationSummary` as a human-readable multi-line summary.
 ///
 /// Output format:

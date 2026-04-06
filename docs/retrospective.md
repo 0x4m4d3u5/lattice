@@ -1113,3 +1113,71 @@ This error names the delimiter, names the format, and gives the exact fix. Two t
 The decision to name both formats in the error message — rather than just saying "use YAML format" — reflects a pattern throughout the error pipeline: error messages should be self-contained. A user who has never read the Lattice documentation should be able to recover from a frontmatter format error without looking anything up. The error names the wrong thing, names the right thing, and names the fix. This is the same standard applied to wikilink errors (which include the exact slug that wasn't found), schema errors (which include the field name and declared type), and shortcode errors (which include the shortcode name and the expected parameter types).
 
 The engineering discipline here is treating error messages as first-class output, not as internal debugging strings. A parse error that reaches a human author is a user interface interaction, and it should be designed with the same care as any other interface.
+
+## Open Graph and Twitter Card Meta Tags — Structural Completeness of the Output
+
+Commit `d69537f` emits Open Graph and Twitter Card meta tags for every rendered page type: collection pages, collection index pages, standalone pages, and root pages. The key decision was that these are not optional decoration — they are part of what it means for a page to be fully rendered.
+
+### Why All Page Types, Not Just Posts
+
+The naive implementation of OG tags is to add them to blog posts because that's where they're most visible: social links to blog posts show preview cards with title, description, and image. But index pages, homepage, and standalone pages are also shared. A link to a collection index or to a documentation page looks broken without an OG title. The structural thesis applied here is: if a page is rendered, it must emit complete metadata. There's no "this page type doesn't need OG tags" category in the output pipeline.
+
+The implementation in `src/html/html.mbt` adds `render_head_meta()` — which emits the `<head>` block including Open Graph (`og:title`, `og:description`, `og:url`, `og:type`, `og:image`) and Twitter Card (`twitter:card`, `twitter:title`, `twitter:description`, `twitter:image`) tags — and threads `og_type` through the `HeadMetaData` struct to distinguish `og:type = "article"` (posts) from `og:type = "website"` (index, root, standalone pages). The caller decides the type at the point where page meaning is known: the builder sets `og_type = Some("article")` for collection pages, and `og_type = None` (defaults to `"website"`) for everything else.
+
+### The og:image Opt-In
+
+`og:image` requires an absolute URL to an image — a missing image tag is worse than a present one in most social preview contexts. The implementation uses `og_image : String?` in `HeadMetaData`: when the site config or frontmatter provides no image, the tags are omitted entirely rather than emitting a malformed or empty tag. The `twitter:card` type downgrades from `summary_large_image` to `summary` when no image is present. This mirrors the frontmatter validation philosophy: emit what's valid, not what's structurally incomplete.
+
+### The Template Slot Boundary
+
+OG and Twitter Card tags live in the `{{head_meta}}` template slot (`HeadMeta` in `TemplateSlot`). The slot emits a pre-rendered HTML string that the template inlines into `<head>`. Template authors don't need to know about OG syntax or Twitter's card format — they declare `{{head_meta}}` and the slot provides the complete metadata block. This preserves the template system's role as a layout contract: templates describe page structure, not content encoding. The OG tag format details belong in the builder, where the page type and site configuration are known.
+
+## Error Accumulation Across Page Categories — Fixing a Silent Swallow
+
+Commit `cd00b24` fixes a bug where validation errors in collection pages caused the build pipeline to skip error collection for standalone pages and root pages entirely. The fix is a single structural point about how `Result` values must be unwrapped: errors should accumulate, not short-circuit.
+
+### The Bug
+
+The builder processes three content categories in sequence: collection pages, standalone pages, and root pages. Before this fix, a collection-phase error would set an early-return flag that prevented the standalone and root phases from running their own error accumulation pass. The result was a build where errors in `content/posts/` caused errors in `content/` (standalone) and `index.md` to be silently dropped from the diagnostic output.
+
+The failure mode was subtle. The build would correctly report `N errors` if only collection pages had issues. It would correctly report errors if only standalone or root pages had issues. But with errors in multiple categories, only the collection errors appeared — the others were lost.
+
+### Why This Matters for Structural Integrity
+
+An SSG that silently drops validation errors violates the structural thesis. The whole point of the lint and validation pipeline is that every violation surfaces before the user calls the build clean. A silent drop is behaviorally equivalent to the dynamic SSG case where the error only manifests at render time or at reader time. The test coverage added in commit `4ada094` explicitly covers the multi-category case: a build fixture where collection, standalone, and root pages all have violations, with assertions that all three categories of errors appear in the final diagnostic list. The test existed to make the guarantee structural rather than just behavioral.
+
+The fix is architecturally uninteresting — it's a control-flow correction, not a design change. What's worth documenting is that the bug existed because the three categories were processed in a sequence where the accumulation variable was inside a conditional that could exit early. Moving the accumulation outside that conditional is the fix. The lesson is that accumulation logic and early-exit logic must be kept apart, and that the test surface should cover cross-category interactions, not just single-category cases in isolation.
+
+## `lattice check --format json` — Machine-Readable Validation Output
+
+Commit `(this session)` adds `--format json` to `lattice check`, producing structured JSON output suitable for CI pipelines, editor integrations, and external tooling.
+
+### The Closed Vocabulary of Violation Kinds
+
+The design point is that `ViolationType` is a closed enum: `SchemaError | MissingRequiredFrontmatter | BrokenWikilink | DanglingTagReference | TemplateSlotError | DataError | ShortcodeError | FrontmatterError | CollectionsError | DuplicateSlug | IOError`. The JSON output uses `violation_type_name()` to map each variant to a stable string. A tool that consumes `check --format json` can enumerate all possible `kind` values and handle each one — or handle the set it cares about and ignore the rest. This is a stronger contract than an unstructured error message: the vocabulary is finite, documented, and enforced by the type system.
+
+If a new violation type is added to `ViolationType`, the compiler forces a new case in `violation_type_name()`. The JSON output automatically gains the new kind. The format does not drift from the implementation.
+
+### Output Structure
+
+```json
+{
+  "violations": [
+    {"path": "content/posts/foo.md", "line": 12, "column": 5, "kind": "broken_wikilink", "message": "unknown slug 'bar'"},
+    {"path": "content/posts/foo.md", "line": null, "column": null, "kind": "schema", "message": "..."}
+  ],
+  "summary": {
+    "total": 2,
+    "by_type": [{"kind": "broken_wikilink", "count": 1}, {"kind": "schema", "count": 1}],
+    "by_file": [{"path": "content/posts/foo.md", "count": 2}]
+  }
+}
+```
+
+`line` and `column` are integers when present, `null` when absent — JSON null rather than a sentinel value, so consuming code can distinguish "this violation has no position" from "position is zero." The summary mirrors the text output: violations grouped by kind and by file, sorted by count descending. Both the text and JSON outputs share the same `summarize()` computation.
+
+### CI Integration
+
+The primary use case is CI: `lattice check --format json | jq '.summary.total'` fails the build at zero and exits 1 on violations. A GitHub Actions step that runs `lattice check --format json` and parses the output can annotate PRs with the violations list at specific file/line positions — the position data is already there in the JSON. The exit code contract is unchanged: 0 on clean, 1 on violations, regardless of format.
+
+The `--format` flag only applies to `check`. Build and serve use the text diagnostic format (structured around developer feedback during iteration) because they run in interactive or watch contexts where human-readable output is the primary consumer. Check is designed for automation and editors, where structured output is the primary consumer.
