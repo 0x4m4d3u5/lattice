@@ -4876,6 +4876,260 @@ pub fn build(
     i = i + 1
   }
 
+  // Validate and render standalone pages (not in any collection).
+  // Always run validation even when prior errors exist, so users see ALL
+  // violations in one pass rather than fixing them incrementally.
+  if standalone_sources.length() > 0 {
+    let standalone_schema = standalone_default_schema()
+    let mut si = 0
+    while si < standalone_sources.length() {
+      let src = standalone_sources[si]
+      let page_url = standalone_page_url(src.slug)
+      let out_path = standalone_output_path(config.output_dir, src.slug)
+      let page_backlinks_html = match backlink_index.get(src.slug) {
+        Some(refs) => render_backlinks_html(refs)
+        None => ""
+      }
+      let doc_outcome = process_document(
+        src.content,
+        src.path,
+        src.slug,
+        "_standalone",
+        page_url,
+        page_index,
+        slug_owner,
+        known_tags,
+        tags_field,
+        standalone_schema,
+        config.site,
+        data_store,
+        templates.page,
+        templates_dir_for_build(config),
+        nav_links_html,
+        custom_css,
+        page_backlinks_html,
+        true, // always rebuild standalone pages (no incremental for now)
+        "",
+        "",
+        "",
+        "", // no prev/next for standalone pages
+      )
+      let mut diag_idx = 0
+      while diag_idx < doc_outcome.diagnostics.length() {
+        diagnostics.push(doc_outcome.diagnostics[diag_idx])
+        diag_idx = diag_idx + 1
+      }
+      match doc_outcome.document {
+        None => error_count = error_count + 1
+        Some(doc) => {
+          let page_dir = config.output_dir + "/" + src.slug
+          let write_ok = try {
+            ensure_dir(page_dir)
+            @fs.write_string_to_file(out_path, doc.html)
+            println("[lattice] wrote " + out_path)
+            true
+          } catch {
+            @fs.IOError(msg) => {
+              diagnostics.push(
+                build_error(
+                  Some(out_path),
+                  None,
+                  None,
+                  "standalone/" + src.slug + ": write failed: " + msg,
+                ),
+              )
+              false
+            }
+          }
+          if write_ok {
+            rebuilt = rebuilt + 1
+            // Add to graph for sitemap and search
+            let page : @graph.GraphPage = {
+              slug: src.slug,
+              title: doc.title,
+              url: doc.url,
+              description: doc.description,
+              date: doc.date,
+              outgoing: doc.resolved_links,
+            }
+            graph_pages.push(page)
+            let search_tags : Array[String] = []
+            search_entries.push(
+              @search.new_entry(
+                doc.title,
+                src.slug,
+                doc.url,
+                search_tags,
+                "_standalone",
+                doc.excerpt,
+              ),
+            )
+            content_entries.push(
+              @search.new_content_entry(
+                doc.title,
+                src.slug,
+                doc.url,
+                search_tags,
+                "_standalone",
+                match doc.date {
+                  Some(d) => d
+                  None => ""
+                },
+                match doc.description {
+                  Some(d) => d
+                  None => ""
+                },
+                "standalone",
+                reading_time_minutes(@strutil.count_words_text(doc.body_text)),
+                doc.body_text,
+              ),
+            )
+          } else {
+            error_count = error_count + 1
+          }
+        }
+      }
+      si = si + 1
+    }
+  }
+
+  // Validate and render root-level pages (content/index.md, etc.).
+  // Always run validation so all file-level errors are accumulated.
+  if root_sources.length() > 0 {
+    let root_schema = standalone_default_schema()
+    let mut ri = 0
+    while ri < root_sources.length() {
+      let src = root_sources[ri]
+      let page_url = root_page_url(src.slug)
+      let out_path = root_output_path(config.output_dir, src.slug)
+      let page_backlinks_html = match backlink_index.get(src.slug) {
+        Some(refs) => render_backlinks_html(refs)
+        None => ""
+      }
+      let doc_outcome = process_document(
+        src.content,
+        src.path,
+        src.slug,
+        "_root",
+        page_url,
+        page_index,
+        slug_owner,
+        known_tags,
+        tags_field,
+        root_schema,
+        config.site,
+        data_store,
+        templates.page,
+        templates_dir_for_build(config),
+        nav_links_html,
+        custom_css,
+        page_backlinks_html,
+        true, // always rebuild root pages (no incremental for now)
+        "",
+        "",
+        "",
+        "", // no prev/next for root pages
+      )
+      let mut diag_idx = 0
+      while diag_idx < doc_outcome.diagnostics.length() {
+        diagnostics.push(doc_outcome.diagnostics[diag_idx])
+        diag_idx = diag_idx + 1
+      }
+      match doc_outcome.document {
+        None => error_count = error_count + 1
+        Some(doc) => {
+          // index.md writes to dist/index.html (no subdirectory)
+          // everything else writes to dist/<slug>/index.html
+          let write_ok = if src.slug == "index" {
+            try {
+              @fs.write_string_to_file(out_path, doc.html)
+              println("[lattice] wrote " + out_path + " (root homepage)")
+              true
+            } catch {
+              @fs.IOError(msg) => {
+                diagnostics.push(
+                  build_error(
+                    Some(out_path),
+                    None,
+                    None,
+                    "root page index: write failed: " + msg,
+                  ),
+                )
+                false
+              }
+            }
+          } else {
+            let page_dir = config.output_dir + "/" + src.slug
+            try {
+              ensure_dir(page_dir)
+              @fs.write_string_to_file(out_path, doc.html)
+              println("[lattice] wrote " + out_path)
+              true
+            } catch {
+              @fs.IOError(msg) => {
+                diagnostics.push(
+                  build_error(
+                    Some(out_path),
+                    None,
+                    None,
+                    "root/" + src.slug + ": write failed: " + msg,
+                  ),
+                )
+                false
+              }
+            }
+          }
+          if write_ok {
+            rebuilt = rebuilt + 1
+            let page : @graph.GraphPage = {
+              slug: src.slug,
+              title: doc.title,
+              url: doc.url,
+              description: doc.description,
+              date: doc.date,
+              outgoing: doc.resolved_links,
+            }
+            graph_pages.push(page)
+            let search_tags : Array[String] = []
+            search_entries.push(
+              @search.new_entry(
+                doc.title,
+                src.slug,
+                doc.url,
+                search_tags,
+                "_root",
+                doc.excerpt,
+              ),
+            )
+            content_entries.push(
+              @search.new_content_entry(
+                doc.title,
+                src.slug,
+                doc.url,
+                search_tags,
+                "_root",
+                match doc.date {
+                  Some(d) => d
+                  None => ""
+                },
+                match doc.description {
+                  Some(d) => d
+                  None => ""
+                },
+                "page",
+                reading_time_minutes(@strutil.count_words_text(doc.body_text)),
+                doc.body_text,
+              ),
+            )
+          } else {
+            error_count = error_count + 1
+          }
+        }
+      }
+      ri = ri + 1
+    }
+  }
+
   if error_count == 0 {
     i = 0
     while i < rendered_collections.length() {
@@ -5032,257 +5286,6 @@ pub fn build(
       }
 
       i = i + 1
-    }
-
-    // Render standalone pages (not in any collection)
-    if error_count == 0 && standalone_sources.length() > 0 {
-      let standalone_schema = standalone_default_schema()
-      let mut si = 0
-      while si < standalone_sources.length() {
-        let src = standalone_sources[si]
-        let page_url = standalone_page_url(src.slug)
-        let out_path = standalone_output_path(config.output_dir, src.slug)
-        let page_backlinks_html = match backlink_index.get(src.slug) {
-          Some(refs) => render_backlinks_html(refs)
-          None => ""
-        }
-        let doc_outcome = process_document(
-          src.content,
-          src.path,
-          src.slug,
-          "_standalone",
-          page_url,
-          page_index,
-          slug_owner,
-          known_tags,
-          tags_field,
-          standalone_schema,
-          config.site,
-          data_store,
-          templates.page,
-          templates_dir_for_build(config),
-          nav_links_html,
-          custom_css,
-          page_backlinks_html,
-          true, // always rebuild standalone pages (no incremental for now)
-          "",
-          "",
-          "",
-          "", // no prev/next for standalone pages
-        )
-        let mut diag_idx = 0
-        while diag_idx < doc_outcome.diagnostics.length() {
-          diagnostics.push(doc_outcome.diagnostics[diag_idx])
-          diag_idx = diag_idx + 1
-        }
-        match doc_outcome.document {
-          None => error_count = error_count + 1
-          Some(doc) => {
-            let page_dir = config.output_dir + "/" + src.slug
-            let write_ok = try {
-              ensure_dir(page_dir)
-              @fs.write_string_to_file(out_path, doc.html)
-              println("[lattice] wrote " + out_path)
-              true
-            } catch {
-              @fs.IOError(msg) => {
-                diagnostics.push(
-                  build_error(
-                    Some(out_path),
-                    None,
-                    None,
-                    "standalone/" + src.slug + ": write failed: " + msg,
-                  ),
-                )
-                false
-              }
-            }
-            if write_ok {
-              rebuilt = rebuilt + 1
-              // Add to graph for sitemap and search
-              let page : @graph.GraphPage = {
-                slug: src.slug,
-                title: doc.title,
-                url: doc.url,
-                description: doc.description,
-                date: doc.date,
-                outgoing: doc.resolved_links,
-              }
-              graph_pages.push(page)
-              let search_tags : Array[String] = []
-              search_entries.push(
-                @search.new_entry(
-                  doc.title,
-                  src.slug,
-                  doc.url,
-                  search_tags,
-                  "_standalone",
-                  doc.excerpt,
-                ),
-              )
-              content_entries.push(
-                @search.new_content_entry(
-                  doc.title,
-                  src.slug,
-                  doc.url,
-                  search_tags,
-                  "_standalone",
-                  match doc.date {
-                    Some(d) => d
-                    None => ""
-                  },
-                  match doc.description {
-                    Some(d) => d
-                    None => ""
-                  },
-                  "standalone",
-                  reading_time_minutes(@strutil.count_words_text(doc.body_text)),
-                  doc.body_text,
-                ),
-              )
-            } else {
-              error_count = error_count + 1
-            }
-          }
-        }
-        si = si + 1
-      }
-    }
-
-    // Render root-level pages (content/index.md, content/about.md, etc.)
-    if error_count == 0 && root_sources.length() > 0 {
-      let root_schema = standalone_default_schema()
-      let mut ri = 0
-      while ri < root_sources.length() {
-        let src = root_sources[ri]
-        let page_url = root_page_url(src.slug)
-        let out_path = root_output_path(config.output_dir, src.slug)
-        let page_backlinks_html = match backlink_index.get(src.slug) {
-          Some(refs) => render_backlinks_html(refs)
-          None => ""
-        }
-        let doc_outcome = process_document(
-          src.content,
-          src.path,
-          src.slug,
-          "_root",
-          page_url,
-          page_index,
-          slug_owner,
-          known_tags,
-          tags_field,
-          root_schema,
-          config.site,
-          data_store,
-          templates.page,
-          templates_dir_for_build(config),
-          nav_links_html,
-          custom_css,
-          page_backlinks_html,
-          true, // always rebuild root pages (no incremental for now)
-          "",
-          "",
-          "",
-          "", // no prev/next for root pages
-        )
-        let mut diag_idx = 0
-        while diag_idx < doc_outcome.diagnostics.length() {
-          diagnostics.push(doc_outcome.diagnostics[diag_idx])
-          diag_idx = diag_idx + 1
-        }
-        match doc_outcome.document {
-          None => error_count = error_count + 1
-          Some(doc) => {
-            // index.md writes to dist/index.html (no subdirectory)
-            // everything else writes to dist/<slug>/index.html
-            let write_ok = if src.slug == "index" {
-              try {
-                @fs.write_string_to_file(out_path, doc.html)
-                println("[lattice] wrote " + out_path + " (root homepage)")
-                true
-              } catch {
-                @fs.IOError(msg) => {
-                  diagnostics.push(
-                    build_error(
-                      Some(out_path),
-                      None,
-                      None,
-                      "root page index: write failed: " + msg,
-                    ),
-                  )
-                  false
-                }
-              }
-            } else {
-              let page_dir = config.output_dir + "/" + src.slug
-              try {
-                ensure_dir(page_dir)
-                @fs.write_string_to_file(out_path, doc.html)
-                println("[lattice] wrote " + out_path)
-                true
-              } catch {
-                @fs.IOError(msg) => {
-                  diagnostics.push(
-                    build_error(
-                      Some(out_path),
-                      None,
-                      None,
-                      "root/" + src.slug + ": write failed: " + msg,
-                    ),
-                  )
-                  false
-                }
-              }
-            }
-            if write_ok {
-              rebuilt = rebuilt + 1
-              let page : @graph.GraphPage = {
-                slug: src.slug,
-                title: doc.title,
-                url: doc.url,
-                description: doc.description,
-                date: doc.date,
-                outgoing: doc.resolved_links,
-              }
-              graph_pages.push(page)
-              let search_tags : Array[String] = []
-              search_entries.push(
-                @search.new_entry(
-                  doc.title,
-                  src.slug,
-                  doc.url,
-                  search_tags,
-                  "_root",
-                  doc.excerpt,
-                ),
-              )
-              content_entries.push(
-                @search.new_content_entry(
-                  doc.title,
-                  src.slug,
-                  doc.url,
-                  search_tags,
-                  "_root",
-                  match doc.date {
-                    Some(d) => d
-                    None => ""
-                  },
-                  match doc.description {
-                    Some(d) => d
-                    None => ""
-                  },
-                  "page",
-                  reading_time_minutes(@strutil.count_words_text(doc.body_text)),
-                  doc.body_text,
-                ),
-              )
-            } else {
-              error_count = error_count + 1
-            }
-          }
-        }
-        ri = ri + 1
-      }
     }
 
     if error_count == 0 {
@@ -5768,7 +5771,7 @@ pub fn build(
         None,
         None,
         None,
-        "skipped collection feeds/indexes, tags, sitemap, and search index generation due to prior build errors",
+        "skipped collection feeds/indexes, tags, sitemap, and search index generation due to collection validation errors",
       ),
     )
   }
