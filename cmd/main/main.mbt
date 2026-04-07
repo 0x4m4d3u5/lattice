@@ -815,7 +815,11 @@ fn run_watch(options : CliOptions, initial_state : CliState) -> Unit {
     )
     match load_cli_state(options) {
       Ok(state) => {
-        let _ = run_once(state.build_config, options.check_mode, options.check_json)
+        let _ = run_once(
+          state.build_config,
+          options.check_mode,
+          options.check_json,
+        )
         current_roots = state.watch_roots
         if options.serve_mode {
           @serve.broadcast_reload()
@@ -1132,7 +1136,11 @@ fn run_main() -> Unit {
     return
   }
 
-  let exit_code = run_once(state.build_config, options.check_mode, options.check_json)
+  let exit_code = run_once(
+    state.build_config,
+    options.check_mode,
+    options.check_json,
+  )
   if exit_code > 0 {
     @sys.exit(1)
   }

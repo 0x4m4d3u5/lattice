@@ -208,7 +208,10 @@ pub fn format_violations_json(result : LintResult) -> String {
       buf.write_string(", ")
     }
     buf.write_string("{\"kind\": ")
-    @strutil.write_json_string(buf, violation_type_name(summary.by_type[j].kind))
+    @strutil.write_json_string(
+      buf,
+      violation_type_name(summary.by_type[j].kind),
+    )
     buf.write_string(", \"count\": ")
     buf.write_string(summary.by_type[j].count.to_string())
     buf.write_string("}")

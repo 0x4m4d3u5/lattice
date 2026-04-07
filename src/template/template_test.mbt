@@ -168,7 +168,7 @@ test "template parse new pagination slots" {
     }
   }
   match tpl_next.parts[0] {
-    Slot(NextPage) => ()
+    Slot(NextPage, _) => ()
     _ => assert_true(false)
   }
 
@@ -180,7 +180,7 @@ test "template parse new pagination slots" {
     }
   }
   match tpl_prev.parts[0] {
-    Slot(PrevPage) => ()
+    Slot(PrevPage, _) => ()
     _ => assert_true(false)
   }
 
@@ -193,7 +193,7 @@ test "template parse new pagination slots" {
     }
   }
   match tpl_page.parts {
-    [Text("Page "), Slot(PageNum), Text(" of 5")] => ()
+    [Text("Page "), Slot(PageNum, []), Text(" of 5")] => ()
     _ => assert_true(false)
   }
 
@@ -205,7 +205,7 @@ test "template parse new pagination slots" {
     }
   }
   match tpl_first.parts[0] {
-    Slot(IsFirstPage) => ()
+    Slot(IsFirstPage, _) => ()
     _ => assert_true(false)
   }
 
@@ -217,7 +217,7 @@ test "template parse new pagination slots" {
     }
   }
   match tpl_last.parts[0] {
-    Slot(IsLastPage) => ()
+    Slot(IsLastPage, _) => ()
     _ => assert_true(false)
   }
 
@@ -229,7 +229,7 @@ test "template parse new pagination slots" {
     }
   }
   match tpl_page_url.parts[0] {
-    Slot(PageUrl) => ()
+    Slot(PageUrl, _) => ()
     _ => assert_true(false)
   }
 }
@@ -244,7 +244,7 @@ test "template parse date component slots" {
     }
   }
   match tpl.parts {
-    [Slot(Year), Text("-"), Slot(Month), Text("-"), Slot(Day)] => ()
+    [Slot(Year, []), Text("-"), Slot(Month, []), Text("-"), Slot(Day, [])] => ()
     _ => assert_true(false)
   }
 }
@@ -268,10 +268,10 @@ test "template parse content metadata slots" {
   let mut has_tags = false
   for part in tpl.parts {
     match part {
-      Slot(Title) => has_title = true
-      Slot(Collection) => has_collection = true
-      Slot(Body) => has_body = true
-      Slot(Tags) => has_tags = true
+      Slot(Title, _) => has_title = true
+      Slot(Collection, _) => has_collection = true
+      Slot(Body, _) => has_body = true
+      Slot(Tags, _) => has_tags = true
       _ => ()
     }
   }
@@ -426,7 +426,7 @@ test "template nested includes" {
             if s.contains("Grandchild content") {
               has_grandchild = true
             }
-          Slot(Content) => has_content_slot = true
+          Slot(Content, _) => has_content_slot = true
           _ => ()
         }
       }
@@ -472,7 +472,7 @@ test "template include in layout file" {
                   has_footer = true
                 }
               }
-              Slot(Body) => has_body_slot = true
+              Slot(Body, _) => has_body_slot = true
               _ => ()
             }
           }
@@ -500,8 +500,8 @@ test "template parse reading_time and word_count slots" {
   let mut has_wc = false
   for part in tpl.parts {
     match part {
-      Slot(ReadingTime) => has_rt = true
-      Slot(WordCount) => has_wc = true
+      Slot(ReadingTime, _) => has_rt = true
+      Slot(WordCount, _) => has_wc = true
       _ => ()
     }
   }
@@ -521,7 +521,7 @@ test "template parse table_of_contents slot" {
   let mut has_toc = false
   for part in tpl.parts {
     match part {
-      Slot(TableOfContents) => has_toc = true
+      Slot(TableOfContents, _) => has_toc = true
       _ => ()
     }
   }
@@ -541,8 +541,8 @@ test "template parse author and excerpt slots" {
   let mut has_excerpt = false
   for part in tpl.parts {
     match part {
-      Slot(Author) => has_author = true
-      Slot(Excerpt) => has_excerpt = true
+      Slot(Author, _) => has_author = true
+      Slot(Excerpt, _) => has_excerpt = true
       _ => ()
     }
   }
@@ -898,7 +898,7 @@ test "parse {{page.field}} frontmatter slot" {
     _ => assert_true(false)
   }
   match tpl.parts[1] {
-    FrontmatterSlot(field) => assert_eq(field, "series")
+    FrontmatterSlot(field, _) => assert_eq(field, "series")
     _ => assert_true(false)
   }
   // FrontmatterSlot should NOT be in required_slots
@@ -1163,7 +1163,7 @@ test "parse {{#each data.nav.items}}...{{/each}} loop" {
       // Body should have one part: LoopItemSlot([])
       assert_eq(body_parts.length(), 1)
       match body_parts[0] {
-        LoopItemSlot(path) => assert_eq(path.length(), 0)
+        LoopItemSlot(path, _) => assert_eq(path.length(), 0)
         _ => assert_true(false)
       }
     }
@@ -1191,14 +1191,14 @@ test "parse {{#each data.nav.links}}...{{/each}} with field access" {
       // Body should have 5 parts: Text, LoopItemSlot, Text, LoopItemSlot, Text
       assert_eq(body_parts.length(), 5)
       match body_parts[1] {
-        LoopItemSlot(path) => {
+        LoopItemSlot(path, _) => {
           assert_eq(path.length(), 1)
           assert_eq(path[0], "url")
         }
         _ => assert_true(false)
       }
       match body_parts[3] {
-        LoopItemSlot(path) => {
+        LoopItemSlot(path, _) => {
           assert_eq(path.length(), 1)
           assert_eq(path[0], "title")
         }
@@ -1220,7 +1220,7 @@ test "parse {{item.title}} creates LoopItemSlot with path" {
   }
 
   match tpl.parts[0] {
-    LoopItemSlot(path) => {
+    LoopItemSlot(path, _) => {
       assert_eq(path.length(), 1)
       assert_eq(path[0], "title")
     }
@@ -1239,7 +1239,7 @@ test "parse {{item.a.b}} creates LoopItemSlot with nested path" {
   }
 
   match tpl.parts[0] {
-    LoopItemSlot(path) => {
+    LoopItemSlot(path, _) => {
       assert_eq(path.length(), 2)
       assert_eq(path[0], "a")
       assert_eq(path[1], "b")
@@ -1462,7 +1462,7 @@ test "parse {{#each page.keywords}}...{{/each}} loop" {
       // Body should have one part: LoopItemSlot([])
       assert_eq(body_parts.length(), 1)
       match body_parts[0] {
-        LoopItemSlot(path) => assert_eq(path.length(), 0)
+        LoopItemSlot(path, _) => assert_eq(path.length(), 0)
         _ => assert_true(false)
       }
     }
@@ -1487,7 +1487,7 @@ test "parse {{#each page.tags}}...{{/each}} with text" {
       // Body should have 2 parts: LoopItemSlot, Text
       assert_eq(body_parts.length(), 2)
       match body_parts[0] {
-        LoopItemSlot(path) => assert_eq(path.length(), 0)
+        LoopItemSlot(path, _) => assert_eq(path.length(), 0)
         _ => assert_true(false)
       }
     }
@@ -1711,7 +1711,7 @@ test "template parse body_no_h1 slot" {
   let mut has_body_no_h1 = false
   for part in tpl.parts {
     match part {
-      Slot(BodyNoH1) => has_body_no_h1 = true
+      Slot(BodyNoH1, _) => has_body_no_h1 = true
       _ => ()
     }
   }
@@ -1745,7 +1745,7 @@ test "template parse head_meta slot" {
     }
   }
   match tpl.parts[0] {
-    Slot(HeadMeta) => ()
+    Slot(HeadMeta, _) => ()
     _ => assert_true(false)
   }
 }
@@ -1846,6 +1846,168 @@ test "head.html conditional description - empty description omits meta tag" {
       assert_true(html.contains("og:title"))
       assert_true(html.contains("canonical"))
     }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "{{page.title | upper}} renders uppercase" {
+  let tpl = match parse_template("Title: {{page.title | upper}}") {
+    Ok(v) => v
+    Err(_) => {
+      assert_true(false)
+      { parts: [], required_slots: [], layout: None }
+    }
+  }
+  let slots : Map[TemplateSlot, String] = Map::new()
+  let page_fields : Map[String, String] = Map::new()
+  page_fields.set("title", "hello world")
+  match render_template(tpl, slots, page_fields) {
+    Ok(html) => assert_eq(html, "Title: HELLO WORLD")
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "{{page.title | lower}} renders lowercase" {
+  let tpl = match parse_template("Title: {{page.title | lower}}") {
+    Ok(v) => v
+    Err(_) => {
+      assert_true(false)
+      { parts: [], required_slots: [], layout: None }
+    }
+  }
+  let slots : Map[TemplateSlot, String] = Map::new()
+  let page_fields : Map[String, String] = Map::new()
+  page_fields.set("title", "HELLO WORLD")
+  match render_template(tpl, slots, page_fields) {
+    Ok(html) => assert_eq(html, "Title: hello world")
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "{{page.description | truncate 20}} truncates with '...'" {
+  let tpl = match parse_template("{{page.description | truncate 20}}") {
+    Ok(v) => v
+    Err(_) => {
+      assert_true(false)
+      { parts: [], required_slots: [], layout: None }
+    }
+  }
+  let slots : Map[TemplateSlot, String] = Map::new()
+  let page_fields : Map[String, String] = Map::new()
+  page_fields.set(
+    "description", "This is a very long description that should be truncated",
+  )
+  match render_template(tpl, slots, page_fields) {
+    Ok(html) => assert_eq(html, "This is a very long ...")
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "{{page.description | truncate 20}} does NOT truncate short strings" {
+  let tpl = match parse_template("{{page.description | truncate 20}}") {
+    Ok(v) => v
+    Err(_) => {
+      assert_true(false)
+      { parts: [], required_slots: [], layout: None }
+    }
+  }
+  let slots : Map[TemplateSlot, String] = Map::new()
+  let page_fields : Map[String, String] = Map::new()
+  page_fields.set("description", "Short text")
+  match render_template(tpl, slots, page_fields) {
+    Ok(html) => assert_eq(html, "Short text")
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "{{page.slug | upper | truncate 5}} chains two filters" {
+  let tpl = match parse_template("{{page.slug | upper | truncate 5}}") {
+    Ok(v) => v
+    Err(_) => {
+      assert_true(false)
+      { parts: [], required_slots: [], layout: None }
+    }
+  }
+  let slots : Map[TemplateSlot, String] = Map::new()
+  let page_fields : Map[String, String] = Map::new()
+  page_fields.set("slug", "hello-world")
+  match render_template(tpl, slots, page_fields) {
+    Ok(html) => assert_eq(html, "HELLO...")
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "{{date | date_part year}} extracts year from date string" {
+  let tpl = match parse_template("{{date | date_part year}}") {
+    Ok(v) => v
+    Err(_) => {
+      assert_true(false)
+      { parts: [], required_slots: [], layout: None }
+    }
+  }
+  // The Date slot renders the date string
+  let slots : Map[TemplateSlot, String] = Map::new()
+  slots.set(Date, "2024-03-15")
+  match render_template(tpl, slots, Map::new()) {
+    Ok(html) => assert_eq(html, "2024")
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "{{date | date_part month}} extracts month from date string" {
+  let tpl = match parse_template("{{date | date_part month}}") {
+    Ok(v) => v
+    Err(_) => {
+      assert_true(false)
+      { parts: [], required_slots: [], layout: None }
+    }
+  }
+  let slots : Map[TemplateSlot, String] = Map::new()
+  slots.set(Date, "2024-03-15")
+  match render_template(tpl, slots, Map::new()) {
+    Ok(html) => assert_eq(html, "03")
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "{{page.missing_field | default \"N/A\"}} returns fallback for empty/missing" {
+  let tpl = match parse_template("{{page.missing_field | default \"N/A\"}}") {
+    Ok(v) => v
+    Err(_) => {
+      assert_true(false)
+      { parts: [], required_slots: [], layout: None }
+    }
+  }
+  let slots : Map[TemplateSlot, String] = Map::new()
+  let page_fields : Map[String, String] = Map::new()
+  // "missing_field" is not set, so it renders as empty → default kicks in
+  match render_template(tpl, slots, page_fields) {
+    Ok(html) => assert_eq(html, "N/A")
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "{{title | upper}} works on standard slots" {
+  let tpl = match parse_template("{{title | upper}}") {
+    Ok(v) => v
+    Err(_) => {
+      assert_true(false)
+      { parts: [], required_slots: [], layout: None }
+    }
+  }
+  let slots : Map[TemplateSlot, String] = Map::new()
+  slots.set(Title, "my page title")
+  match render_template(tpl, slots, Map::new()) {
+    Ok(html) => assert_eq(html, "MY PAGE TITLE")
     Err(_) => assert_true(false)
   }
 }

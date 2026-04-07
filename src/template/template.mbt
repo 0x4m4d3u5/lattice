@@ -40,16 +40,16 @@ pub(all) enum TemplateSlot {
 ///|
 pub(all) enum TemplatePart {
   Text(String)
-  Slot(TemplateSlot)
+  Slot(TemplateSlot, Array[Filter]) // {{slot_name | filter1 | filter2}}
   DataSlot(String, Array[String]) // file name, key path
-  FrontmatterSlot(String) // {{page.field_name}} — key into validated frontmatter
+  FrontmatterSlot(String, Array[Filter]) // {{page.field_name | filter1}} — key into validated frontmatter
   Include(String) // filename to include, resolved at load time
   Layout(String) // layout filename, resolved at load time
   ConditionalBlock(TemplateSlot, Array[TemplatePart]) // {{?slot}} body {{/?slot}}
   FrontmatterConditionalBlock(String, Array[TemplatePart]) // {{?page.field}} body {{/?page.field}} — conditional on frontmatter field presence and non-empty value
   DataEachBlock(String, Array[String], Array[TemplatePart]) // {{#each data.file.key.path}} body {{/each}} — loop over data array
   FrontmatterEachBlock(String, Array[TemplatePart]) // {{#each page.field}} body {{/each}} — loop over frontmatter array field
-  LoopItemSlot(Array[String]) // {{item}} or {{item.field}} inside {{#each}} block
+  LoopItemSlot(Array[String], Array[Filter]) // {{item}} or {{item.field | filter1}} inside {{#each}} block
 }
 
 ///|
@@ -69,6 +69,17 @@ pub enum TemplateError {
 }
 
 ///|
+/// Pipe/filter for slot value transformations.
+/// Chained after slot names with `|` e.g. `{{page.title | upper | truncate 50}}`
+enum Filter {
+  Upper // uppercase the string
+  Lower // lowercase the string
+  Truncate(Int) // truncate to N chars, append "..." if truncated
+  DatePart(String) // extract "year"|"month"|"day" from date string
+  Default(String) // fallback if slot renders empty
+} derive(Eq, Show)
+
+///|
 fn split_dot_template(s : String) -> Array[String] {
   let parts : Array[String] = []
   let mut start = 0
@@ -84,6 +95,204 @@ fn split_dot_template(s : String) -> Array[String] {
     i = i + 1
   }
   parts
+}
+
+///|
+/// Split a slot expression like `"page.title | upper | truncate 50"` into
+/// the slot name part (`"page.title"`) and an array of parsed `Filter`s.
+fn parse_filters(slot_expr : String) -> (String, Array[Filter]) {
+  let filters : Array[Filter] = []
+  // Find the first `|` that is not inside quotes
+  let n = slot_expr.length()
+  let mut i = 0
+  let mut in_quotes = false
+  let mut pipe_pos = -1
+  while i < n {
+    let c = @strutil.char_at(slot_expr, i)
+    if c == '"' {
+      in_quotes = !in_quotes
+    } else if c == '|' && !in_quotes {
+      pipe_pos = i
+      break
+    }
+    i = i + 1
+  }
+  if pipe_pos < 0 {
+    return (slot_expr, filters)
+  }
+  let slot_name = @strutil.trim(@strutil.substr(slot_expr, 0, pipe_pos))
+  let rest = @strutil.substr(slot_expr, pipe_pos + 1, n)
+
+  // Split remaining text on `|` (respecting quotes)
+  let segments : Array[String] = []
+  let mut seg_start = 0
+  i = 0
+  in_quotes = false
+  while i <= rest.length() {
+    if i == rest.length() {
+      let seg = @strutil.trim(@strutil.substr(rest, seg_start, i))
+      if seg.length() > 0 {
+        segments.push(seg)
+      }
+    } else {
+      let c = @strutil.char_at(rest, i)
+      if c == '"' {
+        in_quotes = !in_quotes
+      } else if c == '|' && !in_quotes {
+        let seg = @strutil.trim(@strutil.substr(rest, seg_start, i))
+        if seg.length() > 0 {
+          segments.push(seg)
+        }
+        seg_start = i + 1
+      }
+    }
+    i = i + 1
+  }
+
+  for seg in segments {
+    let filter = parse_single_filter(seg)
+    filters.push(filter)
+  }
+  (slot_name, filters)
+}
+
+///|
+/// Parse a single filter segment like `"upper"`, `"truncate 50"`,
+/// `"date_part year"`, `r#"`default "fallback"`"#` or `"default fallback"`.
+fn parse_single_filter(seg : String) -> Filter {
+  let n = seg.length()
+  let mut i = 0
+  // skip to first non-space
+  i = @strutil.skip_ws(seg, 0)
+  // read the filter name
+  let name_start = i
+  while i < n && @strutil.char_at(seg, i) != ' ' {
+    i = i + 1
+  }
+  let name = @strutil.substr(seg, name_start, i)
+
+  if name == "upper" {
+    return Filter::Upper
+  }
+  if name == "lower" {
+    return Filter::Lower
+  }
+  if name == "truncate" {
+    // skip whitespace then read integer
+    i = @strutil.skip_ws(seg, i)
+    let num_start = i
+    while i < n && @strutil.is_digit(@strutil.char_at(seg, i)) {
+      i = i + 1
+    }
+    let num_str = @strutil.substr(seg, num_start, i)
+    let len = match @strutil.parse_int(num_str) {
+      Some(v) => v
+      None => 100 // default truncate length
+    }
+    return Filter::Truncate(len)
+  }
+  if name == "date_part" {
+    // skip whitespace then read part name
+    i = @strutil.skip_ws(seg, i)
+    let part_start = i
+    while i < n && @strutil.char_at(seg, i) != ' ' {
+      i = i + 1
+    }
+    let part = @strutil.substr(seg, part_start, i)
+    return Filter::DatePart(part)
+  }
+  if name == "default" {
+    // skip whitespace then read argument
+    i = @strutil.skip_ws(seg, i)
+    if i < n && @strutil.char_at(seg, i) == '"' {
+      // Quoted string argument
+      match @strutil.parse_quoted(seg, i) {
+        Ok((val, _)) => return Filter::Default(val)
+        Err(_) => return Filter::Default("")
+      }
+    }
+    // Unquoted argument: read to end
+    let val = @strutil.trim(@strutil.substr(seg, i, n))
+    return Filter::Default(val)
+  }
+  // Unknown filter — treat as no-op (Upper of identity)
+  Filter::Upper
+}
+
+///|
+/// Extract a date component from a date string (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS).
+/// Returns empty string if the part name is unrecognised or the date is malformed.
+fn extract_date_part(value : String, part : String) -> String {
+  // Split on '-' to get [year, month, rest...]
+  let components : Array[String] = []
+  let mut start = 0
+  let n = value.length()
+  let mut i = 0
+  while i <= n {
+    if i == n || @strutil.char_at(value, i) == '-' {
+      components.push(@strutil.substr(value, start, i))
+      start = i + 1
+    }
+    i = i + 1
+  }
+  if part == "year" {
+    if components.length() > 0 {
+      components[0]
+    } else {
+      ""
+    }
+  } else if part == "month" {
+    if components.length() > 1 {
+      components[1]
+    } else {
+      ""
+    }
+  } else if part == "day" {
+    if components.length() > 2 {
+      // day might have "T..." suffix (ISO datetime)
+      let day_str = components[2]
+      let mut end = day_str.length()
+      let mut j = 0
+      while j < end {
+        if @strutil.char_at(day_str, j) == 'T' {
+          end = j
+        }
+        j = j + 1
+      }
+      @strutil.substr(day_str, 0, end)
+    } else {
+      ""
+    }
+  } else {
+    ""
+  }
+}
+
+///|
+/// Apply a single filter to a string value.
+fn apply_filter(value : String, filter : Filter) -> String {
+  match filter {
+    Upper => value.to_upper()
+    Lower => value.to_lower()
+    Truncate(n) =>
+      if value.length() > n {
+        @strutil.substr(value, 0, n) + "..."
+      } else {
+        value
+      }
+    DatePart(part) => extract_date_part(value, part)
+    Default(fallback) => if value.is_empty() { fallback } else { value }
+  }
+}
+
+///|
+/// Apply a chain of filters to a string value, in order.
+fn apply_filters(value : String, filters : Array[Filter]) -> String {
+  let mut result = value
+  for filter in filters {
+    result = apply_filter(result, filter)
+  }
+  result
 }
 
 ///|
@@ -233,7 +442,7 @@ pub fn parse_template(input : String) -> Result[Template, TemplateError] {
       let mut i = 0
       while i < parts.length() {
         match parts[i] {
-          Slot(slot) =>
+          Slot(slot, _filters) =>
             if !required_slots.contains(slot) {
               required_slots.push(slot)
             }
@@ -409,15 +618,19 @@ fn parse_template_recursive(
       }
 
       // Check if this is a loop item slot {{item}} or {{item.field}}
-      if slot_name == "item" || @strutil.starts_with(slot_name, "item.") {
-        if @strutil.starts_with(slot_name, "item.") {
+      // (but also allow filters: {{item | upper}})
+      if slot_name == "item" ||
+        @strutil.starts_with(slot_name, "item.") ||
+        @strutil.starts_with(slot_name, "item |") {
+        let (name_part, item_filters) = parse_filters(slot_name)
+        if @strutil.starts_with(name_part, "item.") {
           let field = @strutil.trim(
-            @strutil.substr(slot_name, 5, slot_name.length()),
+            @strutil.substr(name_part, 5, name_part.length()),
           )
           let item_fields = split_dot_template(field)
-          parts.push(LoopItemSlot(item_fields))
+          parts.push(LoopItemSlot(item_fields, item_filters))
         } else {
-          parts.push(LoopItemSlot([]))
+          parts.push(LoopItemSlot([], item_filters))
         }
         i = close + 2
         text_start = i
@@ -567,31 +780,34 @@ fn parse_template_recursive(
         }
         parts.push(Layout(filename))
       } else if @strutil.starts_with(slot_name, "data.") {
+        // Data slots don't support filters currently
         match parse_data_slot_name(slot_name) {
           Ok((file, key_path)) => parts.push(DataSlot(file, key_path))
           Err(e) => return Err(e)
         }
       } else if @strutil.starts_with(slot_name, "page.") {
+        let (name_part, fm_filters) = parse_filters(slot_name)
         let field = @strutil.trim(
-          @strutil.substr(slot_name, 5, slot_name.length()),
+          @strutil.substr(name_part, 5, name_part.length()),
         )
         if field.length() == 0 {
           return Err(ParseError("invalid page slot '" + slot_name + "'"))
         }
-        parts.push(FrontmatterSlot(field))
+        parts.push(FrontmatterSlot(field, fm_filters))
       } else {
-        let slot = match slot_from_name(slot_name) {
+        let (name_part, slot_filters) = parse_filters(slot_name)
+        let slot = match slot_from_name(name_part) {
           Ok(s) => s
           Err(e) => {
             // If the slot name contains dots but doesn't start with "data.",
             // it's likely an attempt to use a data slot without the proper prefix
-            if slot_name.contains(".") {
-              return Err(ParseError("invalid data slot '" + slot_name + "'"))
+            if name_part.contains(".") {
+              return Err(ParseError("invalid data slot '" + name_part + "'"))
             }
             return Err(e)
           }
         }
-        parts.push(Slot(slot))
+        parts.push(Slot(slot, slot_filters))
       }
       i = close + 2
       text_start = i
@@ -671,9 +887,9 @@ fn render_parts(
   while i < template.parts.length() {
     match template.parts[i] {
       Text(t) => out.write_string(t)
-      Slot(slot) =>
+      Slot(slot, filters) =>
         match slots.get(slot) {
-          Some(value) => out.write_string(value)
+          Some(value) => out.write_string(apply_filters(value, filters))
           None => return Err(MissingRequiredSlot(slot))
         }
       DataSlot(file, key_path) =>
@@ -707,10 +923,19 @@ fn render_parts(
             return Err(MissingDataSlot(path.to_string()))
           }
         }
-      FrontmatterSlot(field) =>
+      FrontmatterSlot(field, filters) =>
         match page_fields.get(field) {
-          Some(value) => out.write_string(@html.escape_html_body(value))
-          None => () // Missing frontmatter field renders as empty string
+          Some(value) =>
+            out.write_string(
+              apply_filters(@html.escape_html_body(value), filters),
+            )
+          None => {
+            // Missing field: apply filters to empty string so Default can kick in
+            let rendered = apply_filters("", filters)
+            if rendered.length() > 0 {
+              out.write_string(rendered)
+            }
+          }
         }
       ConditionalBlock(slot, body_parts) =>
         // Render body only if slot is non-empty
@@ -722,9 +947,9 @@ fn render_parts(
               while j < body_parts.length() {
                 match body_parts[j] {
                   Text(t) => out.write_string(t)
-                  Slot(s) =>
+                  Slot(s, filters) =>
                     match slots.get(s) {
-                      Some(v) => out.write_string(v)
+                      Some(v) => out.write_string(apply_filters(v, filters))
                       None => () // Missing slot renders as empty in conditional
                     }
                   DataSlot(file, key_path) =>
@@ -736,9 +961,12 @@ fn render_parts(
                         }
                       None => () // Missing data store renders as empty in conditional
                     }
-                  FrontmatterSlot(field) =>
+                  FrontmatterSlot(field, filters) =>
                     match page_fields.get(field) {
-                      Some(v) => out.write_string(@html.escape_html_body(v))
+                      Some(v) =>
+                        out.write_string(
+                          apply_filters(@html.escape_html_body(v), filters),
+                        )
                       None => () // Missing frontmatter field renders as empty in conditional
                     }
                   FrontmatterConditionalBlock(field, inner_parts) =>
@@ -751,9 +979,10 @@ fn render_parts(
                           while k < inner_parts.length() {
                             match inner_parts[k] {
                               Text(t) => out.write_string(t)
-                              Slot(s) =>
+                              Slot(s, filters) =>
                                 match slots.get(s) {
-                                  Some(v) => out.write_string(v)
+                                  Some(v) =>
+                                    out.write_string(apply_filters(v, filters))
                                   None => ()
                                 }
                               DataSlot(file, key_path) =>
@@ -768,10 +997,15 @@ fn render_parts(
                                     }
                                   None => ()
                                 }
-                              FrontmatterSlot(f) =>
+                              FrontmatterSlot(f, filters) =>
                                 match page_fields.get(f) {
                                   Some(v) =>
-                                    out.write_string(@html.escape_html_body(v))
+                                    out.write_string(
+                                      apply_filters(
+                                        @html.escape_html_body(v),
+                                        filters,
+                                      ),
+                                    )
                                   None => ()
                                 }
                               _ =>
@@ -808,9 +1042,9 @@ fn render_parts(
               while j < body_parts.length() {
                 match body_parts[j] {
                   Text(t) => out.write_string(t)
-                  Slot(s) =>
+                  Slot(s, filters) =>
                     match slots.get(s) {
-                      Some(v) => out.write_string(v)
+                      Some(v) => out.write_string(apply_filters(v, filters))
                       None => () // Missing slot renders as empty in conditional
                     }
                   DataSlot(file, key_path) =>
@@ -822,9 +1056,12 @@ fn render_parts(
                         }
                       None => () // Missing data store renders as empty in conditional
                     }
-                  FrontmatterSlot(f) =>
+                  FrontmatterSlot(f, filters) =>
                     match page_fields.get(f) {
-                      Some(v) => out.write_string(@html.escape_html_body(v))
+                      Some(v) =>
+                        out.write_string(
+                          apply_filters(@html.escape_html_body(v), filters),
+                        )
                       None => () // Missing frontmatter field renders as empty in conditional
                     }
                   ConditionalBlock(slot, inner_parts) =>
@@ -837,9 +1074,10 @@ fn render_parts(
                           while k < inner_parts.length() {
                             match inner_parts[k] {
                               Text(t) => out.write_string(t)
-                              Slot(s) =>
+                              Slot(s, filters) =>
                                 match slots.get(s) {
-                                  Some(v) => out.write_string(v)
+                                  Some(v) =>
+                                    out.write_string(apply_filters(v, filters))
                                   None => ()
                                 }
                               DataSlot(file, key_path) =>
@@ -854,10 +1092,15 @@ fn render_parts(
                                     }
                                   None => ()
                                 }
-                              FrontmatterSlot(f) =>
+                              FrontmatterSlot(f, filters) =>
                                 match page_fields.get(f) {
                                   Some(v) =>
-                                    out.write_string(@html.escape_html_body(v))
+                                    out.write_string(
+                                      apply_filters(
+                                        @html.escape_html_body(v),
+                                        filters,
+                                      ),
+                                    )
                                   None => ()
                                 }
                               _ =>
@@ -901,9 +1144,10 @@ fn render_parts(
                       while j < body_parts.length() {
                         match body_parts[j] {
                           Text(t) => out.write_string(t)
-                          Slot(s) =>
+                          Slot(s, filters) =>
                             match slots.get(s) {
-                              Some(v) => out.write_string(v)
+                              Some(v) =>
+                                out.write_string(apply_filters(v, filters))
                               None => ()
                             }
                           DataSlot(df, dk) =>
@@ -915,17 +1159,23 @@ fn render_parts(
                                 }
                               None => ()
                             }
-                          FrontmatterSlot(f) =>
+                          FrontmatterSlot(f, filters) =>
                             match page_fields.get(f) {
                               Some(v) =>
-                                out.write_string(@html.escape_html_body(v))
+                                out.write_string(
+                                  apply_filters(
+                                    @html.escape_html_body(v),
+                                    filters,
+                                  ),
+                                )
                               None => ()
                             }
-                          LoopItemSlot(field_path) =>
+                          LoopItemSlot(field_path, filters) =>
                             // Resolve field path from current loop item
                             match
                               resolve_loop_item_field(item_value, field_path) {
-                              Some(v) => out.write_string(v)
+                              Some(v) =>
+                                out.write_string(apply_filters(v, filters))
                               None => ()
                             }
                           _ =>
@@ -956,9 +1206,9 @@ fn render_parts(
               while j < body_parts.length() {
                 match body_parts[j] {
                   Text(t) => out.write_string(t)
-                  Slot(s) =>
+                  Slot(s, filters) =>
                     match slots.get(s) {
-                      Some(v) => out.write_string(v)
+                      Some(v) => out.write_string(apply_filters(v, filters))
                       None => ()
                     }
                   DataSlot(df, dk) =>
@@ -970,16 +1220,19 @@ fn render_parts(
                         }
                       None => ()
                     }
-                  FrontmatterSlot(f) =>
+                  FrontmatterSlot(f, filters) =>
                     match page_fields.get(f) {
-                      Some(v) => out.write_string(@html.escape_html_body(v))
+                      Some(v) =>
+                        out.write_string(
+                          apply_filters(@html.escape_html_body(v), filters),
+                        )
                       None => ()
                     }
-                  LoopItemSlot(field_path) =>
+                  LoopItemSlot(field_path, filters) =>
                     // {{item}} renders the current string item
                     // {{item.field}} renders empty (no subfield support for string arrays)
                     if field_path.length() == 0 {
-                      out.write_string(item_value)
+                      out.write_string(apply_filters(item_value, filters))
                     }
                   _ =>
                     // Other blocks shouldn't appear in loop bodies
@@ -992,7 +1245,7 @@ fn render_parts(
           }
           None => () // Field not found, render nothing (graceful degradation)
         }
-      LoopItemSlot(_) =>
+      LoopItemSlot(_, _) =>
         // LoopItemSlot outside loops is treated as empty
         ()
       Include(_) =>
@@ -1123,9 +1376,10 @@ pub fn parse_template_with_includes(
     while i < parts.length() {
       match parts[i] {
         Text(s) => result.push(Text(s))
-        Slot(slot) => result.push(Slot(slot))
+        Slot(slot, filters) => result.push(Slot(slot, filters))
         DataSlot(file, keys) => result.push(DataSlot(file, keys))
-        FrontmatterSlot(field) => result.push(FrontmatterSlot(field))
+        FrontmatterSlot(field, filters) =>
+          result.push(FrontmatterSlot(field, filters))
         Layout(path) => result.push(Layout(path))
         ConditionalBlock(slot, body_parts) =>
           // Recursively flatten body parts
@@ -1155,7 +1409,8 @@ pub fn parse_template_with_includes(
               result.push(FrontmatterEachBlock(field, flattened_body))
             Err(e) => return Err(e)
           }
-        LoopItemSlot(field_path) => result.push(LoopItemSlot(field_path))
+        LoopItemSlot(field_path, filters) =>
+          result.push(LoopItemSlot(field_path, filters))
         Include(filename) => {
           // Check for cycles
           if visited.contains(filename) {
@@ -1254,7 +1509,7 @@ pub fn parse_template_with_includes(
   i = 0
   while i < final_parts.length() {
     match final_parts[i] {
-      Slot(slot) =>
+      Slot(slot, _filters) =>
         if !required_slots.contains(slot) {
           required_slots.push(slot)
         }
@@ -1314,7 +1569,10 @@ fn collect_refs_from_parts(
 ///|
 fn collect_refs_from_part(part : TemplatePart, refs : Array[String]) -> Unit {
   match part {
-    FrontmatterSlot(field) => if !refs.contains(field) { refs.push(field) }
+    FrontmatterSlot(field, _filters) =>
+      if !refs.contains(field) {
+        refs.push(field)
+      }
     FrontmatterConditionalBlock(field, body) => {
       if !refs.contains(field) {
         refs.push(field)
@@ -1330,10 +1588,10 @@ fn collect_refs_from_part(part : TemplatePart, refs : Array[String]) -> Unit {
     ConditionalBlock(_, body) => collect_refs_from_parts(body, refs)
     DataEachBlock(_, _, body) => collect_refs_from_parts(body, refs)
     Text(_)
-    | Slot(_)
+    | Slot(_, _)
     | DataSlot(_, _)
     | Include(_)
     | Layout(_)
-    | LoopItemSlot(_) => ()
+    | LoopItemSlot(_, _) => ()
   }
 }
