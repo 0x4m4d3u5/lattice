@@ -3253,7 +3253,20 @@ fn process_document(
         @strutil.absolute_url(site.base_url, "/"),
         website_structured_data_builder(site),
       ) {
-      Ok(html) => Some(html)
+      Ok(html) => {
+        // Inject site-wide feed autodiscovery link into root page
+        let site_feed_enabled = match site.site_feed_enabled {
+          Some(enabled) => enabled
+          None => true
+        }
+        if site_feed_enabled {
+          let feed_url = @strutil.absolute_url(site.base_url, "/feed.xml")
+          let feed_markup = @html.render_feed_link_tag(site.title, feed_url)
+          Some(@html.inject_head_markup(html, feed_markup))
+        } else {
+          Some(html)
+        }
+      }
       Err(msg) => {
         diagnostics.push(build_error(Some(source_path), None, None, msg))
         return { document: None, diagnostics }
@@ -5148,6 +5161,7 @@ pub fn build(
   }
 
   if error_count == 0 {
+    let all_feed_pages : Array[@graph.GraphPage] = []
     i = 0
     while i < rendered_collections.length() {
       let coll = rendered_collections[i]
@@ -5180,6 +5194,13 @@ pub fn build(
       }
       if !feed_write_ok {
         error_count = error_count + 1
+      }
+
+      // Accumulate pages for site-wide feed
+      let mut pi = 0
+      while pi < coll.pages.length() {
+        all_feed_pages.push(coll.pages[pi])
+        pi = pi + 1
       }
 
       let paginated_index_pages = paginate_with_optional_size(
@@ -5544,6 +5565,43 @@ pub fn build(
         }
       } else {
         error_count = error_count + 1
+      }
+    }
+
+    // Site-wide aggregated feed
+    if error_count == 0 && all_feed_pages.length() > 0 {
+      let site_feed_enabled = match config.site.site_feed_enabled {
+        Some(enabled) => enabled
+        None => true
+      }
+      if site_feed_enabled {
+        let site_feed_write_ok = try {
+          let site_feed_xml = @rss.render_feed(
+            config.site.title,
+            config.site.base_url,
+            all_feed_pages,
+            config.site.feed_limit,
+          )
+          let out_path = config.output_dir + "/feed.xml"
+          @fs.write_string_to_file(out_path, site_feed_xml)
+          println("[lattice] wrote " + out_path + " (site-wide feed)")
+          true
+        } catch {
+          @fs.IOError(msg) => {
+            diagnostics.push(
+              build_error(
+                Some(config.output_dir + "/feed.xml"),
+                None,
+                None,
+                "site-wide feed: write failed: " + msg,
+              ),
+            )
+            false
+          }
+        }
+        if !site_feed_write_ok {
+          error_count = error_count + 1
+        }
       }
     }
 
@@ -6457,6 +6515,31 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
         })
     }
     i = i + 1
+  }
+
+  // Validate site-wide feed rendering
+  let all_lint_feed_pages : Array[@graph.GraphPage] = []
+  i = 0
+  while i < rendered_collections.length() {
+    let coll = rendered_collections[i]
+    let mut fi = 0
+    while fi < coll.pages.length() {
+      all_lint_feed_pages.push(coll.pages[fi])
+      fi = fi + 1
+    }
+    i = i + 1
+  }
+  let site_feed_enabled = match config.site.site_feed_enabled {
+    Some(enabled) => enabled
+    None => true
+  }
+  if site_feed_enabled && all_lint_feed_pages.length() > 0 {
+    let _site_feed_xml = @rss.render_feed(
+      config.site.title,
+      config.site.base_url,
+      all_lint_feed_pages,
+      config.site.feed_limit,
+    )
   }
 
   let _sitemap_xml = @sitemap.render_sitemap(config.site.base_url, graph_pages)

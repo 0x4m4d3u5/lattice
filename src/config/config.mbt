@@ -36,6 +36,7 @@ pub struct SiteConfig {
   archive_pages : Bool?
   collections : Array[CollectionEntry]
   feed_limit : Int?
+  site_feed_enabled : Bool?
 }
 
 ///|
@@ -167,6 +168,7 @@ fn parse_bool_config(value : String) -> Bool? {
 /// - `robots_txt`
 /// - `archive_pages`
 /// - `feed_limit`
+/// - `site_feed_enabled`
 ///
 /// Inline collections via `[[collections]]` array-of-tables:
 /// - `name`: required, collection name
@@ -194,6 +196,7 @@ pub fn parse(input : String) -> Result[SiteConfig, ConfigError] {
   let mut robots_txt : Bool? = None
   let mut archive_pages : Bool? = None
   let mut feed_limit : Int? = None
+  let mut site_feed_enabled : Bool? = None
 
   let collections : Array[CollectionEntry] = []
   let mut in_collections_block = false
@@ -402,6 +405,16 @@ pub fn parse(input : String) -> Result[SiteConfig, ConfigError] {
                 InvalidValue("feed_limit", "must be a positive integer"),
               )
           }
+        } else if key == "site_feed_enabled" {
+          match parse_bool_config(value) {
+            Some(parsed) => site_feed_enabled = Some(parsed)
+            None =>
+              return Err(
+                InvalidValue(
+                  "site_feed_enabled", "must be true/false, yes/no, 1/0, or on/off",
+                ),
+              )
+          }
         } else {
           // Unknown keys are ignored.
           ()
@@ -460,5 +473,6 @@ pub fn parse(input : String) -> Result[SiteConfig, ConfigError] {
     archive_pages,
     collections,
     feed_limit,
+    site_feed_enabled,
   })
 }
