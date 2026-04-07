@@ -1181,3 +1181,47 @@ If a new violation type is added to `ViolationType`, the compiler forces a new c
 The primary use case is CI: `lattice check --format json | jq '.summary.total'` fails the build at zero and exits 1 on violations. A GitHub Actions step that runs `lattice check --format json` and parses the output can annotate PRs with the violations list at specific file/line positions — the position data is already there in the JSON. The exit code contract is unchanged: 0 on clean, 1 on violations, regardless of format.
 
 The `--format` flag only applies to `check`. Build and serve use the text diagnostic format (structured around developer feedback during iteration) because they run in interactive or watch contexts where human-readable output is the primary consumer. Check is designed for automation and editors, where structured output is the primary consumer.
+
+## Filter/Pipe Syntax for Slot Transformations — Keeping Formatting Out of Templates
+
+Commit `5cc8cfc` adds pipe-style filter chaining to the template DSL: `{{page.title | upper}}`, `{{date | date_part year}}`, `{{page.description | truncate 80 | default "No summary available"}}`. Filters can be chained left-to-right, each receiving the output of the previous.
+
+### The Problem Filters Solve
+
+Before filters, a template author who wanted the post title in uppercase had two options: duplicate the content with a separately-valued slot, or accept that template rendering produced exactly the raw value from the slot map. Neither option was satisfying. The first inflated the slot map with redundant variants of the same data. The second forced formatting concerns into content — a frontmatter field like `title_upper: "MY POST TITLE"` is an authoring burden that breaks down the moment the title is edited and only one variant is updated.
+
+The structural thesis applies here too: if formatting logic lives in templates, it lives in a declared place and is statically parseable. If formatting logic lives in frontmatter duplication, it's invisible to the build pipeline and silently diverges.
+
+### The Filter Enum
+
+`Filter` is a closed enum in `src/template/template.mbt`:
+
+```
+enum Filter {
+  Upper
+  Lower
+  Truncate(Int)
+  DatePart(String) // "year" | "month" | "day"
+  Default(String)  // fallback if slot renders empty
+}
+```
+
+The closed vocabulary matters. `apply_filter()` is an exhaustive match: adding a new `Filter` variant forces a new case in the match. There is no runtime "unsupported filter" path — the type system enforces completeness. The five variants cover the practical cases without growing into a general-purpose expression language: case normalization, length limits, date decomposition, and absent-value fallback.
+
+### Parsing and Quote-Awareness
+
+`parse_filters()` splits the slot expression on the first unquoted `|`, recursively chaining segments. The quote-awareness matters for `default "No description available"` — the argument may contain spaces, so the parser uses a quoted-string path via `@strutil.parse_quoted` when the argument starts with `"`. Unquoted arguments read to end-of-segment. Both paths produce the same `Filter::Default(String)` value.
+
+The `DatePart` filter extracts year, month, or day from an ISO 8601 date string (`YYYY-MM-DD` or `YYYY-MM-DDTHH:MM:SS`). The primary use case is archive-style headings: `{{date | date_part year}}` and `{{date | date_part month}}` in a collection index template produce structured year/month labels without requiring the template author to know the date string format or write string manipulation logic.
+
+### Scope: All Slot Expressions
+
+Filters apply to all three slot expression types: standard slots (`{{title | upper}}`), frontmatter slots (`{{page.field | lower}}`), and loop item slots inside `{{#each ...}}` blocks (`{{item.name | truncate 40}}`). The `parse_filters()` call is made at parse time for each expression type, and `apply_filters()` is called at render time in each corresponding match arm. The filter chain is stored in the `TemplatePart` AST node alongside the slot or field reference.
+
+### The Silent No-Op Gap
+
+Unknown filter names silently become no-ops (currently mapped to `Filter::Upper` in `parse_single_filter`'s fallthrough). This is an honest design gap: a typo like `{{page.title | uper}}` produces uppercase output — the wrong filter — with no diagnostic. The alternative would have been a parse-time error for unknown filter names, which would have been more correct but required surfacing filter validation in the template lint pipeline, which didn't exist at the time this was added. The trade is the same one made for unknown slot names in conditional blocks: graceful degradation at the cost of silent failure on typos. It's worth documenting because "unknown filter → identity" is what a reader of the code would expect, but "unknown filter → uppercase" is the actual behavior, and the discrepancy would produce confusing output.
+
+### What Filters Are Not
+
+Filters are not a general-purpose transformation language. There is no arithmetic, no string interpolation, no regex. The five variants cover the cases that recurred across templates in the example site: `upper`/`lower` for display formatting, `truncate` for meta description length limits, `date_part` for structured date display, and `default` for optional fields. That's a deliberate boundary — each new filter is a new case in `apply_filter()` and a new keyword in `parse_single_filter()`, which means the filter vocabulary is always explicit and auditable. A template using `{{page.status | upper}}` tells a reader exactly what transformation is applied, without requiring them to trace through an arbitrary expression evaluator.
