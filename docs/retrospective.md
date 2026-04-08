@@ -1289,3 +1289,102 @@ The `feed_url` field in the JSON Feed document points to the document's own URL 
 ### Emitted Locations
 
 Per-collection: `/<collection>/feed.json` (alongside `/<collection>/feed.xml`). Site-wide: `/feed.json` (alongside `/feed.xml`). The builder mirrors the exact error handling pattern: I/O failures produce diagnostics rather than crashing the build, and each JSON feed write is independently tracked in `error_count`.
+
+
+
+## Table of Contents — Typed Heading Extraction as an AST Side Effect
+
+TOC generation (`toc: true` frontmatter field, `{{toc}}` template slot) illustrates a recurring pattern in lattice: a structural side effect of the existing parse pass, not an additional parse. The markdown renderer in `src/markdown/markdown.mbt` already traverses the full `Array[Block]` AST to produce HTML. TOC extraction is a second traversal of that same AST, collecting `Heading(level, inlines)` variants, immediately after the render pass that produced the AST.
+
+### TocEntry as a Typed Intermediate
+
+`TocEntry` has three fields: `level : Int` (heading depth, 2–6), `anchor : String` (the `id` used in the rendered `<h2 id="...">` tag), and `text : String` (the plain-text content of the heading for the TOC link label). The anchor is computed by `next_heading_anchor()`, which:
+
+1. Converts the heading text to a URL-safe slug (lowercase, spaces to hyphens, non-alphanumeric stripped).
+2. Checks a `counts : Map[String, Int]` tracking how many headings have produced the same base anchor.
+3. If this is the first heading with this text, registers it in `counts` and returns the base anchor unchanged.
+4. If a duplicate exists, appends a numeric suffix: the second "Introduction" heading becomes `introduction-1`, the third becomes `introduction-2`.
+
+The `counts` map is shared between the HTML render pass and the TOC extraction pass. Both passes call `next_heading_anchor()` in document order. Because they traverse the same AST in the same order, the anchor assigned to each heading in the rendered HTML exactly matches the anchor in the corresponding `TocEntry`. The `<a href="#introduction-1">` link in the TOC always points to the `<h2 id="introduction-1">` in the body — structural consistency guaranteed by shared traversal, not by post-hoc reconciliation.
+
+### RenderResult Carries the TOC
+
+`render_with_diagnostics()` returns a `RenderResult` with four fields: `html`, `shortcode_errors`, `toc`, and `footnotes`. The `toc` field is `Array[TocEntry]`. Callers receive the rendered HTML and the structured TOC simultaneously — no second function call, no re-parse.
+
+The builder's `process_document()` reads `RenderResult.toc` after rendering. It calls `filter_toc_entries()` to apply `toc_depth` from frontmatter (defaulting to 3 if unset), then passes the filtered entries to `@markdown.render_table_of_contents()`. The filter is a simple pass: entries with `level > max_depth` are dropped. What remains is rendered into a `<nav class="table-of-contents"><ul>...</ul></nav>` block with `<li class="toc-level-N">` elements — CSS-addressable by heading depth for indent styling.
+
+When `toc: false` (the default), `filter_toc_entries()` is not called, `render_table_of_contents()` is not called, and the `{{toc}}` slot is set to an empty string. Templates using `{{?toc}}...{{/?toc}}` conditionally suppress the TOC section header — the same optional-slot pattern used throughout the template DSL.
+
+### The Reserved-Key Exemption
+
+`toc` and `toc_depth` are system-consumed frontmatter keys, not user schema fields. The schema validator in `src/schema/schema.mbt` has an explicit reserved-key list that includes both. Without this exemption, any collection schema that didn't declare `toc` as a field would trigger an "unrecognized field" error for any page that set `toc: true`. The exemption teaches a general lesson: a schema that validates content fields must distinguish between "this key is unknown" and "this key belongs to the system." Conflating them produces false errors on correct content.
+
+The structural thesis connection: the TOC is a read-only derivation of the page's heading structure. It cannot be wrong relative to the content — it is computed from the same parse that produces the rendered body. An author who restructures their headings gets a TOC that reflects the new structure on the next build without any manual update. This is the same property as backlinks and tag pages: build-time aggregation produces a derivative that is always consistent with the source.
+
+
+
+## Typed Pagination — `PaginatedIndex[T]` as Generic Code Reuse
+
+The pagination module (`src/pagination/pagination.mbt`) is 71 lines. It provides one generic struct and one generic function, but those 71 lines serve seven call sites in the builder: collection index pages, collection tag pages, tag index pages, and their standalone-page equivalents. Without the generic abstraction, each call site would need its own pagination loop, its own `prev_url`/`next_url` computation, and its own off-by-one handling.
+
+### The Generic Struct
+
+`PaginatedIndex[T]` bundles all state a rendering function needs to produce one page of a paginated sequence:
+
+- `page_number`, `total_pages`, `page_size`, `total_items` — navigation state for template slots (`{{page_num}}`, `{{total_pages}}`)
+- `documents : Array[T]` — the elements to render on this page, already sliced
+- `prev_url : String?`, `next_url : String?` — navigation URLs, already computed
+
+The `T` parameter is the element type: `@graph.GraphPage` for collection index pages, `@tags.TaggedPage` for tag pages, `@tags.TagSummary` for the tag-index listing. The struct carries `Array[T]` so the rendering code never needs to compute slice indices — it receives exactly the documents it should render.
+
+### The `page_url_for` Callback
+
+`paginate[T](documents, page_size, page_url_for)` takes a `(Int) -> String` callback that maps a page number to its URL. This is the caller's contract for URL generation:
+
+- Collection index page 2: `fn(n) { "/posts/page/" + n.to_string() + "/" }`
+- Tag "rust" page 2: `fn(n) { "/tags/rust/page/" + n.to_string() + "/" }`
+- Tag-index page 2: `fn(n) { "/tags/page/" + n.to_string() + "/" }`
+
+The pagination module has no knowledge of URL schemes. It calls `page_url_for(page_number - 1)` for the previous-page URL and `page_url_for(page_number + 1)` for the next-page URL. First-page entries get `prev_url = None`; last-page entries get `next_url = None`. The `None` case is handled at the generic level — no call site needs to guard against "is this the first page?" before accessing `prev_url`.
+
+### `paginate_with_optional_size`
+
+The builder wraps `paginate[T]` in `paginate_with_optional_size[T]`, which takes `page_size : Int?`. When `page_size` is `None` (no pagination configured for this collection), it passes `documents.length()` as the page size — producing a single page containing all documents. This means the builder's rendering loop is identical whether or not pagination is configured: it always iterates `Array[PaginatedIndex[T]]`, which has exactly one element in the unpaginated case. The rendering code has no branching on "is pagination enabled" — the generic type absorbs the distinction.
+
+The structural payoff is that adding pagination to a new page category (say, a future archive-by-year page) requires only a new `paginate_with_optional_size` call and a new `page_url_for` closure. The rendering loop, template slot population, and `prev_url`/`next_url` logic are already written. The generic constraint enforces that the same code path handles any element type — the compiler ensures `documents : Array[T]` is safe to iterate regardless of what `T` is instantiated to.
+
+
+
+## Live-Reload Dev Server — SSE via Native FFI
+
+`lattice serve` (alias: `lattice dev`) starts a file watcher and HTTP dev server simultaneously. The watch loop runs on the main thread; the HTTP server runs on a background thread. When the file watcher detects a changed source file, the main thread triggers a rebuild. After the rebuild completes, it calls `@serve.broadcast_reload()`. This pushes a Server-Sent Events message to every connected browser tab, which respond with `location.reload()`.
+
+### Two-Component Architecture
+
+The two components are deliberately separated:
+
+- **Watch loop** (main thread): polls the filesystem at a configurable interval, compares mtimes against the manifest, and calls `run_once()` to rebuild changed pages. After `run_once()` returns, it calls `@serve.broadcast_reload()` if the serve mode flag is set.
+- **HTTP server** (background thread, C): blocks on `accept()`, handles each connection in a worker thread, serves static files from the `dist/` directory.
+
+The separation means the watch loop does not need to know about HTTP, and the HTTP server does not need to know about the build system. Their only shared state is the `dist/` directory on disk (written by the builder, read by the server) and the reload signal (MoonBit calls `broadcast_reload()`, which crosses the FFI boundary into C).
+
+### Native FFI Pattern
+
+The serve module follows the native/stub split established elsewhere in lattice:
+
+- `serve_native.c` implements the HTTP server using raw POSIX sockets and pthreads. No HTTP framework. The server reads the request line, maps the path to a file in `dist/`, and writes the response. For HTML files, it injects a `<script>` block before `</body>` that opens an `EventSource` connection to `/__lattice_reload`.
+- `serve_native.mbt` declares the MoonBit FFI extern functions targeting `["native", "llvm"]`.
+- `serve_stub.mbt` provides no-op implementations targeting `["js", "wasm", "wasm-gc"]`.
+- `serve.mbt` provides the public API (`ServeConfig`, `default_port()`, `is_valid_port()`) shared across all targets.
+
+`broadcast_reload()` acquires a mutex protecting the list of active SSE client connections, then writes `data: reload\n\n` to each file descriptor. Connections that have closed return a write error; these are removed from the list. The broadcast is fire-and-forget: if the browser tab was closed before the signal arrives, the dead connection is cleaned up silently.
+
+### SSE as the Minimal Viable Protocol
+
+Server-Sent Events were chosen over WebSockets for live reload because the semantics match the use case exactly: unidirectional server-to-client push of a single event type. SSE uses plain HTTP (`Content-Type: text/event-stream`) with a persistent connection. The browser's `EventSource` API handles reconnection automatically if the connection drops. There is no handshake, no framing protocol, and no JavaScript library required — the injected script is eight lines that open an `EventSource` and call `location.reload()` on the `message` event.
+
+The structural consequence is that the server's SSE implementation is stateless from the browser's perspective. The browser doesn't know whether it received the reload signal because a CSS file changed or a content page was rebuilt. It doesn't need to. The signal is binary: rebuild happened, reload now. Richer event payloads (hot module replacement, partial DOM updates) would require the builder to produce a structured change set rather than a plain success/failure result — significantly more complexity for marginal UX benefit in a content-site context.
+
+### Port 4321
+
+The default port (`default_port() -> Int { 4321 }`) matches Astro's default development port. This is not an accident — lattice occupies the same domain (modern SSG for content-first sites), and users migrating from Astro benefit from muscle memory. It's a small UX detail but an explicit one: the `is_valid_port()` guard (1–65535) would accept any value, and 4321 was chosen deliberately rather than inherited from a convention.
