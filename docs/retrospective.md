@@ -1225,3 +1225,61 @@ Unknown filter names silently become no-ops (currently mapped to `Filter::Upper`
 ### What Filters Are Not
 
 Filters are not a general-purpose transformation language. There is no arithmetic, no string interpolation, no regex. The five variants cover the cases that recurred across templates in the example site: `upper`/`lower` for display formatting, `truncate` for meta description length limits, `date_part` for structured date display, and `default` for optional fields. That's a deliberate boundary — each new filter is a new case in `apply_filter()` and a new keyword in `parse_single_filter()`, which means the filter vocabulary is always explicit and auditable. A template using `{{page.status | upper}}` tells a reader exactly what transformation is applied, without requiring them to trace through an arbitrary expression evaluator.
+
+
+
+## Atom 1.0 Feed — Typed Page Graph as Syndication Source
+
+**Commit `47f0210`** introduced per-collection and site-wide `feed.xml` generation using Atom 1.0. The site-wide feed aggregates across all collections, producing a single entry point for feed readers that want the full site stream.
+
+### Pure Function Renderer
+
+The feed renderer in `src/rss/rss.mbt` is a pure function: it takes `Array[GraphPage]`, returns an XML string, and performs no I/O. The builder handles file writing; the RSS module handles XML construction. This separation means the renderer can be tested without touching the filesystem — the test suite constructs `GraphPage` arrays in memory and asserts on the output string.
+
+### Typed Intermediate Structs
+
+`FeedItem` and `FeedChannel` are typed intermediate structs between the page graph and the XML output. Optional fields use `String?` rather than sentinel values like empty strings or "unknown". This matters because `None` and `Some("")` have different semantics: `None` means "no value was provided" (omit the XML element), while `Some("")` means "an empty value was provided" (emit the element with empty content). A dynamic map representation would conflate these two cases.
+
+`render_atom_item` takes `item.updated : String?` and falls back to `fallback_updated` from the channel level, because Atom requires `<updated>` on every `<entry>`. The fallback is the feed-level `<updated>` value (the most recent date across all items, or `1970-01-01T00:00:00Z` as a last resort). This structural guarantee — every entry always has a valid `<updated>` — is enforced at the renderer level rather than left to the caller.
+
+### Date Normalization
+
+`normalize_feed_datetime` converts `YYYY-MM-DD` to RFC 3339 UTC (`2024-01-15` → `2024-01-15T00:00:00Z`). It validates month range (1–12) and day range using `days_in_month` from strutil, which accounts for leap years. Malformed dates produce `None` rather than invalid XML. Pages without dates sort after dated pages (the `compare_iso_desc` function puts `None` after `Some` values), so the feed always lists dated content first.
+
+### Autodiscovery
+
+`<link rel="alternate" type="application/atom+xml" ...>` is injected into `<head>` of collection index pages and root pages via `html.render_feed_link_tag` + `html.inject_head_markup`. The injection happens at the build pass level, not in templates — template authors don't need to remember to add feed links, and the build system ensures they're always present when feeds are generated.
+
+### Configuration
+
+`site_feed_enabled` (bool, default `true`) and `feed_limit` (optional int) in `lattice.toml` control output. When `site_feed_enabled` is `false`, no feed files are written and no autodiscovery links are injected. `feed_limit` caps the output at the N most-recent pages by date, which is useful for large sites where a full feed would be hundreds of entries.
+
+
+
+## JSON Feed 1.1 — Type Reuse Across Syndication Formats
+
+This session's commit adds `feed.json` alongside `feed.xml`, per-collection and site-wide. The JSON Feed 1.1 format provides a machine-readable alternative to Atom that's easier for JavaScript tooling to consume (no XML parsing required).
+
+### Same FeedChannel, Different Output
+
+`render_json_feed(channel : FeedChannel, feed_url : String) -> String` consumes the same `FeedChannel` type as the Atom renderer. No new data pipeline was needed — the `GraphPage → FeedChannel → output` pipeline has a format-agnostic middle stage. New feed formats attach at the right end of the pipeline (the renderer) without requiring changes to the left end (page graph construction and sorting).
+
+This is the structural benefit of the typed intermediate: `FeedChannel` is not "Atom data" or "JSON Feed data" — it's format-agnostic feed data. The Atom renderer adds Atom-specific requirements (mandatory `<updated>`, `<link>` attributes), and the JSON Feed renderer adds JSON Feed-specific requirements (`version` URL, `feed_url` self-reference). The shared type catches bugs where a field that both formats need is missing from the upstream.
+
+### Optional Fields: Omit, Not Null
+
+JSON Feed's `summary`, `date_published`, and `date_modified` are optional — when the underlying `FeedItem` field is `None`, the key is omitted entirely from the JSON output rather than set to `null`. This is a deliberate semantic choice: `null` in JSON means "the key exists but the value is explicitly null," while omitting the key means "this property does not apply." A feed consumer checking `item.date_published` in JavaScript gets `undefined` (absent) rather than having to check `=== null` separately.
+
+This contrasts with `check --format json` output elsewhere in the codebase, where `null` means "the violation has no position." Different null semantics for different contexts — the JSON Feed spec explicitly says optional fields should be absent, not null.
+
+### JSON String Escaping
+
+`@strutil.write_json_string(buf, s)` handles escaping — the same utility used by the search index and content index renderers. This is distinct from `escape_html_body` (used in Atom output), which escapes `<`, `>`, `&` as HTML entities. Using the wrong escaping would produce malformed output: HTML entities in JSON (broken for JSON consumers) or JSON escape sequences in XML (broken for XML parsers). The shared utility means the escaping logic is implemented once and tested once, and both feed formats benefit from the same correctness guarantee.
+
+### Self-Describing `feed_url`
+
+The `feed_url` field in the JSON Feed document points to the document's own URL (e.g., `https://example.com/feed.json` or `https://example.com/posts/feed.json`). This is a JSON Feed 1.1 requirement — the spec mandates `feed_url` so consumers can discover the feed's canonical location. The builder constructs this URL using `@strutil.absolute_url(base_url, path)`, ensuring it's always a fully-qualified absolute URL regardless of the base URL configuration format.
+
+### Emitted Locations
+
+Per-collection: `/<collection>/feed.json` (alongside `/<collection>/feed.xml`). Site-wide: `/feed.json` (alongside `/feed.xml`). The builder mirrors the exact error handling pattern: I/O failures produce diagnostics rather than crashing the build, and each JSON feed write is independently tracked in `error_count`.
