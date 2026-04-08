@@ -5167,8 +5167,9 @@ pub fn build(
       let coll = rendered_collections[i]
       let coll_dir = config.output_dir + "/" + coll.name
 
+      let feed_title = config.site.title + " (" + coll.name + ")"
+
       let feed_write_ok = try {
-        let feed_title = config.site.title + " (" + coll.name + ")"
         let feed_xml = @rss.render_feed(
           feed_title,
           config.site.base_url,
@@ -5193,6 +5194,39 @@ pub fn build(
         }
       }
       if !feed_write_ok {
+        error_count = error_count + 1
+      }
+
+      let json_feed_write_ok = try {
+        let json_feed_url = @strutil.absolute_url(
+          config.site.base_url,
+          "/" + coll.name + "/feed.json",
+        )
+        let json_feed = @rss.render_json_feed_from_pages(
+          feed_title,
+          config.site.base_url,
+          coll.pages,
+          config.site.feed_limit,
+          json_feed_url,
+        )
+        let json_out_path = coll_dir + "/feed.json"
+        @fs.write_string_to_file(json_out_path, json_feed)
+        println("[lattice] wrote " + json_out_path)
+        true
+      } catch {
+        @fs.IOError(msg) => {
+          diagnostics.push(
+            build_error(
+              Some(coll_dir + "/feed.json"),
+              None,
+              None,
+              coll.name + " JSON feed: write failed: " + msg,
+            ),
+          )
+          false
+        }
+      }
+      if !json_feed_write_ok {
         error_count = error_count + 1
       }
 
@@ -5600,6 +5634,41 @@ pub fn build(
           }
         }
         if !site_feed_write_ok {
+          error_count = error_count + 1
+        }
+
+        let site_json_feed_write_ok = try {
+          let site_json_feed_url = @strutil.absolute_url(
+            config.site.base_url,
+            "/feed.json",
+          )
+          let site_json_feed = @rss.render_json_feed_from_pages(
+            config.site.title,
+            config.site.base_url,
+            all_feed_pages,
+            config.site.feed_limit,
+            site_json_feed_url,
+          )
+          let json_out_path = config.output_dir + "/feed.json"
+          @fs.write_string_to_file(json_out_path, site_json_feed)
+          println(
+            "[lattice] wrote " + json_out_path + " (site-wide JSON feed)",
+          )
+          true
+        } catch {
+          @fs.IOError(msg) => {
+            diagnostics.push(
+              build_error(
+                Some(config.output_dir + "/feed.json"),
+                None,
+                None,
+                "site-wide JSON feed: write failed: " + msg,
+              ),
+            )
+            false
+          }
+        }
+        if !site_json_feed_write_ok {
           error_count = error_count + 1
         }
       }
@@ -6386,6 +6455,13 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
       coll.pages,
       config.site.feed_limit,
     )
+    let _json_feed_xml = @rss.render_json_feed_from_pages(
+      feed_title,
+      config.site.base_url,
+      coll.pages,
+      config.site.feed_limit,
+      @strutil.absolute_url(config.site.base_url, "/" + coll.name + "/feed.json"),
+    )
     let paginated_index_pages = paginate_with_optional_size(
       coll.pages,
       coll.page_size,
@@ -6539,6 +6615,13 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
       config.site.base_url,
       all_lint_feed_pages,
       config.site.feed_limit,
+    )
+    let _site_json_feed_xml = @rss.render_json_feed_from_pages(
+      config.site.title,
+      config.site.base_url,
+      all_lint_feed_pages,
+      config.site.feed_limit,
+      @strutil.absolute_url(config.site.base_url, "/feed.json"),
     )
   }
 

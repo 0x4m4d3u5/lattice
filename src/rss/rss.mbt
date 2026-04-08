@@ -286,3 +286,86 @@ pub fn render_feed(
   let channel = build_feed_channel(title, base_url, pages, limit)
   render_atom(channel)
 }
+
+
+///|
+/// Render a JSON Feed 1.1 document from a FeedChannel.
+///
+/// Uses the same typed intermediate struct as the Atom renderer — new formats
+/// attach at the right end of the pipeline without a new data stage.
+pub fn render_json_feed(channel : FeedChannel, feed_url : String) -> String {
+  let buf = StringBuilder::new()
+  buf.write_string("{\n")
+  buf.write_string("  \"version\": \"https://jsonfeed.org/version/1.1\",\n")
+  buf.write_string("  \"title\": ")
+  @strutil.write_json_string(buf, channel.title)
+  buf.write_string(",\n")
+  buf.write_string("  \"home_page_url\": ")
+  @strutil.write_json_string(buf, channel.link)
+  buf.write_string(",\n")
+  buf.write_string("  \"feed_url\": ")
+  @strutil.write_json_string(buf, feed_url)
+  buf.write_string(",\n")
+  buf.write_string("  \"authors\": [{\"name\": ")
+  @strutil.write_json_string(buf, channel.author_name)
+  buf.write_string("}],\n")
+  buf.write_string("  \"items\": [\n")
+  let mut i = 0
+  while i < channel.items.length() {
+    let item = channel.items[i]
+    buf.write_string("    {\n")
+    buf.write_string("      \"id\": ")
+    @strutil.write_json_string(buf, item.id)
+    buf.write_string(",\n")
+    buf.write_string("      \"url\": ")
+    @strutil.write_json_string(buf, item.link)
+    buf.write_string(",\n")
+    buf.write_string("      \"title\": ")
+    @strutil.write_json_string(buf, item.title)
+    match item.summary {
+      Some(summary) => {
+        buf.write_string(",\n      \"summary\": ")
+        @strutil.write_json_string(buf, summary)
+      }
+      None => ()
+    }
+    match item.published {
+      Some(v) => {
+        buf.write_string(",\n      \"date_published\": ")
+        @strutil.write_json_string(buf, v)
+      }
+      None => ()
+    }
+    match item.updated {
+      Some(v) => {
+        buf.write_string(",\n      \"date_modified\": ")
+        @strutil.write_json_string(buf, v)
+      }
+      None => ()
+    }
+    buf.write_string("\n    }")
+    if i + 1 < channel.items.length() {
+      buf.write_string(",")
+    }
+    buf.write_string("\n")
+    i = i + 1
+  }
+  buf.write_string("  ]\n")
+  buf.write_string("}\n")
+  buf.to_string()
+}
+
+///|
+/// Render a complete JSON Feed 1.1 document from typed graph pages.
+///
+/// Wraps `build_feed_channel` → `render_json_feed`, mirroring `render_feed`.
+pub fn render_json_feed_from_pages(
+  title : String,
+  base_url : String,
+  pages : Array[@graph.GraphPage],
+  limit : Int?,
+  feed_url : String,
+) -> String {
+  let channel = build_feed_channel(title, base_url, pages, limit)
+  render_json_feed(channel, feed_url)
+}
