@@ -1265,6 +1265,7 @@ fn template_error_text(e : @template.TemplateError) -> String {
     @template.MissingDataSlot(path) => "missing data slot '" + path + "'"
     @template.ParseError(msg) => msg
     @template.CycleError(msg) => "include cycle: " + msg
+    @template.UnknownFilter(msg) => msg
   }
 }
 
@@ -5651,9 +5652,7 @@ pub fn build(
           )
           let json_out_path = config.output_dir + "/feed.json"
           @fs.write_string_to_file(json_out_path, site_json_feed)
-          println(
-            "[lattice] wrote " + json_out_path + " (site-wide JSON feed)",
-          )
+          println("[lattice] wrote " + json_out_path + " (site-wide JSON feed)")
           true
         } catch {
           @fs.IOError(msg) => {
@@ -6460,7 +6459,10 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
       config.site.base_url,
       coll.pages,
       config.site.feed_limit,
-      @strutil.absolute_url(config.site.base_url, "/" + coll.name + "/feed.json"),
+      @strutil.absolute_url(
+        config.site.base_url,
+        "/" + coll.name + "/feed.json",
+      ),
     )
     let paginated_index_pages = paginate_with_optional_size(
       coll.pages,

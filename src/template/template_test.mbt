@@ -2011,3 +2011,82 @@ test "{{title | upper}} works on standard slots" {
     Err(_) => assert_true(false)
   }
 }
+
+///|
+test "unknown filter name on standard slot returns UnknownFilter error" {
+  match parse_template("{{title | uper}}") {
+    Ok(_) => assert_true(false)
+    Err(UnknownFilter(msg)) => {
+      assert_true(msg.contains("uper"))
+      assert_true(msg.contains("unknown filter"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unknown filter name on page slot returns UnknownFilter error" {
+  match parse_template("{{page.title | capitaize}}") {
+    Ok(_) => assert_true(false)
+    Err(UnknownFilter(msg)) => {
+      assert_true(msg.contains("capitaize"))
+      assert_true(msg.contains("unknown filter"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unknown filter name in chained filters returns error at the bad filter" {
+  match parse_template("{{page.slug | upper | nope | truncate 10}}") {
+    Ok(_) => assert_true(false)
+    Err(UnknownFilter(msg)) => {
+      assert_true(msg.contains("nope"))
+      assert_true(msg.contains("unknown filter"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "known filters still parse successfully" {
+  let tpl = match
+    parse_template(
+      "{{page.title | upper | lower | truncate 20 | date_part year | default \"fallback\"}}",
+    ) {
+    Ok(v) => v
+    Err(_) => {
+      assert_true(false)
+      { parts: [], required_slots: [], layout: None }
+    }
+  }
+  // Should parse without error — all five filters are known
+  match tpl.parts[0] {
+    FrontmatterSlot(field, filters) => {
+      assert_eq(field, "title")
+      assert_eq(filters.length(), 5)
+    }
+    _ => assert_true(false)
+  }
+}
+
+///|
+test "unknown filter on loop item slot returns error" {
+  match parse_template("{{#each data.nav.items}}{{item | uper}}{{/each}}") {
+    Ok(_) => assert_true(false)
+    Err(UnknownFilter(msg)) => assert_true(msg.contains("uper"))
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "unknown filter error includes slot expression context" {
+  match parse_template("{{title | xyz}}") {
+    Ok(_) => assert_true(false)
+    Err(UnknownFilter(msg)) =>
+      // The error message should include the filter name AND the slot expression
+      // so the user can locate the problem in their template
+      assert_true(msg.contains("xyz") && msg.contains("title"))
+    Err(_) => assert_true(false)
+  }
+}

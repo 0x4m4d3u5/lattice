@@ -60,12 +60,13 @@ pub(all) struct Template {
 }
 
 ///|
-pub enum TemplateError {
+pub(all) enum TemplateError {
   UnknownSlot(String)
   MissingRequiredSlot(TemplateSlot)
   MissingDataSlot(String)
   ParseError(String)
   CycleError(String)
+  UnknownFilter(String)
 }
 
 ///|
@@ -100,7 +101,7 @@ fn split_dot_template(s : String) -> Array[String] {
 ///|
 /// Split a slot expression like `"page.title | upper | truncate 50"` into
 /// the slot name part (`"page.title"`) and an array of parsed `Filter`s.
-fn parse_filters(slot_expr : String) -> (String, Array[Filter]) {
+fn parse_filters(slot_expr : String) -> Result[(String, Array[Filter]), String] {
   let filters : Array[Filter] = []
   // Find the first `|` that is not inside quotes
   let n = slot_expr.length()
@@ -118,7 +119,7 @@ fn parse_filters(slot_expr : String) -> (String, Array[Filter]) {
     i = i + 1
   }
   if pipe_pos < 0 {
-    return (slot_expr, filters)
+    return Ok((slot_expr, filters))
   }
   let slot_name = @strutil.trim(@strutil.substr(slot_expr, 0, pipe_pos))
   let rest = @strutil.substr(slot_expr, pipe_pos + 1, n)
@@ -150,16 +151,18 @@ fn parse_filters(slot_expr : String) -> (String, Array[Filter]) {
   }
 
   for seg in segments {
-    let filter = parse_single_filter(seg)
-    filters.push(filter)
+    match parse_single_filter(seg) {
+      Ok(filter) => filters.push(filter)
+      Err(name) => return Err(name)
+    }
   }
-  (slot_name, filters)
+  Ok((slot_name, filters))
 }
 
 ///|
 /// Parse a single filter segment like `"upper"`, `"truncate 50"`,
 /// `"date_part year"`, `r#"`default "fallback"`"#` or `"default fallback"`.
-fn parse_single_filter(seg : String) -> Filter {
+fn parse_single_filter(seg : String) -> Result[Filter, String] {
   let n = seg.length()
   let mut i = 0
   // skip to first non-space
@@ -172,10 +175,10 @@ fn parse_single_filter(seg : String) -> Filter {
   let name = @strutil.substr(seg, name_start, i)
 
   if name == "upper" {
-    return Filter::Upper
+    return Ok(Filter::Upper)
   }
   if name == "lower" {
-    return Filter::Lower
+    return Ok(Filter::Lower)
   }
   if name == "truncate" {
     // skip whitespace then read integer
@@ -189,7 +192,7 @@ fn parse_single_filter(seg : String) -> Filter {
       Some(v) => v
       None => 100 // default truncate length
     }
-    return Filter::Truncate(len)
+    return Ok(Filter::Truncate(len))
   }
   if name == "date_part" {
     // skip whitespace then read part name
@@ -199,7 +202,7 @@ fn parse_single_filter(seg : String) -> Filter {
       i = i + 1
     }
     let part = @strutil.substr(seg, part_start, i)
-    return Filter::DatePart(part)
+    return Ok(Filter::DatePart(part))
   }
   if name == "default" {
     // skip whitespace then read argument
@@ -207,16 +210,16 @@ fn parse_single_filter(seg : String) -> Filter {
     if i < n && @strutil.char_at(seg, i) == '"' {
       // Quoted string argument
       match @strutil.parse_quoted(seg, i) {
-        Ok((val, _)) => return Filter::Default(val)
-        Err(_) => return Filter::Default("")
+        Ok((val, _)) => return Ok(Filter::Default(val))
+        Err(_) => return Ok(Filter::Default(""))
       }
     }
     // Unquoted argument: read to end
     let val = @strutil.trim(@strutil.substr(seg, i, n))
-    return Filter::Default(val)
+    return Ok(Filter::Default(val))
   }
-  // Unknown filter — treat as no-op (Upper of identity)
-  Filter::Upper
+  // Unknown filter — return error instead of silent no-op
+  Err(name)
 }
 
 ///|
@@ -622,7 +625,15 @@ fn parse_template_recursive(
       if slot_name == "item" ||
         @strutil.starts_with(slot_name, "item.") ||
         @strutil.starts_with(slot_name, "item |") {
-        let (name_part, item_filters) = parse_filters(slot_name)
+        let (name_part, item_filters) = match parse_filters(slot_name) {
+          Ok(pair) => pair
+          Err(name) =>
+            return Err(
+              UnknownFilter(
+                "unknown filter '" + name + "' in '{{" + slot_name + "}}'",
+              ),
+            )
+        }
         if @strutil.starts_with(name_part, "item.") {
           let field = @strutil.trim(
             @strutil.substr(name_part, 5, name_part.length()),
@@ -786,7 +797,15 @@ fn parse_template_recursive(
           Err(e) => return Err(e)
         }
       } else if @strutil.starts_with(slot_name, "page.") {
-        let (name_part, fm_filters) = parse_filters(slot_name)
+        let (name_part, fm_filters) = match parse_filters(slot_name) {
+          Ok(pair) => pair
+          Err(name) =>
+            return Err(
+              UnknownFilter(
+                "unknown filter '" + name + "' in '{{" + slot_name + "}}'",
+              ),
+            )
+        }
         let field = @strutil.trim(
           @strutil.substr(name_part, 5, name_part.length()),
         )
@@ -795,7 +814,15 @@ fn parse_template_recursive(
         }
         parts.push(FrontmatterSlot(field, fm_filters))
       } else {
-        let (name_part, slot_filters) = parse_filters(slot_name)
+        let (name_part, slot_filters) = match parse_filters(slot_name) {
+          Ok(pair) => pair
+          Err(name) =>
+            return Err(
+              UnknownFilter(
+                "unknown filter '" + name + "' in '{{" + slot_name + "}}'",
+              ),
+            )
+        }
         let slot = match slot_from_name(name_part) {
           Ok(s) => s
           Err(e) => {

@@ -1218,9 +1218,15 @@ The `DatePart` filter extracts year, month, or day from an ISO 8601 date string 
 
 Filters apply to all three slot expression types: standard slots (`{{title | upper}}`), frontmatter slots (`{{page.field | lower}}`), and loop item slots inside `{{#each ...}}` blocks (`{{item.name | truncate 40}}`). The `parse_filters()` call is made at parse time for each expression type, and `apply_filters()` is called at render time in each corresponding match arm. The filter chain is stored in the `TemplatePart` AST node alongside the slot or field reference.
 
-### The Silent No-Op Gap
+### The Silent No-Op Gap — Closed
 
-Unknown filter names silently become no-ops (currently mapped to `Filter::Upper` in `parse_single_filter`'s fallthrough). This is an honest design gap: a typo like `{{page.title | uper}}` produces uppercase output — the wrong filter — with no diagnostic. The alternative would have been a parse-time error for unknown filter names, which would have been more correct but required surfacing filter validation in the template lint pipeline, which didn't exist at the time this was added. The trade is the same one made for unknown slot names in conditional blocks: graceful degradation at the cost of silent failure on typos. It's worth documenting because "unknown filter → identity" is what a reader of the code would expect, but "unknown filter → uppercase" is the actual behavior, and the discrepancy would produce confusing output.
+Unknown filter names previously became silent no-ops, mapped to `Filter::Upper` in `parse_single_filter`'s fallthrough. A typo like `{{page.title | uper}}` produced uppercase output — the wrong filter — with no diagnostic. This was an honest design gap, documented as such in an earlier version of this retrospective.
+
+The fix converts `parse_single_filter` from returning `Filter` (always succeeding) to returning `Result[Filter, String]` (failing on unknown names). The error propagates through `parse_filters`, which also returns `Result`, and into the template parser where it becomes a `TemplateError::UnknownFilter(String)`. The `UnknownFilter` variant was added to the `TemplateError` enum so the builder's `template_error_text()` can format it as a diagnostic. The error message includes both the unknown filter name and the full slot expression (e.g., `unknown filter 'uper' in '{{title | uper}}'`) so the user can locate the typo in their template.
+
+The type-system payoff is that `parse_single_filter` no longer has a fallthrough case. Before the fix, the compiler could not distinguish between "explicitly parsed `upper`" and "fell through to default `Upper`" — both produced the same `Filter::Upper` value. After the fix, the compiler enforces that every return path either produces a known `Filter` variant or explicitly returns `Err(name)`. The fallthrough is no longer possible. The only way to get a `Filter` value out of `parse_single_filter` is to provide a recognized filter name.
+
+The five valid filter names (`upper`, `lower`, `truncate`, `date_part`, `default`) are now the closed set enforced by the type system. Adding a new filter requires adding a new `if name == "..."` branch and a corresponding `Ok(Filter::...)` return — the compiler will warn about unused variants in `apply_filter` if the render path isn't updated to match. This is the same structural pattern used throughout lattice: the enum is the contract, the parser enforces the contract, and the renderer trusts the contract.
 
 ### What Filters Are Not
 
