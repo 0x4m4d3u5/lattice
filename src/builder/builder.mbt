@@ -174,6 +174,14 @@ fn extract_template(fm : @frontmatter.Frontmatter) -> String? {
 }
 
 ///|
+fn extract_weight(fm : @frontmatter.Frontmatter) -> Int? {
+  match fm.fields.get("weight") {
+    Some(@frontmatter.FInt(n)) => Some(n)
+    _ => None
+  }
+}
+
+///|
 fn is_draft(fm : @frontmatter.Frontmatter) -> Bool {
   match fm.fields.get("draft") {
     Some(@frontmatter.FBool(true)) => true
@@ -331,6 +339,28 @@ fn compare_pages_by_title(
 }
 
 ///|
+/// Compare two pages by weight (lower weight = earlier).
+/// Pages without a weight field sort after all weighted pages
+/// (treated as Int::max_value for ordering purposes).
+fn compare_pages_by_weight(a : @graph.GraphPage, b : @graph.GraphPage) -> Int {
+  let wa = match a.weight {
+    Some(n) => n
+    None => 2147483647
+  }
+  let wb = match b.weight {
+    Some(n) => n
+    None => 2147483647
+  }
+  if wa == wb {
+    0
+  } else if wa < wb {
+    -1
+  } else {
+    1
+  }
+}
+
+///|
 /// Compare two pages according to the specified sort order.
 fn compare_pages_by_order(
   a : @graph.GraphPage,
@@ -342,6 +372,7 @@ fn compare_pages_by_order(
     @collections.DateAsc => compare_pages_by_date(a, b, false)
     @collections.TitleAsc => compare_pages_by_title(a, b, false)
     @collections.TitleDesc => compare_pages_by_title(a, b, true)
+    @collections.Weight => compare_pages_by_weight(a, b)
   }
 }
 
@@ -491,6 +522,7 @@ priv struct ProcessedDocument {
   url : String
   description : String?
   date : String?
+  weight : Int?
   excerpt : String
   body_text : String
   resolved_links : Array[@wikilink.ResolvedWikilink]
@@ -3062,6 +3094,7 @@ fn process_document(
   let title = extract_title(fm)
   let description_value = extract_description(fm)
   let date_value = extract_date(fm)
+  let weight_value = extract_weight(fm)
   let author_value = extract_author(fm)
   let og_image_value = extract_og_image(fm)
   // If any schema/tag errors accumulated, skip rendering but return
@@ -3078,6 +3111,7 @@ fn process_document(
         url,
         description: description_value,
         date: date_value,
+        weight: weight_value,
         excerpt,
         body_text: "",
         resolved_links: resolved,
@@ -3296,6 +3330,7 @@ fn process_document(
       url,
       description: description_value,
       date: date_value,
+      weight: weight_value,
       excerpt,
       body_text: @strutil.strip_html_tags(body_html),
       resolved_links: resolved,
@@ -3323,24 +3358,24 @@ fn build_sorted_collection_pages(
   collection_name : String,
   sort_order : @collections.SortOrder,
 ) -> SortedCollectionPages {
-  // Parse each source to get title and date for sorting
-  let pages : Array[(String, String, String?)] = [] // (slug, title, date)
+  // Parse each source to get title, date, and weight for sorting
+  let pages : Array[(String, String, String?, Int?)] = [] // (slug, title, date, weight)
   let slug_to_title : Map[String, String] = Map::new()
   let slug_to_url : Map[String, String] = Map::new()
   let mut i = 0
   while i < sources.length() {
     let src = sources[i]
-    let (title, date_opt) = match @frontmatter.parse(src.content) {
-      Ok(fm) => (extract_title(fm), extract_date(fm))
-      Err(_) => (src.slug, None)
+    let (title, date_opt, weight_opt) = match @frontmatter.parse(src.content) {
+      Ok(fm) => (extract_title(fm), extract_date(fm), extract_weight(fm))
+      Err(_) => (src.slug, None, None)
     }
     slug_to_title.set(src.slug, title)
     slug_to_url.set(src.slug, collection_page_url(collection_name, src.slug))
-    pages.push((src.slug, title, date_opt))
+    pages.push((src.slug, title, date_opt, weight_opt))
     i = i + 1
   }
 
-  // Sort pages by date/title according to sort order using insertion sort
+  // Sort pages by date/title/weight according to sort order using insertion sort
   let sorted = pages
   let mut i = 1
   while i < sorted.length() {
@@ -3350,9 +3385,11 @@ fn build_sorted_collection_pages(
       let prev_slug = sorted[j - 1].0
       let prev_title = sorted[j - 1].1
       let prev_date = sorted[j - 1].2
+      let prev_weight = sorted[j - 1].3
       let curr_slug = sorted[j].0
       let curr_title = sorted[j].1
       let curr_date = sorted[j].2
+      let curr_weight = sorted[j].3
 
       let page_a : @graph.GraphPage = {
         slug: prev_slug,
@@ -3360,6 +3397,7 @@ fn build_sorted_collection_pages(
         url: "",
         description: None,
         date: prev_date,
+        weight: prev_weight,
         outgoing: [],
       }
       let page_b : @graph.GraphPage = {
@@ -3368,6 +3406,7 @@ fn build_sorted_collection_pages(
         url: "",
         description: None,
         date: curr_date,
+        weight: curr_weight,
         outgoing: [],
       }
 
@@ -3665,6 +3704,7 @@ fn process_document_for_lint(
   let full_title = page_title_builder(title, site.title)
   let description_value = extract_description(fm)
   let date_value = extract_date(fm)
+  let weight_value = extract_weight(fm)
   let author_value = extract_author(fm)
   let og_image_value = extract_og_image(fm)
   let description_text = match description_value {
@@ -3792,6 +3832,7 @@ fn process_document_for_lint(
       url,
       description: description_value,
       date: date_value,
+      weight: weight_value,
       excerpt,
       body_text: @strutil.strip_html_tags(body_html),
       resolved_links: resolved,
@@ -4794,6 +4835,7 @@ pub fn build(
                   url: doc.url,
                   description: doc.description,
                   date: doc.date,
+                  weight: doc.weight,
                   outgoing: doc.resolved_links,
                 }
                 coll_pages.push(page)
@@ -4957,6 +4999,7 @@ pub fn build(
               url: doc.url,
               description: doc.description,
               date: doc.date,
+              weight: doc.weight,
               outgoing: doc.resolved_links,
             }
             graph_pages.push(page)
@@ -5094,6 +5137,7 @@ pub fn build(
               url: doc.url,
               description: doc.description,
               date: doc.date,
+              weight: doc.weight,
               outgoing: doc.resolved_links,
             }
             graph_pages.push(page)
@@ -6277,6 +6321,7 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
             url: doc.url,
             description: doc.description,
             date: doc.date,
+            weight: doc.weight,
             outgoing: doc.resolved_links,
           }
           coll_pages.push(page)
@@ -6357,6 +6402,7 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
             url: doc.url,
             description: doc.description,
             date: doc.date,
+            weight: doc.weight,
             outgoing: doc.resolved_links,
           })
         None => ()
@@ -6412,6 +6458,7 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
             url: doc.url,
             description: doc.description,
             date: doc.date,
+            weight: doc.weight,
             outgoing: doc.resolved_links,
           })
         None => ()

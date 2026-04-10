@@ -9,6 +9,7 @@ pub(all) struct GraphPage {
   url : String
   description : String?
   date : String?
+  weight : Int?
   outgoing : Array[@wikilink.ResolvedWikilink]
 }
 

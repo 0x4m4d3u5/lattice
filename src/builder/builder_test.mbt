@@ -116,6 +116,7 @@ test "group_pages_by_year_month groups pages correctly" {
       description: None,
       date: Some("2024-03-15"),
       outgoing: [],
+      weight: None,
     },
     {
       slug: "post2",
@@ -124,6 +125,7 @@ test "group_pages_by_year_month groups pages correctly" {
       description: None,
       date: Some("2024-01-10"),
       outgoing: [],
+      weight: None,
     },
     {
       slug: "post3",
@@ -132,6 +134,7 @@ test "group_pages_by_year_month groups pages correctly" {
       description: None,
       date: Some("2023-12-05"),
       outgoing: [],
+      weight: None,
     },
     {
       slug: "post4",
@@ -140,6 +143,7 @@ test "group_pages_by_year_month groups pages correctly" {
       description: None,
       date: Some("2024-03-20"),
       outgoing: [],
+      weight: None,
     },
     {
       slug: "post5",
@@ -148,6 +152,7 @@ test "group_pages_by_year_month groups pages correctly" {
       description: None,
       date: None,
       outgoing: [],
+      weight: None,
     },
   ]
 
@@ -225,6 +230,7 @@ test "render_archive_page_content generates HTML list of page links" {
       description: None,
       date: Some("2024-03-15"),
       outgoing: [],
+      weight: None,
     },
     {
       slug: "post2",
@@ -233,6 +239,7 @@ test "render_archive_page_content generates HTML list of page links" {
       description: None,
       date: Some("2024-01-10"),
       outgoing: [],
+      weight: None,
     },
   ]
 
@@ -273,6 +280,7 @@ test "render_archive_index generates HTML with year headings and month links" {
           description: None,
           date: Some("2024-03-15"),
           outgoing: [],
+          weight: None,
         },
         {
           slug: "post2",
@@ -281,6 +289,7 @@ test "render_archive_index generates HTML with year headings and month links" {
           description: None,
           date: Some("2024-03-20"),
           outgoing: [],
+          weight: None,
         },
       ],
     },
@@ -295,6 +304,7 @@ test "render_archive_index generates HTML with year headings and month links" {
           description: None,
           date: Some("2024-01-10"),
           outgoing: [],
+          weight: None,
         },
       ],
     },
@@ -309,6 +319,7 @@ test "render_archive_index generates HTML with year headings and month links" {
           description: None,
           date: Some("2023-12-05"),
           outgoing: [],
+          weight: None,
         },
       ],
     },
@@ -3590,4 +3601,117 @@ test "build accumulates validation errors across collection and root pages" {
     .iter()
     .any(fn(d) { d.message.contains("title") })
   assert_true(has_title_error)
+}
+
+///|
+test "sort_collection_pages sorts by weight (lower weight first)" {
+  let pages : Array[@graph.GraphPage] = [
+    {
+      slug: "heavy",
+      title: "Heavy Page",
+      url: "/heavy",
+      description: None,
+      date: None,
+      weight: Some(100),
+      outgoing: [],
+    },
+    {
+      slug: "light",
+      title: "Light Page",
+      url: "/light",
+      description: None,
+      date: None,
+      weight: Some(1),
+      outgoing: [],
+    },
+    {
+      slug: "medium",
+      title: "Medium Page",
+      url: "/medium",
+      description: None,
+      date: None,
+      weight: Some(50),
+      outgoing: [],
+    },
+  ]
+  @builder.sort_collection_pages(pages, @collections.Weight)
+  assert_eq(pages[0].slug, "light")
+  assert_eq(pages[1].slug, "medium")
+  assert_eq(pages[2].slug, "heavy")
+}
+
+///|
+test "sort_collection_pages weight puts unweighted pages after weighted" {
+  let pages : Array[@graph.GraphPage] = [
+    {
+      slug: "no-weight",
+      title: "No Weight Page",
+      url: "/no-weight",
+      description: None,
+      date: None,
+      weight: None,
+      outgoing: [],
+    },
+    {
+      slug: "weighted",
+      title: "Weighted Page",
+      url: "/weighted",
+      description: None,
+      date: None,
+      weight: Some(10),
+      outgoing: [],
+    },
+    {
+      slug: "also-no-weight",
+      title: "Also No Weight",
+      url: "/also-no-weight",
+      description: None,
+      date: None,
+      weight: None,
+      outgoing: [],
+    },
+  ]
+  @builder.sort_collection_pages(pages, @collections.Weight)
+  assert_eq(pages[0].slug, "weighted")
+  // Pages without weight sort after weighted pages
+  assert_true(pages[1].slug == "no-weight" || pages[1].slug == "also-no-weight")
+  assert_true(pages[2].slug == "no-weight" || pages[2].slug == "also-no-weight")
+}
+
+///|
+test "sort_collection_pages weight with equal weights preserves relative order" {
+  let pages : Array[@graph.GraphPage] = [
+    {
+      slug: "a",
+      title: "Page A",
+      url: "/a",
+      description: None,
+      date: None,
+      weight: Some(5),
+      outgoing: [],
+    },
+    {
+      slug: "b",
+      title: "Page B",
+      url: "/b",
+      description: None,
+      date: None,
+      weight: Some(5),
+      outgoing: [],
+    },
+    {
+      slug: "c",
+      title: "Page C",
+      url: "/c",
+      description: None,
+      date: None,
+      weight: Some(1),
+      outgoing: [],
+    },
+  ]
+  @builder.sort_collection_pages(pages, @collections.Weight)
+  assert_eq(pages[0].slug, "c")
+  // a and b have equal weight, insertion sort preserves relative order
+  assert_eq(pages[1].slug, "a")
+  assert_eq(pages[2].slug, "b")
 }

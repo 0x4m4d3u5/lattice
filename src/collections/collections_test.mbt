@@ -495,3 +495,21 @@ test "collections parse Float bounds order-independent" {
     Err(_) => assert_true(false)
   }
 }
+
+///|
+test "collections parse sort weight" {
+  let src = "[posts]\n" +
+    "schema = title:String\n" +
+    "dir = content/posts\n" +
+    "sort = weight\n"
+  match parse(src) {
+    Ok(cfg) => {
+      assert_eq(cfg.definitions.length(), 1)
+      match cfg.definitions[0].sort_order {
+        @collections.Weight => assert_true(true)
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}

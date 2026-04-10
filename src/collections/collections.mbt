@@ -17,6 +17,7 @@ pub(all) enum SortOrder {
   DateAsc // oldest first
   TitleAsc // alphabetical
   TitleDesc // reverse alphabetical
+  Weight // manual ordering via weight field (lower weight = earlier)
 }
 
 ///|
@@ -961,7 +962,7 @@ pub fn parse(input : String) -> Result[CollectionsConfig, CollectionsError] {
                   line_no,
                   "invalid sort value: '" +
                   value +
-                  "' (expected: date:desc, date:asc, title:asc, title:desc)",
+                  "' (expected: date:desc, date:asc, title:asc, title:desc, weight)",
                 ),
               )
           }
@@ -1036,6 +1037,8 @@ fn parse_sort_order(value : String) -> SortOrder? {
     Some(TitleAsc)
   } else if value == "title:desc" {
     Some(TitleDesc)
+  } else if value == "weight" {
+    Some(Weight)
   } else {
     None
   }

@@ -11,6 +11,7 @@ fn test_pages() -> Array[@graph.GraphPage] {
       description: Some("First post description"),
       date: Some("2024-01-15"),
       outgoing: [],
+      weight: None,
     },
     {
       slug: "second-post",
@@ -19,6 +20,7 @@ fn test_pages() -> Array[@graph.GraphPage] {
       description: Some("Second post description"),
       date: Some("2024-02-20"),
       outgoing: [],
+      weight: None,
     },
     {
       slug: "index",
@@ -27,6 +29,7 @@ fn test_pages() -> Array[@graph.GraphPage] {
       description: None,
       date: None,
       outgoing: [],
+      weight: None,
     },
   ]
 }
@@ -75,6 +78,7 @@ test "render_sitemap includes lastmod from frontmatter date" {
       description: None,
       date: Some("2024-03-10"),
       outgoing: [],
+      weight: None,
     },
   ]
   let xml = @sitemap.render_sitemap("https://example.com", pages)
@@ -92,6 +96,7 @@ test "render_sitemap omits lastmod when date is absent" {
       description: None,
       date: None,
       outgoing: [],
+      weight: None,
     },
   ]
   let xml = @sitemap.render_sitemap("https://example.com", pages)
@@ -109,6 +114,7 @@ test "render_sitemap accepts RFC3339 date in lastmod" {
       description: None,
       date: Some("2024-03-15T14:30:00Z"),
       outgoing: [],
+      weight: None,
     },
   ]
   let xml = @sitemap.render_sitemap("https://example.com", pages)
@@ -129,6 +135,7 @@ test "render_sitemap index page gets higher priority" {
       description: None,
       date: None,
       outgoing: [],
+      weight: None,
     },
     {
       slug: "about",
@@ -137,6 +144,7 @@ test "render_sitemap index page gets higher priority" {
       description: None,
       date: None,
       outgoing: [],
+      weight: None,
     },
   ]
   let xml = @sitemap.render_sitemap("https://example.com", pages)
@@ -181,6 +189,7 @@ test "render_sitemap XML-escapes special characters in URLs" {
       description: None,
       date: None,
       outgoing: [],
+      weight: None,
     },
   ]
   let xml = @sitemap.render_sitemap("https://example.com", pages)
@@ -199,6 +208,7 @@ test "render_sitemap handles base URL with trailing slash" {
       description: None,
       date: Some("2024-01-01"),
       outgoing: [],
+      weight: None,
     },
   ]
   let xml1 = @sitemap.render_sitemap("https://example.com", pages)
@@ -219,6 +229,7 @@ test "render_sitemap rejects malformed date" {
       description: None,
       date: Some("not-a-date"),
       outgoing: [],
+      weight: None,
     },
   ]
   let xml = @sitemap.render_sitemap("https://example.com", pages)

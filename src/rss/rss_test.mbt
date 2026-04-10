@@ -11,6 +11,7 @@ fn test_pages() -> Array[@graph.GraphPage] {
       description: Some("First post description"),
       date: Some("2024-01-15"),
       outgoing: [],
+      weight: None,
     },
     {
       slug: "second-post",
@@ -19,6 +20,7 @@ fn test_pages() -> Array[@graph.GraphPage] {
       description: Some("Second post description"),
       date: Some("2024-02-20"),
       outgoing: [],
+      weight: None,
     },
     {
       slug: "third-post",
@@ -27,6 +29,7 @@ fn test_pages() -> Array[@graph.GraphPage] {
       description: Some("Third post description"),
       date: Some("2024-01-10"),
       outgoing: [],
+      weight: None,
     },
   ]
 }
@@ -70,6 +73,7 @@ test "render_feed includes entry details" {
       description: Some("Test description with <special> & chars"),
       date: Some("2024-03-01"),
       outgoing: [],
+      weight: None,
     },
   ]
   let feed = @rss.render_feed("Test", "https://example.com", pages, None)
@@ -105,6 +109,7 @@ test "render_feed handles pages without description" {
       description: None,
       date: Some("2024-01-01"),
       outgoing: [],
+      weight: None,
     },
   ]
   let feed = @rss.render_feed("Test", "https://example.com", pages, None)
@@ -125,6 +130,7 @@ test "render_feed handles pages without date" {
       description: Some("No date"),
       date: None,
       outgoing: [],
+      weight: None,
     },
   ]
   let feed = @rss.render_feed("Test", "https://example.com", pages, None)
@@ -142,6 +148,7 @@ test "render_feed with RFC3339 date format" {
       description: Some("Has RFC3339 date"),
       date: Some("2024-03-15T14:30:00Z"),
       outgoing: [],
+      weight: None,
     },
   ]
   let feed = @rss.render_feed("Test", "https://example.com", pages, None)
@@ -203,6 +210,7 @@ test "render_feed XML character escaping" {
       description: Some("Description with & < > \" '"),
       date: Some("2024-01-01"),
       outgoing: [],
+      weight: None,
     },
   ]
   let feed = @rss.render_feed("Test", "https://example.com", pages, None)
@@ -225,6 +233,7 @@ test "render_feed respects limit parameter" {
       description: Some("First"),
       date: Some("2024-01-01"),
       outgoing: [],
+      weight: None,
     },
     {
       slug: "post-2",
@@ -233,6 +242,7 @@ test "render_feed respects limit parameter" {
       description: Some("Second"),
       date: Some("2024-01-02"),
       outgoing: [],
+      weight: None,
     },
     {
       slug: "post-3",
@@ -241,6 +251,7 @@ test "render_feed respects limit parameter" {
       description: Some("Third"),
       date: Some("2024-01-03"),
       outgoing: [],
+      weight: None,
     },
   ]
 
@@ -290,6 +301,7 @@ test "render_json_feed basic structure" {
       description: Some("A greeting"),
       date: Some("2024-01-01"),
       outgoing: [],
+      weight: None,
     },
   ]
   let feed = @rss.render_json_feed_from_pages(
@@ -329,6 +341,7 @@ test "render_json_feed items have correct fields" {
       description: Some("Description text here"),
       date: Some("2024-01-01"),
       outgoing: [],
+      weight: None,
     },
   ]
   let feed = @rss.render_json_feed_from_pages(
@@ -359,6 +372,7 @@ test "render_json_feed summary present when description exists" {
       description: Some("Description text here"),
       date: Some("2024-01-01"),
       outgoing: [],
+      weight: None,
     },
   ]
   let feed = @rss.render_json_feed_from_pages(
@@ -384,6 +398,7 @@ test "render_json_feed summary absent when description is None" {
       description: None,
       date: Some("2024-01-01"),
       outgoing: [],
+      weight: None,
     },
   ]
   let feed = @rss.render_json_feed_from_pages(
@@ -406,6 +421,7 @@ test "render_json_feed date fields present when date exists" {
       description: None,
       date: Some("2024-06-15"),
       outgoing: [],
+      weight: None,
     },
   ]
   let feed = @rss.render_json_feed_from_pages(
@@ -435,6 +451,7 @@ test "render_json_feed date fields absent when no date" {
       description: None,
       date: None,
       outgoing: [],
+      weight: None,
     },
   ]
   let feed = @rss.render_json_feed_from_pages(
@@ -458,6 +475,7 @@ test "render_json_feed JSON string escaping" {
       description: Some("Has <tag> & 'apos' too"),
       date: Some("2024-01-01"),
       outgoing: [],
+      weight: None,
     },
   ]
   let feed = @rss.render_json_feed_from_pages(
@@ -483,6 +501,7 @@ test "render_json_feed respects limit parameter" {
       description: Some("First"),
       date: Some("2024-01-01"),
       outgoing: [],
+      weight: None,
     },
     {
       slug: "post-2",
@@ -491,6 +510,7 @@ test "render_json_feed respects limit parameter" {
       description: Some("Second"),
       date: Some("2024-01-02"),
       outgoing: [],
+      weight: None,
     },
     {
       slug: "post-3",
@@ -499,6 +519,7 @@ test "render_json_feed respects limit parameter" {
       description: Some("Third"),
       date: Some("2024-01-03"),
       outgoing: [],
+      weight: None,
     },
   ]
   let feed = @rss.render_json_feed_from_pages(
