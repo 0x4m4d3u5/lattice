@@ -1388,3 +1388,94 @@ The structural consequence is that the server's SSE implementation is stateless 
 ### Port 4321
 
 The default port (`default_port() -> Int { 4321 }`) matches Astro's default development port. This is not an accident — lattice occupies the same domain (modern SSG for content-first sites), and users migrating from Astro benefit from muscle memory. It's a small UX detail but an explicit one: the `is_valid_port()` guard (1–65535) would accept any value, and 4321 was chosen deliberately rather than inherited from a convention.
+
+
+
+## Template Renderer Refactor — Recursive `render_body_parts`
+
+The initial template renderer in `src/template/template.mbt` handled conditional blocks and each blocks by inlining the body-rendering logic at each call site. `render_parts` had four separate copies of the same body-rendering logic — one for `ConditionalBlock` bodies, one for `FrontmatterConditionalBlock` bodies, one for `DataEachBlock` bodies, and one for `FrontmatterEachBlock` bodies. Nested constructs (a `{{?slot}}` inside an `{{#each}}`, or vice versa) were explicitly rejected: the code returned `Err(ParseError("nested loops not supported"))` when it encountered a nesting combination it hadn't inlined.
+
+The refactor extracted a recursive `render_body_parts` function:
+
+```moonbit
+fn render_body_parts(
+  parts : Array[TemplatePart],
+  slots : Map[TemplateSlot, String],
+  data_store : @data.DataStore?,
+  page_fields : Map[String, String],
+  page_field_arrays : Map[String, Array[String]],
+  loop_ctx : LoopCtx,
+  strict : Bool,
+  out : StringBuilder,
+) -> Result[Unit, TemplateError]
+```
+
+### The `LoopCtx` Enum
+
+The key design decision was how to carry loop-item context through recursive calls without changing the signature of each `TemplatePart` variant. The solution is a `LoopCtx` enum with three cases:
+
+- `NoCtx` — top-level rendering, outside any loop
+- `DataCtx(@frontmatter.FrontmatterValue)` — inside a `{{#each data.file.key}}` block; the item is a structured frontmatter value that may be an `FStr`, `FBool`, `FInt`, or `FMap`
+- `StringCtx(String)` — inside a `{{#each page.field}}` block; the item is a plain string from a frontmatter array field
+
+When `render_body_parts` encounters a `LoopItemSlot(field_path, filters)`, it dispatches on `loop_ctx`:
+
+- `DataCtx(item)` → calls `resolve_loop_item_field(item, field_path)`, which navigates nested `FMap` values for `{{item.author.name}}` patterns
+- `StringCtx(s)` → if `field_path` is empty, returns `s` directly; otherwise returns `None` (string items have no subfields)
+- `NoCtx` → returns `None`, renders empty (not an error)
+
+### Strict vs. Lenient Rendering
+
+The `strict` parameter distinguishes top-level slot resolution from body-part rendering inside conditionals and loops. At the top level, a missing required slot is a hard error (`Err(MissingRequiredSlot(slot))`). Inside conditional and loop bodies, a missing slot renders as an empty string. This mirrors the pre-refactor behavior, where the top-level `render_parts` returned early on a missing required slot but the inlined conditional bodies silently produced nothing.
+
+The `render_parts` function — now a thin wrapper — calls `render_body_parts` with `strict: true` for the top-level pass. Conditional and each-block recursion calls it with `strict: false`.
+
+### Eliminated the Nesting Restriction
+
+The `"nested loops not supported"` error and the `"include/layout not allowed in conditional"` error from the inlined copy code are gone. The recursive call handles any nesting combination uniformly. A template author can now write:
+
+```html
+{{?backlinks}}
+  <section class="backlinks">
+    {{#each page.related}}
+      <a href="/{{item}}">{{item}}</a>
+    {{/each}}
+  </section>
+{{/?backlinks}}
+```
+
+This wasn't possible before without adding another inlined copy. The structural payoff: the nesting capability is now a consequence of the architecture rather than a feature that has to be explicitly implemented for each combination.
+
+### Line Count
+
+`template.mbt` shrank from 1,624 lines to 1,477 lines (-147 lines net). The reduction is smaller than the ~400–600 lines of deleted inline code would suggest because the new `render_body_parts` function itself is ~180 lines, and the `LoopCtx` enum and associated dispatch added ~20 lines. The reduction in surface area is more meaningful than the line count: the deleted code was not just duplicated but lightly divergent — the `ConditionalBlock` and `FrontmatterConditionalBlock` inline copies handled slightly different sets of nested cases, creating subtle inconsistency that the refactor eliminated.
+
+
+
+## Error Accumulation Across All Validation Stages
+
+The original `process_document` function in `src/builder/builder.mbt` returned early on the first failing validation category. If schema validation found errors, it returned before running TRef cross-reference checks. If TRef checks failed, it returned before checking tag index membership. The result: a document with three independent categories of problems required three separate build runs to discover all of them.
+
+The fix accumulates a `has_schema_errors` flag across all validation stages — schema structural validation, TRef cross-reference validation, tag extraction, and dangling tag checks — and defers the early-return until after all stages complete:
+
+```moonbit
+let mut has_schema_errors = false
+let schema_errors = @schema.validate(fm, schema)
+if schema_errors.length() > 0 {
+  has_schema_errors = true
+  // ... append diagnostics ...
+}
+let ref_errors = @schema.validate_refs(fm, schema, slug_owner)
+if ref_errors.length() > 0 {
+  has_schema_errors = true
+  // ... append diagnostics ...
+}
+// ... tag extraction and dangling tag checks similarly accumulate ...
+if has_schema_errors {
+  return { document: None, diagnostics }
+}
+```
+
+The structural argument for this change: schema errors, TRef errors, and tag errors are independent. A missing required field does not affect whether a cross-reference is broken, and a broken TRef does not affect whether a tag is in the index. Running all three checks against the same parsed frontmatter is always valid. The only reason to skip later checks was code structure (early returns were the original control flow), not logical necessity.
+
+The UX consequence: a content author who introduces three independent problems in a single commit now sees all three errors in a single build. The error accumulation philosophy — already present at the builder level for collection errors vs. standalone errors — is now applied consistently within the single-document validation pipeline.
