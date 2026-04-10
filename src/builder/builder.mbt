@@ -2943,9 +2943,14 @@ fn process_document(
     }
     None => page_template
   }
-  // Step 2: validate against schema — collect all errors before aborting
+  // Step 2: validate against schema — collect ALL errors across all
+  // validation stages (schema, TRef, tags, wikilinks, shortcodes) rather
+  // than aborting at the first category. This ensures the user sees every
+  // problem in one pass instead of fixing them incrementally.
+  let mut has_schema_errors = false
   let schema_errors = @schema.validate(fm, schema)
   if schema_errors.length() > 0 {
+    has_schema_errors = true
     let mut i = 0
     let note = missing_required_fields_note(schema)
     while i < schema_errors.length() {
@@ -2969,14 +2974,14 @@ fn process_document(
       })
       i = i + 1
     }
-    return { document: None, diagnostics }
   }
   // Step 2a: validate TRef cross-references against the page slug index.
-  // This runs after schema structural validation passes — TRef fields need the
-  // complete slug index to check existence and collection constraints, which
-  // is only available in pass 2 after all sources have been collected.
+  // Runs even when schema errors exist — TRef checks are independent of
+  // structural schema validation and catch different classes of problems
+  // (broken cross-page references vs. missing/wrong-typed fields).
   let ref_errors = @schema.validate_refs(fm, schema, slug_owner)
   if ref_errors.length() > 0 {
+    has_schema_errors = true
     let mut i = 0
     while i < ref_errors.length() {
       let err = ref_errors[i]
@@ -2991,7 +2996,6 @@ fn process_document(
       })
       i = i + 1
     }
-    return { document: None, diagnostics }
   }
   // Step 2b: extract validated tags from typed frontmatter.
   let page_tags = match @tags.extract(fm, tags_field) {
@@ -3005,7 +3009,8 @@ fn process_document(
           "tags field '" + tags_field + "': " + msg,
         ),
       )
-      return { document: None, diagnostics }
+      has_schema_errors = true
+      []
     }
   }
   let mut i = 0
@@ -3025,7 +3030,9 @@ fn process_document(
           ") missing from tag index",
         ),
       )
-      return { document: None, diagnostics }
+      // Accumulate and continue — don't abort for the first dangling tag,
+      // collect ALL dangling tags so the user can fix them at once.
+      has_schema_errors = true
     }
     i = i + 1
   }
@@ -3057,6 +3064,11 @@ fn process_document(
   let date_value = extract_date(fm)
   let author_value = extract_author(fm)
   let og_image_value = extract_og_image(fm)
+  // If any schema/tag errors accumulated, skip rendering but return
+  // all diagnostics so the caller can report every violation at once.
+  if has_schema_errors {
+    return { document: None, diagnostics }
+  }
   if !render_page_html {
     return {
       document: Some({
@@ -4246,14 +4258,10 @@ pub fn build(
             msg,
           ),
         )
-        return {
-          errors: 1,
-          diagnostics,
-          rebuilt_pages: 0,
-          unchanged_pages: 0,
-          skipped_drafts: 0,
-          redirect_count: 0,
-        }
+        // Accumulate error and continue — other collections may still be
+        // readable. Push empty sources so the collection is tracked but
+        // produces zero pages.
+        []
       }
     }
     source_count = source_count + sources.length()
@@ -4272,7 +4280,7 @@ pub fn build(
     while j < coll.sources.length() {
       let source = coll.sources[j]
       match slug_owner.get(source.slug) {
-        Some(owner) => {
+        Some(owner) =>
           diagnostics.push(
             build_error(
               Some(source.path),
@@ -4287,15 +4295,9 @@ pub fn build(
               "'",
             ),
           )
-          return {
-            errors: 1,
-            diagnostics,
-            rebuilt_pages: 0,
-            unchanged_pages: 0,
-            skipped_drafts: 0,
-            redirect_count: 0,
-          }
-        }
+        // Accumulate error and continue — don't abort the entire build
+        // for a single slug conflict. Skip this source so it doesn't
+        // pollute the page_index or cause downstream failures.
         None => {
           slug_owner.set(source.slug, coll.definition.name)
           page_index.set(
@@ -4325,14 +4327,8 @@ pub fn build(
             "cannot read standalone pages directory: " + msg,
           ),
         )
-        return {
-          errors: 1,
-          diagnostics,
-          rebuilt_pages: 0,
-          unchanged_pages: 0,
-          skipped_drafts: 0,
-          redirect_count: 0,
-        }
+        // Accumulate error and continue — proceed with no standalone pages
+        []
       }
     }
   } else {
@@ -4342,7 +4338,7 @@ pub fn build(
   while i < standalone_sources.length() {
     let src = standalone_sources[i]
     match slug_owner.get(src.slug) {
-      Some(owner) => {
+      Some(owner) =>
         diagnostics.push(
           build_error(
             Some(src.path),
@@ -4355,15 +4351,8 @@ pub fn build(
             "'",
           ),
         )
-        return {
-          errors: 1,
-          diagnostics,
-          rebuilt_pages: 0,
-          unchanged_pages: 0,
-          skipped_drafts: 0,
-          redirect_count: 0,
-        }
-      }
+      // Accumulate error and continue — don't abort the entire build
+      // for a single slug conflict.
       None => {
         slug_owner.set(src.slug, "_standalone")
         page_index.set(src.slug, standalone_page_url(src.slug))
@@ -4394,21 +4383,15 @@ pub fn build(
           "cannot read content root directory: " + msg,
         ),
       )
-      return {
-        errors: 1,
-        diagnostics,
-        rebuilt_pages: 0,
-        unchanged_pages: 0,
-        skipped_drafts: 0,
-        redirect_count: 0,
-      }
+      // Accumulate error and continue — proceed with no root pages
+      []
     }
   }
   i = 0
   while i < root_sources.length() {
     let src = root_sources[i]
     match slug_owner.get(src.slug) {
-      Some(owner) => {
+      Some(owner) =>
         diagnostics.push(
           build_error(
             Some(src.path),
@@ -4417,15 +4400,8 @@ pub fn build(
             "root page slug '" + src.slug + "' conflicts with '" + owner + "'",
           ),
         )
-        return {
-          errors: 1,
-          diagnostics,
-          rebuilt_pages: 0,
-          unchanged_pages: 0,
-          skipped_drafts: 0,
-          redirect_count: 0,
-        }
-      }
+      // Accumulate error and continue — don't abort the entire build
+      // for a single slug conflict.
       None => {
         slug_owner.set(src.slug, "_root")
         page_index.set(src.slug, root_page_url(src.slug))

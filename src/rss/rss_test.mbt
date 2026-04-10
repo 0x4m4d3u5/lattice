@@ -280,7 +280,6 @@ test "render_feed with limit of 1" {
   inspect(!feed.contains("<title>Third Post</title>"), content="true")
 }
 
-
 ///|
 test "render_json_feed basic structure" {
   let pages : Array[@graph.GraphPage] = [

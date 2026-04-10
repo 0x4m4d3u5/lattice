@@ -287,7 +287,6 @@ pub fn render_feed(
   render_atom(channel)
 }
 
-
 ///|
 /// Render a JSON Feed 1.1 document from a FeedChannel.
 ///
