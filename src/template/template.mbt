@@ -892,62 +892,89 @@ fn resolve_loop_item_field(
 }
 
 ///|
-fn render_parts(
-  template : Template,
+/// Loop item context — carried through recursive render_body_parts calls
+/// when iterating an {{#each}} block. Enables arbitrary nesting depth:
+/// conditionals inside each-blocks inside conditionals, etc.
+enum LoopCtx {
+  NoCtx
+  DataCtx(@frontmatter.FrontmatterValue) // {{#each data.file.key}} — structured item
+  StringCtx(String) // {{#each page.field}} — string array item
+}
+
+///|
+/// Recursive helper that renders an array of `TemplatePart`s into `out`.
+///
+/// `strict` controls error behaviour:
+/// - `true`  (top-level call): missing `Slot` / `DataSlot` → `Err(MissingRequiredSlot|MissingDataSlot)`
+/// - `false` (inside conditionals / each-blocks): missing slots render as empty string
+///
+/// `loop_ctx` carries the current loop item (if any), enabling `LoopItemSlot`
+/// resolution at arbitrary nesting depth.
+fn render_body_parts(
+  parts : Array[TemplatePart],
   slots : Map[TemplateSlot, String],
   data_store : @data.DataStore?,
   page_fields : Map[String, String],
   page_field_arrays : Map[String, Array[String]],
-) -> Result[String, TemplateError] {
+  loop_ctx : LoopCtx,
+  strict : Bool,
+  out : StringBuilder,
+) -> Result[Unit, TemplateError] {
   let mut i = 0
-  while i < template.required_slots.length() {
-    let slot = template.required_slots[i]
-    match slots.get(slot) {
-      Some(_) => ()
-      None => return Err(MissingRequiredSlot(slot))
-    }
-    i = i + 1
-  }
-
-  let out = StringBuilder::new()
-  i = 0
-  while i < template.parts.length() {
-    match template.parts[i] {
+  while i < parts.length() {
+    match parts[i] {
       Text(t) => out.write_string(t)
       Slot(slot, filters) =>
         match slots.get(slot) {
           Some(value) => out.write_string(apply_filters(value, filters))
-          None => return Err(MissingRequiredSlot(slot))
+          None =>
+            if strict {
+              return Err(MissingRequiredSlot(slot))
+            } else {
+              () // missing slot renders empty in conditional/each body
+            }
         }
       DataSlot(file, key_path) =>
-        match data_store {
-          Some(store) =>
-            match @data.resolve_string(store, file, key_path) {
-              Ok(value) => out.write_string(value)
-              Err(_) => {
-                let path = StringBuilder::new()
-                path.write_string("data.")
-                path.write_string(file)
-                let mut j = 0
-                while j < key_path.length() {
-                  path.write_char('.')
-                  path.write_string(key_path[j])
-                  j = j + 1
+        if strict {
+          match data_store {
+            Some(store) =>
+              match @data.resolve_string(store, file, key_path) {
+                Ok(value) => out.write_string(value)
+                Err(_) => {
+                  let path = StringBuilder::new()
+                  path.write_string("data.")
+                  path.write_string(file)
+                  let mut j = 0
+                  while j < key_path.length() {
+                    path.write_char('.')
+                    path.write_string(key_path[j])
+                    j = j + 1
+                  }
+                  return Err(MissingDataSlot(path.to_string()))
                 }
-                return Err(MissingDataSlot(path.to_string()))
               }
+            None => {
+              let path = StringBuilder::new()
+              path.write_string("data.")
+              path.write_string(file)
+              let mut j = 0
+              while j < key_path.length() {
+                path.write_char('.')
+                path.write_string(key_path[j])
+                j = j + 1
+              }
+              return Err(MissingDataSlot(path.to_string()))
             }
-          None => {
-            let path = StringBuilder::new()
-            path.write_string("data.")
-            path.write_string(file)
-            let mut j = 0
-            while j < key_path.length() {
-              path.write_char('.')
-              path.write_string(key_path[j])
-              j = j + 1
-            }
-            return Err(MissingDataSlot(path.to_string()))
+          }
+        } else {
+          // Inside conditional/each: missing data renders as empty
+          match data_store {
+            Some(store) =>
+              match @data.resolve_string(store, file, key_path) {
+                Ok(v) => out.write_string(v)
+                Err(_) => ()
+              }
+            None => ()
           }
         }
       FrontmatterSlot(field, filters) =>
@@ -969,312 +996,105 @@ fn render_parts(
         match slots.get(slot) {
           Some(value) =>
             if value.length() > 0 {
-              // Render body parts
-              let mut j = 0
-              while j < body_parts.length() {
-                match body_parts[j] {
-                  Text(t) => out.write_string(t)
-                  Slot(s, filters) =>
-                    match slots.get(s) {
-                      Some(v) => out.write_string(apply_filters(v, filters))
-                      None => () // Missing slot renders as empty in conditional
-                    }
-                  DataSlot(file, key_path) =>
-                    match data_store {
-                      Some(store) =>
-                        match @data.resolve_string(store, file, key_path) {
-                          Ok(v) => out.write_string(v)
-                          Err(_) => () // Missing data slot renders as empty in conditional
-                        }
-                      None => () // Missing data store renders as empty in conditional
-                    }
-                  FrontmatterSlot(field, filters) =>
-                    match page_fields.get(field) {
-                      Some(v) =>
-                        out.write_string(
-                          apply_filters(@html.escape_html_body(v), filters),
-                        )
-                      None => () // Missing frontmatter field renders as empty in conditional
-                    }
-                  FrontmatterConditionalBlock(field, inner_parts) =>
-                    // Handle nested frontmatter conditional inside regular conditional
-                    match page_fields.get(field) {
-                      Some(value) =>
-                        if value.length() > 0 {
-                          // Render inner parts recursively
-                          let mut k = 0
-                          while k < inner_parts.length() {
-                            match inner_parts[k] {
-                              Text(t) => out.write_string(t)
-                              Slot(s, filters) =>
-                                match slots.get(s) {
-                                  Some(v) =>
-                                    out.write_string(apply_filters(v, filters))
-                                  None => ()
-                                }
-                              DataSlot(file, key_path) =>
-                                match data_store {
-                                  Some(store) =>
-                                    match
-                                      @data.resolve_string(
-                                        store, file, key_path,
-                                      ) {
-                                      Ok(v) => out.write_string(v)
-                                      Err(_) => ()
-                                    }
-                                  None => ()
-                                }
-                              FrontmatterSlot(f, filters) =>
-                                match page_fields.get(f) {
-                                  Some(v) =>
-                                    out.write_string(
-                                      apply_filters(
-                                        @html.escape_html_body(v),
-                                        filters,
-                                      ),
-                                    )
-                                  None => ()
-                                }
-                              _ =>
-                                // Include and Layout should not appear in conditional bodies
-                                return Err(
-                                  ParseError(
-                                    "include/layout not allowed in conditional",
-                                  ),
-                                )
-                            }
-                            k = k + 1
-                          }
-                        }
-                      None => ()
-                    }
-                  _ =>
-                    // Include and Layout should not appear in conditional bodies
-                    return Err(
-                      ParseError("include/layout not allowed in conditional"),
-                    )
-                }
-                j = j + 1
+              match
+                render_body_parts(
+                  body_parts, slots, data_store, page_fields, page_field_arrays,
+                  loop_ctx, false, out,
+                ) {
+                Ok(_) => ()
+                Err(e) => return Err(e)
               }
             }
-          None => () // Slot not in map, treat as empty
+          None => () // slot not in map → treat as empty
         }
       FrontmatterConditionalBlock(field, body_parts) =>
         // Render body only if frontmatter field is present and non-empty
         match page_fields.get(field) {
           Some(value) =>
             if value.length() > 0 {
-              // Render body parts (reuse same logic as ConditionalBlock)
-              let mut j = 0
-              while j < body_parts.length() {
-                match body_parts[j] {
-                  Text(t) => out.write_string(t)
-                  Slot(s, filters) =>
-                    match slots.get(s) {
-                      Some(v) => out.write_string(apply_filters(v, filters))
-                      None => () // Missing slot renders as empty in conditional
-                    }
-                  DataSlot(file, key_path) =>
-                    match data_store {
-                      Some(store) =>
-                        match @data.resolve_string(store, file, key_path) {
-                          Ok(v) => out.write_string(v)
-                          Err(_) => () // Missing data slot renders as empty in conditional
-                        }
-                      None => () // Missing data store renders as empty in conditional
-                    }
-                  FrontmatterSlot(f, filters) =>
-                    match page_fields.get(f) {
-                      Some(v) =>
-                        out.write_string(
-                          apply_filters(@html.escape_html_body(v), filters),
-                        )
-                      None => () // Missing frontmatter field renders as empty in conditional
-                    }
-                  ConditionalBlock(slot, inner_parts) =>
-                    // Handle nested regular conditional inside frontmatter conditional
-                    match slots.get(slot) {
-                      Some(value) =>
-                        if value.length() > 0 {
-                          // Render inner parts recursively
-                          let mut k = 0
-                          while k < inner_parts.length() {
-                            match inner_parts[k] {
-                              Text(t) => out.write_string(t)
-                              Slot(s, filters) =>
-                                match slots.get(s) {
-                                  Some(v) =>
-                                    out.write_string(apply_filters(v, filters))
-                                  None => ()
-                                }
-                              DataSlot(file, key_path) =>
-                                match data_store {
-                                  Some(store) =>
-                                    match
-                                      @data.resolve_string(
-                                        store, file, key_path,
-                                      ) {
-                                      Ok(v) => out.write_string(v)
-                                      Err(_) => ()
-                                    }
-                                  None => ()
-                                }
-                              FrontmatterSlot(f, filters) =>
-                                match page_fields.get(f) {
-                                  Some(v) =>
-                                    out.write_string(
-                                      apply_filters(
-                                        @html.escape_html_body(v),
-                                        filters,
-                                      ),
-                                    )
-                                  None => ()
-                                }
-                              _ =>
-                                // Include and Layout should not appear in conditional bodies
-                                return Err(
-                                  ParseError(
-                                    "include/layout not allowed in conditional",
-                                  ),
-                                )
-                            }
-                            k = k + 1
-                          }
-                        }
-                      None => ()
-                    }
-                  _ =>
-                    // Include and Layout should not appear in conditional bodies
-                    return Err(
-                      ParseError("include/layout not allowed in conditional"),
-                    )
-                }
-                j = j + 1
+              match
+                render_body_parts(
+                  body_parts, slots, data_store, page_fields, page_field_arrays,
+                  loop_ctx, false, out,
+                ) {
+                Ok(_) => ()
+                Err(e) => return Err(e)
               }
             }
-          None => () // Frontmatter field not in map, treat as empty
+          None => ()
         }
       DataEachBlock(file, key_path, body_parts) =>
-        // Render each block - loop over array items
+        // Loop over data array items
         match data_store {
           Some(store) =>
             match @data.resolve(store, file, key_path) {
               Ok(v) =>
                 match v {
                   @frontmatter.FArray(items) => {
-                    // For each item in the array, render body with loop item context
                     let mut item_idx = 0
                     while item_idx < items.length() {
-                      let item_value = items[item_idx]
-                      // Render body parts with loop item context
-                      let mut j = 0
-                      while j < body_parts.length() {
-                        match body_parts[j] {
-                          Text(t) => out.write_string(t)
-                          Slot(s, filters) =>
-                            match slots.get(s) {
-                              Some(v) =>
-                                out.write_string(apply_filters(v, filters))
-                              None => ()
-                            }
-                          DataSlot(df, dk) =>
-                            match data_store {
-                              Some(store) =>
-                                match @data.resolve_string(store, df, dk) {
-                                  Ok(v) => out.write_string(v)
-                                  Err(_) => ()
-                                }
-                              None => ()
-                            }
-                          FrontmatterSlot(f, filters) =>
-                            match page_fields.get(f) {
-                              Some(v) =>
-                                out.write_string(
-                                  apply_filters(
-                                    @html.escape_html_body(v),
-                                    filters,
-                                  ),
-                                )
-                              None => ()
-                            }
-                          LoopItemSlot(field_path, filters) =>
-                            // Resolve field path from current loop item
-                            match
-                              resolve_loop_item_field(item_value, field_path) {
-                              Some(v) =>
-                                out.write_string(apply_filters(v, filters))
-                              None => ()
-                            }
-                          _ =>
-                            // DataEachBlock and other blocks shouldn't appear in loop bodies
-                            return Err(ParseError("nested loops not supported"))
-                        }
-                        j = j + 1
+                      match
+                        render_body_parts(
+                          body_parts,
+                          slots,
+                          data_store,
+                          page_fields,
+                          page_field_arrays,
+                          DataCtx(items[item_idx]),
+                          false,
+                          out,
+                        ) {
+                        Ok(_) => ()
+                        Err(e) => return Err(e)
                       }
                       item_idx = item_idx + 1
                     }
                   }
-                  _ => () // Not an array, render nothing
+                  _ => () // not an array → render nothing
                 }
-              Err(_) => () // Resolution error, render nothing
+              Err(_) => () // resolution error → render nothing
             }
-          None => () // No data store, render nothing
+          None => () // no data store → render nothing
         }
       FrontmatterEachBlock(field, body_parts) =>
-        // Render each block - loop over frontmatter array field
+        // Loop over frontmatter string array
         match page_field_arrays.get(field) {
           Some(items) => {
-            // For each item in the array, render body with loop item context
             let mut item_idx = 0
             while item_idx < items.length() {
-              let item_value = items[item_idx]
-              // Render body parts with loop item context
-              let mut j = 0
-              while j < body_parts.length() {
-                match body_parts[j] {
-                  Text(t) => out.write_string(t)
-                  Slot(s, filters) =>
-                    match slots.get(s) {
-                      Some(v) => out.write_string(apply_filters(v, filters))
-                      None => ()
-                    }
-                  DataSlot(df, dk) =>
-                    match data_store {
-                      Some(store) =>
-                        match @data.resolve_string(store, df, dk) {
-                          Ok(v) => out.write_string(v)
-                          Err(_) => ()
-                        }
-                      None => ()
-                    }
-                  FrontmatterSlot(f, filters) =>
-                    match page_fields.get(f) {
-                      Some(v) =>
-                        out.write_string(
-                          apply_filters(@html.escape_html_body(v), filters),
-                        )
-                      None => ()
-                    }
-                  LoopItemSlot(field_path, filters) =>
-                    // {{item}} renders the current string item
-                    // {{item.field}} renders empty (no subfield support for string arrays)
-                    if field_path.length() == 0 {
-                      out.write_string(apply_filters(item_value, filters))
-                    }
-                  _ =>
-                    // Other blocks shouldn't appear in loop bodies
-                    return Err(ParseError("nested loops not supported"))
-                }
-                j = j + 1
+              match
+                render_body_parts(
+                  body_parts,
+                  slots,
+                  data_store,
+                  page_fields,
+                  page_field_arrays,
+                  StringCtx(items[item_idx]),
+                  false,
+                  out,
+                ) {
+                Ok(_) => ()
+                Err(e) => return Err(e)
               }
               item_idx = item_idx + 1
             }
           }
-          None => () // Field not found, render nothing (graceful degradation)
+          None => () // field not found → render nothing
         }
-      LoopItemSlot(_, _) =>
-        // LoopItemSlot outside loops is treated as empty
-        ()
+      LoopItemSlot(field_path, filters) =>
+        // Resolve from loop context
+        match loop_ctx {
+          DataCtx(item) =>
+            match resolve_loop_item_field(item, field_path) {
+              Some(v) => out.write_string(apply_filters(v, filters))
+              None => ()
+            }
+          StringCtx(s) =>
+            if field_path.length() == 0 {
+              out.write_string(apply_filters(s, filters))
+            } // else: sub-field on string → render empty
+          NoCtx => () // outside loop → render empty
+        }
       Include(_) =>
         return Err(ParseError("include directive not resolved at render time"))
       Layout(_) =>
@@ -1282,11 +1102,44 @@ fn render_parts(
     }
     i = i + 1
   }
-  Ok(out.to_string())
+  Ok(())
 }
 
 ///|
-/// Render a parsed template by substituting non-data slots.
+fn render_parts(
+  template : Template,
+  slots : Map[TemplateSlot, String],
+  data_store : @data.DataStore?,
+  page_fields : Map[String, String],
+  page_field_arrays : Map[String, Array[String]],
+) -> Result[String, TemplateError] {
+  // Validate required slots upfront
+  let mut i = 0
+  while i < template.required_slots.length() {
+    let slot = template.required_slots[i]
+    match slots.get(slot) {
+      Some(_) => ()
+      None => return Err(MissingRequiredSlot(slot))
+    }
+    i = i + 1
+  }
+
+  let out = StringBuilder::new()
+  match
+    render_body_parts(
+      template.parts,
+      slots,
+      data_store,
+      page_fields,
+      page_field_arrays,
+      NoCtx,
+      true,
+      out,
+    ) {
+    Ok(_) => Ok(out.to_string())
+    Err(e) => Err(e)
+  }
+}
 
 ///|
 /// Render a parsed template by substituting non-data slots.
