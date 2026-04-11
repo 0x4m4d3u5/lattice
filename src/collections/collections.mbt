@@ -859,6 +859,7 @@ pub fn parse(input : String) -> Result[CollectionsConfig, CollectionsError] {
   let mut current_template : String? = None
   let mut current_page_size : Int? = None
   let mut current_sort_order : SortOrder = DateDesc
+  let mut current_description : String? = None
   let mut current_required : String? = None
 
   let mut i = 0
@@ -875,15 +876,8 @@ pub fn parse(input : String) -> Result[CollectionsConfig, CollectionsError] {
         Some(CollectionSection(name)) =>
           match
             finalize_collection(
-              defs,
-              seen_collections,
-              name,
-              current_schema,
-              current_dir,
-              current_template,
-              current_page_size,
-              current_sort_order,
-              None,
+              defs, seen_collections, name, current_schema, current_dir, current_template,
+              current_page_size, current_sort_order, current_description,
             ) {
             Err(e) => return Err(e)
             Ok(_) => ()
@@ -903,6 +897,7 @@ pub fn parse(input : String) -> Result[CollectionsConfig, CollectionsError] {
       current_template = None
       current_page_size = None
       current_sort_order = DateDesc
+      current_description = None
       current_required = None
       match parse_section_header(raw, line_no) {
         Ok(section) => current_section = Some(section)
@@ -966,6 +961,8 @@ pub fn parse(input : String) -> Result[CollectionsConfig, CollectionsError] {
                 ),
               )
           }
+        } else if key == "description" {
+          current_description = Some(value)
         } else {
           return Err(
             InvalidLine(
@@ -994,15 +991,8 @@ pub fn parse(input : String) -> Result[CollectionsConfig, CollectionsError] {
     Some(CollectionSection(name)) =>
       match
         finalize_collection(
-          defs,
-          seen_collections,
-          name,
-          current_schema,
-          current_dir,
-          current_template,
-          current_page_size,
-          current_sort_order,
-          None,
+          defs, seen_collections, name, current_schema, current_dir, current_template,
+          current_page_size, current_sort_order, current_description,
         ) {
         Err(e) => return Err(e)
         Ok(_) => ()
@@ -1028,7 +1018,7 @@ pub fn parse(input : String) -> Result[CollectionsConfig, CollectionsError] {
 ///|
 /// Parse sort order from config string (e.g., "date:desc").
 /// Returns None for invalid values.
-fn parse_sort_order(value : String) -> SortOrder? {
+pub fn parse_sort_order(value : String) -> SortOrder? {
   if value == "date:desc" {
     Some(DateDesc)
   } else if value == "date:asc" {

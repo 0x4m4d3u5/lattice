@@ -513,3 +513,80 @@ test "collections parse sort weight" {
     Err(_) => assert_true(false)
   }
 }
+
+///|
+test "collections parse description field" {
+  let src = "[posts]\n" +
+    "schema = title:String\n" +
+    "dir = content/posts\n" +
+    "description = \"My blog posts\"\n"
+  match parse(src) {
+    Ok(cfg) => {
+      assert_eq(cfg.definitions.length(), 1)
+      assert_eq(cfg.definitions[0].description, Some("My blog posts"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "collections description defaults to None when not specified" {
+  let src = "[posts]\n" + "schema = title:String\n" + "dir = content/posts\n"
+  match parse(src) {
+    Ok(cfg) => {
+      assert_eq(cfg.definitions.length(), 1)
+      assert_eq(cfg.definitions[0].description, None)
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "collections parse description and sort together" {
+  let src = "[posts]\n" +
+    "schema = title:String\n" +
+    "dir = content/posts\n" +
+    "description = All my posts\n" +
+    "sort = title:asc\n"
+  match parse(src) {
+    Ok(cfg) => {
+      assert_eq(cfg.definitions.length(), 1)
+      assert_eq(cfg.definitions[0].description, Some("All my posts"))
+      match cfg.definitions[0].sort_order {
+        @collections.TitleAsc => assert_true(true)
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "collections parse description across multiple sections" {
+  let src = "[posts]\n" +
+    "schema = title:String\n" +
+    "dir = content/posts\n" +
+    "description = Blog\n\n" +
+    "[pages]\n" +
+    "schema = title:String\n" +
+    "dir = content/pages\n" +
+    "description = Static pages\n"
+  match parse(src) {
+    Ok(cfg) => {
+      assert_eq(cfg.definitions.length(), 2)
+      assert_eq(cfg.definitions[0].description, Some("Blog"))
+      assert_eq(cfg.definitions[1].description, Some("Static pages"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "collections parse_sort_order pub function" {
+  assert_true(parse_sort_order("date:desc") is Some(DateDesc))
+  assert_true(parse_sort_order("date:asc") is Some(DateAsc))
+  assert_true(parse_sort_order("title:asc") is Some(TitleAsc))
+  assert_true(parse_sort_order("title:desc") is Some(TitleDesc))
+  assert_true(parse_sort_order("weight") is Some(Weight))
+  assert_true(parse_sort_order("nonsense") is None)
+}
