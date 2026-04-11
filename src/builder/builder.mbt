@@ -530,6 +530,14 @@ priv struct ProcessedDocument {
 }
 
 ///|
+/// Tracks which page declared a given redirect source path.
+/// Used to detect duplicate redirect_from declarations across pages.
+priv struct RedirectSource {
+  redirect_path : String
+  page_url : String
+}
+
+///|
 /// Group of pages for archive generation.
 pub(all) struct ArchiveGroup {
   year : String
@@ -1167,6 +1175,132 @@ pub fn render_redirect_page(canonical_url : String) -> String {
   "</a>&#8230;</p>\n" +
   "</body>\n" +
   "</html>\n"
+}
+
+///|
+/// Extract redirect_from paths from raw content string.
+/// Returns array of redirect path strings if present, empty otherwise.
+fn extract_redirect_paths(raw_content : String) -> Array[String] {
+  match @frontmatter.parse(raw_content) {
+    Ok(fm) =>
+      match fm.fields.get("redirect_from") {
+        Some(@frontmatter.FArray(urls)) => {
+          let paths : Array[String] = []
+          let mut k = 0
+          while k < urls.length() {
+            match urls[k] {
+              @frontmatter.FStr(s) => paths.push(s)
+              _ => ()
+            }
+            k = k + 1
+          }
+          paths
+        }
+        _ => []
+      }
+    Err(_) => []
+  }
+}
+
+///|
+/// Emit redirect stubs for a single page's redirect_from paths.
+/// Returns the number of redirect pages written.
+/// Records each redirect source in `redirect_sources` for duplicate detection.
+fn emit_redirects_for_page(
+  raw_content : String,
+  page_url : String,
+  output_dir : String,
+  base_url : String,
+  redirect_sources : Array[RedirectSource],
+  diagnostics : Array[@diagnostic.Diagnostic],
+) -> Int {
+  let paths = extract_redirect_paths(raw_content)
+  if paths.length() == 0 {
+    return 0
+  }
+  let canonical = @strutil.absolute_url(base_url, page_url)
+  let redirect_html = render_redirect_page(canonical)
+  let mut written = 0
+  let mut k = 0
+  while k < paths.length() {
+    let redirect_url = paths[k]
+    // Track redirect source for duplicate detection
+    redirect_sources.push({ redirect_path: redirect_url, page_url })
+    let redirect_out_path = output_dir +
+      "/" +
+      redirect_url_to_output_path(redirect_url)
+    try {
+      // Ensure parent directory exists
+      let redirect_dir = if redirect_out_path.contains("/") {
+        let mut last_slash = 0
+        let mut idx = 0
+        while idx < redirect_out_path.length() {
+          if @strutil.char_at(redirect_out_path, idx) == '/' {
+            last_slash = idx
+          }
+          idx = idx + 1
+        }
+        @strutil.substr(redirect_out_path, 0, last_slash)
+      } else {
+        "."
+      }
+      ensure_dir(redirect_dir)
+      @fs.write_string_to_file(redirect_out_path, redirect_html)
+      written = written + 1
+    } catch {
+      @fs.IOError(msg) =>
+        diagnostics.push(
+          build_error(
+            Some(redirect_out_path),
+            None,
+            None,
+            "redirect write failed: " + msg,
+          ),
+        )
+    }
+    k = k + 1
+  }
+  written
+}
+
+///|
+/// Check for duplicate redirect_from declarations and emit warnings.
+/// Two pages declaring redirect_from to the same source path would silently
+/// overwrite each other — this makes the conflict visible.
+fn warn_duplicate_redirects(
+  redirect_sources : Array[RedirectSource],
+  diagnostics : Array[@diagnostic.Diagnostic],
+) -> Unit {
+  if redirect_sources.length() < 2 {
+    return
+  }
+  // Group redirect paths by first occurrence, detect collisions
+  let seen : Map[String, String] = Map::new()
+  let mut i = 0
+  while i < redirect_sources.length() {
+    let src = redirect_sources[i]
+    match seen.get(src.redirect_path) {
+      Some(first_url) => {
+        if first_url != src.page_url {
+          diagnostics.push(
+            build_warning(
+              None,
+              None,
+              None,
+              "duplicate redirect source " +
+              src.redirect_path +
+              " — defined by both " +
+              first_url +
+              " and " +
+              src.page_url,
+            ),
+          )
+        }
+      }
+      None => seen.set(src.redirect_path, src.page_url)
+    }
+    i = i + 1
+  }
 }
 
 ///|
@@ -4565,6 +4699,7 @@ pub fn build(
   let mut unchanged = 0
   let mut skipped_drafts = 0
   let mut redirect_count = 0
+  let redirect_sources : Array[RedirectSource] = []
   let graph_pages : Array[@graph.GraphPage] = []
   let search_entries : Array[@search.SearchEntry] = []
   let content_entries : Array[@search.ContentEntry] = []
@@ -4761,70 +4896,14 @@ pub fn build(
               @cache.remember(next_cache_store, src.slug, src.fingerprint)
 
               // Generate redirect pages if redirect_from is specified
-              let redirects_generated = match @frontmatter.parse(src.content) {
-                Ok(fm) =>
-                  match fm.fields.get("redirect_from") {
-                    Some(@frontmatter.FArray(urls)) => {
-                      let mut rd_count = 0
-                      let mut k = 0
-                      while k < urls.length() {
-                        match urls[k] {
-                          @frontmatter.FStr(redirect_url) => {
-                            let canonical = @strutil.absolute_url(
-                              config.site.base_url,
-                              doc.url,
-                            )
-                            let redirect_html = render_redirect_page(canonical)
-                            let redirect_out_path = config.output_dir +
-                              "/" +
-                              redirect_url_to_output_path(redirect_url)
-                            try {
-                              // Ensure parent directory exists
-                              let redirect_dir = if redirect_out_path.contains(
-                                  "/",
-                                ) {
-                                let mut last_slash = 0
-                                let mut idx = 0
-                                while idx < redirect_out_path.length() {
-                                  if @strutil.char_at(redirect_out_path, idx) ==
-                                    '/' {
-                                    last_slash = idx
-                                  }
-                                  idx = idx + 1
-                                }
-                                @strutil.substr(
-                                  redirect_out_path, 0, last_slash,
-                                )
-                              } else {
-                                "."
-                              }
-                              ensure_dir(redirect_dir)
-                              @fs.write_string_to_file(
-                                redirect_out_path, redirect_html,
-                              )
-                              rd_count = rd_count + 1
-                            } catch {
-                              @fs.IOError(msg) =>
-                                diagnostics.push(
-                                  build_error(
-                                    Some(redirect_out_path),
-                                    None,
-                                    None,
-                                    "redirect write failed: " + msg,
-                                  ),
-                                )
-                            }
-                          }
-                          _ => ()
-                        }
-                        k = k + 1
-                      }
-                      rd_count
-                    }
-                    _ => 0
-                  }
-                Err(_) => 0
-              }
+              let redirects_generated = emit_redirects_for_page(
+                src.content,
+                doc.url,
+                config.output_dir,
+                config.site.base_url,
+                redirect_sources,
+                diagnostics,
+              )
               redirect_count = redirect_count + redirects_generated
 
               // Only include non-draft posts in indexes
@@ -4992,6 +5071,16 @@ pub fn build(
           }
           if write_ok {
             rebuilt = rebuilt + 1
+            // Emit redirect stubs if redirect_from is specified
+            redirect_count = redirect_count +
+              emit_redirects_for_page(
+                src.content,
+                doc.url,
+                config.output_dir,
+                config.site.base_url,
+                redirect_sources,
+                diagnostics,
+              )
             // Add to graph for sitemap and search
             let page : @graph.GraphPage = {
               slug: src.slug,
@@ -5131,6 +5220,16 @@ pub fn build(
           }
           if write_ok {
             rebuilt = rebuilt + 1
+            // Emit redirect stubs if redirect_from is specified
+            redirect_count = redirect_count +
+              emit_redirects_for_page(
+                src.content,
+                doc.url,
+                config.output_dir,
+                config.site.base_url,
+                redirect_sources,
+                diagnostics,
+              )
             let page : @graph.GraphPage = {
               slug: src.slug,
               title: doc.title,
@@ -5180,6 +5279,9 @@ pub fn build(
       ri = ri + 1
     }
   }
+
+  // Check for duplicate redirect_from declarations across all pages
+  warn_duplicate_redirects(redirect_sources, diagnostics)
 
   if error_count == 0 {
     let all_feed_pages : Array[@graph.GraphPage] = []

@@ -1140,6 +1140,8 @@ let structural_post : String =
   #|  - types
   #|  - demo
   #|author: Lattice
+  #|redirect_from:
+  #|  - /old-structural-guarantees/
   #|---
   #|
   #|# Structural Guarantees
@@ -1161,6 +1163,10 @@ let structural_post : String =
   #|## Wikilinks
   #|
   #|Internal links use [[my-project]] syntax, resolved against the full site index. A broken wikilink is a build error, not a 404 for your visitors.
+  #|
+  #|## Redirects
+  #|
+  #|The `redirect_from` frontmatter field above generates a meta-refresh redirect page at `/old-structural-guarantees/`. This is useful when you rename or move a page — visitors and search engines are sent to the new URL automatically. Duplicate redirect sources across pages produce a build warning.
   #|
   #|## Cross-References
   #|
@@ -1196,6 +1202,20 @@ let sample_project : String =
   #|- `date` — must be after 2020-01-01
   #|
   #|Try changing `priority` to `99` or `status` to `unknown` and run `lattice build ./content` to see actionable error messages.
+  #|
+
+///|
+/// Sample 404 page — rendered as /404.html when a visitor hits a missing URL.
+let notfound_page : String =
+  #|---
+  #|title: Page Not Found
+  #|---
+  #|
+  #|# 404
+  #|
+  #|The page you're looking for doesn't exist.
+  #|
+  #|[Go home](/)
   #|
 
 ///|
@@ -1394,6 +1414,10 @@ pub fn scaffold_site(target_dir : String) -> Result[Unit, String] {
     Err(e) => return Err(e)
   }
   match write_file(projects + "/my-project.md", sample_project) {
+    Ok(_) => ()
+    Err(e) => return Err(e)
+  }
+  match write_file(content + "/404.md", notfound_page) {
     Ok(_) => ()
     Err(e) => return Err(e)
   }
