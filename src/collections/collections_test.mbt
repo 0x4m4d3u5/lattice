@@ -590,3 +590,111 @@ test "collections parse_sort_order pub function" {
   assert_true(parse_sort_order("weight") is Some(Weight))
   assert_true(parse_sort_order("nonsense") is None)
 }
+// ── TDateTime collection parser tests ────────────────────────────────────────
+
+///|
+test "collections parse DateTime type unbounded" {
+  let src = "[events]\n" +
+    "schema = starts_at:DateTime\n" +
+    "dir = content/events\n"
+  match parse(src) {
+    Ok(cfg) => {
+      let field = cfg.definitions[0].schema.fields[0]
+      assert_eq(field.name, "starts_at")
+      match field.field_type {
+        @schema.TDateTime(None, None) => assert_true(true)
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "collections parse DateTime(after=2026-01-01T00:00:00Z)" {
+  let src = "[events]\n" +
+    "schema = starts_at:DateTime(after=2026-01-01T00:00:00Z)\n" +
+    "dir = content/events\n"
+  match parse(src) {
+    Ok(cfg) => {
+      let field = cfg.definitions[0].schema.fields[0]
+      assert_eq(field.name, "starts_at")
+      match field.field_type {
+        @schema.TDateTime(Some(after), None) =>
+          assert_eq(after, "2026-01-01T00:00:00Z")
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "collections parse DateTime(before=2027-01-01T00:00:00Z)" {
+  let src = "[events]\n" +
+    "schema = starts_at:DateTime(before=2027-01-01T00:00:00Z)\n" +
+    "dir = content/events\n"
+  match parse(src) {
+    Ok(cfg) => {
+      let field = cfg.definitions[0].schema.fields[0]
+      assert_eq(field.name, "starts_at")
+      match field.field_type {
+        @schema.TDateTime(None, Some(before)) =>
+          assert_eq(before, "2027-01-01T00:00:00Z")
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "collections parse DateTime(after=...,before=...)" {
+  let src = "[events]\n" +
+    "schema = starts_at:DateTime(after=2026-01-01T00:00:00Z,before=2027-01-01T00:00:00Z)\n" +
+    "dir = content/events\n"
+  match parse(src) {
+    Ok(cfg) => {
+      let field = cfg.definitions[0].schema.fields[0]
+      match field.field_type {
+        @schema.TDateTime(Some(after), Some(before)) => {
+          assert_eq(after, "2026-01-01T00:00:00Z")
+          assert_eq(before, "2027-01-01T00:00:00Z")
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "collections parse DateTime bounds order-independent" {
+  let src = "[events]\n" +
+    "schema = starts_at:DateTime(before=2027-01-01T00:00:00Z,after=2026-01-01T00:00:00Z)\n" +
+    "dir = content/events\n"
+  match parse(src) {
+    Ok(cfg) => {
+      let field = cfg.definitions[0].schema.fields[0]
+      match field.field_type {
+        @schema.TDateTime(Some(after), Some(before)) => {
+          assert_eq(after, "2026-01-01T00:00:00Z")
+          assert_eq(before, "2027-01-01T00:00:00Z")
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "collections reject DateTime with unknown bound key" {
+  let src = "[events]\n" +
+    "schema = starts_at:DateTime(since=2026-01-01T00:00:00Z)\n" +
+    "dir = content/events\n"
+  match parse(src) {
+    Ok(_) => assert_true(false)
+    Err(_) => assert_true(true)
+  }
+}

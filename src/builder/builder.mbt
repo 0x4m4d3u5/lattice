@@ -1280,7 +1280,7 @@ fn warn_duplicate_redirects(
   while i < redirect_sources.length() {
     let src = redirect_sources[i]
     match seen.get(src.redirect_path) {
-      Some(first_url) => {
+      Some(first_url) =>
         if first_url != src.page_url {
           diagnostics.push(
             build_warning(
@@ -1296,7 +1296,6 @@ fn warn_duplicate_redirects(
             ),
           )
         }
-      }
       None => seen.set(src.redirect_path, src.page_url)
     }
     i = i + 1
@@ -6881,12 +6880,12 @@ pub fn stats(config : BuildConfig) -> StatsResult {
       page_count: coll.sources.length(),
       word_count,
       schema_summary: coll.definition.schema.fields
-        .iter()
-        .map(fn(fdef) {
-          fdef.name + ":" + @schema.field_type_name(fdef.field_type)
-        })
-        .collect()
-        .join(", "),
+      .iter()
+      .map(fn(fdef) {
+        fdef.name + ":" + @schema.field_type_name(fdef.field_type)
+      })
+      .collect()
+      .join(", "),
     })
     i += 1
   }

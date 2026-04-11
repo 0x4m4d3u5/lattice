@@ -305,6 +305,29 @@ fn parse_date_literal_at(s : String, pos : Int) -> (String, Int) {
 }
 
 ///|
+/// Parse a datetime literal (YYYY-MM-DDTHH:MM:SS with optional timezone)
+/// starting at position. Returns the literal string and the position after
+/// the last character. Scans digits, hyphens, colons, T, Z, +, and period.
+fn parse_datetime_literal_at(s : String, pos : Int) -> (String, Int) {
+  let mut i = pos
+  while i < s.length() {
+    let c = @strutil.char_at(s, i)
+    if (c >= '0' && c <= '9') ||
+      c == '-' ||
+      c == 'T' ||
+      c == ':' ||
+      c == 'Z' ||
+      c == '+' ||
+      c == '.' {
+      i = i + 1
+    } else {
+      break
+    }
+  }
+  (@strutil.substr(s, pos, i), i)
+}
+
+///|
 /// Parse a string as an integer, supporting negative values.
 fn parse_positive_or_negative_int(s : String) -> Int? {
   if s.length() == 0 {
@@ -450,6 +473,58 @@ fn parse_field_type_at(
       return Ok((@schema.TDate(after_val, before_val), j))
     }
     return Ok((@schema.TDate(None, None), next))
+  }
+  if name == "DateTime" {
+    let p = skip_ws_type(s, next)
+    if p < s.length() && @strutil.char_at(s, p) == '(' {
+      // Parse DateTime(after=...,before=...) syntax
+      let mut after_val : String? = None
+      let mut before_val : String? = None
+      let mut j = p + 1
+      let mut done = false
+      while j < s.length() && !done {
+        let q = skip_ws_type(s, j)
+        if q < s.length() && @strutil.char_at(s, q) == ')' {
+          j = q + 1
+          done = true
+        } else if starts_with_collections(
+            @strutil.substr(s, q, s.length()),
+            "after=",
+          ) {
+          j = q + 6 // skip "after="
+          let (dt_str, after_dt) = parse_datetime_literal_at(s, j)
+          if dt_str.length() == 0 {
+            return Err("invalid after value in DateTime bounds")
+          }
+          after_val = Some(dt_str)
+          j = skip_ws_type(s, after_dt)
+          if j < s.length() && @strutil.char_at(s, j) == ',' {
+            j = j + 1
+          }
+        } else if starts_with_collections(
+            @strutil.substr(s, q, s.length()),
+            "before=",
+          ) {
+          j = q + 7 // skip "before="
+          let (dt_str, after_dt) = parse_datetime_literal_at(s, j)
+          if dt_str.length() == 0 {
+            return Err("invalid before value in DateTime bounds")
+          }
+          before_val = Some(dt_str)
+          j = skip_ws_type(s, after_dt)
+          if j < s.length() && @strutil.char_at(s, j) == ',' {
+            j = j + 1
+          }
+        } else {
+          return Err("unexpected content in DateTime() bounds")
+        }
+      }
+      if !done {
+        return Err("expected ')' to close DateTime bounds")
+      }
+      return Ok((@schema.TDateTime(after_val, before_val), j))
+    }
+    return Ok((@schema.TDateTime(None, None), next))
   }
   if name == "Int" {
     let p = skip_ws_type(s, next)

@@ -1499,6 +1499,7 @@ pub fn stub_for_field_type(ft : @schema.FieldType, today : String) -> String {
     @schema.TEnum(allowed) => if allowed.length() > 0 { allowed[0] } else { "" }
     @schema.TUrl => "https://example.com"
     @schema.TSlug => "example-slug"
+    @schema.TDateTime(_, _) => "2026-01-01T00:00:00Z"
     @schema.TRef(_) => "example-slug"
   }
 }

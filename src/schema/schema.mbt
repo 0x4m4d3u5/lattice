@@ -22,6 +22,7 @@ pub(all) enum FieldType {
   TEnum(Array[String])
   TUrl
   TSlug
+  TDateTime(String?, String?) // (after, before) — both optional; TDateTime(None, None) accepts any ISO 8601 datetime
   TRef(String?) // optional collection name constraint; None = any collection
 }
 
@@ -93,6 +94,11 @@ pub fn field_type_name(ft : FieldType) -> String {
     }
     TUrl => "Url"
     TSlug => "Slug"
+    TDateTime(None, None) => "DateTime"
+    TDateTime(Some(after), None) => "DateTime(after=" + after + ")"
+    TDateTime(None, Some(before)) => "DateTime(before=" + before + ")"
+    TDateTime(Some(after), Some(before)) =>
+      "DateTime(after=" + after + ", before=" + before + ")"
     TRef(None) => "Ref"
     TRef(Some(coll)) => "Ref[" + coll + "]"
   }
@@ -217,6 +223,25 @@ fn type_matches(val : @frontmatter.FrontmatterValue, ft : FieldType) -> Bool {
         @frontmatter.FStr(s) => is_valid_slug(s)
         _ => false
       }
+    TDateTime(after, before) =>
+      match val {
+        @frontmatter.FStr(s) =>
+          if !is_valid_iso8601_datetime(s) {
+            false
+          } else {
+            let date_part = datetime_date_part(s)
+            let after_ok = match after {
+              Some(lo) => date_part > datetime_date_part(lo)
+              None => true
+            }
+            let before_ok = match before {
+              Some(hi) => date_part < datetime_date_part(hi)
+              None => true
+            }
+            after_ok && before_ok
+          }
+        _ => false
+      }
     TRef(_) =>
       // TRef structural check: value must be a string (valid slug format).
       // Existence against the page index is validated in validate_refs()
@@ -225,6 +250,139 @@ fn type_matches(val : @frontmatter.FrontmatterValue, ft : FieldType) -> Bool {
         @frontmatter.FStr(s) => is_valid_slug(s)
         _ => false
       }
+  }
+}
+
+///|
+/// Validate ISO 8601 datetime format: YYYY-MM-DDTHH:MM:SS with optional timezone.
+///
+/// Accepts:
+/// - `2026-03-15T10:30:00Z`
+/// - `2026-03-15T10:30:00+05:30`
+/// - `2026-03-15T10:30:00-08:00`
+/// - `2026-03-15T10:30:00` (no timezone, treated as local)
+///
+/// Rejects:
+/// - `2026-03-15` (date-only, use TDate for this)
+/// - `2026-03-15T10:30` (missing seconds)
+/// - `not-a-datetime`
+fn is_valid_iso8601_datetime(s : String) -> Bool {
+  // Minimum length: "YYYY-MM-DDTHH:MM:SS" = 19 characters
+  if s.length() < 19 {
+    return false
+  }
+  // Check date part: YYYY-MM-DD (positions 0-9)
+  if @strutil.char_at(s, 4) != '-' || @strutil.char_at(s, 7) != '-' {
+    return false
+  }
+  // Check separator T (or space, some frontmatter uses space)
+  let sep = @strutil.char_at(s, 10)
+  if sep != 'T' && sep != ' ' {
+    return false
+  }
+  // Check time part: HH:MM:SS (positions 11-18)
+  if @strutil.char_at(s, 13) != ':' || @strutil.char_at(s, 16) != ':' {
+    return false
+  }
+  // Validate digits in each position
+  let digit_positions = [0, 1, 2, 3, 5, 6, 8, 9, 11, 12, 14, 15, 17, 18]
+  let mut i = 0
+  while i < digit_positions.length() {
+    let pos = digit_positions[i]
+    if pos >= s.length() {
+      return false
+    }
+    let c = @strutil.char_at(s, pos)
+    if c < '0' || c > '9' {
+      return false
+    }
+    i = i + 1
+  }
+  // Validate month range (1-12)
+  let month_1 = @strutil.char_at(s, 5).to_int() - '0'.to_int()
+  let month_2 = @strutil.char_at(s, 6).to_int() - '0'.to_int()
+  let month = month_1 * 10 + month_2
+  if month < 1 || month > 12 {
+    return false
+  }
+  // Validate day range (1-31, same as TDate)
+  let day_1 = @strutil.char_at(s, 8).to_int() - '0'.to_int()
+  let day_2 = @strutil.char_at(s, 9).to_int() - '0'.to_int()
+  let day = day_1 * 10 + day_2
+  if day < 1 || day > 31 {
+    return false
+  }
+  // Validate hour range (0-23)
+  let hour_1 = @strutil.char_at(s, 11).to_int() - '0'.to_int()
+  let hour_2 = @strutil.char_at(s, 12).to_int() - '0'.to_int()
+  let hour = hour_1 * 10 + hour_2
+  if hour > 23 {
+    return false
+  }
+  // Validate minute range (0-59)
+  let min_1 = @strutil.char_at(s, 14).to_int() - '0'.to_int()
+  let min_2 = @strutil.char_at(s, 15).to_int() - '0'.to_int()
+  let minute = min_1 * 10 + min_2
+  if minute > 59 {
+    return false
+  }
+  // Validate second range (0-59)
+  let sec_1 = @strutil.char_at(s, 17).to_int() - '0'.to_int()
+  let sec_2 = @strutil.char_at(s, 18).to_int() - '0'.to_int()
+  let second = sec_1 * 10 + sec_2
+  if second > 59 {
+    return false
+  }
+  // Validate optional timezone suffix
+  if s.length() == 19 {
+    return true // No timezone — valid local time
+  }
+  let tz_start = 19
+  let tz_char = @strutil.char_at(s, tz_start)
+  if tz_char == 'Z' {
+    // Zulu time — must be the last character
+    return s.length() == 20
+  }
+  if tz_char == '+' || tz_char == '-' {
+    // Offset: +HH:MM or -HH:MM (total length = 25)
+    if s.length() != 25 {
+      return false
+    }
+    if @strutil.char_at(s, 22) != ':' {
+      return false
+    }
+    // Validate offset hour digits (0-23)
+    let off_h1 = @strutil.char_at(s, 20).to_int() - '0'.to_int()
+    let off_h2 = @strutil.char_at(s, 21).to_int() - '0'.to_int()
+    let off_hour = off_h1 * 10 + off_h2
+    if off_hour > 23 {
+      return false
+    }
+    // Validate offset minute digits (0-59)
+    let off_m1 = @strutil.char_at(s, 23).to_int() - '0'.to_int()
+    let off_m2 = @strutil.char_at(s, 24).to_int() - '0'.to_int()
+    let off_min = off_m1 * 10 + off_m2
+    if off_min > 59 {
+      return false
+    }
+    return true
+  }
+  // Unknown suffix
+  false
+}
+
+///|
+/// Extract the date prefix (YYYY-MM-DD) from an ISO 8601 datetime string.
+/// Used for bounds comparison — compares the date portion only, consistent
+/// with how TDate bounds work. This is intentionally imprecise for timezone
+/// edge cases (a datetime at 23:00+05:30 is a different UTC date than its
+/// local date), but for content management (event dates, publish dates),
+/// local date comparison is the expected behavior.
+fn datetime_date_part(s : String) -> String {
+  if s.length() >= 10 {
+    @strutil.substr(s, 0, 10)
+  } else {
+    s
   }
 }
 
@@ -317,6 +475,25 @@ pub fn validate(
               "\""
             (TRef(_), @frontmatter.FStr(s)) =>
               "expected a valid slug reference, got: \"" + s + "\""
+            (TDateTime(after, before), @frontmatter.FStr(s)) =>
+              // If the value isn't even a valid datetime, say so.
+              // Otherwise, construct a temporal range description.
+              if !is_valid_iso8601_datetime(s) {
+                "expected ISO 8601 datetime (YYYY-MM-DDTHH:MM:SS[Z|+HH:MM]), got: \"" +
+                s +
+                "\""
+              } else {
+                let range = match (after, before) {
+                  (Some(lo), Some(hi)) => "after " + lo + " and before " + hi
+                  (Some(lo), None) => "after " + lo
+                  (None, Some(hi)) => "before " + hi
+                  (None, None) => "" // unreachable
+                }
+                "expected DateTime " + range + ", got: " + s
+              }
+            (TDateTime(_), @frontmatter.FDate(s)) =>
+              "expected ISO 8601 datetime (YYYY-MM-DDTHH:MM:SS[Z|+HH:MM]), got date-only value: " +
+              s
             (TDate(after, before), @frontmatter.FDate(s)) => {
               // Construct a temporal range description for the error message.
               // "expected Date after 2020-01-01, got: 2019-12-31"

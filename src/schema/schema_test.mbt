@@ -1733,3 +1733,312 @@ test "TString bounds rejects non-string values" {
   assert_eq(errors[0].field, "title")
   assert_true(errors[0].message.contains("expected String"))
 }
+// ── TDateTime validation tests ────────────────────────────────────────────────
+
+///|
+test "TDateTime(None, None) accepts valid ISO 8601 datetime with Z" {
+  let schema : Schema = {
+    name: "events",
+    fields: [
+      { name: "starts_at", field_type: TDateTime(None, None), required: true },
+    ],
+  }
+  let fm = parse_frontmatter_or_fail(
+    "+++\n" + "starts_at = \"2026-03-15T10:30:00Z\"\n" + "+++\n",
+  )
+  let errors = validate(fm, schema)
+  assert_eq(errors.length(), 0)
+}
+
+///|
+test "TDateTime(None, None) accepts datetime with positive timezone offset" {
+  let schema : Schema = {
+    name: "events",
+    fields: [
+      { name: "starts_at", field_type: TDateTime(None, None), required: true },
+    ],
+  }
+  let fm = parse_frontmatter_or_fail(
+    "+++\n" + "starts_at = \"2026-03-15T10:30:00+05:30\"\n" + "+++\n",
+  )
+  let errors = validate(fm, schema)
+  assert_eq(errors.length(), 0)
+}
+
+///|
+test "TDateTime(None, None) accepts datetime with negative timezone offset" {
+  let schema : Schema = {
+    name: "events",
+    fields: [
+      { name: "starts_at", field_type: TDateTime(None, None), required: true },
+    ],
+  }
+  let fm = parse_frontmatter_or_fail(
+    "+++\n" + "starts_at = \"2026-03-15T10:30:00-08:00\"\n" + "+++\n",
+  )
+  let errors = validate(fm, schema)
+  assert_eq(errors.length(), 0)
+}
+
+///|
+test "TDateTime(None, None) accepts datetime without timezone" {
+  let schema : Schema = {
+    name: "events",
+    fields: [
+      { name: "starts_at", field_type: TDateTime(None, None), required: true },
+    ],
+  }
+  let fm = parse_frontmatter_or_fail(
+    "+++\n" + "starts_at = \"2026-03-15T10:30:00\"\n" + "+++\n",
+  )
+  let errors = validate(fm, schema)
+  assert_eq(errors.length(), 0)
+}
+
+///|
+test "TDateTime rejects date-only string" {
+  let schema : Schema = {
+    name: "events",
+    fields: [
+      { name: "starts_at", field_type: TDateTime(None, None), required: true },
+    ],
+  }
+  let fm = parse_frontmatter_or_fail(
+    "+++\n" + "starts_at = \"2026-03-15\"\n" + "+++\n",
+  )
+  let errors = validate(fm, schema)
+  assert_eq(errors.length(), 1)
+  assert_eq(errors[0].field, "starts_at")
+  assert_true(errors[0].message.contains("expected ISO 8601 datetime"))
+}
+
+///|
+test "TDateTime rejects invalid datetime format" {
+  let schema : Schema = {
+    name: "events",
+    fields: [
+      { name: "starts_at", field_type: TDateTime(None, None), required: true },
+    ],
+  }
+  let fm = parse_frontmatter_or_fail(
+    "+++\n" + "starts_at = \"not-a-datetime\"\n" + "+++\n",
+  )
+  let errors = validate(fm, schema)
+  assert_eq(errors.length(), 1)
+  assert_eq(errors[0].field, "starts_at")
+  assert_true(errors[0].message.contains("expected ISO 8601 datetime"))
+}
+
+///|
+test "TDateTime rejects datetime missing seconds" {
+  let schema : Schema = {
+    name: "events",
+    fields: [
+      { name: "starts_at", field_type: TDateTime(None, None), required: true },
+    ],
+  }
+  let fm = parse_frontmatter_or_fail(
+    "+++\n" + "starts_at = \"2026-03-15T10:30\"\n" + "+++\n",
+  )
+  let errors = validate(fm, schema)
+  assert_eq(errors.length(), 1)
+  assert_eq(errors[0].field, "starts_at")
+}
+
+///|
+test "TDateTime rejects invalid hour (25:00:00)" {
+  let schema : Schema = {
+    name: "events",
+    fields: [
+      { name: "starts_at", field_type: TDateTime(None, None), required: true },
+    ],
+  }
+  let fm = parse_frontmatter_or_fail(
+    "+++\n" + "starts_at = \"2026-03-15T25:00:00Z\"\n" + "+++\n",
+  )
+  let errors = validate(fm, schema)
+  assert_eq(errors.length(), 1)
+}
+
+///|
+test "TDateTime rejects non-string values" {
+  let schema : Schema = {
+    name: "events",
+    fields: [
+      { name: "starts_at", field_type: TDateTime(None, None), required: true },
+    ],
+  }
+  let fm = parse_frontmatter_or_fail("+++\n" + "starts_at = 42\n" + "+++\n")
+  let errors = validate(fm, schema)
+  assert_eq(errors.length(), 1)
+  assert_eq(errors[0].field, "starts_at")
+}
+
+///|
+test "TDateTime(Some(\"2026-01-01T00:00:00Z\"), None) rejects earlier datetime" {
+  let schema : Schema = {
+    name: "events",
+    fields: [
+      {
+        name: "starts_at",
+        field_type: TDateTime(Some("2026-01-01T00:00:00Z"), None),
+        required: true,
+      },
+    ],
+  }
+  // Boundary: equal to after (exclusive) — rejected (date part comparison)
+  let fm_equal = parse_frontmatter_or_fail(
+    "+++\n" + "starts_at = \"2026-01-01T10:00:00Z\"\n" + "+++\n",
+  )
+  let errors_eq = validate(fm_equal, schema)
+  assert_eq(errors_eq.length(), 1)
+  assert_true(errors_eq[0].message.contains("expected DateTime after"))
+
+  // After — accepted (date part 2026-01-02 > 2026-01-01)
+  let fm_after = parse_frontmatter_or_fail(
+    "+++\n" + "starts_at = \"2026-01-02T00:00:00Z\"\n" + "+++\n",
+  )
+  assert_eq(validate(fm_after, schema).length(), 0)
+
+  // Before — rejected (date part 2025-12-31 < 2026-01-01)
+  let fm_before = parse_frontmatter_or_fail(
+    "+++\n" + "starts_at = \"2025-12-31T23:59:59Z\"\n" + "+++\n",
+  )
+  assert_eq(validate(fm_before, schema).length(), 1)
+}
+
+///|
+test "TDateTime(None, Some(\"2027-01-01T00:00:00Z\")) rejects later datetime" {
+  let schema : Schema = {
+    name: "events",
+    fields: [
+      {
+        name: "starts_at",
+        field_type: TDateTime(None, Some("2027-01-01T00:00:00Z")),
+        required: true,
+      },
+    ],
+  }
+  // Before — accepted
+  let fm_before = parse_frontmatter_or_fail(
+    "+++\n" + "starts_at = \"2026-06-15T12:00:00Z\"\n" + "+++\n",
+  )
+  assert_eq(validate(fm_before, schema).length(), 0)
+
+  // Equal to before (exclusive) — rejected
+  let fm_equal = parse_frontmatter_or_fail(
+    "+++\n" + "starts_at = \"2027-01-01T00:00:00Z\"\n" + "+++\n",
+  )
+  assert_eq(validate(fm_equal, schema).length(), 1)
+
+  // After — rejected
+  let fm_after = parse_frontmatter_or_fail(
+    "+++\n" + "starts_at = \"2027-01-02T00:00:00Z\"\n" + "+++\n",
+  )
+  assert_eq(validate(fm_after, schema).length(), 1)
+}
+
+///|
+test "TDateTime(Some(\"2026-01-01T00:00:00Z\"), Some(\"2027-01-01T00:00:00Z\")) validates range" {
+  let schema : Schema = {
+    name: "events",
+    fields: [
+      {
+        name: "starts_at",
+        field_type: TDateTime(
+          Some("2026-01-01T00:00:00Z"),
+          Some("2027-01-01T00:00:00Z"),
+        ),
+        required: true,
+      },
+    ],
+  }
+  // In range — accepted
+  let fm_mid = parse_frontmatter_or_fail(
+    "+++\n" + "starts_at = \"2026-06-15T12:00:00Z\"\n" + "+++\n",
+  )
+  assert_eq(validate(fm_mid, schema).length(), 0)
+
+  // At after boundary (same date as after) — rejected
+  let fm_lo = parse_frontmatter_or_fail(
+    "+++\n" + "starts_at = \"2026-01-01T12:00:00Z\"\n" + "+++\n",
+  )
+  let errors_lo = validate(fm_lo, schema)
+  assert_eq(errors_lo.length(), 1)
+  assert_true(
+    errors_lo[0].message.contains(
+      "expected DateTime after 2026-01-01T00:00:00Z and before 2027-01-01T00:00:00Z",
+    ),
+  )
+
+  // At before boundary (same date as before) — rejected
+  let fm_hi = parse_frontmatter_or_fail(
+    "+++\n" + "starts_at = \"2027-01-01T00:00:00Z\"\n" + "+++\n",
+  )
+  assert_eq(validate(fm_hi, schema).length(), 1)
+
+  // Just inside range — accepted
+  let fm_just_after = parse_frontmatter_or_fail(
+    "+++\n" + "starts_at = \"2026-01-02T00:00:00Z\"\n" + "+++\n",
+  )
+  assert_eq(validate(fm_just_after, schema).length(), 0)
+
+  let fm_just_before = parse_frontmatter_or_fail(
+    "+++\n" + "starts_at = \"2026-12-31T23:59:59Z\"\n" + "+++\n",
+  )
+  assert_eq(validate(fm_just_before, schema).length(), 0)
+}
+
+///|
+test "TOptional(TDateTime) absent field produces no error" {
+  let schema : Schema = {
+    name: "events",
+    fields: [
+      {
+        name: "starts_at",
+        field_type: TOptional(TDateTime(None, None)),
+        required: false,
+      },
+    ],
+  }
+  let fm = parse_frontmatter_or_fail("+++\n+++\n")
+  assert_eq(validate(fm, schema).length(), 0)
+}
+
+///|
+test "TOptional(TDateTime) valid value produces no error" {
+  let schema : Schema = {
+    name: "events",
+    fields: [
+      {
+        name: "starts_at",
+        field_type: TOptional(TDateTime(None, None)),
+        required: false,
+      },
+    ],
+  }
+  let fm = parse_frontmatter_or_fail(
+    "+++\n" + "starts_at = \"2026-03-15T10:30:00Z\"\n" + "+++\n",
+  )
+  assert_eq(validate(fm, schema).length(), 0)
+}
+
+///|
+test "TOptional(TDateTime) invalid value produces error" {
+  let schema : Schema = {
+    name: "events",
+    fields: [
+      {
+        name: "starts_at",
+        field_type: TOptional(TDateTime(None, None)),
+        required: false,
+      },
+    ],
+  }
+  let fm = parse_frontmatter_or_fail(
+    "+++\n" + "starts_at = \"2026-03-15\"\n" + "+++\n",
+  )
+  let errors = validate(fm, schema)
+  assert_eq(errors.length(), 1)
+  assert_eq(errors[0].field, "starts_at")
+}
