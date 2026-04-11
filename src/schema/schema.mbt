@@ -50,7 +50,7 @@ pub(all) struct ValidationError {
 // ── helpers ───────────────────────────────────────────────────────────────────
 
 ///|
-fn field_type_name(ft : FieldType) -> String {
+pub fn field_type_name(ft : FieldType) -> String {
   match ft {
     TString(None, None) => "String"
     TString(Some(minlen), None) => "String(minlen=" + minlen.to_string() + ")"

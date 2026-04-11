@@ -1061,6 +1061,9 @@ fn run_main() -> Unit {
         cs.word_count.to_string() +
         " words",
       )
+      if cs.schema_summary.length() > 0 {
+        println("    schema: " + cs.schema_summary)
+      }
       i += 1
     }
     if result.standalone_count > 0 {

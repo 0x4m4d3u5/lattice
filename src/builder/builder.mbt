@@ -6698,6 +6698,7 @@ pub(all) struct CollectionStats {
   name : String
   page_count : Int
   word_count : Int
+  schema_summary : String
 }
 
 ///|
@@ -6777,6 +6778,13 @@ pub fn stats(config : BuildConfig) -> StatsResult {
       name: coll.definition.name,
       page_count: coll.sources.length(),
       word_count,
+      schema_summary: coll.definition.schema.fields
+        .iter()
+        .map(fn(fdef) {
+          fdef.name + ":" + @schema.field_type_name(fdef.field_type)
+        })
+        .collect()
+        .join(", "),
     })
     i += 1
   }
