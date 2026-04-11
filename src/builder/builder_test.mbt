@@ -3715,3 +3715,874 @@ test "sort_collection_pages weight with equal weights preserves relative order" 
   assert_eq(pages[1].slug, "a")
   assert_eq(pages[2].slug, "b")
 }
+
+///|
+test "standalone page with per-page template override via frontmatter" {
+  let root = "./_tmp_builder_standalone_template_override"
+  let content_root = root + "/content"
+  let standalone_root = content_root + "/standalone"
+  let data_root = content_root + "/data"
+  let templates_root = root + "/templates"
+  let output_root = root + "/dist"
+  ensure_dir_test(root)
+  ensure_dir_test(content_root)
+  ensure_dir_test(standalone_root)
+  ensure_dir_test(data_root)
+  ensure_dir_test(templates_root)
+  ensure_dir_test(output_root)
+
+  // Standalone page with custom template in frontmatter
+  assert_true(
+    write_file_test(
+      standalone_root + "/landing.md",
+      "---\n" +
+      "title: Landing\n" +
+      "template: landing.html\n" +
+      "---\n\n" +
+      "Custom landing content.\n",
+    ),
+  )
+  // Standalone page with default template
+  assert_true(
+    write_file_test(
+      standalone_root + "/default.md",
+      "---\n" + "title: Default\n" + "---\n\n" + "Default content.\n",
+    ),
+  )
+  assert_true(
+    write_file_test(
+      templates_root + "/page.html",
+      "<html><body>DEFAULT: {{content}}</body></html>\n",
+    ),
+  )
+  assert_true(
+    write_file_test(
+      templates_root + "/landing.html",
+      "<html><body>LANDING: {{content}}</body></html>\n",
+    ),
+  )
+
+  let site_cfg = "title = TemplateTest\n" +
+    "base_url = https://example.test\n" +
+    "templates_dir = " +
+    templates_root +
+    "\n" +
+    "data_dir = " +
+    data_root +
+    "\n" +
+    "standalone_dir = " +
+    standalone_root +
+    "\n" +
+    "output_dir = " +
+    output_root +
+    "\n"
+  assert_true(write_file_test(root + "/site.cfg", site_cfg))
+
+  let site = match @config.parse(site_cfg) {
+    Ok(parsed) => parsed
+    Err(_) => {
+      assert_true(false)
+      abort("site config parse failed")
+    }
+  }
+  let result = @builder.build(
+    {
+      content_dir: content_root,
+      output_dir: output_root,
+      config_path: root + "/site.cfg",
+      site,
+      collections_path: None,
+      force_rebuild: true,
+      include_drafts: false,
+    },
+    @cache.empty(output_root),
+  )
+  assert_eq(result.errors, 0)
+
+  let landing_output = @fs.read_file_to_string(
+    output_root + "/landing/index.html",
+  ) catch {
+    @fs.IOError(_) => ""
+  }
+  assert_true(landing_output.contains("LANDING:"))
+  assert_true(landing_output.contains("Custom landing content"))
+
+  let default_output = @fs.read_file_to_string(
+    output_root + "/default/index.html",
+  ) catch {
+    @fs.IOError(_) => ""
+  }
+  assert_true(default_output.contains("DEFAULT:"))
+  assert_true(default_output.contains("Default content"))
+}
+
+///|
+test "root-level about.md with per-page template override via frontmatter" {
+  let root = "./_tmp_builder_root_template_override"
+  let content_root = root + "/content"
+  let posts_root = content_root + "/posts"
+  let data_root = content_root + "/data"
+  let templates_root = root + "/templates"
+  let output_root = root + "/dist"
+  ensure_dir_test(root)
+  ensure_dir_test(content_root)
+  ensure_dir_test(posts_root)
+  ensure_dir_test(data_root)
+  ensure_dir_test(templates_root)
+  ensure_dir_test(output_root)
+
+  // Root page with custom template
+  assert_true(
+    write_file_test(
+      content_root + "/about.md",
+      "---\n" +
+      "title: About\n" +
+      "template: about.html\n" +
+      "---\n\n" +
+      "About page content.\n",
+    ),
+  )
+  // Collection page for coexistence test
+  assert_true(
+    write_file_test(
+      posts_root + "/hello.md",
+      "---\n" +
+      "title: Hello\n" +
+      "date: 2026-04-01\n" +
+      "---\n\n" +
+      "Post content.\n",
+    ),
+  )
+  assert_true(
+    write_file_test(
+      templates_root + "/page.html",
+      "<html><body>DEFAULT: {{content}}</body></html>\n",
+    ),
+  )
+  assert_true(
+    write_file_test(
+      templates_root + "/about.html",
+      "<html><body>ABOUT: {{content}}</body></html>\n",
+    ),
+  )
+  assert_true(
+    write_file_test(
+      root + "/collections.cfg",
+      "[posts]\n" +
+      "schema = title:String,date:Date\n" +
+      "dir = " +
+      posts_root +
+      "\n",
+    ),
+  )
+
+  let site_cfg = "title = RootTemplateTest\n" +
+    "base_url = https://example.test\n" +
+    "templates_dir = " +
+    templates_root +
+    "\n" +
+    "data_dir = " +
+    data_root +
+    "\n" +
+    "collections_file = " +
+    root +
+    "/collections.cfg\n" +
+    "output_dir = " +
+    output_root +
+    "\n"
+  assert_true(write_file_test(root + "/site.cfg", site_cfg))
+
+  let site = match @config.parse(site_cfg) {
+    Ok(parsed) => parsed
+    Err(_) => {
+      assert_true(false)
+      abort("site config parse failed")
+    }
+  }
+  let result = @builder.build(
+    {
+      content_dir: content_root,
+      output_dir: output_root,
+      config_path: root + "/site.cfg",
+      site,
+      collections_path: Some(root + "/collections.cfg"),
+      force_rebuild: true,
+      include_drafts: false,
+    },
+    @cache.empty(output_root),
+  )
+  assert_eq(result.errors, 0)
+
+  let about_output = @fs.read_file_to_string(output_root + "/about/index.html") catch {
+    @fs.IOError(_) => ""
+  }
+  assert_true(about_output.contains("ABOUT:"))
+  assert_true(about_output.contains("About page content"))
+}
+
+///|
+test "wikilinks between root page and collection page resolve correctly" {
+  let root = "./_tmp_builder_root_wikilinks"
+  let content_root = root + "/content"
+  let posts_root = content_root + "/posts"
+  let data_root = content_root + "/data"
+  let templates_root = root + "/templates"
+  let output_root = root + "/dist"
+  ensure_dir_test(root)
+  ensure_dir_test(content_root)
+  ensure_dir_test(posts_root)
+  ensure_dir_test(data_root)
+  ensure_dir_test(templates_root)
+  ensure_dir_test(output_root)
+
+  // Root page linking to a collection page via wikilink
+  assert_true(
+    write_file_test(
+      content_root + "/about.md",
+      "---\n" + "title: About\n" + "---\n\n" + "Check out [[hello]] for more.\n",
+    ),
+  )
+  // Collection page linking back to root page via wikilink
+  assert_true(
+    write_file_test(
+      posts_root + "/hello.md",
+      "---\n" +
+      "title: Hello Post\n" +
+      "date: 2026-04-01\n" +
+      "---\n\n" +
+      "See [[about]] for context.\n",
+    ),
+  )
+  assert_true(
+    write_file_test(
+      templates_root + "/page.html",
+      "<html><body>{{content}}</body></html>\n",
+    ),
+  )
+  assert_true(
+    write_file_test(
+      root + "/collections.cfg",
+      "[posts]\n" +
+      "schema = title:String,date:Date\n" +
+      "dir = " +
+      posts_root +
+      "\n",
+    ),
+  )
+
+  let site_cfg = "title = WikilinkTest\n" +
+    "base_url = https://example.test\n" +
+    "templates_dir = " +
+    templates_root +
+    "\n" +
+    "data_dir = " +
+    data_root +
+    "\n" +
+    "collections_file = " +
+    root +
+    "/collections.cfg\n" +
+    "output_dir = " +
+    output_root +
+    "\n"
+  assert_true(write_file_test(root + "/site.cfg", site_cfg))
+
+  let site = match @config.parse(site_cfg) {
+    Ok(parsed) => parsed
+    Err(_) => {
+      assert_true(false)
+      abort("site config parse failed")
+    }
+  }
+  let result = @builder.build(
+    {
+      content_dir: content_root,
+      output_dir: output_root,
+      config_path: root + "/site.cfg",
+      site,
+      collections_path: Some(root + "/collections.cfg"),
+      force_rebuild: true,
+      include_drafts: false,
+    },
+    @cache.empty(output_root),
+  )
+  assert_eq(result.errors, 0)
+
+  // Root page should link to collection page
+  let about_output = @fs.read_file_to_string(output_root + "/about/index.html") catch {
+    @fs.IOError(_) => ""
+  }
+  assert_true(about_output.contains("href=\"/posts/hello/\""))
+
+  // Collection page should link back to root page
+  let hello_output = @fs.read_file_to_string(
+    output_root + "/posts/hello/index.html",
+  ) catch {
+    @fs.IOError(_) => ""
+  }
+  assert_true(hello_output.contains("href=\"/about/\""))
+}
+
+///|
+test "standalone page redirect_from generates redirect stubs" {
+  let root = "./_tmp_builder_standalone_redirect"
+  let content_root = root + "/content"
+  let standalone_root = content_root + "/standalone"
+  let data_root = content_root + "/data"
+  let templates_root = root + "/templates"
+  let output_root = root + "/dist"
+  ensure_dir_test(root)
+  ensure_dir_test(content_root)
+  ensure_dir_test(standalone_root)
+  ensure_dir_test(data_root)
+  ensure_dir_test(templates_root)
+  ensure_dir_test(output_root)
+
+  // Standalone page with redirect_from
+  assert_true(
+    write_file_test(
+      standalone_root + "/about.md",
+      "---\n" +
+      "title: About\n" +
+      "redirect_from:\n" +
+      "  - \"/old-about/\"\n" +
+      "---\n\n" +
+      "About page content.\n",
+    ),
+  )
+  assert_true(
+    write_file_test(
+      templates_root + "/page.html",
+      "<html><body>{{content}}</body></html>\n",
+    ),
+  )
+
+  let site_cfg = "title = RedirectTest\n" +
+    "base_url = https://example.test\n" +
+    "templates_dir = " +
+    templates_root +
+    "\n" +
+    "data_dir = " +
+    data_root +
+    "\n" +
+    "standalone_dir = " +
+    standalone_root +
+    "\n" +
+    "output_dir = " +
+    output_root +
+    "\n"
+  assert_true(write_file_test(root + "/site.cfg", site_cfg))
+
+  let site = match @config.parse(site_cfg) {
+    Ok(parsed) => parsed
+    Err(_) => {
+      assert_true(false)
+      abort("site config parse failed")
+    }
+  }
+  let result = @builder.build(
+    {
+      content_dir: content_root,
+      output_dir: output_root,
+      config_path: root + "/site.cfg",
+      site,
+      collections_path: None,
+      force_rebuild: true,
+      include_drafts: false,
+    },
+    @cache.empty(output_root),
+  )
+  assert_eq(result.errors, 0)
+  assert_eq(result.redirect_count, 1)
+
+  // Redirect should point to the standalone page URL
+  let redirect_html = @fs.read_file_to_string(
+    output_root + "/old-about/index.html",
+  ) catch {
+    @fs.IOError(_) => ""
+  }
+  assert_true(redirect_html.contains("https://example.test/about"))
+  assert_true(redirect_html.contains("meta http-equiv=\"refresh\""))
+}
+
+///|
+test "root page redirect_from generates redirect stubs" {
+  let root = "./_tmp_builder_root_redirect"
+  let content_root = root + "/content"
+  let posts_root = content_root + "/posts"
+  let data_root = content_root + "/data"
+  let templates_root = root + "/templates"
+  let output_root = root + "/dist"
+  ensure_dir_test(root)
+  ensure_dir_test(content_root)
+  ensure_dir_test(posts_root)
+  ensure_dir_test(data_root)
+  ensure_dir_test(templates_root)
+  ensure_dir_test(output_root)
+
+  // Root page with redirect_from
+  assert_true(
+    write_file_test(
+      content_root + "/about.md",
+      "---\n" +
+      "title: About\n" +
+      "redirect_from:\n" +
+      "  - \"/old-about-page/\"\n" +
+      "---\n\n" +
+      "About content.\n",
+    ),
+  )
+  assert_true(
+    write_file_test(
+      posts_root + "/hello.md",
+      "---\n" +
+      "title: Hello\n" +
+      "date: 2026-04-01\n" +
+      "---\n\n" +
+      "Post content.\n",
+    ),
+  )
+  assert_true(
+    write_file_test(
+      templates_root + "/page.html",
+      "<html><body>{{content}}</body></html>\n",
+    ),
+  )
+  assert_true(
+    write_file_test(
+      root + "/collections.cfg",
+      "[posts]\n" +
+      "schema = title:String,date:Date\n" +
+      "dir = " +
+      posts_root +
+      "\n",
+    ),
+  )
+
+  let site_cfg = "title = RootRedirectTest\n" +
+    "base_url = https://example.test\n" +
+    "templates_dir = " +
+    templates_root +
+    "\n" +
+    "data_dir = " +
+    data_root +
+    "\n" +
+    "collections_file = " +
+    root +
+    "/collections.cfg\n" +
+    "output_dir = " +
+    output_root +
+    "\n"
+  assert_true(write_file_test(root + "/site.cfg", site_cfg))
+
+  let site = match @config.parse(site_cfg) {
+    Ok(parsed) => parsed
+    Err(_) => {
+      assert_true(false)
+      abort("site config parse failed")
+    }
+  }
+  let result = @builder.build(
+    {
+      content_dir: content_root,
+      output_dir: output_root,
+      config_path: root + "/site.cfg",
+      site,
+      collections_path: Some(root + "/collections.cfg"),
+      force_rebuild: true,
+      include_drafts: false,
+    },
+    @cache.empty(output_root),
+  )
+  assert_eq(result.errors, 0)
+  assert_eq(result.redirect_count, 1)
+
+  let redirect_html = @fs.read_file_to_string(
+    output_root + "/old-about-page/index.html",
+  ) catch {
+    @fs.IOError(_) => ""
+  }
+  assert_true(redirect_html.contains("https://example.test/about"))
+}
+
+///|
+test "root page content-index entry has kind page" {
+  let root = "./_tmp_builder_content_index_root_page"
+  let content_root = root + "/content"
+  let posts_root = content_root + "/posts"
+  let data_root = content_root + "/data"
+  let output_root = root + "/dist"
+  ensure_dir_test(root)
+  ensure_dir_test(content_root)
+  ensure_dir_test(posts_root)
+  ensure_dir_test(data_root)
+  ensure_dir_test(output_root)
+
+  // Root page
+  assert_true(
+    write_file_test(
+      content_root + "/about.md",
+      "---\n" +
+      "title: About\n" +
+      "description: An about page\n" +
+      "---\n\n" +
+      "About page body.\n",
+    ),
+  )
+  // Collection page for coexistence
+  assert_true(
+    write_file_test(
+      posts_root + "/hello.md",
+      "---\n" +
+      "title: Hello\n" +
+      "date: 2026-04-01\n" +
+      "description: A post\n" +
+      "---\n\n" +
+      "Post body.\n",
+    ),
+  )
+
+  let site_cfg = "title = Test\n" +
+    "base_url = /\n" +
+    "data_dir = " +
+    data_root +
+    "\n" +
+    "content_index_file = content-index.json\n" +
+    "output_dir = " +
+    output_root +
+    "\n" +
+    "[[collections]]\n" +
+    "name = posts\n" +
+    "dir = " +
+    posts_root +
+    "\n" +
+    "schema = title:String,date:Date,description:String\n"
+  assert_true(write_file_test(root + "/site.cfg", site_cfg))
+
+  let site = match @config.parse(site_cfg) {
+    Ok(parsed) => parsed
+    Err(_) => {
+      assert_true(false)
+      abort("config parse failed")
+    }
+  }
+  let result = @builder.build(
+    {
+      content_dir: content_root,
+      output_dir: output_root,
+      config_path: root + "/site.cfg",
+      site,
+      collections_path: None,
+      force_rebuild: true,
+      include_drafts: false,
+    },
+    @cache.empty(output_root),
+  )
+  assert_eq(result.errors, 0)
+
+  let content_index = @fs.read_file_to_string(
+    output_root + "/content-index.json",
+  ) catch {
+    @fs.IOError(_) => ""
+  }
+  assert_true(content_index.length() > 0)
+  // Root page should have kind "page" (not "post" or "standalone")
+  assert_true(content_index.contains("\"kind\": \"page\""))
+  assert_true(content_index.contains("\"url\": \"/about/\""))
+  assert_true(content_index.contains("\"title\": \"About\""))
+}
+
+///|
+test "standalone page appears in sitemap" {
+  let root = "./_tmp_builder_standalone_sitemap"
+  let content_root = root + "/content"
+  let standalone_root = content_root + "/standalone"
+  let posts_root = content_root + "/posts"
+  let data_root = content_root + "/data"
+  let templates_root = root + "/templates"
+  let output_root = root + "/dist"
+  ensure_dir_test(root)
+  ensure_dir_test(content_root)
+  ensure_dir_test(standalone_root)
+  ensure_dir_test(posts_root)
+  ensure_dir_test(data_root)
+  ensure_dir_test(templates_root)
+  ensure_dir_test(output_root)
+
+  assert_true(
+    write_file_test(
+      standalone_root + "/about.md",
+      "---\n" + "title: About\n" + "---\n\n" + "About page.\n",
+    ),
+  )
+  assert_true(
+    write_file_test(
+      posts_root + "/hello.md",
+      "---\n" +
+      "title: Hello\n" +
+      "date: 2026-04-01\n" +
+      "---\n\n" +
+      "Post content.\n",
+    ),
+  )
+  assert_true(
+    write_file_test(
+      templates_root + "/page.html",
+      "<html><body>{{content}}</body></html>\n",
+    ),
+  )
+  assert_true(
+    write_file_test(
+      root + "/collections.cfg",
+      "[posts]\n" +
+      "schema = title:String,date:Date\n" +
+      "dir = " +
+      posts_root +
+      "\n",
+    ),
+  )
+
+  let site_cfg = "title = SitemapTest\n" +
+    "base_url = https://example.test\n" +
+    "templates_dir = " +
+    templates_root +
+    "\n" +
+    "data_dir = " +
+    data_root +
+    "\n" +
+    "standalone_dir = " +
+    standalone_root +
+    "\n" +
+    "collections_file = " +
+    root +
+    "/collections.cfg\n" +
+    "output_dir = " +
+    output_root +
+    "\n"
+  assert_true(write_file_test(root + "/site.cfg", site_cfg))
+
+  let site = match @config.parse(site_cfg) {
+    Ok(parsed) => parsed
+    Err(_) => {
+      assert_true(false)
+      abort("site config parse failed")
+    }
+  }
+  let result = @builder.build(
+    {
+      content_dir: content_root,
+      output_dir: output_root,
+      config_path: root + "/site.cfg",
+      site,
+      collections_path: Some(root + "/collections.cfg"),
+      force_rebuild: true,
+      include_drafts: false,
+    },
+    @cache.empty(output_root),
+  )
+  assert_eq(result.errors, 0)
+
+  let sitemap = @fs.read_file_to_string(output_root + "/sitemap.xml") catch {
+    @fs.IOError(_) => ""
+  }
+  assert_true(sitemap.contains("https://example.test/about/"))
+  assert_true(sitemap.contains("https://example.test/posts/hello/"))
+}
+
+///|
+test "root page with description populates meta description in output" {
+  let root = "./_tmp_builder_root_description"
+  let content_root = root + "/content"
+  let posts_root = content_root + "/posts"
+  let data_root = content_root + "/data"
+  let templates_root = root + "/templates"
+  let output_root = root + "/dist"
+  ensure_dir_test(root)
+  ensure_dir_test(content_root)
+  ensure_dir_test(posts_root)
+  ensure_dir_test(data_root)
+  ensure_dir_test(templates_root)
+  ensure_dir_test(output_root)
+
+  // Root page with description
+  assert_true(
+    write_file_test(
+      content_root + "/about.md",
+      "---\n" +
+      "title: About\n" +
+      "description: Everything about this site.\n" +
+      "---\n\n" +
+      "About content.\n",
+    ),
+  )
+  assert_true(
+    write_file_test(
+      posts_root + "/hello.md",
+      "---\n" + "title: Hello\n" + "date: 2026-04-01\n" + "---\n\n" + "Post.\n",
+    ),
+  )
+  assert_true(
+    write_file_test(
+      templates_root + "/page.html",
+      "<html><head>{{head_meta}}</head><body>{{content}}</body></html>\n",
+    ),
+  )
+  assert_true(
+    write_file_test(
+      root + "/collections.cfg",
+      "[posts]\n" +
+      "schema = title:String,date:Date\n" +
+      "dir = " +
+      posts_root +
+      "\n",
+    ),
+  )
+
+  let site_cfg = "title = DescTest\n" +
+    "base_url = https://example.test\n" +
+    "templates_dir = " +
+    templates_root +
+    "\n" +
+    "data_dir = " +
+    data_root +
+    "\n" +
+    "collections_file = " +
+    root +
+    "/collections.cfg\n" +
+    "output_dir = " +
+    output_root +
+    "\n"
+  assert_true(write_file_test(root + "/site.cfg", site_cfg))
+
+  let site = match @config.parse(site_cfg) {
+    Ok(parsed) => parsed
+    Err(_) => {
+      assert_true(false)
+      abort("site config parse failed")
+    }
+  }
+  let result = @builder.build(
+    {
+      content_dir: content_root,
+      output_dir: output_root,
+      config_path: root + "/site.cfg",
+      site,
+      collections_path: Some(root + "/collections.cfg"),
+      force_rebuild: true,
+      include_drafts: false,
+    },
+    @cache.empty(output_root),
+  )
+  assert_eq(result.errors, 0)
+
+  let about_output = @fs.read_file_to_string(output_root + "/about/index.html") catch {
+    @fs.IOError(_) => ""
+  }
+  assert_true(about_output.contains("Everything about this site."))
+}
+
+///|
+test "standalone page with backlinks from collection page" {
+  let root = "./_tmp_builder_standalone_backlinks"
+  let content_root = root + "/content"
+  let standalone_root = content_root + "/standalone"
+  let posts_root = content_root + "/posts"
+  let data_root = content_root + "/data"
+  let templates_root = root + "/templates"
+  let output_root = root + "/dist"
+  ensure_dir_test(root)
+  ensure_dir_test(content_root)
+  ensure_dir_test(standalone_root)
+  ensure_dir_test(posts_root)
+  ensure_dir_test(data_root)
+  ensure_dir_test(templates_root)
+  ensure_dir_test(output_root)
+
+  // Standalone page (about) that will receive a backlink
+  assert_true(
+    write_file_test(
+      standalone_root + "/about.md",
+      "---\n" + "title: About\n" + "---\n\n" + "This is the about page.\n",
+    ),
+  )
+  // Collection page that links to about via wikilink
+  assert_true(
+    write_file_test(
+      posts_root + "/hello.md",
+      "---\n" +
+      "title: Hello Post\n" +
+      "date: 2026-04-01\n" +
+      "---\n\n" +
+      "Learn more on the [[about]] page.\n",
+    ),
+  )
+  assert_true(
+    write_file_test(
+      templates_root + "/page.html",
+      "<html><body>{{content}}</body></html>\n",
+    ),
+  )
+  assert_true(
+    write_file_test(
+      root + "/collections.cfg",
+      "[posts]\n" +
+      "schema = title:String,date:Date\n" +
+      "dir = " +
+      posts_root +
+      "\n",
+    ),
+  )
+
+  let site_cfg = "title = BacklinkTest\n" +
+    "base_url = https://example.test\n" +
+    "templates_dir = " +
+    templates_root +
+    "\n" +
+    "data_dir = " +
+    data_root +
+    "\n" +
+    "standalone_dir = " +
+    standalone_root +
+    "\n" +
+    "collections_file = " +
+    root +
+    "/collections.cfg\n" +
+    "output_dir = " +
+    output_root +
+    "\n"
+  assert_true(write_file_test(root + "/site.cfg", site_cfg))
+
+  let site = match @config.parse(site_cfg) {
+    Ok(parsed) => parsed
+    Err(_) => {
+      assert_true(false)
+      abort("site config parse failed")
+    }
+  }
+  let result = @builder.build(
+    {
+      content_dir: content_root,
+      output_dir: output_root,
+      config_path: root + "/site.cfg",
+      site,
+      collections_path: Some(root + "/collections.cfg"),
+      force_rebuild: true,
+      include_drafts: false,
+    },
+    @cache.empty(output_root),
+  )
+  assert_eq(result.errors, 0)
+
+  // Verify the standalone about page was built
+  let about_output = @fs.read_file_to_string(output_root + "/about/index.html") catch {
+    @fs.IOError(_) => ""
+  }
+  assert_true(about_output.contains("about page"))
+
+  // Verify the collection page was built with wikilink resolved
+  let hello_output = @fs.read_file_to_string(
+    output_root + "/posts/hello/index.html",
+  ) catch {
+    @fs.IOError(_) => ""
+  }
+  assert_true(hello_output.contains("href=\"/about/\""))
+}
