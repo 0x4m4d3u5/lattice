@@ -13,6 +13,7 @@ pub(all) struct CollectionEntry {
   template : String?
   page_size : Int?
   description : String?
+  sort_order : String?
 }
 
 ///|
@@ -206,6 +207,7 @@ pub fn parse(input : String) -> Result[SiteConfig, ConfigError] {
   let mut current_collection_template : String? = None
   let mut current_collection_page_size : Int? = None
   let mut current_collection_description : String? = None
+  let mut current_collection_sort : String? = None
 
   let lines = split_lines_config(input)
   let mut i = 0
@@ -236,6 +238,7 @@ pub fn parse(input : String) -> Result[SiteConfig, ConfigError] {
           template: current_collection_template,
           page_size: current_collection_page_size,
           description: current_collection_description,
+          sort_order: current_collection_sort,
         })
       }
       // Start new collection
@@ -246,6 +249,7 @@ pub fn parse(input : String) -> Result[SiteConfig, ConfigError] {
       current_collection_template = None
       current_collection_page_size = None
       current_collection_description = None
+      current_collection_sort = None
       i = i + 1
       continue
     }
@@ -283,6 +287,8 @@ pub fn parse(input : String) -> Result[SiteConfig, ConfigError] {
             }
           } else if key == "description" {
             current_collection_description = Some(string_value)
+          } else if key == "sort" {
+            current_collection_sort = Some(string_value)
           } else {
             // Unknown keys in collections block are ignored
             ()
@@ -441,6 +447,7 @@ pub fn parse(input : String) -> Result[SiteConfig, ConfigError] {
       template: current_collection_template,
       page_size: current_collection_page_size,
       description: current_collection_description,
+      sort_order: current_collection_sort,
     })
   }
 

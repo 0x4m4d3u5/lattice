@@ -181,3 +181,61 @@ test "config standalone_dir defaults to None when omitted" {
     Err(_) => assert_true(false)
   }
 }
+
+///|
+test "config parse [[collections]] with sort_order" {
+  let src = "title = Example\n" +
+    "base_url = https://example.test\n" +
+    "[[collections]]\n" +
+    "name = posts\n" +
+    "dir = ./content/posts\n" +
+    "schema = title:String\n" +
+    "sort = title:asc\n"
+  match parse(src) {
+    Ok(cfg) => {
+      assert_eq(cfg.collections.length(), 1)
+      assert_eq(cfg.collections[0].sort_order, Some("title:asc"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "config parse [[collections]] with description and sort_order" {
+  let src = "title = Example\n" +
+    "base_url = https://example.test\n" +
+    "[[collections]]\n" +
+    "name = posts\n" +
+    "dir = ./content/posts\n" +
+    "schema = title:String\n" +
+    "description = \"My posts\"\n" +
+    "sort = date:asc\n" +
+    "[[collections]]\n" +
+    "name = pages\n" +
+    "dir = ./content/pages\n" +
+    "schema = title:String\n"
+  match parse(src) {
+    Ok(cfg) => {
+      assert_eq(cfg.collections.length(), 2)
+      assert_eq(cfg.collections[0].description, Some("My posts"))
+      assert_eq(cfg.collections[0].sort_order, Some("date:asc"))
+      assert_eq(cfg.collections[1].description, None)
+      assert_eq(cfg.collections[1].sort_order, None)
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "config sort_order defaults to None when not specified" {
+  let src = "title = Example\n" +
+    "base_url = https://example.test\n" +
+    "[[collections]]\n" +
+    "name = posts\n" +
+    "dir = ./content/posts\n" +
+    "schema = title:String\n"
+  match parse(src) {
+    Ok(cfg) => assert_eq(cfg.collections[0].sort_order, None)
+    Err(_) => assert_true(false)
+  }
+}
