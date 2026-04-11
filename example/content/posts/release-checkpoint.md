@@ -6,6 +6,8 @@ tags:
   - demo
   - moonbit
 author: Lattice Team
+redirect_from:
+  - /posts/release/
 ---
 
 # Release Checkpoint

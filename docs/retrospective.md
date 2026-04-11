@@ -1150,7 +1150,7 @@ The fix is architecturally uninteresting — it's a control-flow correction, not
 
 ## `lattice check --format json` — Machine-Readable Validation Output
 
-Commit `(this session)` adds `--format json` to `lattice check`, producing structured JSON output suitable for CI pipelines, editor integrations, and external tooling.
+Commit `f590f19` adds `--format json` to `lattice check`, producing structured JSON output suitable for CI pipelines, editor integrations, and external tooling.
 
 ### The Closed Vocabulary of Violation Kinds
 

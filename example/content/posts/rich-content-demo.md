@@ -6,6 +6,9 @@ tags:
   - demo
   - moonbit
 author: Lattice Team
+redirect_from:
+  - /posts/rich-content/
+  - /posts/shortcodes-demo/
 ---
 
 # Rich Content Demo
