@@ -534,8 +534,15 @@ fn load_inline_collections(
       content_dir: entry.dir,
       template: entry.template,
       page_size: entry.page_size,
-      sort_order: @collections.DateDesc,
-      description: None,
+      sort_order: match entry.sort_order {
+        Some(s) =>
+          match @collections.parse_sort_order(s) {
+            Some(order) => order
+            None => @collections.DateDesc
+          }
+        None => @collections.DateDesc
+      },
+      description: entry.description,
     })
     i = i + 1
   }
