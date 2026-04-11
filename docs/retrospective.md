@@ -1479,3 +1479,116 @@ if has_schema_errors {
 The structural argument for this change: schema errors, TRef errors, and tag errors are independent. A missing required field does not affect whether a cross-reference is broken, and a broken TRef does not affect whether a tag is in the index. Running all three checks against the same parsed frontmatter is always valid. The only reason to skip later checks was code structure (early returns were the original control flow), not logical necessity.
 
 The UX consequence: a content author who introduces three independent problems in a single commit now sees all three errors in a single build. The error accumulation philosophy — already present at the builder level for collection errors vs. standalone errors — is now applied consistently within the single-document validation pipeline.
+
+## Float Type with Bounds
+
+The `TFloat(Double?, Double?)` field type extends the numeric constraint story that started with `TInt(Int?, Int?)`. Content like ratings (`Float(min=0.0, max=5.0)`), prices, or temperature readings need continuous-range constraints that integer types can't represent. The implementation follows the same pattern: `type_matches(TFloat(min, max), FFloat(n))` checks `n >= min && n <= max`, with `None` bounds meaning no constraint in that direction.
+
+The collections parser handles `Float(min=0.0,max=5.0)` syntax using the same `parse_float_literal_at` and `parse_positive_or_negative_float` functions already used by inline config parsing. Negative bounds work: `Float(min=-1.5)` correctly parses as `TFloat(Some(-1.5), None)`. The error messages mirror TInt's range format: `"expected Float in range [0.0, 5.0], got: -1.0"`.
+
+The honest tradeoff: MoonBit's `Double` representation means these bounds are IEEE 754 floating-point comparisons. Edge cases around exact representation (0.1 + 0.2 ≠ 0.3) are inherited from the language, not introduced by the schema layer. For content management use cases — ratings, prices, scientific metadata — the precision is more than sufficient. The bounds check is a structural guard against egregious violations (a rating of -5.0 in a 0-5 scale), not a substitute for domain-specific validation logic.
+
+## Inline Collections Syntax + Feed Configuration
+
+Before inline collections, every Lattice project needed a separate `collections.cfg` file in the content directory. The `[collection_name]` section syntax lived in its own file, parsed by `@collections.parse()`. The `[[collections]]` block syntax in `lattice.conf` embeds collection definitions directly in the main config file, using TOML-style array-of-tables syntax.
+
+The motivation was removing the "two-file" friction from the getting-started experience. A new user running `lattice init` previously had to understand that `lattice.conf` configures the site while `collections.cfg` configures the content types — a distinction that only makes sense after you understand the system. With inline collections, `lattice.conf` is the single source of configuration truth. The external `collections.cfg` file still works for projects that prefer it (backward compatibility), but the scaffold no longer generates one.
+
+The `feed_limit` and `site_feed_enabled` config keys are structural controls over feed generation. A disabled feed (`site_feed_enabled = false`) does not emit `feed.xml` at all — the XML generation code is never invoked. A limited feed (`feed_limit = 20`) passes a typed integer constraint through the feed builder, which truncates the post array before serialization. These are not runtime post-processing steps; they control whether code paths execute. This is the structural guarantee thesis applied to configuration: the config file is not a bag of settings, it's a typed program that determines which build artifacts exist.
+
+## `lattice new` — Schema-Driven Content Scaffolding
+
+The `lattice new <collection> <slug>` command generates a frontmatter stub that satisfies the collection schema. Required fields get valid stub values; optional fields are emitted as comments. The key insight is that the stub values are typed — they're not arbitrary placeholders but values computed from the field type constraints:
+
+```moonbit
+pub fn stub_for_field_type(ft : FieldType, today : String) -> String {
+  match ft {
+    TString(minlen, maxlen) => /* "placeholder", padded/truncated to satisfy bounds */
+    TDate(_, _) => today
+    TInt(min_val, _) => match min_val { Some(n) => n.to_string(); None => "0" }
+    TFloat(min_val, _) => match min_val { Some(n) => n.to_string(); None => "0.0" }
+    TBool => "false"
+    TArray(_) => "[]"
+    TEnum(allowed) => if allowed.length() > 0 { allowed[0] } else { "" }
+    TUrl => "https://example.com"
+    TSlug => "example-slug"
+    TDateTime(_, _) => "2026-01-01T00:00:00Z"
+    TRef(_) => "example-slug"
+    TOptional(inner) => stub_for_field_type(inner, today)
+  }
+}
+```
+
+This is the type system working forward instead of backward. The usual direction is: write content → validate → catch violations. Here, the schema generates content that passes validation from the start. An `Int(min=1, max=5)` field gets stub value `1` (the minimum), not `0` (which would fail validation). A `String(minlen=5)` field gets `"placeholder"` (11 chars), not `"hi"` (2 chars, which would fail).
+
+The `generate_frontmatter()` function in `src/scaffold/scaffold.mbt` emits optional fields as YAML comments:
+
+```yaml
+# description:
+# tags:
+#   - value
+```
+
+The author sees the available fields, knows their types, and can uncomment the ones they need. This is UX serving the structural guarantee: the scaffolding command is a contract surface between the type system and the content author.
+
+## `lattice stats` — Structural Visibility
+
+`lattice stats` reports collection names, schema field types, page counts, and word counts. The schema type display is the interesting part:
+
+```
+posts: 3 pages, 1200 words
+  schema: title:String, date:Date, tags:Optional[Array[String]]
+projects: 1 page, 400 words
+  schema: title:String(minlen=5,maxlen=80), status:Enum["active","archived","planned"], priority:Int(min=1,max=5), homepage:Url
+```
+
+Showing schema types in the stats output makes the structural guarantees visible to users who have never read the schema syntax docs. A user running `lattice stats` sees `priority:Int(min=1,max=5)` and immediately understands that the type system enforces a range constraint. They see `status:Enum["active","archived","planned"]` and know that only those three values are valid.
+
+The implementation is straightforward: `CollectionStats` includes a `schema_summary` field computed by iterating `schema.fields` and calling `field_type_name()` on each. The `field_type_name()` function already existed for error messages — `stats` reuses it for documentation. This is a case where the internal representation (the `FieldType` enum and its display logic) naturally serves an external UX surface.
+
+The word count uses `@strutil.count_words_text()` on the parsed body (frontmatter stripped). The reading time estimate uses 225 words/minute. These are conventional metrics, not structural guarantees — but placing them alongside the schema types creates a holistic view: "here's what your content looks like, and here's what the type system is enforcing."
+
+## Redirect Stubs as Structural Guarantees
+
+The `redirect_from` frontmatter field generates meta-refresh HTML stubs at the old URLs. Without this feature, renaming a post (changing its slug) silently creates a 404 for any existing bookmarks or links. With `redirect_from`, the old URL is a build artifact — a structural guarantee that the page graph is stable under renames.
+
+The implementation in `src/builder/builder.mbt` has three parts:
+
+1. **Extraction**: `extract_redirect_paths()` parses the frontmatter of each source file and extracts the `redirect_from` array. This runs during source collection, before the render pipeline.
+
+2. **Emission**: `emit_redirects_for_page()` writes a small HTML file at each redirect path. The redirect uses `<meta http-equiv="refresh" content="0; url=TARGET">` — not a server-side 301, since Lattice generates static files. Each redirect page includes a canonical link and a fallback `<a>` tag for accessibility.
+
+3. **Duplicate detection**: `warn_duplicate_redirects()` checks whether two different pages declare the same `redirect_from` path. If they do, only one redirect file would be written (the last one wins, silently). The warning makes the conflict visible:
+
+```
+warning: duplicate redirect_from: both "/old-path/" and "/other-path/" redirect to "/new-path/"
+```
+
+The structural argument: the redirect source paths are part of the page graph, just like wikilink targets. A duplicate redirect is analogous to two wikilinks resolving to the same target — the ambiguity is a configuration error, not a runtime surprise. The build detects it before any pages are served.
+
+The redirect count is included in the build summary: `"rebuilt 5 pages (2 unchanged), 3 redirects, 0 errors"`. This gives the author confidence that their redirect configuration is being processed.
+
+## `TDateTime` — Datetime Semantics at the Schema Boundary
+
+The gap that `TDateTime` closes: `TDate` validates `YYYY-MM-DD` strings, but content that has both date AND time semantics (event start times, scheduled publication times with timezone awareness) fell through to `TString`, losing type precision. A field like `published_at: DateTime` should reject `"2026-03-15"` (a date without time) and `"not-a-datetime"`, just as `TDate` rejects non-dates.
+
+The implementation adds `TDateTime(String?, String?)` to the `FieldType` enum, with `(after, before)` bounds following the same pattern as `TDate`. The validation function `is_valid_iso8601_datetime()` checks the `YYYY-MM-DDTHH:MM:SS` core format plus optional timezone suffix (`Z`, `+HH:MM`, `-HH:MM`):
+
+```moonbit
+fn is_valid_iso8601_datetime(s : String) -> Bool {
+  // Minimum: "YYYY-MM-DDTHH:MM:SS" = 19 chars
+  if s.length() < 19 { return false }
+  // Validate positions: digits at 0-3,5-6,8-9,11-12,14-15,17-18
+  // Hyphens at 4,7; separator T (or space) at 10; colons at 13,16
+  // Then: month 1-12, day 1-31, hour 0-23, minute 0-59, second 0-59
+  // Optional timezone: Z (length=20) or ±HH:MM (length=25)
+}
+```
+
+A key boundary decision: the frontmatter parser does not have a `FDateTime` variant. The parser is schema-agnostic — it doesn't know which fields expect datetime values. Instead, datetime strings like `"2026-03-15T10:30:00Z"` are parsed as `FStr` (they don't match the `is_valid_iso8601_date` check because they're longer than 10 characters). The structural validation happens in `type_matches(TDateTime, FStr(s))`, which runs `is_valid_iso8601_datetime(s)` on the string value.
+
+This is the same pattern used by `TUrl` and `TSlug` — domain-specific string constraints that validate format without touching the parser. The alternative (adding `FDateTime` to the frontmatter parser) would require the parser to know about the datetime format, breaking the schema-agnostic parsing contract.
+
+The bounds comparison uses `datetime_date_part()` to extract the `YYYY-MM-DD` prefix from both the value and the bound strings, then compares date parts with exclusive bounds (same as `TDate`). This is intentionally imprecise for timezone edge cases — a datetime at 23:00+05:30 is a different UTC date than its local date — but for content management (event dates, publish dates), local date comparison is the expected behavior.
+
+The collections parser supports `DateTime(after=2026-01-01T00:00:00Z,before=2027-01-01T00:00:00Z)` syntax, using `parse_datetime_literal_at()` which scans the datetime literal characters (digits, hyphens, colons, T, Z, +, period). The scaffold stub for TDateTime is `"2026-01-01T00:00:00Z"` — a valid ISO 8601 datetime that satisfies the format constraint.
