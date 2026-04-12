@@ -1592,3 +1592,27 @@ This is the same pattern used by `TUrl` and `TSlug` — domain-specific string c
 The bounds comparison uses `datetime_date_part()` to extract the `YYYY-MM-DD` prefix from both the value and the bound strings, then compares date parts with exclusive bounds (same as `TDate`). This is intentionally imprecise for timezone edge cases — a datetime at 23:00+05:30 is a different UTC date than its local date — but for content management (event dates, publish dates), local date comparison is the expected behavior.
 
 The collections parser supports `DateTime(after=2026-01-01T00:00:00Z,before=2027-01-01T00:00:00Z)` syntax, using `parse_datetime_literal_at()` which scans the datetime literal characters (digits, hyphens, colons, T, Z, +, period). The scaffold stub for TDateTime is `"2026-01-01T00:00:00Z"` — a valid ISO 8601 datetime that satisfies the format constraint.
+
+## `lattice explain` — Error Codes as a First-Class Documentation Surface
+
+The `lattice explain` command closes the gap between seeing an error code and understanding it. Without `explain`, the build output might print `[E004] broken wikilink: [[missing-page]]` and the developer is left to find the documentation themselves — or, more likely, to guess the fix. `lattice explain E004` produces a structured page with causes, fix steps, and a concrete example.
+
+The implementation is a static lookup in `cmd/main/main.mbt`. `explain_error_code()` accepts E-codes (`E001`–`E011`) case-insensitively and also accepts full enum names (`BrokenWikilink`, `broken_wikilink`) via a single normalization step: trim, lowercase, strip underscores. The match arms are exhaustive by construction — every `ViolationType` variant has a corresponding `explain_error_code` arm. If a new violation type is added to `src/lint/lint.mbt` without a matching explain entry, the pattern does not exhaustively cover the new string, and the test suite fails. The type system enforces completeness indirectly: the `code_for_violation()` function maps every `ViolationType` to an E-code, and the test `"list_error_codes mentions all 11 codes"` verifies that the listing function covers every code. Adding a new violation type requires updating both functions to keep the tests green.
+
+`list_error_codes()` provides a quick reference table without context, for users who want to scan rather than read. It's exposed as the output of `lattice explain` with no argument — a sensible default that answers "what codes exist?" before "what does this code mean?".
+
+The UX decision to use typed E-codes rather than opaque integers was deliberate. `E004` is more memorable than `1004` and more scannable in terminal output. The code also carries a category hint: E-codes are errors, not warnings. If warning codes were added in a future version, they would use `W001`–`W00N` under the same `explain` command. The closed numeric namespace avoids conflicts.
+
+### Discoverability: Connecting explain to the Build Summary
+
+A feature is only useful if users know it exists. The `lattice explain` command was initially reachable only through the help text and the `lattice explain` invocation itself. The build summary (`format_summary` in `src/diagnostic/diagnostic.mbt` and `src/lint/lint.mbt`) shows error code breakdowns like `E002: 2` but made no mention of how to learn more about those codes.
+
+The fix adds a hint line at the end of both summary formatters:
+
+```
+  hint: run `lattice explain <code>` for details on any error code
+```
+
+This only appears when there are errors with codes — empty builds don't show the hint, successful builds don't show the hint, but any build failure that surfaces an E-code now tells the developer exactly what to do next. The pattern mirrors the existing `note: ...` hint system on individual diagnostics: actionable information surfaces at the point of failure, not buried in documentation.
+
+The structural lesson: a closed set of error types (`ViolationType`) combined with a lookup function (`explain_error_code()`) is a documentation surface that can be pointed to from any output path. The hint line in the summary is four lines of code. The underlying value comes from having a closed vocabulary — you can exhaustively document a closed enum; you cannot exhaustively document an open string set.

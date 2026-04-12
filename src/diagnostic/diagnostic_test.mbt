@@ -156,6 +156,7 @@ test "diagnostic format_summary with errors" {
   assert_true(text.contains("By code:"))
   assert_true(text.contains("By file:"))
   assert_true(text.contains("hello.md: 2"))
+  assert_true(text.contains("lattice explain"))
 }
 
 ///|

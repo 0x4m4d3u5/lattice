@@ -116,6 +116,7 @@ test "lint format_summary with violations" {
   assert_true(text.contains("broken_wikilink: 1"))
   assert_true(text.contains("By file:"))
   assert_true(text.contains("posts/hello.md: 2"))
+  assert_true(text.contains("lattice explain"))
 }
 
 ///|

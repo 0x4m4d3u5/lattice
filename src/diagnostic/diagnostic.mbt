@@ -339,5 +339,11 @@ pub fn format_summary(summary : DiagnosticSummary) -> String {
     }
   }
 
+  if summary.by_code.length() > 0 {
+    buf.write_string(
+      "\n  hint: run `lattice explain <code>` for details on any error code",
+    )
+  }
+
   buf.to_string()
 }

@@ -20,6 +20,7 @@ The current implementation supports:
 
 - `String`
 - `Date` or `Date(after=2020-01-01)` or `Date(before=2030-01-01)` or `Date(after=2020-01-01,before=2030-01-01)`
+- `DateTime` or `DateTime(after=2020-01-01T00:00:00Z)` or `DateTime(before=2030-01-01T00:00:00Z)` or `DateTime(after=2020-01-01T00:00:00Z,before=2030-01-01T00:00:00Z)`
 - `Int` or `Int(min=1)` or `Int(max=100)` or `Int(min=1,max=100)`
 - `Float` or `Float(min=0.0)` or `Float(max=5.0)` or `Float(min=0.0,max=5.0)`
 - `Bool`
@@ -44,6 +45,7 @@ schema = related_post:Ref[posts], featured:Optional[Ref]
 schema = related_posts:Array[Ref[posts]]
 schema = title:String, rating:Float(min=0.0,max=5.0), weight:Optional[Float]
 schema = title:String, published_at:Date(after=2020-01-01,before=2030-01-01)
+schema = title:String, published_at:DateTime(after=2026-01-01T00:00:00Z)
 schema = title:String(minlen=5), excerpt:String(maxlen=160)
 schema = title:String(minlen=5), excerpt:String(maxlen=160), slug:String(minlen=3,maxlen=60)
 ```
