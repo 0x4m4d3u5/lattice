@@ -323,6 +323,15 @@ fn build_parser() -> @clap.Parser {
         },
         help="Print site statistics without building",
       ),
+      "explain": @clap.SubCommand::new(
+        args={
+          "code": @clap.Arg::positional(
+            defaults=[""],
+            help="Error code (e.g. E004) or name (e.g. broken_wikilink). Omit to list all codes.",
+          ),
+        },
+        help="Explain an error code or list all codes",
+      ),
     },
   )
 }
@@ -853,6 +862,253 @@ fn run_watch(options : CliOptions, initial_state : CliState) -> Unit {
 }
 
 ///|
+/// List all error codes with one-line summaries.
+///
+/// The exhaustiveness of this list is structurally guaranteed by the
+/// ViolationType enum — adding a new variant without updating this
+/// function causes a compile-time match error.
+pub fn list_error_codes() -> String {
+  let buf = StringBuilder::new()
+  buf.write_string("Lattice error codes:\n")
+  buf.write_string("\n")
+  buf.write_string(
+    "  E001  MissingRequiredFrontmatter  — required frontmatter field is absent\n",
+  )
+  buf.write_string(
+    "  E002  SchemaError                 — frontmatter value fails a schema constraint\n",
+  )
+  buf.write_string(
+    "  E003  FrontmatterError            — frontmatter block is not valid TOML-like syntax\n",
+  )
+  buf.write_string(
+    "  E004  BrokenWikilink              — [[target]] resolves to no page in the index\n",
+  )
+  buf.write_string(
+    "  E005  DanglingTagReference        — tag has no corresponding tag template page\n",
+  )
+  buf.write_string(
+    "  E006  TemplateSlotError           — template references an undefined slot\n",
+  )
+  buf.write_string(
+    "  E007  DataError                   — TOML data file is missing a required field\n",
+  )
+  buf.write_string(
+    "  E008  ShortcodeError              — shortcode name or arguments are invalid\n",
+  )
+  buf.write_string(
+    "  E009  CollectionsError            — collections config file has a syntax error\n",
+  )
+  buf.write_string(
+    "  E010  DuplicateSlug               — two pages resolve to the same URL slug\n",
+  )
+  buf.write_string(
+    "  E011  IOError                     — file read/write failed (permissions, missing path)\n",
+  )
+  buf.write_string("\n")
+  buf.write_string(
+    "Run `lattice explain <code>` for a full explanation of any code.",
+  )
+  buf.to_string()
+}
+
+///|
+/// Return a full human-readable explanation for an error code.
+///
+/// Accepts:
+///   - "E001" through "E011" (case-insensitive)
+///   - Full enum name like "BrokenWikilink" or "broken_wikilink" (case-insensitive)
+///
+/// Returns None if the code is not recognized.
+pub fn explain_error_code(code : String) -> String? {
+  // Normalize: trim, lowercase, remove underscores so both
+  // "BrokenWikilink" and "broken_wikilink" map to "brokenwikilink"
+  let normalized = code.trim().to_lower().replace(old="_", new="").to_string()
+  match normalized {
+    "e001" | "missingrequiredfrontmatter" =>
+      Some(
+        "E001  MissingRequiredFrontmatter  [error]\n\n" +
+        "  A required frontmatter field is missing from a .md file.\n\n" +
+        "  Causes:\n" +
+        "    • The .md file has no --- frontmatter block at all\n" +
+        "    • The frontmatter block exists but omits a field declared required in the collection schema\n" +
+        "    • A typo in the field name causes it not to match the schema\n\n" +
+        "  Fix:\n" +
+        "    • Run `lattice check` to see exactly which files and fields are missing\n" +
+        "    • Add the required field to the --- block at the top of the file\n" +
+        "    • Ensure the field name matches the schema exactly (case-sensitive)\n\n" +
+        "  Example:\n" +
+        "    content/posts/hello.md:1:1: missing required field 'title'\n" +
+        "    → E001: the 'title' field is required by the 'posts' collection schema",
+      )
+    "e002" | "schemaerror" =>
+      Some(
+        "E002  SchemaError  [error]\n\n" +
+        "  A frontmatter value fails a schema constraint.\n\n" +
+        "  Causes:\n" +
+        "    • A field has the wrong type (e.g. string where int was expected)\n" +
+        "    • A value is out of range (e.g. negative page_size)\n" +
+        "    • A required sub-field within a complex type is absent\n\n" +
+        "  Fix:\n" +
+        "    • Run `lattice check` to see the field name and expected type\n" +
+        "    • Compare the value in the .md file against the collection schema definition\n" +
+        "    • Ensure string values are quoted and numeric values are unquoted\n\n" +
+        "  Example:\n" +
+        "    content/posts/hello.md:3:1: schema error: 'date' expected type Date, got \"yesterday\"\n" +
+        "    → E002: value does not satisfy the schema constraint for field 'date'",
+      )
+    "e003" | "frontmattererror" =>
+      Some(
+        "E003  FrontmatterError  [error]\n\n" +
+        "  The frontmatter block is not valid TOML-like syntax.\n\n" +
+        "  Causes:\n" +
+        "    • Missing closing --- delimiter\n" +
+        "    • Malformed key = value pairs (missing equals, unquoted strings with spaces)\n" +
+        "    • Duplicate keys in the same block\n" +
+        "    • Non-TOML syntax (e.g. YAML-style colons or JSON braces)\n\n" +
+        "  Fix:\n" +
+        "    • Ensure the frontmatter is enclosed between two --- lines\n" +
+        "    • Use TOML key = value syntax: title = \"My Post\"\n" +
+        "    • Run `lattice check` to get the exact line where parsing failed\n\n" +
+        "  Example:\n" +
+        "    content/posts/hello.md:4:1: expected '=' after key 'title'\n" +
+        "    → E003: frontmatter syntax error prevents field extraction",
+      )
+    "e004" | "brokenwikilink" =>
+      Some(
+        "E004  BrokenWikilink  [error]\n\n" +
+        "  A wikilink target [[slug]] could not be resolved against the page index.\n\n" +
+        "  Causes:\n" +
+        "    • [[target]] appears in a .md file but no page with that slug exists\n" +
+        "    • The target page may have been deleted or renamed since the link was written\n" +
+        "    • The slug in the link differs from the actual slug (case, dashes vs underscores)\n\n" +
+        "  Fix:\n" +
+        "    • Run `lattice check` to see every broken wikilink with file:line:col locations\n" +
+        "    • Ensure the target .md file exists in the content directory\n" +
+        "    • Use the exact slug (filename without extension, lowercased, hyphens only)\n\n" +
+        "  Example:\n" +
+        "    content/posts/about.md:5:1: [[missing-page]]\n" +
+        "    → E004: target 'missing-page' not found in page index",
+      )
+    "e005" | "danglingtagreference" =>
+      Some(
+        "E005  DanglingTagReference  [error]\n\n" +
+        "  A tag used in a page has no corresponding tag template page.\n\n" +
+        "  Causes:\n" +
+        "    • A post references a tag that has no /tags/<tag>/index.html template\n" +
+        "    • The tag template directory name doesn't match the tag (case-sensitive)\n" +
+        "    • The tag was added to a post but the template was never created\n\n" +
+        "  Fix:\n" +
+        "    • Run `lattice check` to list all dangling tag references\n" +
+        "    • Create a template page at content/tags/<tag>/index.md\n" +
+        "    • Ensure the tag name matches exactly (lowercase, hyphens)\n\n" +
+        "  Example:\n" +
+        "    content/posts/hello.md:2:1: tag 'rust' has no template at content/tags/rust/index.md\n" +
+        "    → E005: tag reference cannot be resolved to a template page",
+      )
+    "e006" | "templatesloterror" =>
+      Some(
+        "E006  TemplateSlotError  [error]\n\n" +
+        "  A template references a slot that is not defined.\n\n" +
+        "  Causes:\n" +
+        "    • A template uses {{slot:name}} but no child template provides that slot\n" +
+        "    • The slot name is misspelled or uses different casing\n" +
+        "    • The template was refactored and the slot was renamed without updating references\n\n" +
+        "  Fix:\n" +
+        "    • Run `lattice check` to find all undefined slot references\n" +
+        "    • Check the template for the correct slot name spelling\n" +
+        "    • Ensure the page that extends this template defines the required slot\n\n" +
+        "  Example:\n" +
+        "    templates/post.html:12:5: undefined slot 'sidebar'\n" +
+        "    → E006: no template defines content for slot 'sidebar'",
+      )
+    "e007" | "dataerror" =>
+      Some(
+        "E007  DataError  [error]\n\n" +
+        "  A TOML data file is missing a required field.\n\n" +
+        "  Causes:\n" +
+        "    • A .toml data file referenced by a template is absent\n" +
+        "    • The file exists but a required key declared in the schema is missing\n" +
+        "    • The file path in the template doesn't match the actual file location\n\n" +
+        "  Fix:\n" +
+        "    • Run `lattice check` to identify which data file and field are problematic\n" +
+        "    • Ensure the data file exists at the expected path\n" +
+        "    • Add the missing required key to the data file\n\n" +
+        "  Example:\n" +
+        "    data/authors.toml: missing required field 'name'\n" +
+        "    → E007: data file does not satisfy the required schema fields",
+      )
+    "e008" | "shortcodeerror" =>
+      Some(
+        "E008  ShortcodeError  [error]\n\n" +
+        "  A shortcode name or its arguments are invalid.\n\n" +
+        "  Causes:\n" +
+        "    • A shortcode {{< name >}} is used but no shortcode with that name is registered\n" +
+        "    • The shortcode arguments don't match the expected signature\n" +
+        "    • The shortcode syntax is malformed (missing delimiters, unclosed braces)\n\n" +
+        "  Fix:\n" +
+        "    • Run `lattice check` to see which shortcodes are invalid and where\n" +
+        "    • Verify the shortcode name matches a registered shortcode\n" +
+        "    • Check the argument format against the shortcode's expected parameters\n\n" +
+        "  Example:\n" +
+        "    content/posts/demo.md:8:3: unknown shortcode 'gallery'\n" +
+        "    → E008: shortcode name not found in registry",
+      )
+    "e009" | "collectionserror" =>
+      Some(
+        "E009  CollectionsError  [error]\n\n" +
+        "  The collections configuration file has a syntax error.\n\n" +
+        "  Causes:\n" +
+        "    • The collections.conf file is not valid TOML\n" +
+        "    • A required field (name, schema, dir) is missing from a collection definition\n" +
+        "    • A collection name is duplicated\n" +
+        "    • The schema definition contains an unknown field type\n\n" +
+        "  Fix:\n" +
+        "    • Run `lattice check` or `lattice build` to see the parsing error location\n" +
+        "    • Ensure each collection has name, dir, and schema fields\n" +
+        "    • Verify schema field types are valid (text, date, int, float, bool, tags)\n\n" +
+        "  Example:\n" +
+        "    collections.conf:5:1: missing required field 'dir' in collection 'posts'\n" +
+        "    → E009: collection definition is incomplete or malformed",
+      )
+    "e010" | "duplicateslug" =>
+      Some(
+        "E010  DuplicateSlug  [error]\n\n" +
+        "  Two pages resolve to the same URL slug.\n\n" +
+        "  Causes:\n" +
+        "    • Two .md files in the same directory have names that slugify to the same value\n" +
+        "    • A file was moved or renamed, creating a slug collision with an existing file\n" +
+        "    • Explicit slug overrides in frontmatter produce identical slugs\n\n" +
+        "  Fix:\n" +
+        "    • Run `lattice check` to see which files collide\n" +
+        "    • Rename one of the conflicting files so the slugs are unique\n" +
+        "    • If using explicit slug overrides, ensure each is distinct\n\n" +
+        "  Example:\n" +
+        "    content/posts/my-post.md and content/posts/my_post.md\n" +
+        "    → E010: both resolve to slug 'my-post'",
+      )
+    "e011" | "ioerror" =>
+      Some(
+        "E011  IOError  [error]\n\n" +
+        "  A file read or write operation failed.\n\n" +
+        "  Causes:\n" +
+        "    • A file path does not exist (deleted or never created)\n" +
+        "    • Insufficient permissions to read or write the file\n" +
+        "    • A directory in the path does not exist\n" +
+        "    • Disk is full or filesystem is read-only\n\n" +
+        "  Fix:\n" +
+        "    • Check that the file path is correct and the file exists\n" +
+        "    • Verify filesystem permissions (read for input, write for output)\n" +
+        "    • Ensure parent directories exist before writing\n" +
+        "    • Run `lattice build` with verbose output to see which operation failed\n\n" +
+        "  Example:\n" +
+        "    Error: cannot write to './dist/index.html': Permission denied\n" +
+        "    → E011: output directory is not writable",
+      )
+    _ => None
+  }
+}
+
+///|
 fn run_main() -> Unit {
   let args = @sys.get_cli_args()
   let parser = build_parser()
@@ -906,6 +1162,30 @@ fn run_main() -> Unit {
         print_diagnostic_main(cli_error(msg))
         @sys.exit(1)
         return
+      }
+    }
+    return
+  }
+
+  // Handle 'explain' subcommand — static lookup, no config loading
+  if subcmd_name == "explain" {
+    let code = if subcmd_sv.positional_args.length() > 0 {
+      subcmd_sv.positional_args[0]
+    } else {
+      ""
+    }
+    if code.length() == 0 {
+      println(list_error_codes())
+    } else {
+      match explain_error_code(code) {
+        Some(explanation) => println(explanation)
+        None => {
+          print_diagnostic_main(cli_error("unknown error code: " + code))
+          println("")
+          println(list_error_codes())
+          @sys.exit(1)
+          return
+        }
       }
     }
     return
