@@ -895,7 +895,7 @@ fn resolve_loop_item_field(
 /// Loop item context — carried through recursive render_body_parts calls
 /// when iterating an {{#each}} block. Enables arbitrary nesting depth:
 /// conditionals inside each-blocks inside conditionals, etc.
-enum LoopCtx {
+priv enum LoopCtx {
   NoCtx
   DataCtx(@frontmatter.FrontmatterValue) // {{#each data.file.key}} — structured item
   StringCtx(String) // {{#each page.field}} — string array item
