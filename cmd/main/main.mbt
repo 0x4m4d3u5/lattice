@@ -3,8 +3,9 @@
 ///
 /// Subcommands:
 ///   lattice build [content-dir] [-o <dir>] [--config <path>] [--collections <path>] [--drafts] [--watch]
-///   lattice check [content-dir] [-o <dir>] [--config <path>] [--collections <path>] [--drafts]
+///   lattice check [content-dir] [-o <dir>] [--config <path>] [--collections <path>] [--drafts] [--watch]
 ///   lattice serve [content-dir] [-o <dir>] [--port <N>] [--config <path>] [--collections <path>] [--drafts]
+///   lattice dev   [content-dir] [-o <dir>] [--port <N>] [--config <path>] [--collections <path>] [--drafts]  (alias for serve)
 ///
 /// Defaults:
 ///   content-dir → ./content
@@ -232,6 +233,15 @@ fn build_parser() -> @clap.Parser {
             defaults=["text"],
             help="Output format: text (default) or json",
           ),
+          "watch": @clap.Arg::flag(
+            help="Re-run check on file changes with polling",
+          ),
+          "watch-interval": @clap.Arg::named(
+            short='i',
+            nargs=One,
+            defaults=["500"],
+            help="Polling interval in milliseconds (default: 500)",
+          ),
         },
         help="Run validation/lint pipeline only",
       ),
@@ -267,6 +277,39 @@ fn build_parser() -> @clap.Parser {
           "drafts": @clap.Arg::flag(help="Include draft posts in the build"),
         },
         help="Start dev server with live reload",
+      ),
+      "dev": @clap.SubCommand::new(
+        args={
+          "content-dir": @clap.Arg::positional(
+            defaults=["./content"],
+            help="Content directory",
+          ),
+          "output-dir": @clap.Arg::named(
+            short='o',
+            nargs=One,
+            defaults=[""],
+            help="Output directory (default: config.output_dir or ./dist)",
+          ),
+          "config": @clap.Arg::named(
+            short='c',
+            nargs=One,
+            defaults=[""],
+            help="Override site config file",
+          ),
+          "collections": @clap.Arg::named(
+            nargs=One,
+            defaults=[""],
+            help="Override collections config file",
+          ),
+          "port": @clap.Arg::named(
+            short='p',
+            nargs=One,
+            defaults=["4321"],
+            help="HTTP port for dev server (default: 4321)",
+          ),
+          "drafts": @clap.Arg::flag(help="Include draft posts in the build"),
+        },
+        help="Alias for serve — start dev server with live reload",
       ),
       "init": @clap.SubCommand::new(
         args={
@@ -347,7 +390,7 @@ fn safe_get_one(sv : @clap.SimpleValue, name : String) -> String? {
 
 ///|
 /// Extract CliOptions from the parsed clap SimpleValue.
-/// `subcmd_name` is "build", "check", or "serve".
+/// `subcmd_name` is "build", "check", "serve", or "dev".
 fn cli_options_from_clap(
   sv : @clap.SimpleValue,
   subcmd_name : String,
@@ -406,6 +449,14 @@ fn cli_options_from_clap(
     "check" => {
       let format_raw = safe_get_one(sv, "format").unwrap_or("text")
       let check_json = format_raw == "json"
+      let watch_mode = sv.get_flag("watch").unwrap_or(false)
+      let watch_interval_str = safe_get_one(sv, "watch-interval").unwrap_or(
+        "500",
+      )
+      let watch_interval_ms = match parse_positive_int(watch_interval_str) {
+        Some(n) => n
+        None => 500
+      }
       {
         content_dir,
         output_dir,
@@ -414,14 +465,14 @@ fn cli_options_from_clap(
         check_mode: true,
         check_json,
         force_rebuild: false,
-        watch_mode: false,
-        watch_interval_ms: 500,
+        watch_mode,
+        watch_interval_ms,
         include_drafts,
         serve_mode: false,
         serve_port: @serve.default_port(),
       }
     }
-    "serve" => {
+    "serve" | "dev" => {
       let port_str = safe_get_one(sv, "port").unwrap_or("4321")
       let serve_port = match parse_positive_int(port_str) {
         Some(n) =>

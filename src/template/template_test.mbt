@@ -1782,7 +1782,7 @@ test "head.html conditional description - with description" {
     #|{{?description}}<meta name="description" content="{{description}}" />
     #|{{/?description}}{{head_meta}}
     #|
-  let resolver = fn(filename : String) -> Result[String, String] {
+  let resolver = fn(_ : String) -> Result[String, String] {
     Err("not found")
   }
   let tpl = match parse_template_with_includes(source, resolver) {
@@ -1821,7 +1821,7 @@ test "head.html conditional description - empty description omits meta tag" {
     #|{{?description}}<meta name="description" content="{{description}}" />
     #|{{/?description}}{{head_meta}}
     #|
-  let resolver = fn(filename : String) -> Result[String, String] {
+  let resolver = fn(_ : String) -> Result[String, String] {
     Err("not found")
   }
   let tpl = match parse_template_with_includes(source, resolver) {
