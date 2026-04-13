@@ -71,6 +71,7 @@ pub enum Block {
   // Each cell is an Array[Inline] so inline formatting works inside cells.
   Table(Array[ColAlign], Array[Array[Inline]], Array[Array[Array[Inline]]])
   DefinitionList(Array[(String, Array[String])]) // (term, [definitions])
+  HtmlBlock(String) // raw HTML block — emitted verbatim, not escaped
 }
 
 ///|
@@ -897,6 +898,27 @@ fn is_definition_term_start(ls : Array[String], i : Int) -> Bool {
 }
 
 ///|
+///|
+/// Detect the start of a raw HTML block.
+/// A block HTML line starts with `<` followed by a letter (opening tag),
+/// `/` (closing tag), `!` (comment/DOCTYPE), or `?` (processing instruction).
+/// This covers the common authoring cases: <div>, </div>, <!-- ... -->, <!DOCTYPE>.
+fn is_html_block_start(line : String) -> Bool {
+  if line.length() < 2 {
+    return false
+  }
+  if line[0] != '<' {
+    return false
+  }
+  let c = line[1]
+  // letter → opening tag; / → closing tag; ! → comment/DOCTYPE; ? → PI
+  (c >= 'a' && c <= 'z') ||
+  (c >= 'A' && c <= 'Z') ||
+  c == '/' ||
+  c == '!' ||
+  c == '?'
+}
+
 fn is_block_starter(line : String) -> Bool {
   is_heading_line(line) ||
   is_hrule(line) ||
@@ -904,7 +926,8 @@ fn is_block_starter(line : String) -> Bool {
   is_unordered_item(line) ||
   is_ordered_item(line) ||
   is_blockquote_line(line) ||
-  is_definition_line(line)
+  is_definition_line(line) ||
+  is_html_block_start(line)
 }
 
 // ── block parsing ─────────────────────────────────────────────────────────────
@@ -1064,6 +1087,15 @@ pub fn parse_blocks_with_footnotes(
         i = i + 1
       }
       result.push(Table(aligns, header_inlines, rows))
+    } else if is_html_block_start(line) {
+      // Raw HTML block — accumulate until first blank line and emit verbatim.
+      // The author controls content in an SSG context, so passthrough is safe.
+      let html_lines : Array[String] = []
+      while i < n && !is_blank(ls[i]) {
+        html_lines.push(ls[i])
+        i = i + 1
+      }
+      result.push(HtmlBlock(@strutil.join_lines(html_lines)))
     } else {
       // paragraph: accumulate non-blank, non-block-starter lines
       let para_lines : Array[String] = []
@@ -1693,6 +1725,11 @@ fn render_block_with_issues(
       }
       buf.write_string("</dl>\n")
       { html: buf.to_string(), shortcode_errors: [], toc: [], footnotes: [] }
+    }
+    HtmlBlock(raw) => {
+      // Emit raw HTML verbatim — no escaping.  The author controls content in
+      // an SSG, so passthrough is the expected and correct behavior.
+      { html: raw + "\n", shortcode_errors: [], toc: [], footnotes: [] }
     }
   }
 }

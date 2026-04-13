@@ -1616,3 +1616,33 @@ The fix adds a hint line at the end of both summary formatters:
 This only appears when there are errors with codes — empty builds don't show the hint, successful builds don't show the hint, but any build failure that surfaces an E-code now tells the developer exactly what to do next. The pattern mirrors the existing `note: ...` hint system on individual diagnostics: actionable information surfaces at the point of failure, not buried in documentation.
 
 The structural lesson: a closed set of error types (`ViolationType`) combined with a lookup function (`explain_error_code()`) is a documentation surface that can be pointed to from any output path. The hint line in the summary is four lines of code. The underlying value comes from having a closed vocabulary — you can exhaustively document a closed enum; you cannot exhaustively document an open string set.
+
+## HTML Block Passthrough — Author-Controlled Verbatim Output
+
+### The Gap
+
+The initial markdown implementation had no raw HTML passthrough. Any content starting with `<` — a `<div>`, `<details>`, `<iframe>`, or `<!-- comment -->` — was treated as a paragraph and its characters escaped via `escape_html_body`. The output was `&lt;div class=&quot;...&quot;&gt;` instead of the intended HTML.
+
+This is a real functional gap for content authors. Typical SSG workflows include embedded video iframes, `<details>/<summary>` expandable sections, custom layout divs for pull-quotes or sidebars, and HTML comments for draft notes. None of these worked before this change.
+
+### The Decision: Passthrough Over Escaping
+
+The choice to escape by default is the right default for user-generated content. But in an SSG, the *author controls the content directory*. The same person who writes the markdown also chooses what HTML to embed. There is no untrusted content path — the build pipeline starts from a local file system that the author owns.
+
+This is the same reasoning that Hugo, Eleventy, and Astro apply: SSG markdown is author content, not user input. Escaping HTML in author-controlled markdown is defensive programming against the wrong threat model.
+
+The design is intentionally permissive: any block-level line starting with `<` followed by a letter, `/`, `!`, or `?` is treated as an HTML block. The block ends at the first blank line, consistent with CommonMark's type-6 HTML block behavior. Content authors get predictable behavior: blank line terminates the HTML block and normal markdown resumes.
+
+### Implementation
+
+The change adds `HtmlBlock(String)` to the `Block` enum in `src/markdown/markdown.mbt`. The `is_html_block_start` function checks the opening character sequence. In `parse_blocks_with_footnotes`, the HTML block branch sits between the GFM table check and the paragraph fallthrough — it runs only if the current line looks like a block-level tag start.
+
+The `is_block_starter` function was updated to include `is_html_block_start`, which stops the paragraph accumulator from consuming HTML block lines as paragraph text. Without this, a line like `<div>` after a paragraph would be absorbed into the paragraph and then escaped.
+
+Rendering is one line: emit `raw + "\n"` without any escaping. The `HtmlBlock` render arm explicitly does not call `escape_html_body` or `escape_html_attr`, which is the correct behavior by construction. The comment in the source reads: *"The author controls content in an SSG, so passthrough is the expected and correct behavior."*
+
+### What The Tests Catch
+
+Seven new tests cover: `<div>` passthrough, closing tags (`</section>`), HTML comments (`<!--`), HTML between markdown paragraphs, `<iframe>`, `<details>/<summary>`, and a negative case verifying that inline `<` in body text (like `x < y`) is still escaped. The negative case is important: escaping still applies to inline angle brackets in paragraph text. The distinction is structural — block-level lines starting with `<` are HTML blocks; inline text containing `<` is data that gets escaped.
+
+Total test count: 638 (up from 631). 0 warnings.

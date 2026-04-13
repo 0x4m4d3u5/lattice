@@ -51,6 +51,20 @@ The navigation header uses a data file (`data/nav.toml`) rendered via `{{#each d
 
 This means site-wide configuration — navigation items, author metadata, feature flags — lives in typed data files rather than being hardcoded in templates. Changing the nav requires editing a TOML file, not a template.
 
+## Raw HTML Blocks
+
+When author-controlled content requires layout elements that markdown alone cannot express, lattice passes HTML blocks through verbatim. Any line starting with a block-level tag (`<div>`, `<details>`, `<section>`, `<!--`) is treated as an HTML block until the next blank line.
+
+<details>
+<summary>Why structural validation and raw HTML coexist</summary>
+Lattice escapes HTML in <em>data</em> — schema fields, frontmatter values, user-supplied text rendered into templates. That escaping prevents content from breaking the surrounding HTML. Raw HTML <em>blocks</em> are different: the author intentionally writes markup, and escaping it would produce garbage output. The author controls the content directory, so there is no untrusted input path. Passthrough is the correct behavior.
+</details>
+
+<div class="callout callout-tip">
+<p class="callout-title">Combining HTML and markdown</p>
+<p>HTML blocks end at the first blank line. Normal markdown resumes after that blank line — paragraphs, headings, shortcodes, and wikilinks all work again immediately after an HTML block closes.</p>
+</div>
+
 ## Cross-Collection Linking
 
 The projects collection (see [[lattice]], [[ametrine]]) demonstrates schema-validated frontmatter with `Enum`, `Int(min,max)`, `Url`, and `Date(after)` constraints. Each project page is a separate collection with its own template, but wikilinks work across collections because the page index is built before any rendering begins.

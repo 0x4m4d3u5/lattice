@@ -538,3 +538,73 @@ test "definition list complex" {
   assert_true(rendered.contains("</dl>"))
   assert_true(rendered.contains("<p>This is a paragraph.</p>"))
 }
+
+// ── HTML block passthrough ─────────────────────────────────────────────────────
+
+///|
+test "html block div passes through verbatim" {
+  let body = "<div class=\"custom\">\nSome content.\n</div>"
+  let rendered = render(body, empty_wl())
+  // Raw HTML must pass through without escaping
+  assert_true(rendered.contains("<div class=\"custom\">"))
+  assert_true(rendered.contains("Some content."))
+  assert_true(rendered.contains("</div>"))
+  // Must NOT be escaped
+  assert_false(rendered.contains("&lt;div"))
+}
+
+///|
+test "html block closing tag passes through" {
+  let body = "<section>\nInside section.\n</section>"
+  let rendered = render(body, empty_wl())
+  assert_true(rendered.contains("<section>"))
+  assert_true(rendered.contains("Inside section."))
+  assert_true(rendered.contains("</section>"))
+  assert_false(rendered.contains("&lt;section"))
+}
+
+///|
+test "html comment block passes through" {
+  let body = "<!-- This is a comment\n     spanning lines -->\n\nAfter comment."
+  let rendered = render(body, empty_wl())
+  assert_true(rendered.contains("<!-- This is a comment"))
+  assert_true(rendered.contains("After comment."))
+  assert_false(rendered.contains("&lt;!--"))
+}
+
+///|
+test "html block surrounded by markdown" {
+  let body = "Before.\n\n<div class=\"note\">\nInner note content.\n</div>\n\nAfter."
+  let rendered = render(body, empty_wl())
+  assert_true(rendered.contains("<p>Before.</p>"))
+  assert_true(rendered.contains("<div class=\"note\">"))
+  assert_true(rendered.contains("Inner note content."))
+  assert_true(rendered.contains("</div>"))
+  assert_true(rendered.contains("<p>After.</p>"))
+}
+
+///|
+test "html block iframe passes through" {
+  let body = "<iframe src=\"https://example.com\" width=\"800\" height=\"600\"></iframe>"
+  let rendered = render(body, empty_wl())
+  assert_true(rendered.contains("<iframe src=\"https://example.com\""))
+  assert_false(rendered.contains("&lt;iframe"))
+}
+
+///|
+test "html block details summary passes through" {
+  let body = "<details>\n<summary>Click to expand</summary>\nHidden content here.\n</details>"
+  let rendered = render(body, empty_wl())
+  assert_true(rendered.contains("<details>"))
+  assert_true(rendered.contains("<summary>Click to expand</summary>"))
+  assert_true(rendered.contains("Hidden content here."))
+  assert_true(rendered.contains("</details>"))
+}
+
+///|
+test "non-html angle bracket in paragraph is still escaped" {
+  let body = "x < y is a comparison."
+  let rendered = render(body, empty_wl())
+  // Inline text with < should be escaped because it's NOT a block HTML start
+  assert_true(rendered.contains("x &lt; y is a comparison."))
+}
