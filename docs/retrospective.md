@@ -1646,3 +1646,27 @@ Rendering is one line: emit `raw + "\n"` without any escaping. The `HtmlBlock` r
 Seven new tests cover: `<div>` passthrough, closing tags (`</section>`), HTML comments (`<!--`), HTML between markdown paragraphs, `<iframe>`, `<details>/<summary>`, and a negative case verifying that inline `<` in body text (like `x < y`) is still escaped. The negative case is important: escaping still applies to inline angle brackets in paragraph text. The distinction is structural — block-level lines starting with `<` are HTML blocks; inline text containing `<` is data that gets escaped.
 
 Total test count: 638 (up from 631). 0 warnings.
+
+
+
+### Underscore Emphasis and Angle-Bracket Autolinks
+
+The inline parser initially handled `*italic*`, `**bold**`, `***bold+italic***`, and `~~strikethrough~~` but had no support for underscore emphasis variants (`_italic_`, `__bold__`, `___bold italic___`) or angle-bracket autolinks (`<https://example.com>`). These are both CommonMark standard features that content authors expect.
+
+#### Why Underscore Emphasis Was Missing
+
+The `*`-based emphasis was implemented first because it was simpler — no word-boundary considerations. The `_` variant was deferred as "same logic, different delimiter," which is true for the matching but false for the boundary rules. CommonMark specifies that `_` emphasis only opens/closes at word boundaries: `_foo_` is emphasis, but `foo_bar_baz` is literal underscores. This distinction doesn't exist for `*`-emphasis.
+
+The implementation enforces a simplified word-boundary rule: an opening `_` is only treated as emphasis if the character before it is not alphanumeric, and a closing `_` must not be followed by an alphanumeric character. This is a pragmatic compromise — full CommonMark compliance tracks Unicode word categories and flanking whitespace, which is overkill for SSG content. The simple rule catches the common case: `snake_case_identifiers` stay literal, while `_emphasis in text_` renders correctly. If a close delimiter is found but followed by an alphanumeric character (mid-word), the parser tries to find the next occurrence. This handles edge cases like `_foo_bar_` where the first `_` close is mid-word.
+
+#### Why Autolinks Matter
+
+Angle-bracket autolinks (`<https://example.com>`) are how authors write bare URL references in markdown without needing to use the full `[text](url)` link syntax. The implementation checks for `http://`, `https://`, or `mailto:` prefixes after the opening `<`, then scans for the closing `>`. On match, it emits `Link(url, url)` — the display text equals the URL itself, which is the standard autolink behavior.
+
+An important interaction with the HTML block parser required fixing: `is_html_block_start` checks if a line starts with `<` followed by a letter (tag opener). But `<https://...>` starts with `<h`, which would match the HTML block heuristic. The fix adds an exclusion for autolink prefixes in `is_html_block_start` — lines starting with `<https://`, `<http://`, or `<mailto:` are not treated as HTML blocks and instead flow through the inline parser where the autolink logic handles them.
+
+#### Test Coverage
+
+Seventeen new tests cover: `_italic_`, `__bold__`, `___bold italic___`, word-boundary prevention (`foo_bar_baz`, `snake_case_ident`), mixed emphasis in sentences, unclosed delimiters falling back to literal text, autolinks for all three schemes (`https`, `http`, `mailto`), autolinks with paths and query strings, autolinks within sentences, non-autolink angle brackets staying literal and HTML-escaped, and unclosed autolinks falling back to literal text.
+
+Total test count: 657 (up from 640). 0 new warnings.

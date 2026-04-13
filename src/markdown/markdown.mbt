@@ -376,6 +376,116 @@ pub fn parse_inlines(s : String, from : Int, to : Int) -> Array[Inline] {
         // no matching close — treat tildes as literal text
         i = i + 1
       }
+    } else if c == '_' {
+      // underscore emphasis: _italic_, __bold__, ___bold italic___
+      // Word-boundary rule: only treat _ as opener if the char before it is
+      // NOT alphanumeric. This prevents snake_case identifiers from being
+      // parsed as emphasis — a pragmatic compromise for SSG content.
+      let prev_is_alnum = i > 0 && {
+        let prev = @strutil.char_at(s, i - 1)
+        @strutil.is_alpha(prev) || @strutil.is_digit(prev)
+      }
+      if prev_is_alnum {
+        // mid-word underscore — treat as literal
+        i = i + 1
+      } else {
+        let under_count = count_char(s, i, '_')
+        let inner_start = i + under_count
+        let close_needle = if under_count >= 3 {
+          "___"
+        } else if under_count == 2 {
+          "__"
+        } else {
+          "_"
+        }
+        let close = @strutil.find_str(s, inner_start, close_needle, to)
+        if close > inner_start {
+          // Closing delimiter word-boundary: the char after the close must
+          // NOT be alphanumeric (mirrors the opener rule).
+          let close_end = close + under_count
+          let next_is_alnum = close_end < to && {
+            let next = @strutil.char_at(s, close_end)
+            @strutil.is_alpha(next) || @strutil.is_digit(next)
+          }
+          if next_is_alnum {
+            // Close is mid-word — skip this match and keep looking
+            let next_close = @strutil.find_str(
+              s, close + 1, close_needle, to,
+            )
+            if next_close > inner_start {
+              let nc_end = next_close + under_count
+              let nc_is_alnum = nc_end < to && {
+                let nc = @strutil.char_at(s, nc_end)
+                @strutil.is_alpha(nc) || @strutil.is_digit(nc)
+              }
+              if nc_is_alnum {
+                // Still mid-word — give up, treat opener as literal
+                i = i + 1
+              } else {
+                if text_start < i {
+                  result.push(Text(@strutil.substr(s, text_start, i)))
+                }
+                let inner = parse_inlines(s, inner_start, next_close)
+                if under_count >= 3 {
+                  result.push(BoldItalic(inner))
+                } else if under_count == 2 {
+                  result.push(Bold(inner))
+                } else {
+                  result.push(Italic(inner))
+                }
+                i = next_close + under_count
+                text_start = i
+              }
+            } else {
+              // No valid close — literal underscore
+              i = i + 1
+            }
+          } else {
+            if text_start < i {
+              result.push(Text(@strutil.substr(s, text_start, i)))
+            }
+            let inner = parse_inlines(s, inner_start, close)
+            if under_count >= 3 {
+              result.push(BoldItalic(inner))
+            } else if under_count == 2 {
+              result.push(Bold(inner))
+            } else {
+              result.push(Italic(inner))
+            }
+            i = close + under_count
+            text_start = i
+          }
+        } else {
+          // no matching close — treat underscores as literal text
+          i = i + 1
+        }
+      }
+    } else if c == '<' {
+      // angle-bracket autolink: <https://...>, <http://...>, <mailto:...>
+      // Only consume if it looks like a URL autolink; otherwise fall through
+      // to literal text (the < will be escaped by escape_html_body later).
+      let mut matched = false
+      if i + 1 < to {
+        let rest_start = i + 1
+        if @strutil.starts_with_at(s, rest_start, "https://") ||
+          @strutil.starts_with_at(s, rest_start, "http://") ||
+          @strutil.starts_with_at(s, rest_start, "mailto:") {
+          let close_bracket = @strutil.find_char(s, rest_start, '>', to)
+          if close_bracket > rest_start {
+            let url = @strutil.substr(s, rest_start, close_bracket)
+            if text_start < i {
+              result.push(Text(@strutil.substr(s, text_start, i)))
+            }
+            result.push(Link(url, url))
+            i = close_bracket + 1
+            text_start = i
+            matched = true
+          }
+        }
+      }
+      if !matched {
+        i = i + 1
+      }
     } else if c == '{' &&
       i + 2 < to &&
       @strutil.char_at(s, i + 1) == '{' &&
@@ -903,11 +1013,21 @@ fn is_definition_term_start(ls : Array[String], i : Int) -> Bool {
 /// A block HTML line starts with `<` followed by a letter (opening tag),
 /// `/` (closing tag), `!` (comment/DOCTYPE), or `?` (processing instruction).
 /// This covers the common authoring cases: <div>, </div>, <!-- ... -->, <!DOCTYPE>.
+///
+/// Exception: angle-bracket autolinks like <https://...> are NOT HTML blocks —
+/// they are inline elements that should be parsed within a paragraph.
 fn is_html_block_start(line : String) -> Bool {
-  if line.length() < 2 {
+  let n = line.length()
+  if n < 2 {
     return false
   }
   if line[0] != '<' {
+    return false
+  }
+  // Exclude autolinks: <http://...>, <https://...>, <mailto:...>
+  if @strutil.starts_with_at(line, 1, "https://") ||
+    @strutil.starts_with_at(line, 1, "http://") ||
+    @strutil.starts_with_at(line, 1, "mailto:") {
     return false
   }
   let c = line[1]

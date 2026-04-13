@@ -608,3 +608,169 @@ test "non-html angle bracket in paragraph is still escaped" {
   // Inline text with < should be escaped because it's NOT a block HTML start
   assert_true(rendered.contains("x &lt; y is a comparison."))
 }
+
+
+// ── Underscore emphasis ────────────────────────────────────────────────────────
+
+///|
+test "underscore italic basic" {
+  let body = "_italic_"
+  let rendered = render(body, empty_wl())
+  assert_true(rendered.contains("<em>italic</em>"))
+}
+
+///|
+test "underscore bold basic" {
+  let body = "__bold__"
+  let rendered = render(body, empty_wl())
+  assert_true(rendered.contains("<strong>bold</strong>"))
+}
+
+///|
+test "underscore bold italic basic" {
+  let body = "___bold italic___"
+  let rendered = render(body, empty_wl())
+  assert_true(rendered.contains("<strong><em>bold italic</em></strong>"))
+}
+
+///|
+test "underscore italic word boundary prevents mid-word" {
+  // foo_bar_baz should NOT be treated as italic — underscores are mid-word
+  let body = "foo_bar_baz"
+  let rendered = render(body, empty_wl())
+  assert_true(!rendered.contains("<em>"))
+  assert_true(rendered.contains("foo_bar_baz"))
+}
+
+///|
+test "underscore snake_case ident not italic" {
+  let body = "snake_case_ident"
+  let rendered = render(body, empty_wl())
+  assert_true(!rendered.contains("<em>"))
+  assert_true(rendered.contains("snake_case_ident"))
+}
+
+///|
+test "underscore italic in sentence" {
+  let body = "This is _emphasized_ text"
+  let rendered = render(body, empty_wl())
+  assert_true(rendered.contains("<em>emphasized</em>"))
+  assert_true(rendered.contains("This is"))
+  assert_true(rendered.contains("text"))
+}
+
+///|
+test "underscore bold in sentence" {
+  let body = "This is __strong__ text"
+  let rendered = render(body, empty_wl())
+  assert_true(rendered.contains("<strong>strong</strong>"))
+}
+
+///|
+test "underscore mixed italic and bold" {
+  let body = "_italic_ and __bold__"
+  let rendered = render(body, empty_wl())
+  assert_true(rendered.contains("<em>italic</em>"))
+  assert_true(rendered.contains("<strong>bold</strong>"))
+}
+
+///|
+test "underscore unclosed falls back" {
+  let body = "_unclosed"
+  let rendered = render(body, empty_wl())
+  assert_true(!rendered.contains("<em>"))
+  assert_true(rendered.contains("_unclosed"))
+}
+
+///|
+test "underscore unclosed double falls back" {
+  let body = "__unclosed"
+  let rendered = render(body, empty_wl())
+  assert_true(!rendered.contains("<strong>"))
+  assert_true(rendered.contains("__unclosed"))
+}
+
+///|
+test "underscore at start of string" {
+  let body = "_italic at start_"
+  let rendered = render(body, empty_wl())
+  assert_true(rendered.contains("<em>italic at start</em>"))
+}
+
+///|
+test "underscore bold at start of string" {
+  let body = "__bold at start__"
+  let rendered = render(body, empty_wl())
+  assert_true(rendered.contains("<strong>bold at start</strong>"))
+}
+
+// ── Angle-bracket autolinks ────────────────────────────────────────────────────
+
+///|
+test "autolink https basic" {
+  let body = "<https://example.com>"
+  let rendered = render(body, empty_wl())
+  assert_true(
+    rendered.contains(
+      "<a href=\"https://example.com\">https://example.com</a>",
+    ),
+  )
+}
+
+///|
+test "autolink http basic" {
+  let body = "<http://example.com>"
+  let rendered = render(body, empty_wl())
+  assert_true(
+    rendered.contains(
+      "<a href=\"http://example.com\">http://example.com</a>",
+    ),
+  )
+}
+
+///|
+test "autolink with path and query" {
+  let body = "<http://example.com/path?q=1>"
+  let rendered = render(body, empty_wl())
+  assert_true(rendered.contains("href=\"http://example.com/path?q=1\""))
+  assert_true(rendered.contains(">http://example.com/path?q=1</a>"))
+}
+
+///|
+test "autolink mailto" {
+  let body = "<mailto:user@example.com>"
+  let rendered = render(body, empty_wl())
+  assert_true(
+    rendered.contains(
+      "<a href=\"mailto:user@example.com\">mailto:user@example.com</a>",
+    ),
+  )
+}
+
+///|
+test "autolink in sentence" {
+  let body = "Visit <https://example.com> for more info."
+  let rendered = render(body, empty_wl())
+  assert_true(rendered.contains("<a href=\"https://example.com\">"))
+  assert_true(rendered.contains("Visit"))
+  assert_true(rendered.contains("for more info"))
+}
+
+///|
+test "non-autolink angle bracket stays literal" {
+  // A bare < that doesn't look like an autolink should pass through as text
+  // and get HTML-escaped in the renderer
+  let body = "x < y"
+  let rendered = render(body, empty_wl())
+  assert_true(rendered.contains("&lt;"))
+  assert_true(!rendered.contains("<a href="))
+}
+
+///|
+test "autolink unclosed falls back" {
+  let body = "<https://example.com"
+  let rendered = render(body, empty_wl())
+  // No matching > — should be literal (HTML-escaped <)
+  assert_true(!rendered.contains("<a href="))
+  assert_true(rendered.contains("&lt;"))
+}
