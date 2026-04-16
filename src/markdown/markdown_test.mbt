@@ -774,3 +774,58 @@ test "autolink unclosed falls back" {
   assert_true(!rendered.contains("<a href="))
   assert_true(rendered.contains("&lt;"))
 }
+
+// ── Rich link text (inline formatting inside [...](url)) ──────────────────────
+
+///|
+test "link text bold" {
+  let body = "[**bold link**](https://example.com)"
+  let rendered = render(body, empty_wl())
+  assert_true(rendered.contains("<a href=\"https://example.com\"><strong>bold link</strong></a>"))
+}
+
+///|
+test "link text italic" {
+  let body = "[_italic link_](https://example.com)"
+  let rendered = render(body, empty_wl())
+  assert_true(rendered.contains("<a href=\"https://example.com\"><em>italic link</em></a>"))
+}
+
+///|
+test "link text inline code" {
+  let body = "[`code`](https://example.com)"
+  let rendered = render(body, empty_wl())
+  assert_true(rendered.contains("<a href=\"https://example.com\"><code>code</code></a>"))
+}
+
+///|
+test "link text bold italic mixed" {
+  let body = "[plain **bold** more](https://example.com)"
+  let rendered = render(body, empty_wl())
+  assert_true(rendered.contains("<a href=\"https://example.com\">plain <strong>bold</strong> more</a>"))
+}
+
+///|
+test "link text plain still works" {
+  let body = "[plain text](https://example.com)"
+  let rendered = render(body, empty_wl())
+  assert_true(rendered.contains("<a href=\"https://example.com\">plain text</a>"))
+}
+
+///|
+test "link text html escaping preserved" {
+  let body = "[a & b](https://example.com)"
+  let rendered = render(body, empty_wl())
+  assert_true(rendered.contains("<a href=\"https://example.com\">a &amp; b</a>"))
+}
+
+///|
+test "toc heading with link text uses plain text" {
+  // TOC extraction uses plain_text_inlines — a heading with a link should
+  // produce the link's display text (not the url) as the anchor text.
+  let body = "## See [the docs](https://example.com) here"
+  let entries = extract_table_of_contents(body, 2)
+  assert_eq(entries.length(), 1)
+  assert_true(entries[0].text.contains("the docs"))
+  assert_true(!entries[0].text.contains("https://"))
+}

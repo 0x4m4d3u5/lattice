@@ -8,7 +8,8 @@
 ///
 /// Supported inline elements:
 ///   **bold**, *italic*, ***bold+italic***, `inline code`,
-///   [text](url), [[wikilink]], [[wikilink|display]]
+///   [rich text](url) — link text is parsed as inline markdown,
+///   [[wikilink]], [[wikilink|display]]
 ///
 /// Supported block elements:
 ///   # Headings (h1–h6), paragraphs, ```fenced code```,
@@ -23,7 +24,7 @@ pub enum Inline {
   BoldItalic(Array[Inline])
   Strikethrough(Array[Inline])
   InlineCode(String)
-  Link(String, String) // display text, url
+  Link(Array[Inline], String) // display inlines, url
   Image(String, String) // alt text, url
   WikiRef(String, String?) // target slug, optional display text
   FootnoteRef(String) // footnote label
@@ -180,7 +181,7 @@ pub fn plain_text_inline(inline : Inline) -> String {
     BoldItalic(inner) => plain_text_inlines(inner)
     Strikethrough(inner) => plain_text_inlines(inner)
     InlineCode(code) => code
-    Link(text, _) => text
+    Link(inlines, _) => plain_text_inlines(inlines)
     Image(alt, _) => alt
     WikiRef(target, display) =>
       match display {
@@ -476,7 +477,7 @@ pub fn parse_inlines(s : String, from : Int, to : Int) -> Array[Inline] {
             if text_start < i {
               result.push(Text(@strutil.substr(s, text_start, i)))
             }
-            result.push(Link(url, url))
+            result.push(Link([Text(url)], url))
             i = close_bracket + 1
             text_start = i
             matched = true
@@ -646,7 +647,7 @@ pub fn parse_inlines(s : String, from : Int, to : Int) -> Array[Inline] {
             }
             let link_text = @strutil.substr(s, i + 1, bracket_close)
             let url = @strutil.substr(s, bracket_close + 2, paren_close)
-            result.push(Link(link_text, url))
+            result.push(Link(parse_inlines(link_text, 0, link_text.length()), url))
             i = paren_close + 1
             text_start = i
           } else {
@@ -1485,17 +1486,19 @@ fn render_inline_with_issues(
         toc: [],
         footnotes: [],
       }
-    Link(text, url) =>
+    Link(inlines, url) => {
+      let rendered = render_inlines_with_issues(inlines, wl, fn_map)
       {
         html: "<a href=\"" +
         @strutil.escape_html_body(url) +
         "\">" +
-        @strutil.escape_html_body(text) +
+        rendered.html +
         "</a>",
-        shortcode_errors: [],
+        shortcode_errors: rendered.shortcode_errors,
         toc: [],
         footnotes: [],
       }
+    }
     Image(alt, url) =>
       {
         html: "<img src=\"" +

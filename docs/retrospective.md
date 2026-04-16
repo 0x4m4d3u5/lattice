@@ -1670,3 +1670,38 @@ An important interaction with the HTML block parser required fixing: `is_html_bl
 Seventeen new tests cover: `_italic_`, `__bold__`, `___bold italic___`, word-boundary prevention (`foo_bar_baz`, `snake_case_ident`), mixed emphasis in sentences, unclosed delimiters falling back to literal text, autolinks for all three schemes (`https`, `http`, `mailto`), autolinks with paths and query strings, autolinks within sentences, non-autolink angle brackets staying literal and HTML-escaped, and unclosed autolinks falling back to literal text.
 
 Total test count: 657 (up from 640). 0 new warnings.
+
+## Rich Link Text — Inline Formatting Inside `[...](url)`
+
+### The Gap
+
+The `Link` AST node was originally `Link(String, String)` — the display text was a raw string, stored verbatim from the source. This meant `[**bold link**](url)` rendered as `<a href="url">**bold link**</a>` rather than `<a href="url"><strong>bold link</strong></a>`. The asterisks appeared as literal characters in the output.
+
+This is a real functional gap. Link text with inline code (`` [`code`](url) ``), emphasis (`[_note_](url)`), or mixed formatting (`[plain **and bold**](url)`) are all common in technical documentation. Every major CommonMark implementation handles this correctly.
+
+### Why the Original Design Missed It
+
+The `Link` node was defined alongside the other simple inline variants at the start of implementation, when the parser was being built bottom-up. At that stage, storing link text as a raw string was the simplest thing that worked — there was no inline parser yet to recurse into. By the time full inline parsing existed, the `Link(String, String)` shape had already been used throughout the codebase and wasn't revisited.
+
+This is a common failure mode in incremental parsers: early design decisions get locked in by accumulated usage, and the gap only becomes visible when you enumerate "what can appear inside `[...]`?"
+
+### The Fix: Link Text as `Array[Inline]`
+
+Changing `Link` to `Link(Array[Inline], String)` required updates to four sites:
+
+1. **AST definition** — `Link(Array[Inline], String)` replaces `Link(String, String)` in the `Inline` enum.
+2. **Parser** — `parse_inlines` now recursively calls itself on the bracket-delimited text: `Link(parse_inlines(link_text, 0, link_text.length()), url)`. Autolinks (`<https://...>`) are constructed as `Link([Text(url)], url)` — the display text is the URL wrapped in a `Text` node.
+3. **Plain text extraction** — `plain_text_inline` for `Link` calls `plain_text_inlines` on the inline array. This is important for TOC generation: a heading like `## See [the docs](url) here` should produce `"See the docs here"` as the anchor slug, not `"See [the docs](url) here"`.
+4. **Renderer** — `render_inline_with_issues` for `Link` now calls `render_inlines_with_issues` on the inline array and propagates any shortcode errors from nested content.
+
+A subtlety: the recursive call to `parse_inlines` on link text could theoretically produce nested links (`[[nested link](url2)](url1)`), which CommonMark disallows. The implementation doesn't prevent this — nested links would render as a link inside a link anchor, which most browsers handle gracefully by ignoring the inner link. For an SSG where the author controls the content, this edge case is acceptable to not guard against.
+
+### Structural Argument
+
+Before this change, `Link` was a leaf node — the display text was opaque data, not part of the AST structure the renderer could inspect. After this change, `Link` is an interior node with a typed subtree. The type `Link(Array[Inline], String)` says: "a link is a URL paired with arbitrary inline content" — which is what CommonMark actually specifies. The old type said: "a link is a URL paired with a string." The new type is structurally correct.
+
+The downstream benefit is that any future pass over the AST (search index extraction, link analysis, accessibility checkers) gets the full inline structure of link text for free — no need to re-parse strings.
+
+Seven new tests cover: bold link text, italic link text, inline code in links, mixed plain+bold, plain text regression, HTML entity escaping in link text, and TOC heading with link confirming plain-text extraction.
+
+Total test count: 664 (up from 657). 0 new warnings.
