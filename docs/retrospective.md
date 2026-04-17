@@ -1705,3 +1705,58 @@ The downstream benefit is that any future pass over the AST (search index extrac
 Seven new tests cover: bold link text, italic link text, inline code in links, mixed plain+bold, plain text regression, HTML entity escaping in link text, and TOC heading with link confirming plain-text extraction.
 
 Total test count: 664 (up from 657). 0 new warnings.
+
+## Definition List Inline Rendering — AST Type Consistency
+
+### The Gap
+
+`DefinitionList` was the only block type in the `Block` enum that stored inline content as raw `String` rather than `Array[Inline]`. The enum originally read:
+
+```moonbit
+DefinitionList(Array[(String, Array[String])]) // (term, [definitions])
+```
+
+Every other block type with inline content used `Array[Inline]`:
+
+- `Heading(Int, Array[Inline])` — headings since the parser's first version
+- `Paragraph(Array[Inline])` — paragraphs since the parser's first version
+- `ListItem.inlines : Array[Inline]` — list items after the nested-list refactor
+- `Table(Array[ColAlign], Array[Array[Inline]], Array[Array[Array[Inline]]])` — table cells
+
+The practical consequence: `**bold**`, `*italic*`, `` `code` ``, and `[links](url)` inside definition list terms or definitions were silently dropped. The asterisks appeared as literal characters in the output because the renderer called `escape_html_body(term)` and `escape_html_body(def_text)` directly, bypassing the inline parser entirely.
+
+### Why It Happened
+
+Definition lists were added after the initial block structure was established. The commit that introduced them was focused on the parsing logic — detecting the term/definition pattern, stripping the `: ` prefix — and the rendering was written to match the existing test cases, which used only plain text. The structural inconsistency wasn't caught because existing tests didn't exercise inline formatting in definition content. The type system doesn't enforce "if you have content that should render as inline HTML, its AST node should be `Array[Inline]`" — that's a design invariant, not a type invariant.
+
+### The Fix
+
+The `Block` enum type changes to:
+
+```moonbit
+DefinitionList(Array[(Array[Inline], Array[Array[Inline]])])
+```
+
+The parse step now calls `parse_inlines` on both terms and definition values:
+
+```moonbit
+let term_inlines = parse_inlines(term_str, 0, term_str.length())
+...
+defs.push(parse_inlines(def_text, 0, def_text.length()))
+```
+
+The renderer now calls `render_inlines_with_issues` — exactly the same code path used by headings, paragraphs, table cells, and list items. The `DefinitionList` case also correctly propagates shortcode errors through the `issues` array, which the original string-based version couldn't do at all.
+
+### What the Existing Tests Confirmed
+
+The "definition list html escaping" test checked that `Apple & Banana` produced `<dt>Apple &amp; Banana</dt>` and that `<b>` inside a definition was escaped to `&lt;b&gt;`. Both behaviors hold after the fix: the inline parser treats `&` and non-autolink `<` as literal text, so `escape_html_body` in the renderer still fires. The tests passed without modification.
+
+Five new tests verify the fixed behavior: bold in terms, bold in definitions, italic in definitions, inline code in definitions, and a link in a definition. These would all have silently produced wrong output before this change.
+
+### The Structural Lesson
+
+The `Block` enum is a type contract for what kinds of content a block can hold. `DefinitionList` claimed "terms and definitions are strings" when the semantically correct claim is "terms and definitions are sequences of inline elements." The type mismatch was detectable by inspection — any place in the `Block` enum where a variant holds content that could contain formatting should hold `Array[Inline]`, not `String`. Adding a new block type should trigger a check: does this content support inline formatting? If yes, use `Array[Inline]`, parse at block-parse time, and get the full inline pipeline for free.
+
+The broader anti-pattern: adding a block type with `String` content to avoid writing the `parse_inlines` call defers a correctness decision to the renderer, which then has to either re-parse the string or treat it as opaque data. Both are worse than parsing at the right boundary.
+
+Total test count: 669 (up from 664). 0 new warnings.

@@ -71,7 +71,11 @@ pub enum Block {
   // GFM table: column alignments, header cells, data rows.
   // Each cell is an Array[Inline] so inline formatting works inside cells.
   Table(Array[ColAlign], Array[Array[Inline]], Array[Array[Array[Inline]]])
-  DefinitionList(Array[(String, Array[String])]) // (term, [definitions])
+  // Definition list: each entry is (term inlines, list of definition inlines).
+  // Using Array[Inline] for both term and definitions ensures inline formatting
+  // (**bold**, `code`, links) is fully supported — consistent with Heading,
+  // Paragraph, ListItem, and Table, all of which already use Array[Inline].
+  DefinitionList(Array[(Array[Inline], Array[Array[Inline]])])
   HtmlBlock(String) // raw HTML block — emitted verbatim, not escaped
 }
 
@@ -1147,22 +1151,25 @@ pub fn parse_blocks_with_footnotes(
       }
       result.push(OrderedList(items))
     } else if is_definition_term_start(ls, i) {
-      // Definition list: term followed by one or more : definition lines
-      let items : Array[(String, Array[String])] = []
+      // Definition list: term followed by one or more : definition lines.
+      // Both terms and definition values are parsed as inline content so
+      // **bold**, `code`, [links](url), etc. work as expected.
+      let items : Array[(Array[Inline], Array[Array[Inline]])] = []
       while i < n && is_definition_term_start(ls, i) {
-        let term = ls[i]
+        let term_str = ls[i]
+        let term_inlines = parse_inlines(term_str, 0, term_str.length())
         i = i + 1
         // Collect all : definition lines for this term
-        let defs : Array[String] = []
+        let defs : Array[Array[Inline]] = []
         while i < n && is_definition_line(ls[i]) {
           // Strip ": " prefix and any extra leading whitespace (e.g. ":   ")
           let def_text = @strutil.trim_start(
             @strutil.substr(ls[i], 2, ls[i].length()),
           )
-          defs.push(def_text)
+          defs.push(parse_inlines(def_text, 0, def_text.length()))
           i = i + 1
         }
-        items.push((term, defs))
+        items.push((term_inlines, defs))
       }
       result.push(DefinitionList(items))
     } else if is_table_row_line(line) &&
@@ -1832,22 +1839,27 @@ fn render_block_with_issues(
     }
     DefinitionList(items) => {
       let buf = StringBuilder::new()
+      let issues : Array[ShortcodeIssue] = []
       buf.write_string("<dl>\n")
       let mut j = 0
       while j < items.length() {
-        let (term, defs) = items[j]
-        buf.write_string("<dt>" + @strutil.escape_html_body(term) + "</dt>\n")
+        let (term_inlines, def_groups) = items[j]
+        let rendered_term = render_inlines_with_issues(term_inlines, wl, fn_map)
+        merge_shortcode_errors(issues, rendered_term.shortcode_errors)
+        buf.write_string("<dt>" + rendered_term.html + "</dt>\n")
         let mut k = 0
-        while k < defs.length() {
-          buf.write_string(
-            "<dd>" + @strutil.escape_html_body(defs[k]) + "</dd>\n",
+        while k < def_groups.length() {
+          let rendered_def = render_inlines_with_issues(
+            def_groups[k], wl, fn_map,
           )
+          merge_shortcode_errors(issues, rendered_def.shortcode_errors)
+          buf.write_string("<dd>" + rendered_def.html + "</dd>\n")
           k = k + 1
         }
         j = j + 1
       }
       buf.write_string("</dl>\n")
-      { html: buf.to_string(), shortcode_errors: [], toc: [], footnotes: [] }
+      { html: buf.to_string(), shortcode_errors: issues, toc: [], footnotes: [] }
     }
     HtmlBlock(raw) => {
       // Emit raw HTML verbatim — no escaping.  The author controls content in

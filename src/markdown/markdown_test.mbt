@@ -515,6 +515,8 @@ test "definition list followed by paragraph" {
 
 ///|
 test "definition list html escaping" {
+  // & in terms and < in definitions are escaped (inline parser treats them as
+  // literal text; escape_html_body fires during render, same as paragraphs).
   let body = "Apple & Banana\n:   A <b>fruit</b> that grows on trees."
   let rendered = render(body, empty_wl())
   assert_true(rendered.contains("<dt>Apple &amp; Banana</dt>"))
@@ -523,6 +525,43 @@ test "definition list html escaping" {
       "<dd>A &lt;b&gt;fruit&lt;/b&gt; that grows on trees.</dd>",
     ),
   )
+}
+
+///|
+test "definition list term with bold inline" {
+  let body = "**Bold Term**\n:   A fruit."
+  let rendered = render(body, empty_wl())
+  assert_true(rendered.contains("<dt><strong>Bold Term</strong></dt>"))
+  assert_true(rendered.contains("<dd>A fruit.</dd>"))
+}
+
+///|
+test "definition list definition with bold" {
+  let body = "Apple\n:   A **sweet** fruit."
+  let rendered = render(body, empty_wl())
+  assert_true(rendered.contains("<dt>Apple</dt>"))
+  assert_true(rendered.contains("<dd>A <strong>sweet</strong> fruit.</dd>"))
+}
+
+///|
+test "definition list definition with italic" {
+  let body = "Unix\n:   _The_ operating system."
+  let rendered = render(body, empty_wl())
+  assert_true(rendered.contains("<dd><em>The</em> operating system.</dd>"))
+}
+
+///|
+test "definition list definition with inline code" {
+  let body = "Lattice\n:   An SSG that enforces `typed` frontmatter."
+  let rendered = render(body, empty_wl())
+  assert_true(rendered.contains("<dd>An SSG that enforces <code>typed</code> frontmatter.</dd>"))
+}
+
+///|
+test "definition list definition with link" {
+  let body = "Lattice\n:   See [the docs](https://example.com) for more."
+  let rendered = render(body, empty_wl())
+  assert_true(rendered.contains("<dd>See <a href=\"https://example.com\">the docs</a> for more.</dd>"))
 }
 
 ///|
