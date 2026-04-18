@@ -1,7 +1,7 @@
 ---
 title: Markdown Feature Showcase
 date: 2026-04-18
-description: Demonstrates math equations, definition lists, rich link text, autolinks, underscore emphasis, and HTML passthrough — every inline and block feature in the markdown engine.
+description: Demonstrates math equations, definition lists, rich link text, autolinks, underscore emphasis, inline HTML passthrough, and more — every inline and block feature in the markdown engine.
 tags:
   - demo
   - markdown
@@ -136,6 +136,26 @@ Escaping author-written HTML defeats the purpose. The parser detects block-level
 
 Normal markdown resumes here, because the `<details>` block ended at the blank line above.
 
+## Inline HTML Passthrough
+
+Inline HTML tags within paragraph text pass through verbatim as `InlineHtml` AST nodes —
+the same author-trust argument as HTML block passthrough, but for inline context.
+
+Keyboard shortcuts use `<kbd>`: press <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>I</kbd> to open devtools.
+
+Chemical formulas with `<sub>` and `<sup>`: water is H<sub>2</sub>O, and Einstein's mass-energy
+equivalence is E = mc<sup>2</sup>.
+
+<mark>Highlighted text</mark> uses the `<mark>` tag. <abbr title="Static Site Generator">SSG</abbr>
+is an abbreviation with a tooltip via `<abbr title="...">`.
+
+The `<span class="...">` tag lets authors apply custom CSS classes inline: a
+<span style="font-variant: small-caps">small caps</span> style, for example.
+
+Unlike the `HtmlBlock` case, `InlineHtml` fires mid-paragraph — when the line doesn't start
+with a tag opener. A line starting with `<div>` is still an HTML block; a `<kbd>` appearing
+mid-sentence is `InlineHtml`. The distinction is structural, not a configuration choice.
+
 ## Strikethrough and Task Lists
 
 ~~Strikethrough text~~ uses the GFM `~~` delimiter. Task list items render checkboxes:
@@ -145,6 +165,7 @@ Normal markdown resumes here, because the `<details>` block ended at the blank l
 - [x] Syntax highlighting for 15 languages
 - [x] Math rendering (inline $...$ and block $$...$$)
 - [x] Definition lists with inline formatting
+- [x] Inline HTML passthrough in paragraph context (<kbd>, <mark>, <sub>, <sup>, <abbr>)
 - [ ] Reference-style link definitions (future work)
 
 ## Tables
@@ -162,6 +183,7 @@ Tables use GitHub Flavored Markdown syntax. Cell content supports inline formatt
 | Task checkbox | `TaskCheckbox(Bool)` | March 17 |
 | Math | `Math(String)`, `MathBlock(String)` | April 18 |
 | Definition list | `DefinitionList(...)` | April 18 |
+| Inline HTML | `InlineHtml(String)` | April 18 |
 
 ## Blockquotes
 

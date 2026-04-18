@@ -515,16 +515,11 @@ test "definition list followed by paragraph" {
 
 ///|
 test "definition list html escaping" {
-  // & in terms and < in definitions are escaped (inline parser treats them as
-  // literal text; escape_html_body fires during render, same as paragraphs).
+  // & in terms escapes to &amp;; inline HTML tags in definitions pass through.
   let body = "Apple & Banana\n:   A <b>fruit</b> that grows on trees."
   let rendered = render(body, empty_wl())
   assert_true(rendered.contains("<dt>Apple &amp; Banana</dt>"))
-  assert_true(
-    rendered.contains(
-      "<dd>A &lt;b&gt;fruit&lt;/b&gt; that grows on trees.</dd>",
-    ),
-  )
+  assert_true(rendered.contains("<dd>A <b>fruit</b> that grows on trees.</dd>"))
 }
 
 ///|
@@ -979,4 +974,65 @@ test "inline math empty not math" {
   let rendered = render(body, empty_wl())
   // Should not produce math spans — $$ is block-level
   assert_true(!rendered.contains("<span class=\"math-inline\">"))
+}
+
+test "inline html open tag passthrough" {
+  let rendered = render("Press <kbd>Ctrl</kbd>+<kbd>C</kbd> to copy.", empty_wl())
+  assert_true(rendered.contains("<kbd>Ctrl</kbd>"))
+  assert_true(!rendered.contains("&lt;kbd&gt;"))
+}
+
+test "inline html self-closing tag passthrough" {
+  let rendered = render("Line one.<br/>Line two.", empty_wl())
+  assert_true(rendered.contains("<br/>"))
+  assert_true(!rendered.contains("&lt;br/&gt;"))
+}
+
+test "inline html mark tag passthrough" {
+  let rendered = render("This is <mark>highlighted</mark> text.", empty_wl())
+  assert_true(rendered.contains("<mark>highlighted</mark>"))
+}
+
+test "inline html sub and sup passthrough" {
+  let rendered = render("H<sub>2</sub>O and x<sup>2</sup>", empty_wl())
+  assert_true(rendered.contains("<sub>2</sub>"))
+  assert_true(rendered.contains("<sup>2</sup>"))
+}
+
+test "inline html abbr with title passthrough" {
+  let rendered = render(
+    "The <abbr title=\"HyperText Markup Language\">HTML</abbr> spec.",
+    empty_wl(),
+  )
+  assert_true(rendered.contains("<abbr title=\"HyperText Markup Language\">HTML</abbr>"))
+}
+
+test "inline html does not fire on autolinks" {
+  let rendered = render("Visit <https://example.com> today.", empty_wl())
+  assert_true(rendered.contains("href=\"https://example.com\""))
+}
+
+test "inline html in bold context passthrough" {
+  let rendered = render("**bold <kbd>key</kbd> text**", empty_wl())
+  assert_true(rendered.contains("<strong>bold <kbd>key</kbd> text</strong>"))
+}
+
+test "inline html angle bracket space still escapes" {
+  // bare < not followed by a letter is not inline HTML — escapes normally
+  let rendered = render("a < 5", empty_wl())
+  assert_true(rendered.contains("&lt;"))
+}
+
+test "inline html close tag passthrough" {
+  let rendered = render("text</em>more", empty_wl())
+  assert_true(rendered.contains("</em>"))
+  assert_true(!rendered.contains("&lt;/em&gt;"))
+}
+
+test "inline html span with class passthrough" {
+  let rendered = render(
+    "A <span class=\"highlight\">word</span> here.",
+    empty_wl(),
+  )
+  assert_true(rendered.contains("<span class=\"highlight\">word</span>"))
 }

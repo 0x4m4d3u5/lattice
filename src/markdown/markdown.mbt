@@ -30,6 +30,7 @@ pub enum Inline {
   FootnoteRef(String) // footnote label
   Shortcode(@shortcode.ShortcodeCall)
   Math(String) // inline math: $...$, content is LaTeX source
+  InlineHtml(String) // raw inline HTML tag — emitted verbatim, not escaped
   HardBreak
 }
 
@@ -197,6 +198,7 @@ pub fn plain_text_inline(inline : Inline) -> String {
     FootnoteRef(_) => ""
     Shortcode(_) => ""
     Math(_) => "" // math is opaque, not meaningful as plain text
+    InlineHtml(_) => "" // raw HTML tags are opaque to plain-text consumers
     HardBreak => " "
   }
 }
@@ -519,15 +521,15 @@ pub fn parse_inlines(s : String, from : Int, to : Int) -> Array[Inline] {
         }
       }
     } else if c == '<' {
-      // angle-bracket autolink: <https://...>, <http://...>, <mailto:...>
-      // Only consume if it looks like a URL autolink; otherwise fall through
-      // to literal text (the < will be escaped by escape_html_body later).
+      // angle-bracket autolink or inline HTML passthrough
       let mut matched = false
       if i + 1 < to {
         let rest_start = i + 1
+        let next_c = @strutil.char_at(s, rest_start)
         if @strutil.starts_with_at(s, rest_start, "https://") ||
           @strutil.starts_with_at(s, rest_start, "http://") ||
           @strutil.starts_with_at(s, rest_start, "mailto:") {
+          // autolink: <https://...>, <http://...>, <mailto:...>
           let close_bracket = @strutil.find_char(s, rest_start, '>', to)
           if close_bracket > rest_start {
             let url = @strutil.substr(s, rest_start, close_bracket)
@@ -536,6 +538,46 @@ pub fn parse_inlines(s : String, from : Int, to : Int) -> Array[Inline] {
             }
             result.push(Link([Text(url)], url))
             i = close_bracket + 1
+            text_start = i
+            matched = true
+          }
+        } else if (next_c >= 'a' && next_c <= 'z') ||
+          (next_c >= 'A' && next_c <= 'Z') {
+          // inline open tag: <tagname ...> or <br/> etc.
+          let close_gt = @strutil.find_char(s, rest_start, '>', to)
+          if close_gt > i {
+            if text_start < i {
+              result.push(Text(@strutil.substr(s, text_start, i)))
+            }
+            result.push(InlineHtml(@strutil.substr(s, i, close_gt + 1)))
+            i = close_gt + 1
+            text_start = i
+            matched = true
+          }
+        } else if next_c == '/' && rest_start + 1 < to {
+          let next2 = @strutil.char_at(s, rest_start + 1)
+          if (next2 >= 'a' && next2 <= 'z') || (next2 >= 'A' && next2 <= 'Z') {
+            // inline close tag: </tagname>
+            let close_gt = @strutil.find_char(s, rest_start + 1, '>', to)
+            if close_gt > i {
+              if text_start < i {
+                result.push(Text(@strutil.substr(s, text_start, i)))
+              }
+              result.push(InlineHtml(@strutil.substr(s, i, close_gt + 1)))
+              i = close_gt + 1
+              text_start = i
+              matched = true
+            }
+          }
+        } else if @strutil.starts_with_at(s, i, "<!--") {
+          // inline HTML comment: <!-- ... -->
+          let close_comment = @strutil.find_str(s, i + 4, "-->", to)
+          if close_comment >= 0 {
+            if text_start < i {
+              result.push(Text(@strutil.substr(s, text_start, i)))
+            }
+            result.push(InlineHtml(@strutil.substr(s, i, close_comment + 3)))
+            i = close_comment + 3
             text_start = i
             matched = true
           }
@@ -1673,6 +1715,8 @@ fn render_inline_with_issues(
       }
     HardBreak =>
       { html: "<br />\n", shortcode_errors: [], toc: [], footnotes: [] }
+    InlineHtml(raw) =>
+      { html: raw, shortcode_errors: [], toc: [], footnotes: [] }
     Math(src) =>
       {
         html: "<span class=\"math-inline\">\\(" +
