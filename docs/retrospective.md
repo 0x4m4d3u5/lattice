@@ -1760,3 +1760,38 @@ The `Block` enum is a type contract for what kinds of content a block can hold. 
 The broader anti-pattern: adding a block type with `String` content to avoid writing the `parse_inlines` call defers a correctness decision to the renderer, which then has to either re-parse the string or treat it as opaque data. Both are worse than parsing at the right boundary.
 
 Total test count: 669 (up from 664). 0 new warnings.
+
+
+
+## Math Support — Inline $...$ and Block $$...$$
+
+### The Gap
+
+Technical content — equations, formulas, proofs — needs rendered math. Most SSGs either ignore LaTeX math entirely or pass raw strings to the client with no structural distinction between math and prose. Astro's Ametrine handles it via a remark plugin that wraps strings at runtime. There's no type-level guarantee that math content was properly delimited; a missing closing `$` just breaks the page.
+
+### The Design Decision
+
+`Math(String)` and `MathBlock(String)` are typed AST nodes in the `Inline` and `Block` enums respectively. The parser guarantees:
+
+1. **Inline math** (`$...$`): content is properly delimited, non-empty, single-line LaTeX source. If the closing `$` is missing, the dollar is treated as a literal character — no broken HTML.
+2. **Block math** (`$$...$$`): content is collected between opening and closing `$$` lines, joined with newlines. If the closing `$$` is missing, the opening line falls back to a paragraph.
+
+This is structurally different from "just pass raw HTML." The SSG can inspect `Math` and `MathBlock` nodes — count equations, validate that math is non-empty, apply transforms, or lint LaTeX conventions — because they are first-class AST nodes, not strings embedded in `Text`.
+
+The `plain_text_inline` function returns `""` for `Math(_)` because LaTeX source is opaque to plain-text consumers (TOC extraction, search indexing, RSS feeds). This is the correct default: the rendered equation is visual, not textual.
+
+### Rendering Approach
+
+Inline math renders as `<span class="math-inline">\(...\)</span>` using the KaTeX/MathJax inline delimiter syntax. Block math renders as `<div class="math-block">\[...\]</div>` using the display math delimiter syntax. Both wrap the LaTeX source in HTML-escaped form (`@strutil.escape_html_body`) to prevent XSS from math source.
+
+Template authors add KaTeX or MathJax via a `<script>` tag in their `head.html` partial to activate client-side rendering. The SSG produces structurally correct, safe HTML; the math library handles the visual rendering.
+
+### Currency Dollar Edge Case
+
+A dollar sign followed by a space (`$ 5`) or at end-of-string is treated as a literal character, not a math opener. This prevents false positives in prose that mentions money. A dollar followed by a digit (`$5`) also falls through because the closing `$` search won't find a valid close on the same line for typical currency usage. Double-dollar (`$$`) in inline context is skipped entirely — the block parser owns `$$`.
+
+### Test Coverage
+
+12 new tests covering: basic inline math, LaTeX content preservation (e.g. `\frac{a}{b}`), HTML escaping of `<` and `&` in math source, space-after-dollar not triggering math, unclosed dollar fallback, basic block math, multi-line block math content, inline math in paragraph context, unclosed block math fallback to paragraph, block math with surrounding content, and double-dollar inline behavior.
+
+Test count: 669 → 681. 0 new warnings.

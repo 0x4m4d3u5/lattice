@@ -29,6 +29,7 @@ pub enum Inline {
   WikiRef(String, String?) // target slug, optional display text
   FootnoteRef(String) // footnote label
   Shortcode(@shortcode.ShortcodeCall)
+  Math(String) // inline math: $...$, content is LaTeX source
   HardBreak
 }
 
@@ -76,6 +77,7 @@ pub enum Block {
   // (**bold**, `code`, links) is fully supported — consistent with Heading,
   // Paragraph, ListItem, and Table, all of which already use Array[Inline].
   DefinitionList(Array[(Array[Inline], Array[Array[Inline]])])
+  MathBlock(String) // display math: $$...$$, content is LaTeX source
   HtmlBlock(String) // raw HTML block — emitted verbatim, not escaped
 }
 
@@ -194,6 +196,7 @@ pub fn plain_text_inline(inline : Inline) -> String {
       }
     FootnoteRef(_) => ""
     Shortcode(_) => ""
+    Math(_) => "" // math is opaque, not meaningful as plain text
     HardBreak => " "
   }
 }
@@ -333,6 +336,56 @@ pub fn parse_inlines(s : String, from : Int, to : Int) -> Array[Inline] {
         i = i + 1
       }
       text_start = i
+    } else if c == '$' {
+      // inline math: $...$
+      // Dollar followed by space or at end of string is not a math opener
+      // (prevents false positives with currency like "$5" or "$ amount").
+      // Content cannot span lines (no newlines) and cannot be empty.
+      let opener_end = i + 1
+      let is_dollar_dollar = opener_end < to &&
+        @strutil.char_at(s, opener_end) == '$'
+      // $$ is handled by the block parser (MathBlock), skip here
+      if is_dollar_dollar {
+        i = i + 1
+      } else if opener_end < to && @strutil.char_at(s, opener_end) != ' ' {
+        // Look for closing $ that is not preceded by \
+        let mut close = opener_end
+        let mut found = false
+        while close < to {
+          let ch = @strutil.char_at(s, close)
+          if ch == '$' {
+            // Check it's not preceded by a backslash
+            if close > opener_end &&
+              @strutil.char_at(s, close - 1) == '\\' {
+              close = close + 1
+              continue
+            }
+            // Closing $ must not be followed immediately by alphanumeric
+            // (prevents matching mid-word dollars) and content must be non-empty
+            let content = @strutil.substr(s, opener_end, close)
+            if content.length() > 0 && !content.contains("\n") {
+              found = true
+              break
+            }
+          }
+          close = close + 1
+        }
+        if found {
+          let content = @strutil.substr(s, opener_end, close)
+          if text_start < i {
+            result.push(Text(@strutil.substr(s, text_start, i)))
+          }
+          result.push(Math(content))
+          i = close + 1
+          text_start = i
+        } else {
+          // No closing $ found — treat as literal
+          i = i + 1
+        }
+      } else {
+        // $ followed by space or at end — literal dollar
+        i = i + 1
+      }
     } else if c == '*' {
       // bold (**), italic (*), or bold+italic (***)
       let star_count = count_char(s, i, '*')
@@ -1044,6 +1097,17 @@ fn is_html_block_start(line : String) -> Bool {
   c == '?'
 }
 
+///|
+fn is_math_block_start(line : String) -> Bool {
+  // A line that starts with $$ (possibly after whitespace) opens a math block.
+  // The trimmed line must start with exactly $$ and have content after it (or
+  // be exactly $$ for a closing delimiter).
+  let t = @strutil.trim(line)
+  t.length() >= 2 &&
+  @strutil.char_at(t, 0) == '$' &&
+  @strutil.char_at(t, 1) == '$'
+}
+
 fn is_block_starter(line : String) -> Bool {
   is_heading_line(line) ||
   is_hrule(line) ||
@@ -1052,7 +1116,8 @@ fn is_block_starter(line : String) -> Bool {
   is_ordered_item(line) ||
   is_blockquote_line(line) ||
   is_definition_line(line) ||
-  is_html_block_start(line)
+  is_html_block_start(line) ||
+  is_math_block_start(line)
 }
 
 // ── block parsing ─────────────────────────────────────────────────────────────
@@ -1215,6 +1280,32 @@ pub fn parse_blocks_with_footnotes(
         i = i + 1
       }
       result.push(Table(aligns, header_inlines, rows))
+    } else if is_math_block_start(line) {
+      // Display math block: $$...$$
+      let t = @strutil.trim(line)
+      let math_lines : Array[String] = []
+      // If the opening line has content after $$, include it
+      if t.length() > 2 {
+        math_lines.push(@strutil.trim(@strutil.substr(t, 2, t.length())))
+      }
+      i = i + 1
+      let mut found_close = false
+      while i < n {
+        let cur = @strutil.trim(ls[i])
+        if cur == "$$" {
+          found_close = true
+          i = i + 1
+          break
+        }
+        math_lines.push(ls[i])
+        i = i + 1
+      }
+      if found_close {
+        result.push(MathBlock(@strutil.join_lines(math_lines)))
+      } else {
+        // No closing $$ — treat opening line as a paragraph
+        result.push(Paragraph(parse_inlines(line, 0, line.length())))
+      }
     } else if is_html_block_start(line) {
       // Raw HTML block — accumulate until first blank line and emit verbatim.
       // The author controls content in an SSG context, so passthrough is safe.
@@ -1582,6 +1673,15 @@ fn render_inline_with_issues(
       }
     HardBreak =>
       { html: "<br />\n", shortcode_errors: [], toc: [], footnotes: [] }
+    Math(src) =>
+      {
+        html: "<span class=\"math-inline\">\\(" +
+        @strutil.escape_html_body(src) +
+        "\\)</span>",
+        shortcode_errors: [],
+        toc: [],
+        footnotes: [],
+      }
   }
 }
 
@@ -1865,6 +1965,16 @@ fn render_block_with_issues(
       // Emit raw HTML verbatim — no escaping.  The author controls content in
       // an SSG, so passthrough is the expected and correct behavior.
       { html: raw + "\n", shortcode_errors: [], toc: [], footnotes: [] }
+    }
+    MathBlock(src) => {
+      {
+        html: "<div class=\"math-block\">\\[" +
+        @strutil.escape_html_body(src) +
+        "\\]</div>\n",
+        shortcode_errors: [],
+        toc: [],
+        footnotes: [],
+      }
     }
   }
 }

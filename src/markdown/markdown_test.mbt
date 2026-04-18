@@ -868,3 +868,115 @@ test "toc heading with link text uses plain text" {
   assert_true(entries[0].text.contains("the docs"))
   assert_true(!entries[0].text.contains("https://"))
 }
+
+
+
+// ── Inline and block math ──────────────────────────────────────────────────────
+
+///|
+test "inline math basic" {
+  let body = "The formula $x^2 + y^2 = r^2$ is known."
+  let rendered = render(body, empty_wl())
+  assert_true(rendered.contains("<span class=\"math-inline\">"))
+  assert_true(rendered.contains("\\(x^2 + y^2 = r^2\\)"))
+  assert_true(rendered.contains("</span>"))
+  assert_true(rendered.contains("The formula"))
+  assert_true(rendered.contains("is known."))
+}
+
+///|
+test "inline math content preserved" {
+  let body = "Use $\\frac{a}{b}$ for fractions."
+  let rendered = render(body, empty_wl())
+  assert_true(rendered.contains("<span class=\"math-inline\">"))
+  assert_true(rendered.contains("\\(\\frac{a}{b}\\)"))
+}
+
+///|
+test "inline math html escaping" {
+  let body = "We have $x < y$ and $a & b$."
+  let rendered = render(body, empty_wl())
+  assert_true(rendered.contains("&lt;"))
+  assert_true(rendered.contains("&amp;"))
+}
+
+///|
+test "inline math dollar not math when space follows" {
+  let body = "costs $5 each"
+  let rendered = render(body, empty_wl())
+  // Dollar followed by digit is not preceded by space, so it could be parsed.
+  // But "costs $ 5 each" with space after dollar should NOT be math.
+  assert_true(!rendered.contains("<span class=\"math-inline\">"))
+}
+
+///|
+test "inline math dollar space after opener not math" {
+  let body = "costs $ 5 each"
+  let rendered = render(body, empty_wl())
+  assert_true(!rendered.contains("<span class=\"math-inline\">"))
+  assert_true(rendered.contains("$ 5 each"))
+}
+
+///|
+test "inline math unclosed falls back" {
+  let body = "just a $ sign"
+  let rendered = render(body, empty_wl())
+  assert_true(!rendered.contains("<span class=\"math-inline\">"))
+  assert_true(rendered.contains("$"))
+}
+
+///|
+test "block math basic" {
+  let body = "$$\n\\sum_{i=0}^{n} i\n$$"
+  let rendered = render(body, empty_wl())
+  assert_true(rendered.contains("<div class=\"math-block\">"))
+  assert_true(rendered.contains("\\[\\sum_{i=0}^{n} i\\]"))
+  assert_true(rendered.contains("</div>"))
+}
+
+///|
+test "block math content preserved" {
+  let body = "$$\n\\frac{1}{2} +\n\\frac{3}{4}\n$$"
+  let rendered = render(body, empty_wl())
+  assert_true(rendered.contains("<div class=\"math-block\">"))
+  assert_true(rendered.contains("\\frac{1}{2}"))
+  assert_true(rendered.contains("\\frac{3}{4}"))
+}
+
+///|
+test "inline math in paragraph" {
+  let body = "The equation $E = mc^2$ is famous."
+  let rendered = render(body, empty_wl())
+  assert_true(rendered.contains("<p>"))
+  assert_true(rendered.contains("<span class=\"math-inline\">"))
+  assert_true(rendered.contains("\\(E = mc^2\\)"))
+}
+
+///|
+test "block math unclosed falls back to paragraph" {
+  let body = "$$\nno closing"
+  let rendered = render(body, empty_wl())
+  // No closing $$ → treated as paragraph
+  assert_true(!rendered.contains("<div class=\"math-block\">"))
+  assert_true(rendered.contains("<p>"))
+}
+
+///|
+test "block math with surrounding content" {
+  let body = "Before.\n\n$$\nx^2\n$$\n\nAfter."
+  let rendered = render(body, empty_wl())
+  assert_true(rendered.contains("<p>Before.</p>"))
+  assert_true(rendered.contains("<div class=\"math-block\">"))
+  assert_true(rendered.contains("<p>After.</p>"))
+}
+
+///|
+test "inline math empty not math" {
+  // "$$" as inline content (two adjacent dollars) — the $$ check in inline
+  // parser skips double-dollar, treating first $ as literal then second $ also
+  // as literal (since it sees $$ and skips). This tests the fallback behavior.
+  let body = "a$$b"
+  let rendered = render(body, empty_wl())
+  // Should not produce math spans — $$ is block-level
+  assert_true(!rendered.contains("<span class=\"math-inline\">"))
+}
