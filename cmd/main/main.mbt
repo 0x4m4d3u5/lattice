@@ -785,24 +785,32 @@ fn run_once(
       i = i + 1
     }
     let elapsed = @watch.current_millis() - start_ms
+    if result.skipped_drafts > 0 && !build_config.include_drafts {
+      println(
+        "[lattice] skipped " +
+        result.skipped_drafts.to_string() +
+        " draft(s). Use --drafts to include them.",
+      )
+    }
     if result.errors == 0 {
       println(
         "[lattice] built " +
         result.rebuilt_pages.to_string() +
         " page(s) [" +
         result.unchanged_pages.to_string() +
-        " unchanged] in " +
+        " unchanged], " +
+        result.redirect_count.to_string() +
+        " redirect(s) in " +
         format_duration(elapsed),
       )
     } else {
       let summary = @diagnostic.summarize(result.diagnostics)
       println(@diagnostic.format_summary(summary))
       println(
-        "[lattice] build failed in " +
+        "[lattice] build failed: " +
         result.errors.to_string() +
-        " error(s) (" +
-        format_duration(elapsed) +
-        ")",
+        " error(s) in " +
+        format_duration(elapsed),
       )
     }
     result.errors

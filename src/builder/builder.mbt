@@ -6041,25 +6041,6 @@ pub fn build(
   }
 
   error_count = @diagnostic.count_errors(diagnostics)
-  println(
-    "[lattice] " +
-    "rebuilt " +
-    rebuilt.to_string() +
-    " pages (" +
-    unchanged.to_string() +
-    " unchanged), " +
-    redirect_count.to_string() +
-    " redirects, " +
-    error_count.to_string() +
-    " errors",
-  )
-  if skipped_drafts > 0 && !config.include_drafts {
-    println(
-      "[lattice] skipped " +
-      skipped_drafts.to_string() +
-      " draft(s). Use --drafts to include them.",
-    )
-  }
   {
     errors: error_count,
     diagnostics,
