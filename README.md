@@ -66,7 +66,7 @@ moon build
 ### Build the example site
 
 ```bash
-moon run cmd/main -- build ./example/content ./example/dist --config ./example/site.cfg
+moon run cmd/main -- build ./example/content --config ./example/site.cfg
 ```
 
 ### Check content without rendering
@@ -78,7 +78,7 @@ moon run cmd/main -- check ./example/content --config ./example/site.cfg
 ### Start the dev server
 
 ```bash
-moon run cmd/main -- serve ./example/content ./example/dist --config ./example/site.cfg
+moon run cmd/main -- serve ./example/content --config ./example/site.cfg
 ```
 
 ### Scaffold a new site
@@ -206,7 +206,7 @@ The `example/` directory exercises the full feature set:
 Build it:
 
 ```bash
-moon run cmd/main -- build ./example/content ./example/dist --config ./example/site.cfg
+moon run cmd/main -- build ./example/content --config ./example/site.cfg
 ```
 
 ## Content Format

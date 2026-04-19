@@ -4901,10 +4901,9 @@ pub fn build(
                 // Draft skipped, don't count as rebuilt or unchanged
                 skipped_drafts = skipped_drafts + 1
                 ()
-              } else if !should_rebuild {
-                messages.push("[skip] " + page_context)
-                unchanged = unchanged + 1
               }
+              // Unchanged pages already have [skip] message and unchanged
+              // counter incremented in the write_result assignment above.
               @cache.remember(next_cache_store, src.slug, src.fingerprint)
 
               // Generate redirect pages if redirect_from is specified

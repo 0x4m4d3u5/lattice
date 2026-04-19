@@ -2013,3 +2013,46 @@ The rule is now clean: **nothing in `src/` has terminal side effects.** All stdo
 `build()` is now fully mockable for test consumers and library embedders. A test that calls `build()` sees zero stdout noise — all progress messages are captured in the `messages` array and can be asserted on or ignored. A library that uses lattice as a build step gets clean output without having to suppress progress spam.
 
 Total test count: 691 (no new tests — this refactor changed output routing, not behavior). 0 errors, 5 pre-existing deprecation warnings (unrelated `derive(Show)` → `derive(Debug)`).
+\n\n---\n\n### Bug Fix: Double Skip Messages in Build Output
+
+**When:** 2026-04-19
+**Discovered by:** Manual CLI output inspection, not test failure
+**AI involvement:** The agent task description identified the bug location; the fix was straightforward once the code was examined.
+
+#### What Happened
+
+Running an incremental build (no source changes) produced doubled `[skip]` progress messages:
+
+```
+[skip] posts/template-composition
+[skip] posts/template-composition
+```
+
+Every unchanged page appeared twice in the output. The `unchanged_pages` counter was also inflated by the same factor.
+
+#### Root Cause
+
+The `build()` function in `src/builder/builder.mbt` had two branches that both pushed `[skip]` messages and incremented the `unchanged` counter for the same page:
+
+1. The `let write_result = if should_skip_draft || !should_rebuild` block (the assignment) pushed `[skip]` and incremented `unchanged` when `!should_rebuild`.
+2. The subsequent `match write_result` block also pushed `[skip]` and incremented `unchanged` for the `!should_rebuild` case.
+
+These are not independent conditions — the second is a structural consequence of the first. The `match write_result` was re-checking conditions that had already been handled during the `write_result` assignment.
+
+#### The Fix
+
+Removed the duplicate `else if !should_rebuild` branch from the `match write_result` block. The first push (in the assignment block) is the correct location — it happens at the point where the decision to skip is made. Added a comment explaining that unchanged pages are already handled above.
+
+#### Why Tests Didn't Catch This
+
+The test suite (691 tests) verifies HTML output, schema validation, link resolution, feed generation, and many other properties. But no test asserts on the *progress message stream*. The `messages` array in `BuildResult` exists for this purpose — it was added precisely so that progress output could be tested — but the doubling bug was introduced after the message-capture refactor and no test was written to verify message deduplication.
+
+This is an honest gap: test coverage of observable behavior is incomplete. The build's *functional* output (HTML files, feeds, sitemap) was always correct — only the progress reporting was wrong. A user watching `--watch` mode would see confusing output, but the site itself was fine.
+
+**Lesson:** For CLI tools, the terminal output is part of the UX contract. If `messages` exists for testability, the deduplication property should have a test. That test doesn't exist yet — it's a follow-up item, not part of this bugfix.
+
+#### Bug Fix: Example Site Output Directory
+
+The example site config (`example/site.cfg`) lacked an `output_dir` key. The `build` subcommand's `--output-dir` flag is named-only (`--output-dir`), not positional. The README and site.cfg comments showed a command with `./example/dist` as a second positional argument, which was silently ignored. The build wrote to `./dist` (project root) instead of `./example/dist`.
+
+Fix: Added `output_dir = example/dist` to `example/site.cfg` and updated all documentation commands to use `build ./example/content --config ./example/site.cfg` (no second positional argument). Cleaned up the stale `./dist` directory that had been created by the misconfigured build.

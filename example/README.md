@@ -18,5 +18,5 @@ Key files:
 Build it with:
 
 ```bash
-moon run cmd/main -- build ./example/content ./example/dist --config ./example/site.cfg
+moon run cmd/main -- build ./example/content --config ./example/site.cfg
 ```
