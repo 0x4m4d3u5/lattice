@@ -8,6 +8,7 @@ description: A MoonBit static site generator where structural violations are typ
 tags:
   - moonbit
   - tooling
+related_post: typed-content-tour
 ---
 
 # Lattice SSG

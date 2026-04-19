@@ -8,6 +8,7 @@ description: Astro-based personal site and content engine. Succeeded by Lattice.
 tags:
   - astro
   - typescript
+related_post: release-checkpoint
 ---
 
 # Ametrine
