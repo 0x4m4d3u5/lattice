@@ -549,14 +549,22 @@ test "definition list definition with italic" {
 test "definition list definition with inline code" {
   let body = "Lattice\n:   An SSG that enforces `typed` frontmatter."
   let rendered = render(body, empty_wl())
-  assert_true(rendered.contains("<dd>An SSG that enforces <code>typed</code> frontmatter.</dd>"))
+  assert_true(
+    rendered.contains(
+      "<dd>An SSG that enforces <code>typed</code> frontmatter.</dd>",
+    ),
+  )
 }
 
 ///|
 test "definition list definition with link" {
   let body = "Lattice\n:   See [the docs](https://example.com) for more."
   let rendered = render(body, empty_wl())
-  assert_true(rendered.contains("<dd>See <a href=\"https://example.com\">the docs</a> for more.</dd>"))
+  assert_true(
+    rendered.contains(
+      "<dd>See <a href=\"https://example.com\">the docs</a> for more.</dd>",
+    ),
+  )
 }
 
 ///|
@@ -642,7 +650,6 @@ test "non-html angle bracket in paragraph is still escaped" {
   // Inline text with < should be escaped because it's NOT a block HTML start
   assert_true(rendered.contains("x &lt; y is a comparison."))
 }
-
 
 // ── Underscore emphasis ────────────────────────────────────────────────────────
 
@@ -745,9 +752,7 @@ test "autolink https basic" {
   let body = "<https://example.com>"
   let rendered = render(body, empty_wl())
   assert_true(
-    rendered.contains(
-      "<a href=\"https://example.com\">https://example.com</a>",
-    ),
+    rendered.contains("<a href=\"https://example.com\">https://example.com</a>"),
   )
 }
 
@@ -756,9 +761,7 @@ test "autolink http basic" {
   let body = "<http://example.com>"
   let rendered = render(body, empty_wl())
   assert_true(
-    rendered.contains(
-      "<a href=\"http://example.com\">http://example.com</a>",
-    ),
+    rendered.contains("<a href=\"http://example.com\">http://example.com</a>"),
   )
 }
 
@@ -815,42 +818,60 @@ test "autolink unclosed falls back" {
 test "link text bold" {
   let body = "[**bold link**](https://example.com)"
   let rendered = render(body, empty_wl())
-  assert_true(rendered.contains("<a href=\"https://example.com\"><strong>bold link</strong></a>"))
+  assert_true(
+    rendered.contains(
+      "<a href=\"https://example.com\"><strong>bold link</strong></a>",
+    ),
+  )
 }
 
 ///|
 test "link text italic" {
   let body = "[_italic link_](https://example.com)"
   let rendered = render(body, empty_wl())
-  assert_true(rendered.contains("<a href=\"https://example.com\"><em>italic link</em></a>"))
+  assert_true(
+    rendered.contains(
+      "<a href=\"https://example.com\"><em>italic link</em></a>",
+    ),
+  )
 }
 
 ///|
 test "link text inline code" {
   let body = "[`code`](https://example.com)"
   let rendered = render(body, empty_wl())
-  assert_true(rendered.contains("<a href=\"https://example.com\"><code>code</code></a>"))
+  assert_true(
+    rendered.contains("<a href=\"https://example.com\"><code>code</code></a>"),
+  )
 }
 
 ///|
 test "link text bold italic mixed" {
   let body = "[plain **bold** more](https://example.com)"
   let rendered = render(body, empty_wl())
-  assert_true(rendered.contains("<a href=\"https://example.com\">plain <strong>bold</strong> more</a>"))
+  assert_true(
+    rendered.contains(
+      "<a href=\"https://example.com\">plain <strong>bold</strong> more</a>",
+    ),
+  )
 }
 
 ///|
 test "link text plain still works" {
   let body = "[plain text](https://example.com)"
   let rendered = render(body, empty_wl())
-  assert_true(rendered.contains("<a href=\"https://example.com\">plain text</a>"))
+  assert_true(
+    rendered.contains("<a href=\"https://example.com\">plain text</a>"),
+  )
 }
 
 ///|
 test "link text html escaping preserved" {
   let body = "[a & b](https://example.com)"
   let rendered = render(body, empty_wl())
-  assert_true(rendered.contains("<a href=\"https://example.com\">a &amp; b</a>"))
+  assert_true(
+    rendered.contains("<a href=\"https://example.com\">a &amp; b</a>"),
+  )
 }
 
 ///|
@@ -863,8 +884,6 @@ test "toc heading with link text uses plain text" {
   assert_true(entries[0].text.contains("the docs"))
   assert_true(!entries[0].text.contains("https://"))
 }
-
-
 
 // ── Inline and block math ──────────────────────────────────────────────────────
 
@@ -976,59 +995,74 @@ test "inline math empty not math" {
   assert_true(!rendered.contains("<span class=\"math-inline\">"))
 }
 
+///|
 test "inline html open tag passthrough" {
-  let rendered = render("Press <kbd>Ctrl</kbd>+<kbd>C</kbd> to copy.", empty_wl())
+  let rendered = render(
+    "Press <kbd>Ctrl</kbd>+<kbd>C</kbd> to copy.",
+    empty_wl(),
+  )
   assert_true(rendered.contains("<kbd>Ctrl</kbd>"))
   assert_true(!rendered.contains("&lt;kbd&gt;"))
 }
 
+///|
 test "inline html self-closing tag passthrough" {
   let rendered = render("Line one.<br/>Line two.", empty_wl())
   assert_true(rendered.contains("<br/>"))
   assert_true(!rendered.contains("&lt;br/&gt;"))
 }
 
+///|
 test "inline html mark tag passthrough" {
   let rendered = render("This is <mark>highlighted</mark> text.", empty_wl())
   assert_true(rendered.contains("<mark>highlighted</mark>"))
 }
 
+///|
 test "inline html sub and sup passthrough" {
   let rendered = render("H<sub>2</sub>O and x<sup>2</sup>", empty_wl())
   assert_true(rendered.contains("<sub>2</sub>"))
   assert_true(rendered.contains("<sup>2</sup>"))
 }
 
+///|
 test "inline html abbr with title passthrough" {
   let rendered = render(
     "The <abbr title=\"HyperText Markup Language\">HTML</abbr> spec.",
     empty_wl(),
   )
-  assert_true(rendered.contains("<abbr title=\"HyperText Markup Language\">HTML</abbr>"))
+  assert_true(
+    rendered.contains("<abbr title=\"HyperText Markup Language\">HTML</abbr>"),
+  )
 }
 
+///|
 test "inline html does not fire on autolinks" {
   let rendered = render("Visit <https://example.com> today.", empty_wl())
   assert_true(rendered.contains("href=\"https://example.com\""))
 }
 
+///|
 test "inline html in bold context passthrough" {
   let rendered = render("**bold <kbd>key</kbd> text**", empty_wl())
   assert_true(rendered.contains("<strong>bold <kbd>key</kbd> text</strong>"))
 }
 
+///|
 test "inline html angle bracket space still escapes" {
   // bare < not followed by a letter is not inline HTML — escapes normally
   let rendered = render("a < 5", empty_wl())
   assert_true(rendered.contains("&lt;"))
 }
 
+///|
 test "inline html close tag passthrough" {
   let rendered = render("text</em>more", empty_wl())
   assert_true(rendered.contains("</em>"))
   assert_true(!rendered.contains("&lt;/em&gt;"))
 }
 
+///|
 test "inline html span with class passthrough" {
   let rendered = render(
     "A <span class=\"highlight\">word</span> here.",

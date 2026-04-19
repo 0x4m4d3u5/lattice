@@ -32,7 +32,7 @@ test "lint summarize groups by violation type" {
       message: "broken link",
     },
   ]
-  let result : LintResult = { violations, }
+  let result : LintResult = { violations, messages: [] }
   let summary = summarize(result)
   assert_eq(summary.total, 3)
   // SchemaError should be first (count 2) then BrokenWikilink (count 1)
@@ -68,7 +68,7 @@ test "lint summarize groups by file" {
       message: "err3",
     },
   ]
-  let result : LintResult = { violations, }
+  let result : LintResult = { violations, messages: [] }
   let summary = summarize(result)
   assert_eq(summary.total, 3)
   assert_eq(summary.by_file.length(), 2)
@@ -107,7 +107,7 @@ test "lint format_summary with violations" {
       message: "link",
     },
   ]
-  let result : LintResult = { violations, }
+  let result : LintResult = { violations, messages: [] }
   let summary = summarize(result)
   let text = format_summary(summary)
   assert_true(text.contains("Summary: 2 violation(s)"))
@@ -140,7 +140,7 @@ test "lint format_violations_json with line and column" {
       message: "unknown slug 'bar'",
     },
   ]
-  let result : LintResult = { violations, }
+  let result : LintResult = { violations, messages: [] }
   let json = format_violations_json(result)
   assert_true(json.contains("\"path\": \"content/posts/foo.md\""))
   assert_true(json.contains("\"line\": 12"))
@@ -161,7 +161,7 @@ test "lint format_violations_json null line and column" {
       message: "field error",
     },
   ]
-  let result : LintResult = { violations, }
+  let result : LintResult = { violations, messages: [] }
   let json = format_violations_json(result)
   assert_true(json.contains("\"line\": null"))
   assert_true(json.contains("\"column\": null"))
@@ -179,7 +179,7 @@ test "lint format_violations_json escapes special chars in message" {
       message: "field \"x\" contains \\backslash",
     },
   ]
-  let result : LintResult = { violations, }
+  let result : LintResult = { violations, messages: [] }
   let json = format_violations_json(result)
   // backslash and quote must be escaped in JSON
   assert_true(json.contains("\\\"x\\\""))
@@ -197,7 +197,7 @@ test "lint summarize single violation" {
       message: "dup",
     },
   ]
-  let result : LintResult = { violations, }
+  let result : LintResult = { violations, messages: [] }
   let summary = summarize(result)
   assert_eq(summary.total, 1)
   assert_eq(summary.by_type.length(), 1)

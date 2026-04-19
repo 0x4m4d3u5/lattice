@@ -25,11 +25,12 @@ pub(all) struct LintViolation {
 ///|
 pub(all) struct LintResult {
   violations : Array[LintViolation]
+  messages : Array[String]
 }
 
 ///|
 pub fn empty_result() -> LintResult {
-  { violations: [] }
+  { violations: [], messages: [] }
 }
 
 ///|

@@ -357,8 +357,7 @@ pub fn parse_inlines(s : String, from : Int, to : Int) -> Array[Inline] {
           let ch = @strutil.char_at(s, close)
           if ch == '$' {
             // Check it's not preceded by a backslash
-            if close > opener_end &&
-              @strutil.char_at(s, close - 1) == '\\' {
+            if close > opener_end && @strutil.char_at(s, close - 1) == '\\' {
               close = close + 1
               continue
             }
@@ -441,10 +440,11 @@ pub fn parse_inlines(s : String, from : Int, to : Int) -> Array[Inline] {
       // Word-boundary rule: only treat _ as opener if the char before it is
       // NOT alphanumeric. This prevents snake_case identifiers from being
       // parsed as emphasis — a pragmatic compromise for SSG content.
-      let prev_is_alnum = i > 0 && {
-        let prev = @strutil.char_at(s, i - 1)
-        @strutil.is_alpha(prev) || @strutil.is_digit(prev)
-      }
+      let prev_is_alnum = i > 0 &&
+        ({
+          let prev = @strutil.char_at(s, i - 1)
+          @strutil.is_alpha(prev) || @strutil.is_digit(prev)
+        })
       if prev_is_alnum {
         // mid-word underscore — treat as literal
         i = i + 1
@@ -463,21 +463,21 @@ pub fn parse_inlines(s : String, from : Int, to : Int) -> Array[Inline] {
           // Closing delimiter word-boundary: the char after the close must
           // NOT be alphanumeric (mirrors the opener rule).
           let close_end = close + under_count
-          let next_is_alnum = close_end < to && {
-            let next = @strutil.char_at(s, close_end)
-            @strutil.is_alpha(next) || @strutil.is_digit(next)
-          }
+          let next_is_alnum = close_end < to &&
+            ({
+              let next = @strutil.char_at(s, close_end)
+              @strutil.is_alpha(next) || @strutil.is_digit(next)
+            })
           if next_is_alnum {
             // Close is mid-word — skip this match and keep looking
-            let next_close = @strutil.find_str(
-              s, close + 1, close_needle, to,
-            )
+            let next_close = @strutil.find_str(s, close + 1, close_needle, to)
             if next_close > inner_start {
               let nc_end = next_close + under_count
-              let nc_is_alnum = nc_end < to && {
-                let nc = @strutil.char_at(s, nc_end)
-                @strutil.is_alpha(nc) || @strutil.is_digit(nc)
-              }
+              let nc_is_alnum = nc_end < to &&
+                ({
+                  let nc = @strutil.char_at(s, nc_end)
+                  @strutil.is_alpha(nc) || @strutil.is_digit(nc)
+                })
               if nc_is_alnum {
                 // Still mid-word — give up, treat opener as literal
                 i = i + 1
@@ -746,7 +746,9 @@ pub fn parse_inlines(s : String, from : Int, to : Int) -> Array[Inline] {
             }
             let link_text = @strutil.substr(s, i + 1, bracket_close)
             let url = @strutil.substr(s, bracket_close + 2, paren_close)
-            result.push(Link(parse_inlines(link_text, 0, link_text.length()), url))
+            result.push(
+              Link(parse_inlines(link_text, 0, link_text.length()), url),
+            )
             i = paren_close + 1
             text_start = i
           } else {
@@ -1108,6 +1110,7 @@ fn is_definition_term_start(ls : Array[String], i : Int) -> Bool {
 }
 
 ///|
+
 ///|
 /// Detect the start of a raw HTML block.
 /// A block HTML line starts with `<` followed by a letter (opening tag),
@@ -1150,6 +1153,7 @@ fn is_math_block_start(line : String) -> Bool {
   @strutil.char_at(t, 1) == '$'
 }
 
+///|
 fn is_block_starter(line : String) -> Bool {
   is_heading_line(line) ||
   is_hrule(line) ||
@@ -1994,7 +1998,9 @@ fn render_block_with_issues(
         let mut k = 0
         while k < def_groups.length() {
           let rendered_def = render_inlines_with_issues(
-            def_groups[k], wl, fn_map,
+            def_groups[k],
+            wl,
+            fn_map,
           )
           merge_shortcode_errors(issues, rendered_def.shortcode_errors)
           buf.write_string("<dd>" + rendered_def.html + "</dd>\n")
@@ -2003,14 +2009,18 @@ fn render_block_with_issues(
         j = j + 1
       }
       buf.write_string("</dl>\n")
-      { html: buf.to_string(), shortcode_errors: issues, toc: [], footnotes: [] }
+      {
+        html: buf.to_string(),
+        shortcode_errors: issues,
+        toc: [],
+        footnotes: [],
+      }
     }
-    HtmlBlock(raw) => {
+    HtmlBlock(raw) =>
       // Emit raw HTML verbatim — no escaping.  The author controls content in
       // an SSG, so passthrough is the expected and correct behavior.
       { html: raw + "\n", shortcode_errors: [], toc: [], footnotes: [] }
-    }
-    MathBlock(src) => {
+    MathBlock(src) =>
       {
         html: "<div class=\"math-block\">\\[" +
         @strutil.escape_html_body(src) +
@@ -2019,7 +2029,6 @@ fn render_block_with_issues(
         toc: [],
         footnotes: [],
       }
-    }
   }
 }
 

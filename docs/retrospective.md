@@ -1961,3 +1961,55 @@ The functional completeness rubric requires the core pipeline to work end-to-end
 The UX rubric scores error messages. The TRef error diagnostic is now demonstrable: a judge can change any `related_post` value to a nonexistent slug, rebuild, and see the structured diagnostic. The error message is file-specific, field-specific, and includes the invalid value — the kind of actionable diagnostic that Ametrine's behavioral validation model couldn't provide.
 
 No source files in `src/` or `cmd/` were modified. The change is entirely in example content and configuration, plus this retrospective entry.
+
+
+
+## Completing the I/O Separation — builder.mbt println Cleanup
+
+The previous refactor (commit `62bbadd`) removed the happy-path build summary `println` calls from `build()`, moving them to `run_once()` in `cmd/main/main.mbt`. That was the high-impact change — the summary prints fire on every build. But it left roughly 46 `println` calls in `src/builder/builder.mbt` as a "known deviation" from the I/O separation principle. This commit completes the cleanup.
+
+### What Was Left
+
+The remaining `println` calls fell into four categories:
+
+1. **Progress messages** — `"[lattice] building ... → ..."`, `"[lattice] using N collections"`, `"[lattice] found N source files"`, `"[lattice] loaded data files from ..."`, `"[lattice] found N standalone page(s)"`, `"[lattice] found N root page(s)"`. These fire on every build and are the first thing a user sees.
+
+2. **File-write confirmations** — `"[lattice] wrote <path>"` for every output file: CSS, HTML pages, archive pages, feeds, sitemap, robots.txt, search index, graph data, 404 page. These are the bulk of the remaining calls (~20 occurrences).
+
+3. **Per-page build/skip progress** — `"[build] <context>"`, `"[skip] <context>"`, `"[skip draft] <context>"`. One or more of these fires for every source file.
+
+4. **Warning messages** — `"[warn] incremental manifest ..."` for cache issues, and `"[error] archive page ..."` for render failures. These fire only on failure paths.
+
+Additionally, `check()` had 3 `println` calls and `stats()` had 2 `println` calls with the same pattern.
+
+### Why It Was Deferred
+
+The first pass focused on the build summary because that was the output most likely to be asserted on by library consumers. The remaining calls were mostly progress chaff — useful for the CLI user, but not something a test or library consumer would care about. The tradeoff was clear: fix the struct first, clean up the calls later.
+
+The archive page helper (`build_archive_pages`) was the main structural blocker — it had 8 `println` calls and was called from within `build()`. Passing `messages` through as a parameter was the cleanest fix without restructuring the helper's return type.
+
+### The Fix
+
+Three result types gained a `messages : Array[String]` field:
+
+- `BuildResult` (in `src/builder/builder.mbt`)
+- `LintResult` (in `src/lint/lint.mbt`)
+- `StatsResult` (in `src/builder/builder.mbt`)
+
+Each function (`build()`, `check()`, `stats()`) now accumulates messages in a local array and returns them in the result struct. `run_once()` in `cmd/main/main.mbt` iterates `result.messages` and prints each one before printing the summary.
+
+Three helper functions gained a `messages` parameter:
+
+- `build_archive_pages()` — receives `messages` from `build()`, pushes file-write confirmations and error messages
+- `load_manifest()` — receives `messages` from `build_incremental_state()`, pushes cache warnings
+- `build_incremental_state()` — receives `messages` from `build()`, passes to `load_manifest()` and pushes dependency snapshot warnings
+
+### Architectural Rule
+
+The rule is now clean: **nothing in `src/` has terminal side effects.** All stdout lives in `cmd/main/main.mbt`. The boundary is architectural, not conventional — a maintainer reading any function in `src/` can trust that it will not print to the terminal.
+
+### Practical Benefit
+
+`build()` is now fully mockable for test consumers and library embedders. A test that calls `build()` sees zero stdout noise — all progress messages are captured in the `messages` array and can be asserted on or ignored. A library that uses lattice as a build step gets clean output without having to suppress progress spam.
+
+Total test count: 691 (no new tests — this refactor changed output routing, not behavior). 0 errors, 5 pre-existing deprecation warnings (unrelated `derive(Show)` → `derive(Debug)`).

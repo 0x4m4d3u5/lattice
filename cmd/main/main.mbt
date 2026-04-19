@@ -740,6 +740,12 @@ fn run_once(
   let start_ms = @watch.current_millis()
   if check_mode {
     let lint_result = @builder.check(build_config)
+    // Print accumulated progress messages
+    let mut mi = 0
+    while mi < lint_result.messages.length() {
+      println(lint_result.messages[mi])
+      mi = mi + 1
+    }
     if check_json {
       println(@lint.format_violations_json(lint_result))
       return if @lint.has_violations(lint_result) { 1 } else { 0 }
@@ -779,6 +785,12 @@ fn run_once(
       }
     }
     let result = @builder.build(build_config, cache_store)
+    // Print accumulated progress messages
+    let mut mi = 0
+    while mi < result.messages.length() {
+      println(result.messages[mi])
+      mi = mi + 1
+    }
     let mut i = 0
     while i < result.diagnostics.length() {
       print_diagnostic_main(result.diagnostics[i])
@@ -1375,6 +1387,12 @@ fn run_main() -> Unit {
       }
     }
     let result = @builder.stats(state.build_config)
+    // Print accumulated progress messages
+    let mut mi = 0
+    while mi < result.messages.length() {
+      println(result.messages[mi])
+      mi += 1
+    }
     if result.errors.length() > 0 {
       let mut ei = 0
       while ei < result.errors.length() {

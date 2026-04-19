@@ -42,6 +42,7 @@ pub(all) struct BuildResult {
   unchanged_pages : Int
   skipped_drafts : Int
   redirect_count : Int
+  messages : Array[String]
 }
 
 ///|
@@ -889,6 +890,7 @@ fn build_archive_pages(
   nav_links_html : String,
   custom_css : String,
   data_store : @data.DataStore,
+  messages : Array[String],
 ) -> (Int, Int) {
   // Only build if collection has dated pages
   let has_dates = {
@@ -937,7 +939,7 @@ fn build_archive_pages(
       ) {
       Ok(html) => html
       Err(msg) => {
-        println(
+        messages.push(
           "[error] archive page " +
           collection_name +
           "/" +
@@ -955,11 +957,11 @@ fn build_archive_pages(
     let year_write_ok = try {
       ensure_dir(coll_dir + "/" + group.year)
       @fs.write_string_to_file(year_out_path, year_archive_html)
-      println("[lattice] wrote " + year_out_path)
+      messages.push("[lattice] wrote " + year_out_path)
       true
     } catch {
       @fs.IOError(msg) => {
-        println(
+        messages.push(
           "[error] cannot write archive page " + year_out_path + ": " + msg,
         )
         false
@@ -987,7 +989,7 @@ fn build_archive_pages(
       ) {
       Ok(html) => html
       Err(msg) => {
-        println(
+        messages.push(
           "[error] archive page " +
           collection_name +
           "/" +
@@ -1012,11 +1014,11 @@ fn build_archive_pages(
     let month_write_ok = try {
       ensure_dir(coll_dir + "/" + group.year + "/" + group.month)
       @fs.write_string_to_file(month_out_path, month_archive_html)
-      println("[lattice] wrote " + month_out_path)
+      messages.push("[lattice] wrote " + month_out_path)
       true
     } catch {
       @fs.IOError(msg) => {
-        println(
+        messages.push(
           "[error] cannot write archive page " + month_out_path + ": " + msg,
         )
         false
@@ -1045,7 +1047,7 @@ fn build_archive_pages(
     ) {
     Ok(html) => html
     Err(msg) => {
-      println(
+      messages.push(
         "[error] archive index page " + collection_name + "/archive: " + msg,
       )
       errors = errors + 1
@@ -1059,11 +1061,11 @@ fn build_archive_pages(
     let archive_write_ok = try {
       ensure_dir(archive_dir)
       @fs.write_string_to_file(archive_index_path, archive_index_html)
-      println("[lattice] wrote " + archive_index_path)
+      messages.push("[lattice] wrote " + archive_index_path)
       true
     } catch {
       @fs.IOError(msg) => {
-        println(
+        messages.push(
           "[error] cannot write archive index page " +
           archive_index_path +
           ": " +
@@ -4100,20 +4102,23 @@ fn dependency_roots_for_build(
 }
 
 ///|
-fn load_manifest(config : BuildConfig) -> @manifest.ManifestFile? {
+fn load_manifest(
+  config : BuildConfig,
+  messages : Array[String],
+) -> @manifest.ManifestFile? {
   let path = manifest_path_for_build(config)
   if !@fs.path_exists(path) {
     return None
   }
   let source = @fs.read_file_to_string(path) catch {
     @fs.IOError(msg) => {
-      println("[warn] incremental manifest read failed: " + msg)
+      messages.push("[warn] incremental manifest read failed: " + msg)
       return None
     }
   }
   Some(@manifest.parse(source)) catch {
     @manifest.ParseError(msg) => {
-      println("[warn] incremental manifest parse failed: " + msg)
+      messages.push("[warn] incremental manifest parse failed: " + msg)
       None
     }
   }
@@ -4148,6 +4153,7 @@ fn build_incremental_state(
   config : BuildConfig,
   collection_sources : Array[CollectionSources],
   collections : Array[@collections.CollectionDef],
+  messages : Array[String],
 ) -> IncrementalState {
   let previous_entries : Map[String, @manifest.ManifestEntry] = Map::new()
   let changed_sources : Map[String, Bool] = Map::new()
@@ -4155,7 +4161,7 @@ fn build_incremental_state(
     return { force_full_rebuild: true, previous_entries, changed_sources }
   }
 
-  let manifest = match load_manifest(config) {
+  let manifest = match load_manifest(config, messages) {
     Some(file) => file
     None =>
       return { force_full_rebuild: true, previous_entries, changed_sources }
@@ -4171,7 +4177,7 @@ fn build_incremental_state(
     dependency_manifest_entries(config, collections) {
     Ok(entries) => entries
     Err(msg) => {
-      println("[warn] incremental dependency snapshot failed: " + msg)
+      messages.push("[warn] incremental dependency snapshot failed: " + msg)
       return { force_full_rebuild: true, previous_entries, changed_sources }
     }
   }
@@ -4347,7 +4353,8 @@ pub fn build(
   config : BuildConfig,
   cache_store : @cache.CacheStore,
 ) -> BuildResult {
-  println(
+  let messages : Array[String] = []
+  messages.push(
     "[lattice] building " + config.content_dir + " → " + config.output_dir,
   )
   let diagnostics : Array[@diagnostic.Diagnostic] = []
@@ -4365,11 +4372,12 @@ pub fn build(
         unchanged_pages: 0,
         skipped_drafts: 0,
         redirect_count: 0,
+        messages,
       }
     }
   }
   let collections = layout.collections
-  println(
+  messages.push(
     "[lattice] using " + collections.length().to_string() + " collections",
   )
   let templates = match load_templates(config) {
@@ -4383,6 +4391,7 @@ pub fn build(
         unchanged_pages: 0,
         skipped_drafts: 0,
         redirect_count: 0,
+        messages,
       }
     }
   }
@@ -4408,10 +4417,13 @@ pub fn build(
         unchanged_pages: 0,
         skipped_drafts: 0,
         redirect_count: 0,
+        messages,
       }
     }
   }
-  println("[lattice] loaded data files from " + data_dir_for_build(config))
+  messages.push(
+    "[lattice] loaded data files from " + data_dir_for_build(config),
+  )
 
   // Pass 1: collect sources for each collection
   let collection_sources : Array[CollectionSources] = []
@@ -4442,7 +4454,7 @@ pub fn build(
     collection_sources.push({ definition: collection_def, sources })
     i = i + 1
   }
-  println("[lattice] found " + source_count.to_string() + " source files")
+  messages.push("[lattice] found " + source_count.to_string() + " source files")
 
   // Build complete page index before any rendering begins.
   let page_index : Map[String, String] = Map::new()
@@ -4535,7 +4547,7 @@ pub fn build(
     i = i + 1
   }
   if standalone_sources.length() > 0 {
-    println(
+    messages.push(
       "[lattice] found " +
       standalone_sources.length().to_string() +
       " standalone page(s)",
@@ -4584,7 +4596,7 @@ pub fn build(
     i = i + 1
   }
   if root_sources.length() > 0 {
-    println(
+    messages.push(
       "[lattice] found " + root_sources.length().to_string() + " root page(s)",
     )
   }
@@ -4633,7 +4645,7 @@ pub fn build(
     all_sources_for_backlinks, page_index,
   )
   let incremental = build_incremental_state(
-    config, collection_sources, collections,
+    config, collection_sources, collections, messages,
   )
   let backlink_affected = mark_backlink_targets_changed(
     incremental, collection_sources,
@@ -4665,6 +4677,7 @@ pub fn build(
       unchanged_pages: 0,
       skipped_drafts: 0,
       redirect_count: 0,
+      messages,
     }
   }
 
@@ -4688,7 +4701,7 @@ pub fn build(
       }
     }
     if write_ok {
-      println("[lattice] wrote " + css_path)
+      messages.push("[lattice] wrote " + css_path)
     }
   }
 
@@ -4846,9 +4859,9 @@ pub fn build(
           let write_result = if should_skip_draft || !should_rebuild {
             // Skip output for drafts (unless --drafts flag is set)
             if should_skip_draft {
-              println("[skip draft] " + page_context)
+              messages.push("[skip draft] " + page_context)
             } else if !should_rebuild {
-              println("[skip] " + page_context)
+              messages.push("[skip] " + page_context)
               unchanged = unchanged + 1
             }
             Some(out_path)
@@ -4882,14 +4895,14 @@ pub fn build(
           match write_result {
             Some(_) => {
               if should_rebuild && !should_skip_draft {
-                println("[build] " + page_context)
+                messages.push("[build] " + page_context)
                 rebuilt = rebuilt + 1
               } else if should_skip_draft {
                 // Draft skipped, don't count as rebuilt or unchanged
                 skipped_drafts = skipped_drafts + 1
                 ()
               } else if !should_rebuild {
-                println("[skip] " + page_context)
+                messages.push("[skip] " + page_context)
                 unchanged = unchanged + 1
               }
               @cache.remember(next_cache_store, src.slug, src.fingerprint)
@@ -5053,7 +5066,7 @@ pub fn build(
           let write_ok = try {
             ensure_dir(page_dir)
             @fs.write_string_to_file(out_path, doc.html)
-            println("[lattice] wrote " + out_path)
+            messages.push("[lattice] wrote " + out_path)
             true
           } catch {
             @fs.IOError(msg) => {
@@ -5181,7 +5194,7 @@ pub fn build(
           let write_ok = if src.slug == "index" {
             try {
               @fs.write_string_to_file(out_path, doc.html)
-              println("[lattice] wrote " + out_path + " (root homepage)")
+              messages.push("[lattice] wrote " + out_path + " (root homepage)")
               true
             } catch {
               @fs.IOError(msg) => {
@@ -5201,7 +5214,7 @@ pub fn build(
             try {
               ensure_dir(page_dir)
               @fs.write_string_to_file(out_path, doc.html)
-              println("[lattice] wrote " + out_path)
+              messages.push("[lattice] wrote " + out_path)
               true
             } catch {
               @fs.IOError(msg) => {
@@ -5300,7 +5313,7 @@ pub fn build(
         )
         let out_path = coll_dir + "/feed.xml"
         @fs.write_string_to_file(out_path, feed_xml)
-        println("[lattice] wrote " + out_path)
+        messages.push("[lattice] wrote " + out_path)
         true
       } catch {
         @fs.IOError(msg) => {
@@ -5333,7 +5346,7 @@ pub fn build(
         )
         let json_out_path = coll_dir + "/feed.json"
         @fs.write_string_to_file(json_out_path, json_feed)
-        println("[lattice] wrote " + json_out_path)
+        messages.push("[lattice] wrote " + json_out_path)
         true
       } catch {
         @fs.IOError(msg) => {
@@ -5408,7 +5421,7 @@ pub fn build(
               }
               ensure_parent_dirs_for_file(out_path)
               @fs.write_string_to_file(out_path, html)
-              println("[lattice] wrote " + out_path)
+              messages.push("[lattice] wrote " + out_path)
               // Emit a content-index entry for page 1 of the collection index
               if pagination.page_number == 1 {
                 content_entries.push(
@@ -5474,6 +5487,7 @@ pub fn build(
         nav_links_html,
         custom_css,
         data_store,
+        messages,
       )
       if archive_errors > 0 {
         error_count = error_count + archive_errors
@@ -5586,7 +5600,7 @@ pub fn build(
                     }
                     ensure_parent_dirs_for_file(out_path)
                     @fs.write_string_to_file(out_path, html)
-                    println("[lattice] wrote " + out_path)
+                    messages.push("[lattice] wrote " + out_path)
                     true
                   } catch {
                     @fs.IOError(msg) => {
@@ -5684,7 +5698,7 @@ pub fn build(
                   }
                   ensure_parent_dirs_for_file(out_path)
                   @fs.write_string_to_file(out_path, html)
-                  println("[lattice] wrote " + out_path)
+                  messages.push("[lattice] wrote " + out_path)
                   true
                 } catch {
                   @fs.IOError(msg) => {
@@ -5740,7 +5754,7 @@ pub fn build(
           )
           let out_path = config.output_dir + "/feed.xml"
           @fs.write_string_to_file(out_path, site_feed_xml)
-          println("[lattice] wrote " + out_path + " (site-wide feed)")
+          messages.push("[lattice] wrote " + out_path + " (site-wide feed)")
           true
         } catch {
           @fs.IOError(msg) => {
@@ -5773,7 +5787,9 @@ pub fn build(
           )
           let json_out_path = config.output_dir + "/feed.json"
           @fs.write_string_to_file(json_out_path, site_json_feed)
-          println("[lattice] wrote " + json_out_path + " (site-wide JSON feed)")
+          messages.push(
+            "[lattice] wrote " + json_out_path + " (site-wide JSON feed)",
+          )
           true
         } catch {
           @fs.IOError(msg) => {
@@ -5802,7 +5818,7 @@ pub fn build(
         )
         let out_path = config.output_dir + "/sitemap.xml"
         @fs.write_string_to_file(out_path, sitemap_xml)
-        println("[lattice] wrote " + out_path)
+        messages.push("[lattice] wrote " + out_path)
         true
       } catch {
         @fs.IOError(msg) => {
@@ -5834,7 +5850,7 @@ pub fn build(
         let robots_write_ok = try {
           let out_path = config.output_dir + "/robots.txt"
           @fs.write_string_to_file(out_path, robots_txt_content)
-          println("[lattice] wrote " + out_path)
+          messages.push("[lattice] wrote " + out_path)
           true
         } catch {
           @fs.IOError(msg) => {
@@ -5853,7 +5869,7 @@ pub fn build(
           error_count = error_count + 1
         }
       } else {
-        println("[lattice] robots.txt skipped (disabled)")
+        messages.push("[lattice] robots.txt skipped (disabled)")
       }
     }
     if error_count == 0 {
@@ -5864,7 +5880,7 @@ pub fn build(
           search_index_file_name(config.site)
         ensure_parent_dirs_for_file(out_path)
         @fs.write_string_to_file(out_path, search_json)
-        println("[lattice] wrote " + out_path)
+        messages.push("[lattice] wrote " + out_path)
         true
       } catch {
         @fs.IOError(msg) => {
@@ -5893,7 +5909,7 @@ pub fn build(
             let out_path = config.output_dir + "/" + fname
             ensure_parent_dirs_for_file(out_path)
             @fs.write_string_to_file(out_path, content_json)
-            println("[lattice] wrote " + out_path)
+            messages.push("[lattice] wrote " + out_path)
             true
           } catch {
             @fs.IOError(msg) => {
@@ -5920,7 +5936,7 @@ pub fn build(
         let graph_json = @graph.render_graph_json(graph_pages)
         let out_path = config.output_dir + "/graph.json"
         @fs.write_string_to_file(out_path, graph_json)
-        println("[lattice] wrote " + out_path)
+        messages.push("[lattice] wrote " + out_path)
         true
       } catch {
         @fs.IOError(msg) => {
@@ -5948,7 +5964,7 @@ pub fn build(
         ) {
         Ok(copied) =>
           if copied > 0 {
-            println(
+            messages.push(
               "[lattice] copied " + copied.to_string() + " static asset files",
             )
           }
@@ -5979,7 +5995,7 @@ pub fn build(
             let out_path = config.output_dir + "/404.html"
             @fs.write_string_to_file(out_path, html)
             let source_type = if has_custom_404 { "custom" } else { "default" }
-            println("[lattice] wrote 404.html (" + source_type + ")")
+            messages.push("[lattice] wrote 404.html (" + source_type + ")")
             ()
           } catch {
             @fs.IOError(msg) => {
@@ -6048,6 +6064,7 @@ pub fn build(
     unchanged_pages: unchanged,
     skipped_drafts,
     redirect_count,
+    messages,
   }
 }
 
@@ -6056,7 +6073,8 @@ pub fn build(
 ///
 /// Runs the full two-pass validation pipeline and returns every violation found.
 pub fn check(config : BuildConfig) -> @lint.LintResult {
-  println("[lattice] checking " + config.content_dir)
+  let messages : Array[String] = []
+  messages.push("[lattice] checking " + config.content_dir)
   let violations : Array[@lint.LintViolation] = []
 
   let layout = match load_project_layout(config) {
@@ -6072,11 +6090,11 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
         kind: @lint.CollectionsError,
         message: msg,
       })
-      return { violations, }
+      return { violations, messages }
     }
   }
   let collections = layout.collections
-  println(
+  messages.push(
     "[lattice] using " + collections.length().to_string() + " collections",
   )
 
@@ -6128,7 +6146,7 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
     collection_sources.push({ definition: collection_def, sources })
     i = i + 1
   }
-  println("[lattice] found " + source_count.to_string() + " source files")
+  messages.push("[lattice] found " + source_count.to_string() + " source files")
 
   let page_index : Map[String, String] = Map::new()
   let slug_owner : Map[String, String] = Map::new()
@@ -6749,7 +6767,7 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
     })
     i = i + 1
   }
-  { violations, }
+  { violations, messages }
 }
 
 ///|
@@ -6773,6 +6791,8 @@ pub(all) struct StatsResult {
   unique_tags : Int
   /// Any errors encountered during stats collection
   errors : Array[@diagnostic.Diagnostic]
+  /// Progress and informational messages
+  messages : Array[String]
 }
 
 ///|
@@ -6789,7 +6809,8 @@ pub(all) struct CollectionStats {
 /// Returns aggregated metrics: page counts per collection, word counts,
 /// estimated reading time, and unique tag count.
 pub fn stats(config : BuildConfig) -> StatsResult {
-  println("[lattice] collecting stats for " + config.content_dir)
+  let messages : Array[String] = []
+  messages.push("[lattice] collecting stats for " + config.content_dir)
   let errors : Array[@diagnostic.Diagnostic] = []
 
   let layout = match load_project_layout(config) {
@@ -6808,11 +6829,12 @@ pub fn stats(config : BuildConfig) -> StatsResult {
         reading_time_minutes: 0,
         unique_tags: 0,
         errors,
+        messages,
       }
     }
   }
   let collections = layout.collections
-  println(
+  messages.push(
     "[lattice] using " + collections.length().to_string() + " collections",
   )
 
@@ -6985,6 +7007,7 @@ pub fn stats(config : BuildConfig) -> StatsResult {
     reading_time_minutes,
     unique_tags,
     errors,
+    messages,
   }
 }
 
