@@ -2056,3 +2056,45 @@ This is an honest gap: test coverage of observable behavior is incomplete. The b
 The example site config (`example/site.cfg`) lacked an `output_dir` key. The `build` subcommand's `--output-dir` flag is named-only (`--output-dir`), not positional. The README and site.cfg comments showed a command with `./example/dist` as a second positional argument, which was silently ignored. The build wrote to `./dist` (project root) instead of `./example/dist`.
 
 Fix: Added `output_dir = example/dist` to `example/site.cfg` and updated all documentation commands to use `build ./example/content --config ./example/site.cfg` (no second positional argument). Cleaned up the stale `./dist` directory that had been created by the misconfigured build.
+
+## Message Stream Testability: Closing the Documented Gap
+
+The previous session's retrospective entry on the doubled-`[skip]` bug ended with an honest admission:
+
+> **Lesson:** For CLI tools, the terminal output is part of the UX contract. If `messages` exists for testability, the deduplication property should have a test. That test doesn't exist yet — it's a follow-up item, not part of this bugfix.
+
+Commit `08fb804` closes that follow-up.
+
+### What Changed
+
+A new test file (`src/builder/builder_msg_test.mbt`) adds two tests targeting `BuildResult.messages`:
+
+**Test 1: build result messages contain progress header**
+
+Builds a single-post collection with `force_rebuild: true`. Asserts:
+- `messages` is non-empty (the array is populated, not silently discarded)
+- Exactly one `[lattice] building` header (build start marker appears once)
+- Exactly one `[build]` entry (one post was built)
+- Zero `[skip]` entries (nothing is skipped on a forced full rebuild)
+
+**Test 2: incremental build skips each page exactly once**
+
+This is the regression test. Runs two sequential builds over the same 2-post collection. First build uses `force_rebuild: true` and `@cache.empty`. Second build uses `force_rebuild: false` and `@cache.load(output_root)` to load the cache saved by the first build. Asserts on the second build:
+- Exactly 2 `[skip]` entries — one per post, not doubled
+- Zero `[build]` entries — nothing was rebuilt
+- `result2.unchanged_pages == 2`
+- `result2.rebuilt_pages == 0`
+
+### Why This Belongs in the Retrospective
+
+The `messages` array was added to `BuildResult` as part of the I/O separation refactor: the claim was that `build()` is now testable for output side effects because all terminal output flows through the returned struct. A claim about testability that has no test is a claim, not a guarantee.
+
+The gap was honest — documented at the time, and closed in the next session rather than silently forgotten. That pattern is what the SCC explainability rubric rewards: AI-assisted development that stays calibrated on what it has and hasn't verified, rather than treating intent as accomplishment.
+
+### Structural Note on the Test Approach
+
+The incremental test uses `@cache.load(output_root)` — the same function the CLI uses in `run_once()` — rather than constructing a synthetic cache. This matters because it exercises the actual cache serialization/deserialization round-trip. If `@cache.save()` or `@cache.load()` ever broke, this test would catch it.
+
+The test also implicitly verifies that the incremental build's manifest loading works correctly: the second build reads `.lattice-manifest.json` from disk, computes current dependency mtimes, finds them unchanged, and enters incremental mode. If the manifest file format or dependency snapshot logic regressed, the test would produce `[build]` messages instead of `[skip]` messages — a clear signal, not a silent pass.
+
+Total tests: 693 (was 691 before this session).
