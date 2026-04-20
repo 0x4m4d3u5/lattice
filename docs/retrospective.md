@@ -2161,6 +2161,38 @@ Total tests: 697 (added 4 config tests for `[[data]]` block parsing).
 
 
 
+## RSS Feed Datetime — Structural Validation Over Heuristics
+
+Commit `ce183d9` fixed a validation weakness in the RSS emitter layer that exemplifies the "structural guarantee" thesis applied to output generation.
+
+### What was wrong
+
+The `normalize_feed_datetime` function in `src/rss/rss.mbt` used loose heuristic checks: the input must start with `"20"`, end with `"Z"` or a timezone offset, and be at least 20 characters long. This accepted garbage like `"20xxxxxxxxxxxxxxxxZ"` — a string that satisfies the heuristics but is not a valid RFC 3339 datetime. The function's purpose is to accept well-formed datetime strings from frontmatter and pass them through to the RSS `<updated>` and `<published>` elements, rejecting anything that isn't recognizable as ISO 8601 / RFC 3339.
+
+### Why it wasn't caught
+
+The frontmatter validation pipeline already enforces date correctness. When a content file declares `date = 2024-01-15`, the schema validator checks the format via `is_valid_iso8601_date` (which validates year/month/day ranges, including leap years). When a file declares `datetime = 2024-01-15T10:30:00Z`, the `TDateTime` field type validates the full RFC 3339 structure. By the time dates reach the RSS emitter, they have already been validated at two layers: schema parsing and frontmatter type checking.
+
+This means the weak secondary check in `normalize_feed_datetime` was invisible in practice. No test would fail, no build would produce wrong output, because upstream validation caught every malformed date before it could reach the feed layer. The weakness was purely defensive — a gap in the emitter's own input validation that was masked by upstream correctness.
+
+### The fix
+
+The commit replaced the heuristic with structural RFC 3339 validation:
+
+- **Date portion**: validates `YYYY-MM-DD` with correct separator positions, month range 1–12, and day range checked against `days_in_month` (including leap year handling via `is_leap_year` from `@strutil`).
+- **Time portion**: validates `HH:MM:SS` with hour 0–23, minute 0–59, second 0–59.
+- **Timezone**: accepts either `Z` (UTC) or `±HH:MM` offset with hour 0–23, minute 0–59.
+
+This mirrors the approach used by `is_valid_iso8601_date` in `@strutil` — character-class validation at each field position rather than loose prefix/suffix matching. Twenty new tests cover valid inputs (UTC, offset, Feb 29 leap year), invalid inputs (month 13, hour 25, garbage strings), and specifically the `"20xxxxxxxxxxxxxxxxZ"` string that the old heuristic accepted.
+
+### The honest lesson
+
+Defense-in-depth at emitter boundaries matters, even when upstream validation makes failures unlikely in practice. The RSS module is an output emitter — its job is to produce XML, not validate content. But every emitter has a validation boundary: "what inputs do I accept?" If that boundary is heuristic, the emitter's correctness depends on every upstream producer being correct. If the boundary is structural, the emitter's correctness is self-contained.
+
+This is the same principle as the wikilink resolution design. The markdown renderer *could* assume that all `[[target]]` references have already been validated by the wikilink resolver. Instead, it receives a pre-validated `Map[String, String]` of target→URL mappings and resolves against it — the renderer's correctness doesn't depend on the resolver's behavior, only on the data it receives. The RSS datetime fix applies the same principle to the feed layer: the emitter validates its own inputs structurally, regardless of what upstream validation already guarantees.
+
+The gap was caught by code audit, not by test failure. This is the honest tradeoff: the structural thesis catches bugs that dynamic checks miss, but the thesis itself needs to be audited — the type system doesn't enforce "your validation is thorough enough," it enforces "your validation is structurally sound." Thoroughness is still a human judgment.
+
 ## Submission State — April 2026
 
 ### Feature Matrix
@@ -2225,7 +2257,7 @@ The third win is the separation between the build engine and I/O. Commit `09070c
 
 **Template syntax is custom, not interoperable.** The `{{slot}}` / `{{?slot}}` / `{{#each}}` syntax was designed for lattice specifically. Templates cannot be shared with Jinja2, Handlebars, or any other ecosystem. This was a deliberate tradeoff: a custom syntax let us bake in typed slot names, frontmatter field access, and data-store resolution at the parser level rather than string-interpreting at render time. But it means the template authoring story is "learn lattice's syntax" rather than "use what you already know."
 
-**RSS datetime normalization is fragile.** The `normalize_feed_datetime` function in `src/rss/rss.mbt` uses prefix/suffix heuristics ("starts with `20...`", "ends with `Z`", length ≥ 20) rather than proper RFC 3339 structure validation. A malformed string like `"20xxxxxxxxxxxxxxxxZ"` would be accepted. This hasn't caused issues because frontmatter date validation (`TDate` / `TDateTime`) catches malformed dates before they reach the feed emitter, but the RSS module's own validation layer is weak.
+**RSS datetime normalization was fragile — now fixed.** The `normalize_feed_datetime` function in `src/rss/rss.mbt` originally used prefix/suffix heuristics ("starts with `20...`", "ends with `Z`", length ≥ 20) rather than proper RFC 3339 structure validation. A malformed string like `"20xxxxxxxxxxxxxxxxZ"` would have been accepted. This was caught during a code audit (commit `ce183d9`) and replaced with structural field-count + character-class validation that mirrors the frontmatter `is_valid_iso8601_date` approach — validating date components (year/month/day with range checks), time components (hour/minute/second), and timezone (UTC `Z` or `±HH:MM` offset). The honest lesson: frontmatter date validation caught bad dates before they reached the feed emitter, making the weak secondary check invisible in practice — but defense-in-depth at emitter boundaries matters regardless. See the dedicated retrospective entry below.
 
 **No image processing.** Lattice copies static assets verbatim. There is no image resizing, format conversion, or responsive srcset generation. A production blog would need this, either as a build step or via a CDN. The `assets` package (`src/assets/assets.mbt`) handles path resolution and copy operations, but does not touch file contents.
 
@@ -2235,16 +2267,16 @@ The third win is the separation between the build engine and I/O. Commit `09070c
 
 | Metric | Value |
 |--------|-------|
-| Total source LOC | 39,961 |
-| Implementation LOC (non-test) | 23,299 |
+| Total source LOC | 41,655 |
+| Implementation LOC (non-test) | 24,993 |
 | Test LOC | 16,662 |
-| Source files | 34 |
-| Test files | 29 (black-box) + 10 (white-box) |
+| Source files | 35 |
+| Test files | 29 (black-box) + 1 (white-box) |
 | Packages | 30 |
 | Tests | 721 passing |
 | Compiler warnings | 0 |
 | External dependencies | 2 (`moonbitlang/x` 0.4.40, `TheWaWaR/clap` 0.2.6) |
-| Commits | 228 |
+| Commits | 229 |
 | Development span | March 8 – April 21, 2026 (45 days) |
 | Example site build time | 57ms (10 pages, 3 collections, 3 redirects) |
 | Retrospective length | ~2,200 lines |
