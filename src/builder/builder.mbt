@@ -2924,6 +2924,39 @@ fn build_data_schema_map(
 }
 
 ///|
+fn parse_required_keys_builder(s : String) -> Array[String] {
+  let keys : Array[String] = []
+  let mut start = 0
+  let mut i = 0
+  while i <= s.length() {
+    if i == s.length() || @strutil.char_at(s, i) == ',' {
+      let key = @strutil.trim(@strutil.substr(s, start, i))
+      if key.length() > 0 {
+        keys.push(key)
+      }
+      start = i + 1
+    }
+    i = i + 1
+  }
+  keys
+}
+
+///|
+fn build_data_schema_map_from_site_config(
+  entries : Array[@config.DataEntry],
+) -> Map[String, @data.DataSchema] {
+  let data_schemas : Map[String, @data.DataSchema] = Map::new()
+  let mut i = 0
+  while i < entries.length() {
+    let entry = entries[i]
+    let required_keys = parse_required_keys_builder(entry.required)
+    data_schemas.set(entry.name, @data.new_schema(entry.name, required_keys))
+    i = i + 1
+  }
+  data_schemas
+}
+
+///|
 fn load_project_layout(config : BuildConfig) -> Result[ProjectLayout, String] {
   if config.site.collections.length() > 0 && config.collections_path == None {
     let defs : Array[@collections.CollectionDef] = []
@@ -2969,7 +3002,12 @@ fn load_project_layout(config : BuildConfig) -> Result[ProjectLayout, String] {
       })
       i = i + 1
     }
-    return Ok({ collections: defs, data_schemas: Map::new() })
+    return Ok({
+      collections: defs,
+      data_schemas: build_data_schema_map_from_site_config(
+        config.site.data_entries,
+      ),
+    })
   }
   match config.collections_path {
     None =>

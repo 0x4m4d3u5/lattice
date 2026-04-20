@@ -239,3 +239,71 @@ test "config sort_order defaults to None when not specified" {
     Err(_) => assert_true(false)
   }
 }
+
+///|
+test "config [[data]] block parsed into data_entries" {
+  let src = "title = Example\n" +
+    "base_url = https://example.test\n" +
+    "[[data]]\n" +
+    "name = nav\n" +
+    "required = title,links\n" +
+    "[[data]]\n" +
+    "name = authors\n" +
+    "required = team_lead\n"
+  match parse(src) {
+    Ok(cfg) => {
+      assert_eq(cfg.data_entries.length(), 2)
+      assert_eq(cfg.data_entries[0].name, "nav")
+      assert_eq(cfg.data_entries[0].required, "title,links")
+      assert_eq(cfg.data_entries[1].name, "authors")
+      assert_eq(cfg.data_entries[1].required, "team_lead")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "config [[data]] with empty required is valid" {
+  let src = "title = Example\n" +
+    "base_url = https://example.test\n" +
+    "[[data]]\n" +
+    "name = settings\n"
+  match parse(src) {
+    Ok(cfg) => {
+      assert_eq(cfg.data_entries.length(), 1)
+      assert_eq(cfg.data_entries[0].name, "settings")
+      assert_eq(cfg.data_entries[0].required, "")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "config [[data]] and [[collections]] can coexist" {
+  let src = "title = Example\n" +
+    "base_url = https://example.test\n" +
+    "[[collections]]\n" +
+    "name = posts\n" +
+    "dir = ./content/posts\n" +
+    "[[data]]\n" +
+    "name = nav\n" +
+    "required = links\n"
+  match parse(src) {
+    Ok(cfg) => {
+      assert_eq(cfg.collections.length(), 1)
+      assert_eq(cfg.collections[0].name, "posts")
+      assert_eq(cfg.data_entries.length(), 1)
+      assert_eq(cfg.data_entries[0].name, "nav")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "config data_entries is empty when no [[data]] blocks present" {
+  let src = "title = Example\n" + "base_url = https://example.test\n"
+  match parse(src) {
+    Ok(cfg) => assert_eq(cfg.data_entries.length(), 0)
+    Err(_) => assert_true(false)
+  }
+}

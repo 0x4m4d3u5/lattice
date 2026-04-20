@@ -6,6 +6,7 @@
 /// - Lines beginning with `#` are comments.
 /// - Unknown keys are ignored.
 /// - `[[collections]]` array-of-tables for inline collection declarations.
+/// - `[[data]]` array-of-tables for data-file schema declarations.
 pub(all) struct CollectionEntry {
   name : String
   dir : String
@@ -14,6 +15,13 @@ pub(all) struct CollectionEntry {
   page_size : Int?
   description : String?
   sort_order : String?
+}
+
+///|
+/// A `[[data]]` block in site.cfg, declaring required keys for a data file.
+pub(all) struct DataEntry {
+  name : String
+  required : String
 }
 
 ///|
@@ -36,6 +44,7 @@ pub struct SiteConfig {
   robots_txt : Bool?
   archive_pages : Bool?
   collections : Array[CollectionEntry]
+  data_entries : Array[DataEntry]
   feed_limit : Int?
   site_feed_enabled : Bool?
 }
@@ -200,7 +209,9 @@ pub fn parse(input : String) -> Result[SiteConfig, ConfigError] {
   let mut site_feed_enabled : Bool? = None
 
   let collections : Array[CollectionEntry] = []
+  let data_entries : Array[DataEntry] = []
   let mut in_collections_block = false
+  let mut in_data_block = false
   let mut current_collection_name : String? = None
   let mut current_collection_dir : String? = None
   let mut current_collection_schema : String? = None
@@ -208,6 +219,8 @@ pub fn parse(input : String) -> Result[SiteConfig, ConfigError] {
   let mut current_collection_page_size : Int? = None
   let mut current_collection_description : String? = None
   let mut current_collection_sort : String? = None
+  let mut current_data_name : String? = None
+  let mut current_data_required : String = ""
 
   let lines = split_lines_config(input)
   let mut i = 0
@@ -241,8 +254,16 @@ pub fn parse(input : String) -> Result[SiteConfig, ConfigError] {
           sort_order: current_collection_sort,
         })
       }
+      // Finalize previous data block if exists
+      if in_data_block {
+        match current_data_name {
+          Some(n) => data_entries.push({ name: n, required: current_data_required })
+          None => ()
+        }
+      }
       // Start new collection
       in_collections_block = true
+      in_data_block = false
       current_collection_name = None
       current_collection_dir = None
       current_collection_schema = None
@@ -250,6 +271,53 @@ pub fn parse(input : String) -> Result[SiteConfig, ConfigError] {
       current_collection_page_size = None
       current_collection_description = None
       current_collection_sort = None
+      current_data_name = None
+      current_data_required = ""
+      i = i + 1
+      continue
+    }
+
+    // Check for [[data]] header
+    if raw == "[[data]]" {
+      // Finalize previous collection if exists
+      if in_collections_block {
+        let coll_name = match current_collection_name {
+          Some(n) => n
+          None => return Err(MissingCollectionField("collections", "name"))
+        }
+        let coll_dir = match current_collection_dir {
+          Some(d) => d
+          None => return Err(MissingCollectionField(coll_name, "dir"))
+        }
+        collections.push({
+          name: coll_name,
+          dir: coll_dir,
+          schema: current_collection_schema,
+          template: current_collection_template,
+          page_size: current_collection_page_size,
+          description: current_collection_description,
+          sort_order: current_collection_sort,
+        })
+      }
+      // Finalize previous data block if exists
+      if in_data_block {
+        match current_data_name {
+          Some(n) => data_entries.push({ name: n, required: current_data_required })
+          None => ()
+        }
+      }
+      // Start new data block
+      in_collections_block = false
+      in_data_block = true
+      current_collection_name = None
+      current_collection_dir = None
+      current_collection_schema = None
+      current_collection_template = None
+      current_collection_page_size = None
+      current_collection_description = None
+      current_collection_sort = None
+      current_data_name = None
+      current_data_required = ""
       i = i + 1
       continue
     }
@@ -259,7 +327,18 @@ pub fn parse(input : String) -> Result[SiteConfig, ConfigError] {
       Ok((key, value)) => {
         let string_value = parse_string_value_config(value)
 
-        if in_collections_block {
+        if in_data_block {
+          // Inside [[data]] block
+          if key == "name" {
+            if string_value.length() == 0 {
+              return Err(InvalidValue("data.name", "must not be empty"))
+            }
+            current_data_name = Some(string_value)
+          } else if key == "required" {
+            current_data_required = string_value
+          }
+          // Unknown keys in data block are ignored
+        } else if in_collections_block {
           // Inside [[collections]] block
           if key == "name" {
             if string_value.length() == 0 {
@@ -450,6 +529,13 @@ pub fn parse(input : String) -> Result[SiteConfig, ConfigError] {
       sort_order: current_collection_sort,
     })
   }
+  // Finalize last data block if we were in one
+  if in_data_block {
+    match current_data_name {
+      Some(n) => data_entries.push({ name: n, required: current_data_required })
+      None => ()
+    }
+  }
 
   let title_value = match title {
     Some(v) => v
@@ -479,6 +565,7 @@ pub fn parse(input : String) -> Result[SiteConfig, ConfigError] {
     robots_txt,
     archive_pages,
     collections,
+    data_entries,
     feed_limit,
     site_feed_enabled,
   })
