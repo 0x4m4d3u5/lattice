@@ -2036,12 +2036,36 @@ fn standalone_dir_for_build(config : BuildConfig) -> String {
 }
 
 ///|
+/// Check whether a root-level `.md` filename is a well-known non-content file
+/// that should be excluded from page collection.
+///
+/// The comparison is case-insensitive so that `README.md`, `readme.md`, and
+/// `Readme.md` are all excluded.
+///
+/// Excluded files:
+/// - `404.md` — handled separately by the 404 page renderer
+/// - `README.md` — project readme, not content
+/// - `CHANGELOG.md` — changelog, not content
+/// - `LICENSE.md` — license file, not content
+/// - `CONTRIBUTING.md` — contribution guide, not content
+/// - `CODE_OF_CONDUCT.md` — not content
+pub fn is_non_content_file(filename : String) -> Bool {
+  let lower = filename.to_lower()
+  lower == "404.md" ||
+    lower == "readme.md" ||
+    lower == "changelog.md" ||
+    lower == "license.md" ||
+    lower == "contributing.md" ||
+    lower == "code_of_conduct.md"
+}
+
+///|
 /// Collect root-level .md files from the content directory.
 ///
 /// These are files like `content/index.md` or `content/about.md` that sit
 /// directly in the content root but aren't part of any defined collection.
-/// Excludes `404.md` (handled separately) and files whose slugs are already
-/// claimed by collections or standalone pages.
+/// Excludes well-known non-content files (404.md, README.md, etc.) and files
+/// whose slugs are already claimed by collections or standalone pages.
 fn collect_root_sources(
   content_dir : String,
   slug_owner : Map[String, String],
@@ -2051,7 +2075,7 @@ fn collect_root_sources(
   let mut i = 0
   while i < entries.length() {
     let filename = entries[i]
-    if filename.has_suffix(".md") && filename != "404.md" {
+    if filename.has_suffix(".md") && !is_non_content_file(filename) {
       let file_slug = @slug.filename_to_slug(filename)
       // Only include if no collection or standalone page has claimed this slug
       match slug_owner.get(file_slug) {

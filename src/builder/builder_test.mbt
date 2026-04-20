@@ -4586,3 +4586,130 @@ test "standalone page with backlinks from collection page" {
   }
   assert_true(hello_output.contains("href=\"/about/\""))
 }
+
+
+
+///|
+test "is_non_content_file excludes well-known non-content files" {
+  assert_true(@builder.is_non_content_file("404.md"))
+  assert_true(@builder.is_non_content_file("README.md"))
+  assert_true(@builder.is_non_content_file("readme.md"))
+  assert_true(@builder.is_non_content_file("Readme.md"))
+  assert_true(@builder.is_non_content_file("CHANGELOG.md"))
+  assert_true(@builder.is_non_content_file("changelog.md"))
+  assert_true(@builder.is_non_content_file("LICENSE.md"))
+  assert_true(@builder.is_non_content_file("license.md"))
+  assert_true(@builder.is_non_content_file("CONTRIBUTING.md"))
+  assert_true(@builder.is_non_content_file("CODE_OF_CONDUCT.md"))
+  assert_true(@builder.is_non_content_file("code_of_conduct.md"))
+}
+
+///|
+test "is_non_content_file does not exclude genuine content files" {
+  assert_false(@builder.is_non_content_file("index.md"))
+  assert_false(@builder.is_non_content_file("about.md"))
+  assert_false(@builder.is_non_content_file("hello.md"))
+  assert_false(@builder.is_non_content_file("my-post.md"))
+  assert_false(@builder.is_non_content_file("readme-intro.md"))
+}
+
+///|
+test "README.md in content root is not treated as root page" {
+  let root = "./_tmp_builder_root_readme"
+  let content_root = root + "/content"
+  let posts_root = content_root + "/posts"
+  let data_root = content_root + "/data"
+  let templates_root = root + "/templates"
+  let output_root = root + "/dist"
+  ensure_dir_test(root)
+  ensure_dir_test(content_root)
+  ensure_dir_test(posts_root)
+  ensure_dir_test(data_root)
+  ensure_dir_test(templates_root)
+  ensure_dir_test(output_root)
+
+  // Create README.md in content root — should be excluded from root pages
+  assert_true(
+    write_file_test(
+      content_root + "/README.md",
+      "# Lattice Example Site\n\nThis is an example site for the Lattice SSG.\n",
+    ),
+  )
+  // Also create a genuine root page
+  assert_true(
+    write_file_test(
+      content_root + "/index.md",
+      "---\n" + "title: Home\n" + "---\n\n" + "# Home\n\nWelcome.\n",
+    ),
+  )
+  assert_true(
+    write_file_test(
+      posts_root + "/hello.md",
+      "---\n" +
+      "title: Hello\n" +
+      "date: 2026-03-17\n" +
+      "---\n\n" +
+      "Content.\n",
+    ),
+  )
+  assert_true(
+    write_file_test(
+      templates_root + "/page.html",
+      "<html><head><title>{{title}}</title></head><body>{{content}}</body></html>\n",
+    ),
+  )
+  assert_true(
+    write_file_test(
+      root + "/collections.cfg",
+      "[posts]\n" +
+      "schema = title:String,date:Date\n" +
+      "dir = " +
+      posts_root +
+      "\n",
+    ),
+  )
+
+  let site_cfg = "title = TestReadme\n" +
+    "base_url = https://example.test\n" +
+    "templates_dir = " +
+    templates_root +
+    "\n" +
+    "data_dir = " +
+    data_root +
+    "\n" +
+    "collections_file = " +
+    root +
+    "/collections.cfg\n" +
+    "output_dir = " +
+    output_root +
+    "\n"
+  assert_true(write_file_test(root + "/site.cfg", site_cfg))
+
+  let site = match @config.parse(site_cfg) {
+    Ok(parsed) => parsed
+    Err(_) => {
+      assert_true(false)
+      abort("site config parse failed")
+    }
+  }
+  let result = @builder.build(
+    {
+      content_dir: content_root,
+      output_dir: output_root,
+      config_path: root + "/site.cfg",
+      site,
+      collections_path: Some(root + "/collections.cfg"),
+      force_rebuild: true,
+      include_drafts: false,
+    },
+    @cache.empty(output_root),
+  )
+  // Build should succeed — README.md excluded, no frontmatter error
+  assert_eq(result.errors, 0)
+
+  // index.md should be rendered
+  let index_html = @fs.read_file_to_string(output_root + "/index.html") catch {
+    @fs.IOError(_) => ""
+  }
+  assert_true(index_html.contains("Home"))
+}
