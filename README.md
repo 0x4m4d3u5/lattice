@@ -178,9 +178,9 @@ Defaults: `content-dir` → `./content`, config → `<content-dir>/lattice.conf`
 
 ## Project Stats
 
-- **~23k lines** of MoonBit in `src/` (41k total including tests)
+- **~23k lines** of MoonBit in `src/` (40k total including tests)
 - **30 packages** with focused responsibilities
-- **697 tests**, all passing
+- **721 tests**, all passing
 - **1 external dependency**: [`TheWaWaR/clap`](https://github.com/TheWaWaR/clap) for CLI parsing
 - Builds cleanly with `moon build` (0 errors, 0 warnings)
 
