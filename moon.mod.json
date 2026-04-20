@@ -6,12 +6,13 @@
     "TheWaWaR/clap": "0.2.6"
   },
   "readme": "README.mbt.md",
-  "repository": "https://github.com/0x4m4d3u5/lattice",
+  "repository": "https://github.com/0x4m4d4u5/lattice",
   "license": "Apache-2.0",
   "keywords": [
     "ssg",
     "static-site-generator",
     "moonbit"
   ],
-  "description": "A static site generator where structural violations are type errors, not runtime surprises."
+  "description": "A static site generator where structural violations are type errors, not runtime surprises.",
+  "warn-list": "-27"
 }
