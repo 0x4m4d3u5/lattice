@@ -2098,3 +2098,62 @@ The incremental test uses `@cache.load(output_root)` — the same function the C
 The test also implicitly verifies that the incremental build's manifest loading works correctly: the second build reads `.lattice-manifest.json` from disk, computes current dependency mtimes, finds them unchanged, and enters incremental mode. If the manifest file format or dependency snapshot logic regressed, the test would produce `[build]` messages instead of `[skip]` messages — a clear signal, not a silent pass.
 
 Total tests: 693 (was 691 before this session).
+
+## `[[data]]` in site.cfg — Closing the Format Parity Gap
+
+### The Gap
+
+Lattice supports two config formats:
+
+1. **`collections.cfg`** — the standalone file format, which supports `[data.nav]` sections for data-file schema validation.
+2. **`site.cfg` with inline `[[collections]]`** — the newer format that consolidates config into one file.
+
+The data schema feature was implemented in the `collections.cfg` format early in the project. When the inline `[[collections]]` format was added to `site.cfg` as a convenience, it replicated collection definitions but not data schemas — the builder returned `data_schemas: Map::new()` for the inline path. The `[[collections]]` format and the `collections.cfg` format were not at parity.
+
+The practical consequence: the example site uses inline `[[collections]]` in `site.cfg`. Despite having `content/data/nav.toml` and `content/data/authors.toml`, the data files were never schema-validated during the build. The structural guarantee — missing required data keys produce build errors — was implemented and tested in isolation but not demonstrated in the primary example.
+
+### The Fix
+
+Two changes close the gap:
+
+**In `src/config/config.mbt`**: Added `DataEntry { name, required }` struct and `data_entries : Array[DataEntry]` to `SiteConfig`. The parser now recognizes `[[data]]` array-of-table blocks with `name` and `required` keys, using the same state-machine pattern as `[[collections]]`. A `[[data]]` block can appear before, between, or after `[[collections]]` blocks; each block finalizes the previous one before starting.
+
+**In `src/builder/builder.mbt`**: Added `parse_required_keys_builder` (splits comma-separated key strings into `Array[String]`) and `build_data_schema_map_from_site_config` (converts `Array[@config.DataEntry]` to `Map[String, @data.DataSchema]`). The inline collections path now calls this function with `config.site.data_entries` rather than returning an empty map.
+
+### The Example Site Demonstration
+
+`example/site.cfg` now declares:
+
+```toml
+[[data]]
+name = nav
+required = links
+
+[[data]]
+name = authors
+required = team_lead
+```
+
+The `nav.toml` data file has a `links` key; the `authors.toml` file has a `team_lead` key. Both pass validation. If either required key were removed, the build would fail with:
+
+```
+data file 'nav': required key 'links' is missing
+```
+
+This is the same structural guarantee as frontmatter schema validation, applied to the data layer. A template that uses `{{#each data.nav.links}}` cannot receive a data file missing the `links` key — the build fails before the template renderer runs.
+
+### Test Coverage
+
+Four new tests in `src/config/config_test.mbt` cover:
+- `[[data]]` block parsed into `data_entries` (two blocks, name and required fields)
+- `[[data]]` with empty `required` is valid (defaults to empty key list — the file loads but no key is required)
+- `[[data]]` and `[[collections]]` can coexist in the same config file
+- `data_entries` is empty when no `[[data]]` blocks are present
+
+### The Format Parity Principle
+
+The broader lesson is that parallel configuration paths are a maintenance liability. When `[[collections]]` was added as a convenience format, the implementation translated each `CollectionEntry` to a `CollectionDef` but didn't ask "what else does `collections.cfg` support that we might want here?" The answer was data schemas. The parity gap was invisible until someone tried to demonstrate data validation using the inline path.
+
+The structural parallel: the data schema feature is analogous to the TRef demo gap documented in an earlier section. In both cases, a feature was implemented and tested in unit isolation but absent from the primary example that judges build. The fix in both cases is the same: make the example exercise the feature so the demonstration matches the documentation.
+
+Total tests: 697 (added 4 config tests for `[[data]]` block parsing).
