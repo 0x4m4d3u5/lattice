@@ -131,14 +131,14 @@ Defaults: `content-dir` → `./content`, config → `<content-dir>/lattice.conf`
                    ┌────────────────────┼────────────────────┐
                    ▼                    ▼                    ▼
             ┌─────────────┐    ┌──────────────┐    ┌──────────────┐
-            │   Pass 1     │    │   Pass 1     │    │   Pass 1     │
+            │   Pass 1     │    │  Pass 1.5    │    │   Pass 2     │
             │  Collect &   │───▶│  Validate &  │───▶│  Render &    │
             │   Index      │    │  Resolve     │    │  Emit        │
             └─────────────┘    └──────────────┘    └──────────────┘
             • Walk sources       • Schema check       • Markdown → HTML
             • Parse frontmatter  • Wikilink resolve    • Template apply
             • Compute slugs      • Shortcode validate  • Write output
-            • Build page index   • Lint violations     • Sitemap/RSS/robots
+            • Build page index   • Backlink index      • Sitemap/RSS/robots
 ```
 
 ### Module overview (`src/` — 30 packages)
@@ -178,9 +178,9 @@ Defaults: `content-dir` → `./content`, config → `<content-dir>/lattice.conf`
 
 ## Project Stats
 
-- **~10k lines** of MoonBit in `src/` (22.7k total across all `.mbt` files)
+- **~23k lines** of MoonBit in `src/` (41k total including tests)
 - **30 packages** with focused responsibilities
-- **631 tests**, all passing
+- **697 tests**, all passing
 - **1 external dependency**: [`TheWaWaR/clap`](https://github.com/TheWaWaR/clap) for CLI parsing
 - Builds cleanly with `moon build` (0 errors, 0 warnings)
 
@@ -298,7 +298,7 @@ Built for the [2026 MoonBit Software Synthesis Challenge](https://www.moonbitlan
 
 - **Functional completeness (25%)**: Full SSG pipeline — parse → validate → render → emit. Collections, wikilinks, templates, feeds, search, sitemap, dev server, incremental builds, scaffolding, stats.
 - **Engineering quality (25%)**: MoonBit's type system does real work. 30 packages with typed error boundaries. `FrontmatterValue` ADT, `ViolationType` closed enum, schema validation as a structural gate.
-- **Explainability (25%)**: [1594-line retrospective](docs/retrospective.md) documenting every architectural decision. Commit history traces *why* the code looks the way it does. AI tool usage annotated honestly.
+- **Explainability (25%)**: [2100-line retrospective](docs/retrospective.md) documenting every architectural decision. Commit history traces *why* the code looks the way it does. AI tool usage annotated honestly.
 - **UX (25%)**: Error messages include file:line:column. `lattice check` for CI pipelines. `lattice new` generates schema-compliant stubs. `lattice stats` for site metrics. `lattice explain <E-code>` for error code documentation. Clear CLI with subcommands.
 
 ## License
