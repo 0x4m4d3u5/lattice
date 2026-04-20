@@ -555,3 +555,118 @@ test "render_json_feed sorting newest first" {
   inspect(first_idx >= 0, content="true")
   inspect(second_idx < first_idx, content="true")
 }
+
+
+
+///|
+test "normalize_feed_datetime: plain date YYYY-MM-DD" {
+  let result = @rss.normalize_feed_datetime(Some("2026-03-17"))
+  assert_eq(result, Some("2026-03-17T00:00:00Z"))
+}
+
+///|
+test "normalize_feed_datetime: RFC 3339 UTC" {
+  let result = @rss.normalize_feed_datetime(Some("2026-03-17T14:30:00Z"))
+  assert_eq(result, Some("2026-03-17T14:30:00Z"))
+}
+
+///|
+test "normalize_feed_datetime: RFC 3339 with offset" {
+  let result = @rss.normalize_feed_datetime(Some("2026-03-17T14:30:00+05:30"))
+  assert_eq(result, Some("2026-03-17T14:30:00+05:30"))
+}
+
+///|
+test "normalize_feed_datetime: RFC 3339 with negative offset" {
+  let result = @rss.normalize_feed_datetime(Some("2026-03-17T14:30:00-08:00"))
+  assert_eq(result, Some("2026-03-17T14:30:00-08:00"))
+}
+
+///|
+test "normalize_feed_datetime: None input" {
+  assert_eq(@rss.normalize_feed_datetime(None), None)
+}
+
+///|
+test "normalize_feed_datetime: empty string" {
+  assert_eq(@rss.normalize_feed_datetime(Some("")), None)
+}
+
+///|
+test "normalize_feed_datetime: whitespace-only string" {
+  assert_eq(@rss.normalize_feed_datetime(Some("   ")), None)
+}
+
+///|
+test "normalize_feed_datetime: invalid month 13" {
+  assert_eq(@rss.normalize_feed_datetime(Some("2026-13-01")), None)
+}
+
+///|
+test "normalize_feed_datetime: invalid day 32" {
+  assert_eq(@rss.normalize_feed_datetime(Some("2026-01-32")), None)
+}
+
+///|
+test "normalize_feed_datetime: day 31 in April (30-day month)" {
+  assert_eq(@rss.normalize_feed_datetime(Some("2026-04-31")), None)
+}
+
+///|
+test "normalize_feed_datetime: Feb 29 in non-leap year" {
+  assert_eq(@rss.normalize_feed_datetime(Some("2025-02-29")), None)
+}
+
+///|
+test "normalize_feed_datetime: Feb 29 in leap year" {
+  let result = @rss.normalize_feed_datetime(Some("2024-02-29"))
+  assert_eq(result, Some("2024-02-29T00:00:00Z"))
+}
+
+///|
+test "normalize_feed_datetime: garbage with Z suffix rejected" {
+  // The old heuristic accepted this; structural validation rejects it
+  assert_eq(@rss.normalize_feed_datetime(Some("20garbage1234567890Z")), None)
+}
+
+///|
+test "normalize_feed_datetime: invalid time hour 25" {
+  assert_eq(@rss.normalize_feed_datetime(Some("2026-03-17T25:00:00Z")), None)
+}
+
+///|
+test "normalize_feed_datetime: invalid time minute 61" {
+  assert_eq(@rss.normalize_feed_datetime(Some("2026-03-17T14:61:00Z")), None)
+}
+
+///|
+test "normalize_feed_datetime: invalid time second 61" {
+  assert_eq(@rss.normalize_feed_datetime(Some("2026-03-17T14:30:61Z")), None)
+}
+
+///|
+test "normalize_feed_datetime: truncated datetime rejected" {
+  assert_eq(@rss.normalize_feed_datetime(Some("2026-03-17T14:30")), None)
+}
+
+///|
+test "normalize_feed_datetime: missing T separator rejected" {
+  assert_eq(@rss.normalize_feed_datetime(Some("2026-03-17 14:30:00Z")), None)
+}
+
+///|
+test "normalize_feed_datetime: invalid timezone offset rejected" {
+  assert_eq(@rss.normalize_feed_datetime(Some("2026-03-17T14:30:00+25:00")), None)
+}
+
+///|
+test "normalize_feed_datetime: midnight is valid" {
+  let result = @rss.normalize_feed_datetime(Some("2026-01-01T00:00:00Z"))
+  assert_eq(result, Some("2026-01-01T00:00:00Z"))
+}
+
+///|
+test "normalize_feed_datetime: end of day is valid" {
+  let result = @rss.normalize_feed_datetime(Some("2026-12-31T23:59:59Z"))
+  assert_eq(result, Some("2026-12-31T23:59:59Z"))
+}
