@@ -919,58 +919,92 @@ fn build_archive_pages(
 
   let coll_dir = config.output_dir + "/" + collection_name
 
+  // Aggregate all pages per year so the year archive includes every month.
+  let year_pages_map : Map[String, Array[@graph.GraphPage]] = Map::new()
+  let mut gi = 0
+  while gi < groups.length() {
+    let g = groups[gi]
+    match year_pages_map.get(g.year) {
+      Some(existing) => {
+        let mut pi = 0
+        while pi < g.pages.length() {
+          existing.push(g.pages[pi])
+          pi = pi + 1
+        }
+      }
+      None => {
+        let copy : Array[@graph.GraphPage] = []
+        let mut pi = 0
+        while pi < g.pages.length() {
+          copy.push(g.pages[pi])
+          pi = pi + 1
+        }
+        year_pages_map.set(g.year, copy)
+      }
+    }
+    gi = gi + 1
+  }
+
+  let written_years : Map[String, Bool] = Map::new()
+
   let mut i = 0
   while i < groups.length() {
     let group = groups[i]
 
-    // Build year archive (month = "")
-    let year_archive_html = match
-      render_archive_page(
-        collection_name,
-        group.year,
-        "",
-        group.pages,
-        config.site,
-        archive_template,
-        index_template,
-        nav_links_html,
-        custom_css,
-        data_store,
-      ) {
-      Ok(html) => html
-      Err(msg) => {
-        messages.push(
-          "[error] archive page " +
-          collection_name +
-          "/" +
-          group.year +
-          ": " +
-          msg,
-        )
+    // Build year archive once per year using all pages for that year.
+    if written_years.get(group.year) is None {
+      let year_pages = match year_pages_map.get(group.year) {
+        Some(yp) => yp
+        None => []
+      }
+      let year_archive_html = match
+        render_archive_page(
+          collection_name,
+          group.year,
+          "",
+          year_pages,
+          config.site,
+          archive_template,
+          index_template,
+          nav_links_html,
+          custom_css,
+          data_store,
+        ) {
+        Ok(html) => html
+        Err(msg) => {
+          messages.push(
+            "[error] archive page " +
+            collection_name +
+            "/" +
+            group.year +
+            ": " +
+            msg,
+          )
+          errors = errors + 1
+          i = i + 1
+          continue
+        }
+      }
+      let year_out_path = coll_dir + "/" + group.year + "/index.html"
+      let year_write_ok = try {
+        ensure_dir(coll_dir + "/" + group.year)
+        @fs.write_string_to_file(year_out_path, year_archive_html)
+        messages.push("[lattice] wrote " + year_out_path)
+        true
+      } catch {
+        @fs.IOError(msg) => {
+          messages.push(
+            "[error] cannot write archive page " + year_out_path + ": " + msg,
+          )
+          false
+        }
+      }
+      if year_write_ok {
+        pages_written = pages_written + 1
+      } else {
         errors = errors + 1
-        i = i + 1
-        continue
       }
-    }
-
-    let year_out_path = coll_dir + "/" + group.year + "/index.html"
-    let year_write_ok = try {
-      ensure_dir(coll_dir + "/" + group.year)
-      @fs.write_string_to_file(year_out_path, year_archive_html)
-      messages.push("[lattice] wrote " + year_out_path)
-      true
-    } catch {
-      @fs.IOError(msg) => {
-        messages.push(
-          "[error] cannot write archive page " + year_out_path + ": " + msg,
-        )
-        false
-      }
-    }
-    if year_write_ok {
-      pages_written = pages_written + 1
-    } else {
-      errors = errors + 1
+      written_years.set(group.year, true)
     }
 
     // Build month archive
