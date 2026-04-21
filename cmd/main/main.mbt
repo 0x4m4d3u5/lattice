@@ -325,7 +325,12 @@ fn build_parser() -> @clap.Parser {
           "collection": @clap.Arg::positional(
             help="Collection name (e.g. posts)",
           ),
-          "slug": @clap.Arg::positional(help="Content slug (e.g. my-new-post)"),
+          "name": @clap.Arg::named(
+            short='n',
+            nargs=One,
+            defaults=[""],
+            help="Content slug/filename (e.g. my-new-post)",
+          ),
           "config": @clap.Arg::named(
             short='c',
             nargs=One,
@@ -1264,13 +1269,22 @@ fn run_main() -> Unit {
 
   // Handle 'new' subcommand — load config + collections, then scaffold content file
   if subcmd_name == "new" {
-    if subcmd_sv.positional_args.length() < 2 {
-      print_diagnostic_main(cli_error("usage: lattice new <collection> <slug>"))
+    if subcmd_sv.positional_args.length() < 1 {
+      print_diagnostic_main(
+        cli_error("usage: lattice new <collection> --name <slug>"),
+      )
       @sys.exit(1)
       return
     }
     let collection_name = subcmd_sv.positional_args[0]
-    let slug = subcmd_sv.positional_args[1]
+    let slug = safe_get_one(subcmd_sv, "name").unwrap_or("")
+    if slug.length() == 0 {
+      print_diagnostic_main(
+        cli_error("--name <slug> is required (e.g. lattice new posts --name my-first-post)"),
+      )
+      @sys.exit(1)
+      return
+    }
     let config_raw = safe_get_one(subcmd_sv, "config").unwrap_or("")
     let collections_raw = safe_get_one(subcmd_sv, "collections").unwrap_or("")
     // Load config to discover collections
