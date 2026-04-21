@@ -2251,7 +2251,7 @@ The third win is the separation between the build engine and I/O. Commit `09070c
 
 ### Honest Limitations
 
-**The slugifier is ASCII-only.** `slugify_n` in `src/slug/slug.mbt` lowercases ASCII and replaces spaces/underscores with hyphens, but passes through accented characters, CJK, and emoji unchanged. A post titled "Café résumé" would produce the slug "café-résumé" rather than "cafe-resume". For an English-only blog this is invisible; for multilingual content it is a correctness gap. The fix would be transliteration tables or Unicode-aware lowercasing via the stdlib's `String::to_lower()`, but this was deprioritized in favor of features judges would actually see.
+**The slugifier handles Latin accented characters but not CJK or emoji.** Latin precomposed characters (café → cafe, résumé → resume, Ångström → angstrom) are now transliterated via a Unicode code-point table in `slugify_n` (commit `ef773f6`). The table covers grave/acute/circumflex/tilde/umlaut/ring variants for a/e/i/o/u/y, plus ç, ñ, and multi-char expansions (æ→ae, œ→oe, ß→ss). Uppercase variants map directly to lowercase ASCII. CJK and emoji still pass through unchanged — for a multilingual site, a full Unicode normalization library would be needed.
 
 **There is no plugin system.** Shortcodes are extensible (register a `ShortcodeHandler` function), but the broader build pipeline — markdown extensions, template functions, output emitters — requires modifying the source. A real-world SSG needs a plugin API. The current architecture (pipeline stages as distinct packages with clean interfaces) makes this tractable: each stage could expose a registration point. But the plumbing is not there yet.
 
@@ -2271,16 +2271,16 @@ The third win is the separation between the build engine and I/O. Commit `09070c
 
 | Metric | Value |
 |--------|-------|
-| Total source LOC | 41,655 |
-| Implementation LOC (non-test) | 24,993 |
-| Test LOC | 16,662 |
+| Total source LOC | 41,899 |
+| Implementation LOC (non-test) | 24,970 |
+| Test LOC | 16,929 |
 | Source files | 35 |
 | Test files | 29 (black-box) + 1 (white-box) |
-| Packages | 30 |
-| Tests | 722 passing |
+| Packages | 31 |
+| Tests | 726 passing |
 | Compiler warnings | 0 |
 | External dependencies | 2 (`moonbitlang/x` 0.4.40, `TheWaWaR/clap` 0.2.6) |
-| Commits | 234 |
+| Commits | 238 |
 | Development span | March 8 – April 21, 2026 (45 days) |
 | Example site build time | 57ms (10 pages, 3 collections, 3 redirects) |
 | Retrospective length | ~2,300 lines |
