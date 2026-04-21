@@ -103,7 +103,7 @@ lattice build   [content-dir] [-o <dir>] [options]   — build the site
 lattice check   [content-dir] [-o <dir>] [options]   — validate/lint only (no output)
 lattice serve   [content-dir] [-o <dir>] [options]   — dev server with live reload
 lattice init    <name>                                — scaffold a new site
-lattice new     <collection> <slug> [options]         — create content from schema
+lattice new     <collection> --name <slug> [options]  — create content from schema
 lattice stats   [content-dir] [options]               — print site statistics
 lattice explain <code>                                — describe an error code (e.g. E001)
 ```

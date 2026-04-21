@@ -2261,6 +2261,8 @@ The third win is the separation between the build engine and I/O. Commit `09070c
 
 **No image processing.** Lattice copies static assets verbatim. There is no image resizing, format conversion, or responsive srcset generation. A production blog would need this, either as a build step or via a CDN. The `assets` package (`src/assets/assets.mbt`) handles path resolution and copy operations, but does not touch file contents.
 
+**The `@clap` library only allows one positional argument per subcommand — discovered late.** The original `lattice new` interface was designed as `lattice new <collection> <slug>` — two positional arguments. At runtime, the `@clap.SubCommand::new()` spec itself fails with `InvalidSpec("only one positional argument is allowed, second=slug")` before any user input is processed. The fix (commit `6478eef`) converted the second positional to a named flag: `lattice new posts --name my-first-post`. This is strictly a library constraint, not a design choice, and the fix is clean — but it demonstrates the cost of treating a library's undocumented limits as assumptions. The honest lesson: for CLI argument parsers specifically, test the full subcommand spec at integration time, not just the happy-path value parsing.
+
 **External dependency surface is minimal but not zero.** The project depends on `moonbitlang/x` (filesystem utilities) and `TheWaWaR/clap` (CLI argument parsing). Both are well-maintained MoonBit ecosystem packages. All HTML rendering, markdown parsing, template compilation, feed generation, schema validation, and content indexing are implemented from scratch — no wrapping of JS/C libraries. This was a deliberate choice to exercise MoonBit's type system rather than bridging to existing solutions, but it means some features (syntax highlighting breadth, markdown edge cases) are less complete than ecosystem-standard parsers.
 
 ### Final Engineering Stats
@@ -2276,9 +2278,9 @@ The third win is the separation between the build engine and I/O. Commit `09070c
 | Tests | 721 passing |
 | Compiler warnings | 0 |
 | External dependencies | 2 (`moonbitlang/x` 0.4.40, `TheWaWaR/clap` 0.2.6) |
-| Commits | 229 |
+| Commits | 231 |
 | Development span | March 8 – April 21, 2026 (45 days) |
 | Example site build time | 57ms (10 pages, 3 collections, 3 redirects) |
-| Retrospective length | ~2,200 lines |
+| Retrospective length | ~2,300 lines |
 
 **Largest packages by LOC** (non-test): builder (11,885), template (3,565), markdown (3,183), schema (2,734), highlight (2,218), collections (1,865), scaffold (1,826), frontmatter (1,114), html (1,239), data (1,357). The builder package is large because it orchestrates the full pipeline — content loading, schema validation, wikilink resolution, template rendering, pagination, feed generation, sitemap, robots.txt, search indexing, graph emission, asset copying, and cache management. Splitting it further would introduce coupling between stages that the current single-file orchestration avoids.
