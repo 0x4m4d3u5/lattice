@@ -183,6 +183,70 @@ test "group_pages_by_year_month groups pages correctly" {
 }
 
 ///|
+test "aggregate_pages_by_year collects all months under the same year key" {
+  // Regression: year archive used group.pages (per-month) instead of all
+  // pages for that year. Result: only the last-processed month appeared in
+  // the year archive.
+  let groups : Array[@builder.ArchiveGroup] = [
+    {
+      year: "2026",
+      month: "04",
+      pages: [
+        {
+          slug: "april-post",
+          title: "April Post",
+          url: "/posts/april-post",
+          description: None,
+          date: Some("2026-04-01"),
+          outgoing: [],
+          weight: None,
+        },
+      ],
+    },
+    {
+      year: "2026",
+      month: "03",
+      pages: [
+        {
+          slug: "march-post",
+          title: "March Post",
+          url: "/posts/march-post",
+          description: None,
+          date: Some("2026-03-15"),
+          outgoing: [],
+          weight: None,
+        },
+      ],
+    },
+    {
+      year: "2025",
+      month: "12",
+      pages: [
+        {
+          slug: "dec-post",
+          title: "December Post",
+          url: "/posts/dec-post",
+          description: None,
+          date: Some("2025-12-01"),
+          outgoing: [],
+          weight: None,
+        },
+      ],
+    },
+  ]
+  let year_map = @builder.aggregate_pages_by_year(groups)
+  // 2026 year key must contain both April and March posts
+  match year_map.get("2026") {
+    Some(year_pages) => assert_eq(year_pages.length(), 2)
+    None => assert_true(false)
+  }
+  match year_map.get("2025") {
+    Some(year_pages) => assert_eq(year_pages.length(), 1)
+    None => assert_true(false)
+  }
+}
+
+///|
 test "extract_year_month extracts year and month from date string" {
   match @builder.extract_year_month("2024-03-15") {
     Some((year, month)) => {

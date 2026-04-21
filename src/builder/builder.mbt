@@ -651,6 +651,39 @@ pub fn group_pages_by_year_month(
 }
 
 ///|
+/// Aggregate pages from year+month groups into a per-year map.
+/// Each year key maps to all pages across every month for that year.
+pub fn aggregate_pages_by_year(
+  groups : Array[ArchiveGroup],
+) -> Map[String, Array[@graph.GraphPage]] {
+  let year_map : Map[String, Array[@graph.GraphPage]] = Map::new()
+  let mut i = 0
+  while i < groups.length() {
+    let g = groups[i]
+    match year_map.get(g.year) {
+      Some(existing) => {
+        let mut pi = 0
+        while pi < g.pages.length() {
+          existing.push(g.pages[pi])
+          pi = pi + 1
+        }
+      }
+      None => {
+        let copy : Array[@graph.GraphPage] = []
+        let mut pi = 0
+        while pi < g.pages.length() {
+          copy.push(g.pages[pi])
+          pi = pi + 1
+        }
+        year_map.set(g.year, copy)
+      }
+    }
+    i = i + 1
+  }
+  year_map
+}
+
+///|
 /// Render HTML content for an archive page - list of page links.
 pub fn render_archive_page_content(pages : Array[@graph.GraphPage]) -> String {
   let buf = StringBuilder::new()
@@ -920,30 +953,7 @@ fn build_archive_pages(
   let coll_dir = config.output_dir + "/" + collection_name
 
   // Aggregate all pages per year so the year archive includes every month.
-  let year_pages_map : Map[String, Array[@graph.GraphPage]] = Map::new()
-  let mut gi = 0
-  while gi < groups.length() {
-    let g = groups[gi]
-    match year_pages_map.get(g.year) {
-      Some(existing) => {
-        let mut pi = 0
-        while pi < g.pages.length() {
-          existing.push(g.pages[pi])
-          pi = pi + 1
-        }
-      }
-      None => {
-        let copy : Array[@graph.GraphPage] = []
-        let mut pi = 0
-        while pi < g.pages.length() {
-          copy.push(g.pages[pi])
-          pi = pi + 1
-        }
-        year_pages_map.set(g.year, copy)
-      }
-    }
-    gi = gi + 1
-  }
+  let year_pages_map = aggregate_pages_by_year(groups)
 
   let written_years : Map[String, Bool] = Map::new()
 
