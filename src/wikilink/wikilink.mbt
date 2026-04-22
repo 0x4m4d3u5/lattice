@@ -8,7 +8,7 @@
 
 ///|
 /// A raw wikilink extracted from markdown source.
-pub struct RawWikilink {
+pub(all) struct RawWikilink {
   target : String
   display : String? // None means use target as display text
   source_file : String
@@ -16,7 +16,7 @@ pub struct RawWikilink {
 
 ///|
 /// A resolved wikilink with a validated target URL.
-pub struct ResolvedWikilink {
+pub(all) struct ResolvedWikilink {
   raw : RawWikilink
   url : String
   title : String
@@ -24,7 +24,7 @@ pub struct ResolvedWikilink {
 
 ///|
 /// Resolution error: the target did not match any content page.
-pub struct ResolutionError {
+pub(all) struct ResolutionError {
   link : RawWikilink
   message : String
 }

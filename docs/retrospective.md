@@ -2271,16 +2271,16 @@ The third win is the separation between the build engine and I/O. Commit `09070c
 
 | Metric | Value |
 |--------|-------|
-| Total source LOC | 42,163 |
+| Total source LOC | 42,272 |
 | Implementation LOC (non-test) | 24,970 |
-| Test LOC | 17,193 |
-| Source files | 36 |
-| Test files | 30 (black-box) + 1 (white-box) |
+| Test LOC | 17,302 |
+| Source files | 37 |
+| Test files | 31 (black-box) + 1 (white-box) |
 | Packages | 31 |
-| Tests | 759 passing |
+| Tests | 764 passing |
 | Compiler warnings | 0 |
 | External dependencies | 2 (`moonbitlang/x` 0.4.40, `TheWaWaR/clap` 0.2.6) |
-| Commits | 239 |
+| Commits | 240 |
 | Development span | March 8 – April 21, 2026 (45 days) |
 | Example site build time | 57ms (10 pages, 3 collections, 3 redirects) |
 | Retrospective length | ~2,300 lines |
