@@ -44,3 +44,53 @@ test "manifest parse accepts entries without targets" {
   assert_eq(parsed.entries.length(), 1)
   assert_eq(parsed.entries[0].targets.length(), 0)
 }
+
+///|
+test "manifest roundtrip preserves negative mtime" {
+  let manifest : ManifestFile = {
+    version: 1,
+    entries: [{ src: "a.md", mtime: -1000L, out: "dist/a/index.html", targets: [] }],
+  }
+  let parsed = parse(render(manifest)) catch {
+    ParseError(_) => {
+      assert_true(false)
+      { version: 0, entries: [] }
+    }
+  }
+  assert_eq(parsed.entries[0].mtime, -1000L)
+}
+
+///|
+test "manifest parse rejects missing required src field" {
+  let raised = try {
+    let _ = parse(
+      "{\"version\":1,\"entries\":[{\"mtime\":1,\"out\":\"out/index.html\"}]}",
+    )
+    false
+  } catch {
+    ParseError(_) => true
+  }
+  assert_true(raised)
+}
+
+///|
+test "manifest parse rejects completely malformed input" {
+  let raised = try {
+    let _ = parse("not json")
+    false
+  } catch {
+    ParseError(_) => true
+  }
+  assert_true(raised)
+}
+
+///|
+test "manifest render omits targets key when targets array is empty" {
+  let manifest : ManifestFile = {
+    version: 1,
+    entries: [{ src: "a.md", mtime: 1L, out: "out/a/index.html", targets: [] }],
+  }
+  let rendered = render(manifest)
+  // When targets is empty, the rendered JSON should not include the targets key
+  assert_true(!rendered.contains("\"targets\""))
+}

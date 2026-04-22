@@ -2277,13 +2277,13 @@ The third win is the separation between the build engine and I/O. Commit `09070c
 | Source files | 35 |
 | Test files | 32 (black-box) + 1 (white-box) |
 | Packages | 31 |
-| Tests | 781 passing |
+| Tests | 795 passing |
 | Compiler warnings | 0 |
 | External dependencies | 2 (`moonbitlang/x` 0.4.40, `TheWaWaR/clap` 0.2.6) |
-| Commits | 241 |
+| Commits | 242 |
 | Development span | March 8 – April 22, 2026 (46 days) |
 | Example site build time | 57ms (10 pages, 3 collections, 3 redirects) |
-| Retrospective length | ~2,300 lines |
+| Retrospective length | ~2,350 lines |
 
 **Largest packages by LOC** (non-test): builder (11,885), template (3,565), markdown (3,183), schema (2,734), highlight (2,218), collections (1,865), scaffold (1,826), frontmatter (1,114), html (1,239), data (1,357). The builder package is large because it orchestrates the full pipeline — content loading, schema validation, wikilink resolution, template rendering, pagination, feed generation, sitemap, robots.txt, search indexing, graph emission, asset copying, and cache management. Splitting it further would introduce coupling between stages that the current single-file orchestration avoids.
 
@@ -2306,5 +2306,35 @@ Unlike `vault`, the assets package involves real filesystem I/O — `copy_static
 There was one visibility footgun: the `AssetCopyError` enum was declared `pub enum` (constructors are read-only externally — pattern matching allowed, construction forbidden). Tests that construct `SourceReadError("/a/b", "msg")` directly in assertions against `error_path` and `format_error` failed with "Cannot create values of the read-only type." The fix changes `pub enum` to `pub(all) enum`, which also adds `derive(Eq, Show)` — required for `assert_eq` and consistent with the policy established by the vault fix. The visibility change is appropriate: `AssetCopyError` is an error type that callers are expected to construct when wrapping the assets API in their own error hierarchies.
 
 The fix (commit `test(assets): 17 tests for error formatting and copy/check static — engineering quality rubric`) adds `assets_test.mbt` covering: `error_path` for all five error variants; `format_error` message strings for all five variants; `copy_static` as a no-op when the source root is missing; `copy_static` returning `SourceNotDirectory` when the static path is a regular file; `copy_static` correctly copying a flat directory and counting files; `copy_static` recursing into subdirectories and summing the total; `check_static` returning no errors when the source is absent; `check_static` returning `SourceNotDirectory` for a file-as-directory; and `check_static` returning no errors for a readable directory.
+
+## Cache and Manifest: Core Logic Paths Without Test Coverage
+
+The per-package audit that uncovered the vault and assets gaps also revealed similar depth problems in two infrastructure packages: `cache` and `manifest`. Both had roundtrip tests (verifying that `render` → `parse` produces the original input), but neither had tests for the behavioral logic that depends on those parsed structures.
+
+### Cache: `should_skip` was completely untested
+
+The `should_skip` function is the core decision point for incremental builds. It takes a `CacheStore`, a slug, a fingerprint, an output path, and a `force_rebuild` flag, and returns whether the build can skip regenerating a page. The function encodes three distinct conditions:
+
+1. If `force_rebuild` is set, always return false — no page is ever skipped.
+2. If the output file doesn't exist on disk, return false — the cache is stale (output was deleted).
+3. If the slug has no cached fingerprint, return false — first build for this page.
+4. If the cached fingerprint matches the current fingerprint, return true — content unchanged.
+5. If the fingerprints differ, return false — content was modified.
+
+None of these cases were tested. A regression in any one of them would silently break incremental builds — pages would either be incorrectly skipped (producing stale output) or incorrectly rebuilt (losing the performance benefit of caching). The risk is high because the failures are invisible at build time: a page that was skipped looks identical to a page that was rebuilt, and a developer would only discover the bug through stale content reaching the browser.
+
+The fix (commit `test(cache,manifest): should_skip decision tree, error paths, fingerprint path-sensitivity — engineering quality rubric`) adds 10 tests to `cache_test.mbt` covering all five `should_skip` conditions, the path-sensitivity property of `fingerprint_for_source` (same content at different paths must produce different fingerprints — this is the rename-detection invariant), parse error handling for malformed inputs, `error_text` message formatting for all three error variants, and a roundtrip for slugs containing special characters that require JSON escaping.
+
+The `fingerprint_for_source` path-sensitivity test is worth highlighting. The function mixes the file path into the FNV-1a hash before hashing the content. If it didn't, renaming `content/a.md` to `content/b.md` without changing the body would produce the same fingerprint — and the cache would report the renamed file as unchanged, potentially skipping a rebuild that would update the URL and any page that references it. The test `fingerprint_for_source("content/a.md", body) != fingerprint_for_source("content/b.md", body)` is a direct test of this invariant.
+
+### Manifest: negative mtime and structural parse errors
+
+The `manifest` package had two tests: a basic roundtrip and a test for entries without targets. Missing: negative mtime roundtrip, parse error handling, and the optimization that omits the targets key when the array is empty (which the renderer does to keep the output compact).
+
+Negative mtime matters because mtime is an `Int64` representing Unix seconds, and file modification times before the Unix epoch (January 1, 1970) are technically representable as negative values. More practically, test code that constructs manifests with sentinel values like `-1L` should roundtrip cleanly. The parse function uses `parse_int64_manifest`, which explicitly handles the leading `-` character — a test that verifies this path closes the gap.
+
+The targets-key omission test documents a deliberate render optimization: when `entry.targets.length() == 0`, the renderer skips writing the `"targets": []` key entirely. This keeps the manifest file smaller for the common case of pages with no wikilink targets. The test `assert_true(!rendered.contains("\"targets\""))` verifies the optimization is in effect and catches any regression that would re-introduce the empty array.
+
+The parse error tests for both `cache` and `manifest` verify that malformed inputs raise errors rather than producing silently wrong structures. This is the defensive contract: `parse("not json")` must not succeed with version=0 and an empty entry list — it must fail with a diagnostic. Without these tests, a change to the parser that accidentally accepted malformed input would go undetected.
 
 After this commit, every package with implementation code has a `_test.mbt` file. The `watch` package is the only remaining untested package — it wraps a C `inotify`/`kqueue` watcher via native FFI and has no pure-MoonBit logic to unit test.
