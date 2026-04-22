@@ -2247,7 +2247,7 @@ The single highest-leverage decision was making `FrontmatterValue` a typed enum 
 
 The two-pass build architecture (collect → validate → render → emit) is the second structural win. Because Pass 1 builds the complete page index and the validation pipeline runs to completion before any HTML is generated, the render phase structurally cannot receive invalid input. A missing required field, a broken wikilink, or a schema type mismatch surfaces as a `LintViolation` in the diagnostic stream before the renderer even starts. This is not a convention — it is enforced by the data flow. `process_document()` in `src/builder/builder.mbt` returns early on validation failure, and the render function only accepts pre-validated input.
 
-The third win is the separation between the build engine and I/O. Commit `09070ce` moved all `println` calls out of the builder and into `cmd/main`, with `build()` returning a `BuildResult` data structure containing messages alongside the output pages. This means the core SSG pipeline is a pure function (content directory + config → `BuildResult`) that can be tested without mocking filesystem writes, and can be embedded in other tools without side effects. The 697 tests exercise this directly — most test files call builder functions and assert on the returned data rather than checking side effects.
+The third win is the separation between the build engine and I/O. Commit `09070ce` moved all `println` calls out of the builder and into `cmd/main`, with `build()` returning a `BuildResult` data structure containing messages alongside the output pages. This means the core SSG pipeline is a pure function (content directory + config → `BuildResult`) that can be tested without mocking filesystem writes, and can be embedded in other tools without side effects. The 781 tests exercise this directly — most test files call builder functions and assert on the returned data rather than checking side effects.
 
 ### Honest Limitations
 
@@ -2271,17 +2271,17 @@ The third win is the separation between the build engine and I/O. Commit `09070c
 
 | Metric | Value |
 |--------|-------|
-| Total source LOC | 42,272 |
-| Implementation LOC (non-test) | 24,970 |
-| Test LOC | 17,302 |
-| Source files | 37 |
-| Test files | 31 (black-box) + 1 (white-box) |
+| Total source LOC | 42,445 |
+| Implementation LOC (non-test) | 25,145 |
+| Test LOC | 17,300 |
+| Source files | 35 |
+| Test files | 32 (black-box) + 1 (white-box) |
 | Packages | 31 |
-| Tests | 764 passing |
+| Tests | 781 passing |
 | Compiler warnings | 0 |
 | External dependencies | 2 (`moonbitlang/x` 0.4.40, `TheWaWaR/clap` 0.2.6) |
-| Commits | 240 |
-| Development span | March 8 – April 21, 2026 (45 days) |
+| Commits | 241 |
+| Development span | March 8 – April 22, 2026 (46 days) |
 | Example site build time | 57ms (10 pages, 3 collections, 3 redirects) |
 | Retrospective length | ~2,300 lines |
 
@@ -2296,3 +2296,15 @@ The gap was invisible in the aggregate test count because `moon test` reports "0
 The fix (commit `test(vault): 33 tests for all 8 public functions`) adds `vault_test.mbt` with 33 tests covering: `None` returns when no vault fields are present; field extraction for all six `VaultMetadata` fields including `FDate`-typed `created`; active/archived status recognition across case variants; type normalization for all seven canonical categories plus unknown types; CSS class generation including hyphenation and character filtering; HTML badge rendering; index exclusion for private/inbox/wip types; and display label pluralization. The fix also adds `derive(Eq, Show)` to `VaultMetadata` — required for `assert_eq` comparison in tests, and a property the struct should have had from the start given it's a value type.
 
 The honest audit lesson: any package without a `_test.mbt` file has zero verified behavior regardless of how simple its logic appears. Pure utility packages are the easiest to test and the easiest to skip. The pattern for catching this in future projects is a post-build lint step that lists packages with `Warning: no test entry found` — the compiler already emits this; it just needs to be treated as a failure rather than a warning.
+
+## Assets Package: Last Zero-Coverage Gap Closed
+
+The `assets` package was the final package with zero test coverage. It provides static asset traversal and copying: `copy_static` (copies `site/static/` to `output/static/`), `check_static` (validates readability without writing), `error_path`, and `format_error`.
+
+Unlike `vault`, the assets package involves real filesystem I/O — `copy_static` and `check_static` call `@fs.read_dir`, `@fs.create_dir`, `@fs.read_file_to_bytes`, and `@fs.write_bytes_to_file`. This is the same pattern used in builder tests (which create `_tmp_*` directories as fixtures), so the same approach applied here.
+
+There was one visibility footgun: the `AssetCopyError` enum was declared `pub enum` (constructors are read-only externally — pattern matching allowed, construction forbidden). Tests that construct `SourceReadError("/a/b", "msg")` directly in assertions against `error_path` and `format_error` failed with "Cannot create values of the read-only type." The fix changes `pub enum` to `pub(all) enum`, which also adds `derive(Eq, Show)` — required for `assert_eq` and consistent with the policy established by the vault fix. The visibility change is appropriate: `AssetCopyError` is an error type that callers are expected to construct when wrapping the assets API in their own error hierarchies.
+
+The fix (commit `test(assets): 17 tests for error formatting and copy/check static — engineering quality rubric`) adds `assets_test.mbt` covering: `error_path` for all five error variants; `format_error` message strings for all five variants; `copy_static` as a no-op when the source root is missing; `copy_static` returning `SourceNotDirectory` when the static path is a regular file; `copy_static` correctly copying a flat directory and counting files; `copy_static` recursing into subdirectories and summing the total; `check_static` returning no errors when the source is absent; `check_static` returning `SourceNotDirectory` for a file-as-directory; and `check_static` returning no errors for a readable directory.
+
+After this commit, every package with implementation code has a `_test.mbt` file. The `watch` package is the only remaining untested package — it wraps a C `inotify`/`kqueue` watcher via native FFI and has no pure-MoonBit logic to unit test.

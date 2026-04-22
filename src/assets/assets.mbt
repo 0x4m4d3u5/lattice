@@ -5,18 +5,18 @@
 /// - Missing source directory is not an error.
 /// - Copy preserves binary bytes and relative paths.
 /// - All failures are typed (no panics).
-pub enum AssetCopyError {
+pub(all) enum AssetCopyError {
   SourceReadError(String, String)
   SourceNotDirectory(String)
   DestCreateError(String, String)
   FileReadError(String, String)
   FileWriteError(String, String)
-}
+} derive(Eq, Show)
 
 ///|
 pub struct AssetValidation {
   errors : Array[AssetCopyError]
-}
+} derive(Eq, Show)
 
 ///|
 fn ensure_dir(path : String) -> Result[Unit, AssetCopyError] {
