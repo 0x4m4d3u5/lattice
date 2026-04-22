@@ -2280,10 +2280,10 @@ The third win is the separation between the build engine and I/O. Commit `09070c
 | Tests | 795 passing |
 | Compiler warnings | 0 |
 | External dependencies | 2 (`moonbitlang/x` 0.4.40, `TheWaWaR/clap` 0.2.6) |
-| Commits | 242 |
+| Commits | 243 |
 | Development span | March 8 – April 22, 2026 (46 days) |
 | Example site build time | 57ms (10 pages, 3 collections, 3 redirects) |
-| Retrospective length | ~2,350 lines |
+| Retrospective length | ~2,380 lines |
 
 **Largest packages by LOC** (non-test): builder (11,885), template (3,565), markdown (3,183), schema (2,734), highlight (2,218), collections (1,865), scaffold (1,826), frontmatter (1,114), html (1,239), data (1,357). The builder package is large because it orchestrates the full pipeline — content loading, schema validation, wikilink resolution, template rendering, pagination, feed generation, sitemap, robots.txt, search indexing, graph emission, asset copying, and cache management. Splitting it further would introduce coupling between stages that the current single-file orchestration avoids.
 
@@ -2296,6 +2296,18 @@ The gap was invisible in the aggregate test count because `moon test` reports "0
 The fix (commit `test(vault): 33 tests for all 8 public functions`) adds `vault_test.mbt` with 33 tests covering: `None` returns when no vault fields are present; field extraction for all six `VaultMetadata` fields including `FDate`-typed `created`; active/archived status recognition across case variants; type normalization for all seven canonical categories plus unknown types; CSS class generation including hyphenation and character filtering; HTML badge rendering; index exclusion for private/inbox/wip types; and display label pluralization. The fix also adds `derive(Eq, Show)` to `VaultMetadata` — required for `assert_eq` comparison in tests, and a property the struct should have had from the start given it's a value type.
 
 The honest audit lesson: any package without a `_test.mbt` file has zero verified behavior regardless of how simple its logic appears. Pure utility packages are the easiest to test and the easiest to skip. The pattern for catching this in future projects is a post-build lint step that lists packages with `Warning: no test entry found` — the compiler already emits this; it just needs to be treated as a failure rather than a warning.
+
+## Graph Package: Visibility Footgun Blocks External Test Construction
+
+The `graph` package had 74 lines of implementation and zero tests. It provides one function: `render_graph_json`, which serializes the site-wide bidirectional link graph as a JSON object with `nodes` and `edges` arrays. The output feeds graph visualization tools (D3, Cytoscape) and is emitted as `graph.json` on every build. Despite being a pure function with no I/O, no test coverage existed for any of its rendering paths.
+
+The gap exposed a visibility footgun that is distinct from the simple "forgot to write tests" failure mode in vault. The `graph` package's input type references `@wikilink.ResolvedWikilink` — a struct defined in the `wikilink` package. To construct `GraphPage` values in tests, the test file needs to construct `ResolvedWikilink` and its inner `RawWikilink` directly. But these structs were declared `pub struct` rather than `pub(all) struct` — MoonBit's distinction between public *type* (pattern matching allowed) and public *fields* (construction and field access allowed). External tests that tried to write `ResolvedWikilink { raw: RawWikilink { target: "other-post", ... } }` would fail with a compiler error: fields are not accessible from outside the package.
+
+The fix (commit `test(graph): 5 tests for render_graph_json + pub(all) wikilink structs`) promotes `RawWikilink`, `ResolvedWikilink`, and `ResolutionError` from `pub struct` to `pub(all) struct`. These are pure data carriers — value types whose purpose is to be created, passed, and inspected by callers. There are no encapsulation invariants to protect. The `pub`-without-`pub(all)` restriction was a default that happened to be wrong for this type of struct, not a deliberate encapsulation boundary. Making the fields private prevented construction without preventing the types from being pattern-matched — a half-open door that serves nobody.
+
+The 5 tests in `graph_test.mbt` cover: an empty page array produces a structurally valid JSON envelope (with empty `nodes` and `edges` arrays, not a null or empty string); a single page node appears in `nodes` with the correct slug/title/url fields; outgoing wikilinks generate corresponding entries in `edges` with the correct source/target slugs; title strings containing double quotes are correctly escaped via `@strutil.write_json_string` (a title like `Hello "World"` must produce `"Hello \"World\""` in the JSON output); and multiple pages produce correctly comma-separated entries in both arrays.
+
+The double-quote escaping test is worth highlighting. `render_graph_json` calls `@strutil.write_json_string` for all string values, which handles the full JSON string escape sequence for `"`, `\`, and control characters. Before the `@strutil` migration, the graph package had its own local `write_json_string_graph` function — the same risk as every other local utility copy. The migration moved that risk to a single tested location. The graph test for title escaping is a regression test for the escape path specifically, ensuring that if `write_json_string` ever regresses on double quotes, the failure surfaces at the package level rather than in a deployed `graph.json` that silently breaks JSON consumers.
 
 ## Assets Package: Last Zero-Coverage Gap Closed
 
