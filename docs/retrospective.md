@@ -2235,10 +2235,10 @@ The gap was caught by code audit, not by test failure. This is the honest tradeo
 | | `init` | Scaffold a new lattice project. |
 | | `new` | Create a new content file in a collection (with schema-aware defaults). |
 | | `stats` | Show collection sizes, word counts, schema types, tag counts. |
-| | `explain` | Typed error code reference. `lattice explain E4001` → human-readable description with fix hints. |
+| | `explain` | Typed error code reference. `lattice explain E001` → human-readable description with fix hints. |
 | | `scaffold` | Generate project scaffolding with example content, templates, and config. |
 | **Dev Experience** | Incremental builds | Content manifest + hash cache. Unchanged pages skipped on rebuild. Example site: 57ms full build. |
-| | Diagnostic system | Typed error codes (E3xxx–E9xxx) with per-code hints. Build summary shows per-category violation counts. |
+| | Diagnostic system | Typed error codes (E001–E011) with per-code hints. Build summary shows per-category violation counts. |
 | | Wikilink validation | Broken `[[links]]` are build-time errors, not runtime 404s. |
 
 ### Architecture Wins
@@ -2271,18 +2271,28 @@ The third win is the separation between the build engine and I/O. Commit `09070c
 
 | Metric | Value |
 |--------|-------|
-| Total source LOC | 41,899 |
+| Total source LOC | 42,163 |
 | Implementation LOC (non-test) | 24,970 |
-| Test LOC | 16,929 |
-| Source files | 35 |
-| Test files | 29 (black-box) + 1 (white-box) |
+| Test LOC | 17,193 |
+| Source files | 36 |
+| Test files | 30 (black-box) + 1 (white-box) |
 | Packages | 31 |
-| Tests | 726 passing |
+| Tests | 759 passing |
 | Compiler warnings | 0 |
 | External dependencies | 2 (`moonbitlang/x` 0.4.40, `TheWaWaR/clap` 0.2.6) |
-| Commits | 238 |
+| Commits | 239 |
 | Development span | March 8 – April 21, 2026 (45 days) |
 | Example site build time | 57ms (10 pages, 3 collections, 3 redirects) |
 | Retrospective length | ~2,300 lines |
 
 **Largest packages by LOC** (non-test): builder (11,885), template (3,565), markdown (3,183), schema (2,734), highlight (2,218), collections (1,865), scaffold (1,826), frontmatter (1,114), html (1,239), data (1,357). The builder package is large because it orchestrates the full pipeline — content loading, schema validation, wikilink resolution, template rendering, pagination, feed generation, sitemap, robots.txt, search indexing, graph emission, asset copying, and cache management. Splitting it further would introduce coupling between stages that the current single-file orchestration avoids.
+
+## Vault Package: Zero-Coverage Gap Closed at Deadline
+
+The `vault` package shipped with 297 lines of implementation and zero tests. The package provides PARA-method note organization utilities for Obsidian-style vaults: `extract_vault_metadata`, `is_active_project`, `is_archived`, `categorize_note`, `category_class`, `render_metadata_badge`, `should_exclude_from_index`, and `category_label`. These are pure functions — no I/O, no external state — but none had test coverage.
+
+The gap was invisible in the aggregate test count because `moon test` reports "0 tests" for a package with no test file rather than failing. There was no mechanism to detect this until a per-package audit caught it.
+
+The fix (commit `test(vault): 33 tests for all 8 public functions`) adds `vault_test.mbt` with 33 tests covering: `None` returns when no vault fields are present; field extraction for all six `VaultMetadata` fields including `FDate`-typed `created`; active/archived status recognition across case variants; type normalization for all seven canonical categories plus unknown types; CSS class generation including hyphenation and character filtering; HTML badge rendering; index exclusion for private/inbox/wip types; and display label pluralization. The fix also adds `derive(Eq, Show)` to `VaultMetadata` — required for `assert_eq` comparison in tests, and a property the struct should have had from the start given it's a value type.
+
+The honest audit lesson: any package without a `_test.mbt` file has zero verified behavior regardless of how simple its logic appears. Pure utility packages are the easiest to test and the easiest to skip. The pattern for catching this in future projects is a post-build lint step that lists packages with `Warning: no test entry found` — the compiler already emits this; it just needs to be treated as a failure rather than a warning.

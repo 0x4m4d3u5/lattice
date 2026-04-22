@@ -15,7 +15,7 @@ pub(all) struct VaultMetadata {
   goal : String?
   source : String?
   created : String?
-}
+} derive(Eq, Show)
 
 ///|
 /// Extract vault-specific metadata from parsed frontmatter.
