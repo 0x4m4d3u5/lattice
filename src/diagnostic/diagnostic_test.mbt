@@ -180,3 +180,79 @@ test "diagnostic summarize without code or path" {
   // No file grouping when path is None
   assert_eq(summary.by_file.length(), 0)
 }
+
+///|
+test "count_errors returns zero for empty array" {
+  assert_eq(count_errors([]), 0)
+}
+
+///|
+test "count_errors ignores warnings" {
+  let items : Array[Diagnostic] = [
+    { severity: Warning, code: None, path: None, line: None, column: None, message: "w", note: None },
+    { severity: Warning, code: None, path: None, line: None, column: None, message: "w2", note: None },
+  ]
+  assert_eq(count_errors(items), 0)
+}
+
+///|
+test "count_errors counts only errors in mixed array" {
+  let items : Array[Diagnostic] = [
+    { severity: Error, code: Some("E001"), path: None, line: None, column: None, message: "e1", note: None },
+    { severity: Warning, code: None, path: None, line: None, column: None, message: "w", note: None },
+    { severity: Error, code: Some("E004"), path: None, line: None, column: None, message: "e2", note: None },
+  ]
+  assert_eq(count_errors(items), 2)
+}
+
+///|
+test "of_lint_violation assigns correct E-code for BrokenWikilink" {
+  let v : @lint.LintViolation = {
+    path: "content/posts/hello.md",
+    line: Some(5),
+    column: None,
+    kind: @lint.BrokenWikilink,
+    message: "broken wikilink: [[missing]]",
+  }
+  let d = of_lint_violation(v)
+  assert_eq(d.severity, Error)
+  assert_eq(d.code, Some("E004"))
+  assert_eq(d.path, Some("content/posts/hello.md"))
+  assert_eq(d.line, Some(5))
+  assert_eq(d.message, "broken wikilink: [[missing]]")
+  // BrokenWikilink has a hint
+  assert_true(!(d.note is None))
+}
+
+///|
+test "of_lint_violation assigns correct E-code for DuplicateSlug" {
+  let v : @lint.LintViolation = {
+    path: "content/posts/dup.md",
+    line: None,
+    column: None,
+    kind: @lint.DuplicateSlug,
+    message: "duplicate slug: 'hello'",
+  }
+  let d = of_lint_violation(v)
+  assert_eq(d.severity, Error)
+  assert_eq(d.code, Some("E010"))
+  assert_eq(d.path, Some("content/posts/dup.md"))
+}
+
+///|
+test "of_lint_violation is always Error severity" {
+  // All lint violations are errors, never warnings — verify this invariant
+  // for a representative sample of violation types
+  let kinds : Array[@lint.ViolationType] = [
+    @lint.MissingRequiredFrontmatter,
+    @lint.SchemaError,
+    @lint.FrontmatterError,
+    @lint.BrokenWikilink,
+    @lint.TemplateSlotError,
+    @lint.IOError,
+  ]
+  for kind in kinds {
+    let v : @lint.LintViolation = { path: "x.md", line: None, column: None, kind, message: "msg" }
+    assert_eq(of_lint_violation(v).severity, Error)
+  }
+}

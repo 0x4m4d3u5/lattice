@@ -2277,7 +2277,7 @@ The third win is the separation between the build engine and I/O. Commit `09070c
 | Source files | 35 |
 | Test files | 32 (black-box) + 1 (white-box) |
 | Packages | 31 |
-| Tests | 795 passing |
+| Tests | 801 passing |
 | Compiler warnings | 0 |
 | External dependencies | 2 (`moonbitlang/x` 0.4.40, `TheWaWaR/clap` 0.2.6) |
 | Commits | 243 |
@@ -2350,3 +2350,22 @@ The targets-key omission test documents a deliberate render optimization: when `
 The parse error tests for both `cache` and `manifest` verify that malformed inputs raise errors rather than producing silently wrong structures. This is the defensive contract: `parse("not json")` must not succeed with version=0 and an empty entry list — it must fail with a diagnostic. Without these tests, a change to the parser that accidentally accepted malformed input would go undetected.
 
 After this commit, every package with implementation code has a `_test.mbt` file. The `watch` package is the only remaining untested package — it wraps a C `inotify`/`kqueue` watcher via native FFI and has no pure-MoonBit logic to unit test.
+
+## Diagnostic Package: Severity Eq + of_lint_violation Coverage
+
+The prior test audit confirmed that all packages had `_test.mbt` files, but `diagnostic_test.mbt` had a narrower gap: two public functions — `count_errors` and `of_lint_violation` — had zero direct tests despite being load-bearing in the build command's output pipeline.
+
+`of_lint_violation` is the bridge between the internal lint engine and the user-facing terminal output. It maps every `ViolationType` variant to an E-code string (`E001`–`E011`) and attaches the appropriate hint text. If this mapping were wrong — a typo in the match arm, a missing case after adding a new violation type, a hint attached to the wrong violation — the user would see incorrect E-codes in the build diagnostic stream. The error would still display, but `lattice explain E004` would give the wrong documentation. No existing test verified this mapping directly.
+
+The fix (commit `test(diagnostic): count_errors and of_lint_violation coverage — engineering quality rubric`) adds 6 targeted tests:
+
+- `count_errors` returns 0 for an empty array (base case).
+- `count_errors` ignores warnings (warnings do not count as errors — a critical invariant for the build exit-code logic that uses this function to decide whether to exit non-zero).
+- `count_errors` counts only errors in a mixed array (positive case, verifies Warning items are skipped).
+- `of_lint_violation` assigns `E004` to `BrokenWikilink` with the correct path, line, message, and a non-None hint (verifies the mapping, field threading, and that the hint system fires for this code).
+- `of_lint_violation` assigns `E010` to `DuplicateSlug` (a second mapping verification for a different code).
+- `of_lint_violation` is always `Error` severity across six representative `ViolationType` variants — verifying the invariant that lint violations never produce `Warning` diagnostics. This matters because a regression that accidentally produced a `Warning` severity diagnostic would cause `count_errors` to return 0 for that violation, the build to exit with success despite content errors, and CI pipelines to pass builds that should fail.
+
+The `of_lint_violation` severity-invariant test required adding `derive(Eq, Show)` to the `Severity` enum. Like the earlier `derive(Eq, Show)` additions to `VaultMetadata` and `AssetCopyError`, this is a property the enum should have had from the start — it's a value type used in comparisons throughout the diagnostic pipeline. The `assert_eq` call in tests surfaces the missing derive cleanly rather than silently accepting a less precise assertion.
+
+The `count_errors` invariant is worth documenting explicitly: the build command exits with code 1 if `count_errors(diagnostics) > 0`. A regression where warnings were miscounted as errors would cause builds with only warnings to fail CI. A regression where errors were undercounted (the other direction) would cause builds with errors to pass CI. Neither would produce a visible runtime crash — they'd produce silent wrong behavior in the pipeline. Testing the filtering logic directly is the only way to verify this boundary holds after future changes to `Diagnostic` or `Severity`.

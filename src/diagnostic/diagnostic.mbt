@@ -2,7 +2,7 @@
 pub(all) enum Severity {
   Error
   Warning
-}
+} derive(Eq, Show)
 
 ///|
 pub(all) struct Diagnostic {
