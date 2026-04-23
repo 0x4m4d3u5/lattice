@@ -2271,19 +2271,19 @@ The third win is the separation between the build engine and I/O. Commit `09070c
 
 | Metric | Value |
 |--------|-------|
-| Total source LOC | 42,445 |
+| Total source LOC | 43,166 |
 | Implementation LOC (non-test) | 25,145 |
-| Test LOC | 17,300 |
+| Test LOC | 18,021 |
 | Source files | 35 |
 | Test files | 32 (black-box) + 1 (white-box) |
 | Packages | 31 |
-| Tests | 801 passing |
+| Tests | 864 passing |
 | Compiler warnings | 0 |
 | External dependencies | 2 (`moonbitlang/x` 0.4.40, `TheWaWaR/clap` 0.2.6) |
-| Commits | 243 |
-| Development span | March 8 – April 22, 2026 (46 days) |
+| Commits | 246 |
+| Development span | March 8 – April 23, 2026 (47 days) |
 | Example site build time | 57ms (10 pages, 3 collections, 3 redirects) |
-| Retrospective length | ~2,380 lines |
+| Retrospective length | ~2,400 lines |
 
 **Largest packages by LOC** (non-test): builder (11,885), template (3,565), markdown (3,183), schema (2,734), highlight (2,218), collections (1,865), scaffold (1,826), frontmatter (1,114), html (1,239), data (1,357). The builder package is large because it orchestrates the full pipeline — content loading, schema validation, wikilink resolution, template rendering, pagination, feed generation, sitemap, robots.txt, search indexing, graph emission, asset copying, and cache management. Splitting it further would introduce coupling between stages that the current single-file orchestration avoids.
 
@@ -2367,5 +2367,38 @@ The fix (commit `test(diagnostic): count_errors and of_lint_violation coverage �
 - `of_lint_violation` is always `Error` severity across six representative `ViolationType` variants — verifying the invariant that lint violations never produce `Warning` diagnostics. This matters because a regression that accidentally produced a `Warning` severity diagnostic would cause `count_errors` to return 0 for that violation, the build to exit with success despite content errors, and CI pipelines to pass builds that should fail.
 
 The `of_lint_violation` severity-invariant test required adding `derive(Eq, Show)` to the `Severity` enum. Like the earlier `derive(Eq, Show)` additions to `VaultMetadata` and `AssetCopyError`, this is a property the enum should have had from the start — it's a value type used in comparisons throughout the diagnostic pipeline. The `assert_eq` call in tests surfaces the missing derive cleanly rather than silently accepting a less precise assertion.
+
+## Strutil Package: Cross-Cutting Utility Coverage
+
+The `strutil` package is lattice's lowest-level utility layer — every other package that produces HTML, JSON, or URL strings depends on it. It provides: HTML escaping (`escape_html_body`, `escape_html_attr`), HTML stripping (`strip_html_tags`), JSON string serialization (`write_json_escaped`, `write_json_string`), URL assembly (`normalize_base_url`, `absolute_url`, `join_path`), word counting (`count_words_text`), date validation (`is_valid_iso8601_date`, `is_leap_year`, `days_in_month`), numeric parsing (`parse_int`, `parse_positive_int`, `parse_float`), quoted string parsing (`parse_quoted`), and line operations (`split_lines`, `join_lines`).
+
+Despite being the foundation of every output emitter, `strutil` had no test coverage. The 35 tests added in commit `test(strutil): 35 tests for escape, parse, url, date, json utilities` cover the full surface. Three tests are worth documenting explicitly.
+
+**`escape_html_body` vs `escape_html_attr` — a meaningful split.** `escape_html_body` encodes `&`, `<`, and `>` but not `"`. `escape_html_attr` encodes all four. The split is correct: double-quotes are legal unescaped in HTML text content but must be encoded inside attribute values. If the two functions were merged into one over-aggressive implementation, attribute values containing double-quotes would produce structurally valid but semantically wrong HTML — `href="say "hi" there"` parses as `href="say "` followed by garbage attributes. The tests for both functions pin the boundary: `escape_html_body("say \"hi\"")` returns the string unchanged, while `escape_html_attr("say \"hi\"")` returns `"say &quot;hi&quot;"`. This is a behavior contract, not a unit test — the goal is to catch a future refactor that collapses the two paths.
+
+**`is_valid_iso8601_date` and the century leap year exception.** The date validation chain tests `2024-02-29` (valid — 2024 is a leap year) and `2023-02-29` (invalid). But the more important pair is `assert_true(!is_leap_year(1900))` and `assert_true(is_leap_year(2000))`. 1900 is divisible by 4 and by 100, but not by 400 — so it is not a leap year. 2000 is divisible by 400 — so it is. A naive implementation that checks only divisibility by 4 gets 1900 wrong. The test exists because this exact mistake is common, not because anyone at lattice is confused about the Gregorian calendar.
+
+**`parse_quoted` error paths.** `parse_quoted` is used by the frontmatter and config parsers to read quoted string values. The tests verify that unterminated strings and non-quote-starting input both return `Err` rather than panicking or producing a zero-value string. This is the defensive contract at a parsing boundary: malformed input should produce a clean error that propagates as a `ParseError`, not silent garbage that reaches the template renderer.
+
+## Slug and Wikilink: slug_to_url and Extraction Edge Cases
+
+The `slug` package had partial coverage from the transliteration tests added at commit `ef773f6`, but `slug_to_url` — the function that wraps a slug in leading and trailing slashes to produce the canonical URL path — had zero direct tests. Every internal link in the site goes through this function: it is called when building page URLs, when resolving wikilink targets, and when generating pagination URLs. A regression would break site-wide URL generation silently — no build-time error, just wrong `href` values in every anchor tag.
+
+The new tests (commit `test(slug,wikilink): slug_to_url + wikilink edge cases`) cover the expected behavior and the edge cases worth documenting:
+
+- `slug_to_url("hello-world")` → `"/hello-world/"` (canonical case)
+- `slug_to_url("")` → `"//"` (the function wraps unconditionally; an empty slug is a caller bug, not a function bug, but documenting the output prevents surprises)
+- `slug_to_url("nested/path")` → `"/nested/path/"` (`slug_to_url` is a wrapper, not a normalizer — it does not deduplicate internal slashes)
+
+The wikilink tests add extraction and resolution cases missing from prior coverage:
+
+- An unclosed `[[` at end of content returns zero links without panicking. Content files are author-controlled; the extractor must be robust to any malformed input.
+- Multiple wikilinks on a single line are extracted in document order.
+- A code fence suppresses extraction inside and resumes outside — verified from the post-fence angle (the prior test verified that fenced links are excluded; the new test verifies that non-fenced links after the fence are included).
+- `resolve` with an empty links array returns empty results (base case — confirms the function doesn't crash on zero input).
+- `resolve` with an empty index maps all links to errors — the all-broken case, useful for detecting regressions in how errors accumulate.
+- Error messages contain the missing target name, making the diagnostic actionable.
+
+The `lookup_key` test is the most architecturally significant. It verifies that wikilink resolution uses the same normalization as slug generation: `lookup_key("My Post")` → `"my-post"`. This equality is load-bearing. The page index is built by slugifying filenames, so `My Post.md` produces the index key `"my-post"`. For `[[My Post]]` to resolve, `lookup_key` must produce the same key from the display-form target. If the normalization ever diverges — different separator, different case folding, different punctuation handling — links that should resolve start silently failing with `BrokenWikilink` errors. The test is a contract between the slug and wikilink packages: as long as this assertion holds, an author who names a file `My Post.md` and links to it with `[[My Post]]` gets a working link.
 
 The `count_errors` invariant is worth documenting explicitly: the build command exits with code 1 if `count_errors(diagnostics) > 0`. A regression where warnings were miscounted as errors would cause builds with only warnings to fail CI. A regression where errors were undercounted (the other direction) would cause builds with errors to pass CI. Neither would produce a visible runtime crash — they'd produce silent wrong behavior in the pipeline. Testing the filtering logic directly is the only way to verify this boundary holds after future changes to `Diagnostic` or `Severity`.
