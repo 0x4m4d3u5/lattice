@@ -102,3 +102,165 @@ test "data unknown dir" {
     Err(_) => assert_true(false)
   }
 }
+
+// ── format_error ─────────────────────────────────────────────────────────────
+
+///|
+test "format_error FileNotFound" {
+  assert_eq(
+    format_error(FileNotFound("/data")),
+    "data directory not found: /data",
+  )
+}
+
+///|
+test "format_error ParseError" {
+  assert_eq(
+    format_error(ParseError("/data/nav.toml", 3, "expected key=value")),
+    "/data/nav.toml:3: expected key=value",
+  )
+}
+
+///|
+test "format_error ValidationError with key" {
+  assert_eq(
+    format_error(ValidationError("nav", "links", "required key missing")),
+    "data.nav.links: required key missing",
+  )
+}
+
+///|
+test "format_error ValidationError empty key" {
+  assert_eq(
+    format_error(ValidationError("nav", "", "data file not found")),
+    "data.nav: data file not found",
+  )
+}
+
+///|
+test "format_error IOError" {
+  assert_eq(
+    format_error(IOError("/data/nav.toml", "permission denied")),
+    "data I/O error /data/nav.toml: permission denied",
+  )
+}
+
+// ── value_to_string ───────────────────────────────────────────────────────────
+
+///|
+test "value_to_string FInt" {
+  assert_eq(value_to_string(@frontmatter.FInt(42)), "42")
+}
+
+///|
+test "value_to_string FBool true" {
+  assert_eq(value_to_string(@frontmatter.FBool(true)), "true")
+}
+
+///|
+test "value_to_string FBool false" {
+  assert_eq(value_to_string(@frontmatter.FBool(false)), "false")
+}
+
+///|
+test "value_to_string FArray" {
+  assert_eq(
+    value_to_string(
+      @frontmatter.FArray(
+        [@frontmatter.FStr("a"), @frontmatter.FStr("b"), @frontmatter.FStr("c")],
+      ),
+    ),
+    "a, b, c",
+  )
+}
+
+///|
+test "value_to_string FMap renders placeholder" {
+  let map : Map[String, @frontmatter.FrontmatterValue] = Map::new()
+  map.set("key", @frontmatter.FStr("val"))
+  assert_eq(value_to_string(@frontmatter.FMap(map)), "[object]")
+}
+
+// ── empty_store + get_file ────────────────────────────────────────────────────
+
+///|
+test "empty_store has no files" {
+  let store = empty_store()
+  assert_true(get_file(store, "nav") is None)
+}
+
+///|
+test "get_file returns Some for existing file" {
+  let store = new_store([new_string_file("nav", [("title", "Lattice")])])
+  assert_true(get_file(store, "nav") is Some(_))
+  assert_true(get_file(store, "missing") is None)
+}
+
+// ── resolve error paths ───────────────────────────────────────────────────────
+
+///|
+test "resolve returns error for missing file" {
+  let store = empty_store()
+  match resolve(store, "nav", ["title"]) {
+    Err(ValidationError(file, key, msg)) => {
+      assert_eq(file, "nav")
+      assert_eq(key, "")
+      assert_eq(msg, "data file not found")
+    }
+    _ => assert_true(false)
+  }
+}
+
+///|
+test "resolve returns error for missing key" {
+  let store = new_store([new_string_file("nav", [("title", "Lattice")])])
+  match resolve(store, "nav", ["missing"]) {
+    Err(ValidationError(file, key, msg)) => {
+      assert_eq(file, "nav")
+      assert_eq(key, "missing")
+      assert_eq(msg, "key not found")
+    }
+    _ => assert_true(false)
+  }
+}
+
+// ── non-string data types via load_from_dir ───────────────────────────────────
+
+///|
+test "data boolean and integer values parse correctly" {
+  let root = "./_tmp_data_types"
+  reset_dir(root)
+  assert_true(
+    write_file_test(root + "/cfg.toml", "active = true\ncount = 7\n"),
+  )
+  let schemas : Map[String, DataSchema] = Map::new()
+  match load_from_dir(root, schemas) {
+    Ok(store) => {
+      match resolve_string(store, "cfg", ["active"]) {
+        Ok(v) => assert_eq(v, "true")
+        Err(_) => assert_true(false)
+      }
+      match resolve_string(store, "cfg", ["count"]) {
+        Ok(v) => assert_eq(v, "7")
+        Err(_) => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "data parse error on malformed assignment" {
+  let root = "./_tmp_data_parse_err"
+  reset_dir(root)
+  assert_true(write_file_test(root + "/bad.toml", "= missing key\n"))
+  let schemas : Map[String, DataSchema] = Map::new()
+  match load_from_dir(root, schemas) {
+    Ok(_) => assert_true(false)
+    Err(ParseError(path, line, _)) => {
+      assert_true(path.contains("bad.toml"))
+      assert_eq(line, 1)
+    }
+    Err(_) => assert_true(false)
+  }
+}

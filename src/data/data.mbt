@@ -27,12 +27,12 @@ pub struct DataStore {
 }
 
 ///|
-pub enum DataError {
+pub(all) enum DataError {
   FileNotFound(String) // data directory path
   ParseError(String, Int, String) // file path, line, message
   ValidationError(String, String, String) // file name, key, message
   IOError(String, String) // path, message
-}
+} derive(Eq, Show)
 
 ///|
 fn starts_with_data(s : String, prefix : String) -> Bool {
