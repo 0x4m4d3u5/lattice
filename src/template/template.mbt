@@ -1143,34 +1143,23 @@ fn render_parts(
 
 ///|
 /// Render a parsed template by substituting non-data slots.
+///
+/// Thin wrapper around `render_template_with_data` — passes `None` for the
+/// data store and an empty map for page field arrays. Eliminates the
+/// duplicated layout-rendering logic that previously existed between this
+/// function and `render_template_with_data`.
 pub fn render_template(
   template : Template,
   slots : Map[TemplateSlot, String],
   page_fields : Map[String, String],
 ) -> Result[String, TemplateError] {
-  let page_field_arrays = Map::new()
-  // If template has a layout, render child first, then render layout with body
-  match template.layout {
-    Some(layout) => {
-      // Render the child template
-      let child_output = match
-        render_parts(template, slots, None, page_fields, page_field_arrays) {
-        Ok(output) => output
-        Err(e) => return Err(e)
-      }
-
-      // Add body to slots for layout
-      let layout_slots = Map::new()
-      for key, value in slots {
-        layout_slots.set(key, value)
-      }
-      layout_slots.set(Body, child_output)
-
-      // Render layout with all slots including body
-      render_parts(layout, layout_slots, None, page_fields, page_field_arrays)
-    }
-    None => render_parts(template, slots, None, page_fields, page_field_arrays)
-  }
+  render_template_with_data(
+    template,
+    slots,
+    @data.empty_store(),
+    page_fields,
+    Map::new(),
+  )
 }
 
 ///|
