@@ -2271,19 +2271,19 @@ The third win is the separation between the build engine and I/O. Commit `09070c
 
 | Metric | Value |
 |--------|-------|
-| Total source LOC | 43,166 |
+| Total source LOC | 43,574 |
 | Implementation LOC (non-test) | 25,145 |
-| Test LOC | 18,021 |
+| Test LOC | 18,429 |
 | Source files | 35 |
 | Test files | 32 (black-box) + 1 (white-box) |
 | Packages | 31 |
-| Tests | 864 passing |
+| Tests | 897 passing |
 | Compiler warnings | 0 |
 | External dependencies | 2 (`moonbitlang/x` 0.4.40, `TheWaWaR/clap` 0.2.6) |
-| Commits | 246 |
-| Development span | March 8 – April 23, 2026 (47 days) |
+| Commits | 249 |
+| Development span | March 8 – April 24, 2026 (47 days) |
 | Example site build time | 57ms (10 pages, 3 collections, 3 redirects) |
-| Retrospective length | ~2,400 lines |
+| Retrospective length | ~2,430 lines |
 
 **Largest packages by LOC** (non-test): builder (11,885), template (3,565), markdown (3,183), schema (2,734), highlight (2,218), collections (1,865), scaffold (1,826), frontmatter (1,114), html (1,239), data (1,357). The builder package is large because it orchestrates the full pipeline — content loading, schema validation, wikilink resolution, template rendering, pagination, feed generation, sitemap, robots.txt, search indexing, graph emission, asset copying, and cache management. Splitting it further would introduce coupling between stages that the current single-file orchestration avoids.
 
@@ -2414,3 +2414,17 @@ The fix (commit `test(data): format_error, value_to_string, resolve errors, Pars
 **`format_error` was entirely untested despite four distinct formatting paths.** The function formats `FileNotFound`, `ParseError`, `ValidationError`, and `IOError` into human-readable strings. `ValidationError` has two code paths: when the key field is non-empty, the output is `"data.{file}.{key}: {msg}"`; when key is empty (the "data file not found" case from `resolve`), it omits the key segment and produces `"data.{file}: {msg}"`. Without tests, either formatting branch could regress silently. The test for the empty-key branch is particularly important because it verifies an internal convention: `resolve` signals "file not found" through a `ValidationError` with an empty key field, not through a dedicated `FileNotFound` variant. That convention is implicit in the code — the test makes it explicit and regression-proof.
 
 **`value_to_string` for non-string types is the template rendering contract.** Templates access data files via `{{data.file.key}}`, which ultimately calls `value_to_string` on whatever `FrontmatterValue` the field holds. The function handles six variants: `FStr`, `FDate`, `FInt`, `FFloat`, `FBool`, and `FArray`. The `FMap` case returns the placeholder string `"[object]"` — a deliberate choice (nested maps in templates are navigated by path, not serialized as values). Without tests, a refactor that collapsed `FInt` to forward through `FStr` conversion, or changed `FBool(false)` to render as an empty string, would silently produce wrong template output. The five added tests (`FInt`, `FBool(true)`, `FBool(false)`, `FArray`, `FMap`) pin the contract at each variant, so any regression surfaces as a test failure rather than incorrect rendered content.
+
+## Config Package: Error Paths and Top-Level Field Coverage
+
+The `config` package had 17 tests covering inline collection parsing, `[[data]]` block parsing, and a handful of error variants. Left untested were the two `MissingRequiredField` paths (`title` and `base_url`), the `InvalidLine` path (a config line without an `=` character), `InvalidValue` paths for empty required strings and invalid bool/int values, and the top-level field set: `output_dir`, `description`, `og_image`, `templates_dir`, `static_dir`, `data_dir`, `tags_field`, `search_index_file`, `content_index_file`, `page_size`, `feed_limit`, `robots_txt`, `archive_pages`, and `site_feed_enabled`.
+
+The 17 new tests bring the package to 34. Four gaps are worth documenting explicitly.
+
+**`MissingRequiredField` is the parser's exit contract.** The `parse()` function returns `Ok(SiteConfig)` only when both `title` and `base_url` are present. Every other field is optional. `MissingRequiredField("title")` and `MissingRequiredField("base_url")` are the terminal errors for a config file that omits a required key. Without tests, a refactor that accidentally swapped the field check order, renamed the error variant, or added a third required field would go undetected. The tests assert on the field name in the error payload — structural change to the error data is immediately visible.
+
+**`InvalidLine` requires a line number in the error payload.** When the parser encounters a line without an `=` character (not a comment, not a section header, not blank), it returns `InvalidLine(line_no, "expected key=value")`. The test verifies that the reported line number matches the actual position of the malformed line. This matters for the UX of config error reporting: the CLI renders `InvalidLine(n, msg)` as a diagnostic with file path and line number. If the line number were wrong — off-by-one in the parser's line counter — the user would look at the wrong line when debugging. The test pins the exact line number against the input, which makes it a regression test for the line-counting logic specifically, not just for error production.
+
+**Bool and int fields have asymmetric invalid-value behavior.** For `robots_txt`, `archive_pages`, and `site_feed_enabled`, an unrecognized value (e.g. `robots_txt = maybe`) produces `InvalidValue("robots_txt", "must be true/false, yes/no, 1/0, or on/off")`. For `page_size` and `feed_limit`, a non-positive-integer value (e.g. `feed_limit = abc`) produces `InvalidValue("feed_limit", "must be a positive integer")`. Both paths produce `InvalidValue`, but with different field names and messages. Testing them separately ensures neither path silently falls through to the "unknown key" branch — which ignores the line without error. That silent-ignore behavior is correct for genuinely unknown keys, but applying it to a known key with a bad value would mean a mistyped `robots_txt` setting is silently dropped rather than diagnosed.
+
+**Unknown keys are silently ignored by design.** The config parser accepts any `key = value` line outside a section header. Unknown keys produce no error and no warning — they are discarded. This is a deliberate forward-compatibility decision: a newer config format that introduces a key not recognized by an older binary should not break the build. The test that verifies unknown keys are ignored (`unknown_key = some_value`, `another_unknown = 42`) is a contract test for this design choice. Without it, a future change that accidentally started returning an error for unrecognized keys would break any site that uses keys from a newer lattice version, and the failure mode (parse error on startup) would be confusing because the key looks valid.

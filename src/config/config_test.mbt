@@ -307,3 +307,249 @@ test "config data_entries is empty when no [[data]] blocks present" {
     Err(_) => assert_true(false)
   }
 }
+
+///|
+test "config MissingRequiredField when title absent" {
+  let src = "base_url = https://example.test\n"
+  match parse(src) {
+    Ok(_) => assert_true(false)
+    Err(err) =>
+      match err {
+        MissingRequiredField(field) => assert_eq(field, "title")
+        _ => assert_true(false)
+      }
+  }
+}
+
+///|
+test "config MissingRequiredField when base_url absent" {
+  let src = "title = Example\n"
+  match parse(src) {
+    Ok(_) => assert_true(false)
+    Err(err) =>
+      match err {
+        MissingRequiredField(field) => assert_eq(field, "base_url")
+        _ => assert_true(false)
+      }
+  }
+}
+
+///|
+test "config InvalidValue for empty title" {
+  let src = "title = \nbase_url = https://example.test\n"
+  match parse(src) {
+    Ok(_) => assert_true(false)
+    Err(err) =>
+      match err {
+        InvalidValue(field, _) => assert_eq(field, "title")
+        _ => assert_true(false)
+      }
+  }
+}
+
+///|
+test "config InvalidValue for empty base_url" {
+  let src = "title = Example\nbase_url = \n"
+  match parse(src) {
+    Ok(_) => assert_true(false)
+    Err(err) =>
+      match err {
+        InvalidValue(field, _) => assert_eq(field, "base_url")
+        _ => assert_true(false)
+      }
+  }
+}
+
+///|
+test "config InvalidLine for line without equals sign" {
+  let src = "title = Example\nbase_url = https://example.test\nnoequals\n"
+  match parse(src) {
+    Ok(_) => assert_true(false)
+    Err(err) =>
+      match err {
+        InvalidLine(line_no, _) => assert_eq(line_no, 3)
+        _ => assert_true(false)
+      }
+  }
+}
+
+///|
+test "config parses output_dir" {
+  let src = "title = Example\nbase_url = https://example.test\noutput_dir = dist\n"
+  match parse(src) {
+    Ok(cfg) => assert_eq(cfg.output_dir, Some("dist"))
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "config parses description and og_image" {
+  let src =
+    "title = Example\n" +
+    "base_url = https://example.test\n" +
+    "description = A test site\n" +
+    "og_image = https://example.test/card.png\n"
+  match parse(src) {
+    Ok(cfg) => {
+      assert_eq(cfg.description, Some("A test site"))
+      assert_eq(cfg.og_image, Some("https://example.test/card.png"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "config parses templates_dir and static_dir" {
+  let src =
+    "title = Example\n" +
+    "base_url = https://example.test\n" +
+    "templates_dir = templates\n" +
+    "static_dir = public\n"
+  match parse(src) {
+    Ok(cfg) => {
+      assert_eq(cfg.templates_dir, Some("templates"))
+      assert_eq(cfg.static_dir, Some("public"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "config parses page_size and feed_limit" {
+  let src =
+    "title = Example\n" +
+    "base_url = https://example.test\n" +
+    "page_size = 10\n" +
+    "feed_limit = 20\n"
+  match parse(src) {
+    Ok(cfg) => {
+      assert_eq(cfg.page_size, Some(10))
+      assert_eq(cfg.feed_limit, Some(20))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "config parses robots_txt and archive_pages booleans" {
+  let src =
+    "title = Example\n" +
+    "base_url = https://example.test\n" +
+    "robots_txt = true\n" +
+    "archive_pages = false\n"
+  match parse(src) {
+    Ok(cfg) => {
+      assert_eq(cfg.robots_txt, Some(true))
+      assert_eq(cfg.archive_pages, Some(false))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "config parses site_feed_enabled boolean" {
+  let src =
+    "title = Example\n" +
+    "base_url = https://example.test\n" +
+    "site_feed_enabled = yes\n"
+  match parse(src) {
+    Ok(cfg) => assert_eq(cfg.site_feed_enabled, Some(true))
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "config InvalidValue for bad robots_txt value" {
+  let src =
+    "title = Example\n" +
+    "base_url = https://example.test\n" +
+    "robots_txt = maybe\n"
+  match parse(src) {
+    Ok(_) => assert_true(false)
+    Err(err) =>
+      match err {
+        InvalidValue(field, _) => assert_eq(field, "robots_txt")
+        _ => assert_true(false)
+      }
+  }
+}
+
+///|
+test "config InvalidValue for bad feed_limit value" {
+  let src =
+    "title = Example\n" +
+    "base_url = https://example.test\n" +
+    "feed_limit = abc\n"
+  match parse(src) {
+    Ok(_) => assert_true(false)
+    Err(err) =>
+      match err {
+        InvalidValue(field, _) => assert_eq(field, "feed_limit")
+        _ => assert_true(false)
+      }
+  }
+}
+
+///|
+test "config unknown top-level keys are ignored" {
+  let src =
+    "title = Example\n" +
+    "base_url = https://example.test\n" +
+    "unknown_key = some_value\n" +
+    "another_unknown = 42\n"
+  match parse(src) {
+    Ok(cfg) => {
+      assert_eq(cfg.title, "Example")
+      assert_eq(cfg.base_url, "https://example.test")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "config comment lines are ignored" {
+  let src =
+    "# This is a comment\n" +
+    "title = Example\n" +
+    "# Another comment\n" +
+    "base_url = https://example.test\n"
+  match parse(src) {
+    Ok(cfg) => {
+      assert_eq(cfg.title, "Example")
+      assert_eq(cfg.base_url, "https://example.test")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "config parses search_index_file and content_index_file" {
+  let src =
+    "title = Example\n" +
+    "base_url = https://example.test\n" +
+    "search_index_file = search.json\n" +
+    "content_index_file = content.json\n"
+  match parse(src) {
+    Ok(cfg) => {
+      assert_eq(cfg.search_index_file, Some("search.json"))
+      assert_eq(cfg.content_index_file, Some("content.json"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "config parses data_dir and tags_field" {
+  let src =
+    "title = Example\n" +
+    "base_url = https://example.test\n" +
+    "data_dir = _data\n" +
+    "tags_field = categories\n"
+  match parse(src) {
+    Ok(cfg) => {
+      assert_eq(cfg.data_dir, Some("_data"))
+      assert_eq(cfg.tags_field, Some("categories"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
