@@ -2481,3 +2481,21 @@ The `normalize_lastmod` function in `src/sitemap/sitemap.mbt` is the emitter-bou
 3. **Mid-length strings (neither 10 nor >=20 chars)** — `"2024-01-01T12"` is 13 characters, too long for the plain-date path and too short for the RFC 3339 path. The function returns `None`. Without a test, this structural gap was invisible.
 
 The broader lesson is the same as the RSS datetime section: when a function's contract is "accept exactly these two formats, reject everything else," tests need to cover the rejection branches as explicitly as the acceptance branches. The acceptance branches are well-motivated (they correspond to user inputs that work). The rejection branches are the defense-in-depth layer that prevents malformed strings from reaching the XML output — and they are exactly the branches most likely to be accidentally removed during refactoring, because no test immediately fails when they disappear.
+
+
+
+## Manifest Parser: Exhaustive Error-Path Coverage
+
+The manifest parser (`src/manifest/manifest.mbt`) is a hand-rolled JSON parser that reads `.lattice-manifest.json` — the incremental build cache that tracks source paths, mtimes, output paths, and wikilink targets. A corrupted or malformed manifest could cause the incremental builder to skip pages that should be rebuilt, or worse, silently use stale output. The parser's error paths are the defense layer that catches corruption before it reaches the build logic.
+
+Initial test coverage was 6 tests covering the main success paths (roundtrip, negative mtime, empty targets) and two obvious failure cases (missing `src` field, completely malformed input). This left 22 lines uncovered — all error branches in the JSON parser. The uncovered paths fell into four categories:
+
+1. **String escape handling** — the parser supports `\"`, `\\`, `\/`, `\b`, `\f`, `\n`, `\r`, `\t` and rejects `\u` (unicode) and invalid escape characters like `\x`. The escape branches are each a single line in a long if-else chain. Without per-branch tests, a refactor that removed one escape (say `\f`) would pass all existing tests because no manifest file in practice contains formfeed characters. But the parser's contract is "handle all standard JSON escapes except unicode," and the tests now verify that contract explicitly.
+
+2. **Integer parsing edge cases** — `parse_int64_manifest` has two rejection paths: source exhaustion (nothing after the colon where an integer is expected) and non-digit characters where digits are required. The second case is subtly different from "the value is a string" — `"mtime":"notanumber"` triggers the non-digit path because the parser reads a `"` and immediately rejects it as not matching `[0-9]`.
+
+3. **Structural delimiters** — the entry parser checks for commas between fields, closing braces after all required fields are seen, and source exhaustion at multiple points in the parse loop. These are the "what if the file was truncated mid-write" scenarios — exactly the corruption mode that matters for an incremental build cache.
+
+4. **Top-level field ordering** — the parser expects `"version"` then `"entries"`. Wrong field names, missing commas, or trailing content after the closing brace are all rejected with specific error messages.
+
+The result is 31 new tests achieving 100% line coverage on the manifest module. The pattern is the same one documented for sitemap `normalize_lastmod`: when a function's contract is "accept this exact shape, reject everything else," the rejection branches need explicit test coverage because they are the most fragile part of the implementation. A refactor that accidentally widens the acceptance criteria will not break any existing test that exercises the happy path — it will only be caught by a test that specifically verifies the rejection behavior.
