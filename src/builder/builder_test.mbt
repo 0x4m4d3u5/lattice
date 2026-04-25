@@ -4887,3 +4887,159 @@ test "stats returns page count, word count, and schema summary for a collection"
   assert_true(result.total_words > 0)
   assert_true(result.unique_tags >= 2)
 }
+
+///|
+test "check detects broken wikilink as BrokenWikilink violation" {
+  // Core structural thesis test: a [[nonexistent]] link must surface as
+  // a BrokenWikilink violation in check mode, not silently disappear.
+  let root = "./_tmp_builder_check_broken_wikilink"
+  let content_root = root + "/content"
+  let posts_root = content_root + "/posts"
+  let data_root = content_root + "/data"
+  let templates_root = root + "/templates"
+  let output_root = root + "/dist"
+  ensure_dir_test(root)
+  ensure_dir_test(content_root)
+  ensure_dir_test(posts_root)
+  ensure_dir_test(data_root)
+  ensure_dir_test(templates_root)
+  ensure_dir_test(output_root)
+
+  assert_true(
+    write_file_test(
+      posts_root + "/hello.md",
+      "---\n" +
+      "title: Hello\n" +
+      "date: 2026-04-01\n" +
+      "---\n\n" +
+      "See [[missing-page]] for context.\n",
+    ),
+  )
+  assert_true(
+    write_file_test(
+      templates_root + "/page.html",
+      "<html><body>{{content}}</body></html>\n",
+    ),
+  )
+  let site_cfg = "title = WikilinkCheck\n" +
+    "base_url = /\n" +
+    "templates_dir = " +
+    templates_root +
+    "\n" +
+    "output_dir = " +
+    output_root +
+    "\n" +
+    "[[collections]]\n" +
+    "name = posts\n" +
+    "dir = " +
+    posts_root +
+    "\n" +
+    "schema = title:String,date:Date\n"
+  let site = match @config.parse(site_cfg) {
+    Ok(parsed) => parsed
+    Err(_) => {
+      assert_true(false)
+      abort("site config parse failed")
+    }
+  }
+  let result = @builder.check({
+    content_dir: content_root,
+    output_dir: output_root,
+    config_path: root + "/site.cfg",
+    site,
+    collections_path: None,
+    force_rebuild: false,
+    include_drafts: false,
+  })
+  // BrokenWikilink must appear as a violation in check mode
+  let wl_violations = result.violations.filter(fn(v) {
+    v.kind == @lint.BrokenWikilink
+  })
+  assert_true(wl_violations.length() > 0)
+  assert_true(wl_violations[0].message.contains("missing-page"))
+}
+
+///|
+test "build with broken wikilink renders page as warning not error" {
+  // In build mode, unresolved wikilinks produce warnings but don't abort
+  // the page render. The structural thesis requires check mode for strict
+  // enforcement; build mode produces output for permissive workflows.
+  let root = "./_tmp_builder_build_broken_wikilink"
+  let content_root = root + "/content"
+  let posts_root = content_root + "/posts"
+  let data_root = content_root + "/data"
+  let templates_root = root + "/templates"
+  let output_root = root + "/dist"
+  ensure_dir_test(root)
+  ensure_dir_test(content_root)
+  ensure_dir_test(posts_root)
+  ensure_dir_test(data_root)
+  ensure_dir_test(templates_root)
+  ensure_dir_test(output_root)
+
+  assert_true(
+    write_file_test(
+      posts_root + "/hello.md",
+      "---\n" +
+      "title: Hello\n" +
+      "date: 2026-04-01\n" +
+      "---\n\n" +
+      "See [[missing-page]] for context.\n",
+    ),
+  )
+  assert_true(
+    write_file_test(
+      templates_root + "/page.html",
+      "<html><body>{{content}}</body></html>\n",
+    ),
+  )
+  assert_true(
+    write_file_test(
+      templates_root + "/index.html",
+      "<html><body>{{content}}</body></html>\n",
+    ),
+  )
+  let site_cfg = "title = WikilinkBuild\n" +
+    "base_url = /\n" +
+    "templates_dir = " +
+    templates_root +
+    "\n" +
+    "output_dir = " +
+    output_root +
+    "\n" +
+    "[[collections]]\n" +
+    "name = posts\n" +
+    "dir = " +
+    posts_root +
+    "\n" +
+    "schema = title:String,date:Date\n"
+  let site = match @config.parse(site_cfg) {
+    Ok(parsed) => parsed
+    Err(_) => {
+      assert_true(false)
+      abort("site config parse failed")
+    }
+  }
+  let result = @builder.build(
+    {
+      content_dir: content_root,
+      output_dir: output_root,
+      config_path: root + "/site.cfg",
+      site,
+      collections_path: None,
+      force_rebuild: true,
+      include_drafts: false,
+    },
+    @cache.empty(output_root),
+  )
+  // Build succeeds even with a broken wikilink (it renders as plain text
+  // with a warning). The hard enforcement is in check mode.
+  assert_eq(result.errors, 0)
+  // The warning about the unresolved wikilink must appear in diagnostics
+  let wl_warnings = result.diagnostics.filter(fn(d) {
+    d.message.contains("missing-page")
+  })
+  assert_true(wl_warnings.length() > 0)
+  // The page must still be produced
+  assert_true(@fs.path_exists(output_root + "/posts/hello/index.html"))
+}
