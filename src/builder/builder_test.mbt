@@ -4802,3 +4802,88 @@ test "render_redirect_page escapes special chars in URL" {
   let amp_count = parts.length() - 1
   assert_eq(amp_count, 4)
 }
+
+///|
+test "stats returns page count, word count, and schema summary for a collection" {
+  let root = "./_tmp_builder_stats"
+  let content_root = root + "/content"
+  let posts_root = content_root + "/posts"
+  let data_root = content_root + "/data"
+  let templates_root = root + "/templates"
+  let output_root = root + "/dist"
+  ensure_dir_test(root)
+  ensure_dir_test(content_root)
+  ensure_dir_test(posts_root)
+  ensure_dir_test(data_root)
+  ensure_dir_test(templates_root)
+  ensure_dir_test(output_root)
+
+  assert_true(
+    write_file_test(
+      posts_root + "/alpha.md",
+      "---\n" +
+      "title: Alpha Post\n" +
+      "date: 2026-04-01\n" +
+      "tags:\n  - moonbit\n" +
+      "---\n\n" +
+      "This post has five words.\n",
+    ),
+  )
+  assert_true(
+    write_file_test(
+      posts_root + "/beta.md",
+      "---\n" +
+      "title: Beta Post\n" +
+      "date: 2026-04-02\n" +
+      "tags:\n  - moonbit\n  - ssg\n" +
+      "---\n\n" +
+      "Beta post body text here.\n",
+    ),
+  )
+  assert_true(
+    write_file_test(
+      templates_root + "/page.html",
+      "<html><body>{{content}}</body></html>\n",
+    ),
+  )
+  let site_cfg = "title = StatsTest\n" +
+    "base_url = https://example.test\n" +
+    "templates_dir = " +
+    templates_root +
+    "\n" +
+    "output_dir = " +
+    output_root +
+    "\n" +
+    "[[collections]]\n" +
+    "name = posts\n" +
+    "dir = " +
+    posts_root +
+    "\n" +
+    "schema = title:String,date:Date,tags:Optional[Array[String]]\n"
+  let site = match @config.parse(site_cfg) {
+    Ok(parsed) => parsed
+    Err(_) => {
+      assert_true(false)
+      abort("site config parse failed")
+    }
+  }
+  let result = @builder.stats({
+    content_dir: content_root,
+    output_dir: output_root,
+    config_path: root + "/site.cfg",
+    site,
+    collections_path: None,
+    force_rebuild: false,
+    include_drafts: false,
+  })
+  assert_eq(result.errors.length(), 0)
+  assert_eq(result.collection_stats.length(), 1)
+  let cs = result.collection_stats[0]
+  assert_eq(cs.name, "posts")
+  assert_eq(cs.page_count, 2)
+  assert_true(cs.word_count > 0)
+  assert_true(cs.schema_summary.contains("title"))
+  assert_true(cs.schema_summary.contains("date"))
+  assert_true(result.total_words > 0)
+  assert_true(result.unique_tags >= 2)
+}
