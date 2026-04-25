@@ -2270,19 +2270,19 @@ The third win is the separation between the build engine and I/O. Commit `09070c
 
 | Metric | Value |
 |--------|-------|
-| Total source LOC | 43,730 |
+| Total source LOC | 44,058 |
 | Implementation LOC (non-test) | 24,962 |
-| Test LOC | 18,768 |
+| Test LOC | 19,096 |
 | Source files | 35 |
 | Test files | 32 (black-box) + 1 (white-box) |
 | Packages | 31 |
-| Tests | 908 passing |
+| Tests | 916 passing |
 | Compiler warnings | 0 |
 | External dependencies | 2 (`moonbitlang/x` 0.4.40, `TheWaWaR/clap` 0.2.6) |
-| Commits | 254 |
+| Commits | 258 |
 | Development span | March 8 – April 25, 2026 (48 days) |
 | Example site build time | 57ms (10 pages, 3 collections, 3 redirects) |
-| Retrospective length | ~2,470 lines |
+| Retrospective length | ~2,490 lines |
 
 **Largest packages by LOC** (non-test): builder (11,885), template (3,565), markdown (3,183), schema (2,734), highlight (2,218), collections (1,865), scaffold (1,826), frontmatter (1,114), html (1,239), data (1,357). The builder package is large because it orchestrates the full pipeline — content loading, schema validation, wikilink resolution, template rendering, pagination, feed generation, sitemap, robots.txt, search indexing, graph emission, asset copying, and cache management. Splitting it further would introduce coupling between stages that the current single-file orchestration avoids.
 
