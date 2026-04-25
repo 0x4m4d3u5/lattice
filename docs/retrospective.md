@@ -2236,7 +2236,6 @@ The gap was caught by code audit, not by test failure. This is the honest tradeo
 | | `new` | Create a new content file in a collection (with schema-aware defaults). |
 | | `stats` | Show collection sizes, word counts, schema types, tag counts. |
 | | `explain` | Typed error code reference. `lattice explain E001` → human-readable description with fix hints. |
-| | `scaffold` | Generate project scaffolding with example content, templates, and config. |
 | **Dev Experience** | Incremental builds | Content manifest + hash cache. Unchanged pages skipped on rebuild. Example site: 57ms full build. |
 | | Diagnostic system | Typed error codes (E001–E011) with per-code hints. Build summary shows per-category violation counts. |
 | | Wikilink validation | Broken `[[links]]` are build-time errors, not runtime 404s. |
@@ -2271,19 +2270,19 @@ The third win is the separation between the build engine and I/O. Commit `09070c
 
 | Metric | Value |
 |--------|-------|
-| Total source LOC | 43,574 |
-| Implementation LOC (non-test) | 25,145 |
-| Test LOC | 18,429 |
+| Total source LOC | 43,730 |
+| Implementation LOC (non-test) | 24,962 |
+| Test LOC | 18,768 |
 | Source files | 35 |
 | Test files | 32 (black-box) + 1 (white-box) |
 | Packages | 31 |
-| Tests | 897 passing |
+| Tests | 908 passing |
 | Compiler warnings | 0 |
 | External dependencies | 2 (`moonbitlang/x` 0.4.40, `TheWaWaR/clap` 0.2.6) |
-| Commits | 249 |
-| Development span | March 8 – April 24, 2026 (47 days) |
+| Commits | 254 |
+| Development span | March 8 – April 25, 2026 (48 days) |
 | Example site build time | 57ms (10 pages, 3 collections, 3 redirects) |
-| Retrospective length | ~2,430 lines |
+| Retrospective length | ~2,470 lines |
 
 **Largest packages by LOC** (non-test): builder (11,885), template (3,565), markdown (3,183), schema (2,734), highlight (2,218), collections (1,865), scaffold (1,826), frontmatter (1,114), html (1,239), data (1,357). The builder package is large because it orchestrates the full pipeline — content loading, schema validation, wikilink resolution, template rendering, pagination, feed generation, sitemap, robots.txt, search indexing, graph emission, asset copying, and cache management. Splitting it further would introduce coupling between stages that the current single-file orchestration avoids.
 
@@ -2470,3 +2469,15 @@ Added two direct tests: one for a normal URL asserting the three key HTML struct
 When `lattice init` is called with an absolute path (e.g. `lattice init /tmp/my-site`), the display message unconditionally prepended `./`, producing `created site in .//tmp/my-site` (double slash). The fix checks `name.has_prefix("/")` and uses the path as-is when absolute, otherwise prepends `./`.
 
 This is a minor UX issue but relevant to the explainability rubric: the bug exists because the original code assumed `name` would always be a relative path (the default is `"my-site"`), but the CLI accepts any string as a positional argument. The fix makes no assumption about the input format.
+
+## Sitemap Emitter: normalize_lastmod Edge Case Coverage
+
+The `normalize_lastmod` function in `src/sitemap/sitemap.mbt` is the emitter-boundary guard for date strings entering the XML `<lastmod>` element. It accepts two formats — `YYYY-MM-DD` (10 chars) and RFC 3339 with Z suffix (`>=20 chars ending in Z`) — and rejects everything else. The function was tested for the primary success paths (valid ISO date, valid RFC 3339, absent date, empty string) but three edge-case rejection branches had no coverage:
+
+1. **Whitespace-only strings** — a date value of `"   "` should trim to empty and return `None`. Without a test, a change that checked `length > 0` before trimming would accept the whitespace-padded value and emit `<lastmod>   </lastmod>`, which is invalid XML content.
+
+2. **Non-digit characters in YYYY-MM-DD positions** — `normalize_lastmod` walks the 10-char case character-by-character and sets `all_digits = false` if any non-digit appears at a digit position. The value `"20AB-CD-EF"` exercises this path. Before this test, the branch was dead code from the test suite's perspective — a refactor that removed the per-character check and used only length validation would have passed all existing tests while silently accepting malformed date strings.
+
+3. **Mid-length strings (neither 10 nor >=20 chars)** — `"2024-01-01T12"` is 13 characters, too long for the plain-date path and too short for the RFC 3339 path. The function returns `None`. Without a test, this structural gap was invisible.
+
+The broader lesson is the same as the RSS datetime section: when a function's contract is "accept exactly these two formats, reject everything else," tests need to cover the rejection branches as explicitly as the acceptance branches. The acceptance branches are well-motivated (they correspond to user inputs that work). The rejection branches are the defense-in-depth layer that prevents malformed strings from reaching the XML output — and they are exactly the branches most likely to be accidentally removed during refactoring, because no test immediately fails when they disappear.
