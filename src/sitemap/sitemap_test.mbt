@@ -236,3 +236,62 @@ test "render_sitemap rejects malformed date" {
 
   inspect(!xml.contains("<lastmod>"), content="true")
 }
+
+///|
+test "render_sitemap rejects whitespace-only date" {
+  // Catches: normalize_lastmod returning None for strings that trim to empty
+  let pages : Array[@graph.GraphPage] = [
+    {
+      slug: "ws-date",
+      title: "Whitespace Date",
+      url: "/ws/",
+      description: None,
+      date: Some("   "),
+      outgoing: [],
+      weight: None,
+    },
+  ]
+  let xml = @sitemap.render_sitemap("https://example.com", pages)
+
+  inspect(!xml.contains("<lastmod>"), content="true")
+}
+
+///|
+test "render_sitemap rejects date with non-digit chars in YYYY-MM-DD position" {
+  // Catches: normalize_lastmod detecting non-digit characters where
+  // year/month/day digits should be (the all_digits=false path)
+  let pages : Array[@graph.GraphPage] = [
+    {
+      slug: "nondigit",
+      title: "Non Digit Date",
+      url: "/nondigit/",
+      description: None,
+      date: Some("20AB-CD-EF"),
+      outgoing: [],
+      weight: None,
+    },
+  ]
+  let xml = @sitemap.render_sitemap("https://example.com", pages)
+
+  inspect(!xml.contains("<lastmod>"), content="true")
+}
+
+///|
+test "render_sitemap rejects date that is neither plain nor RFC3339" {
+  // Catches: normalize_lastmod returning None for strings that don't match
+  // YYYY-MM-DD (10 chars) or RFC3339 (>=20 chars ending in Z)
+  let pages : Array[@graph.GraphPage] = [
+    {
+      slug: "odd-date",
+      title: "Odd Date",
+      url: "/odd/",
+      description: None,
+      date: Some("2024-01-01T12"),
+      outgoing: [],
+      weight: None,
+    },
+  ]
+  let xml = @sitemap.render_sitemap("https://example.com", pages)
+
+  inspect(!xml.contains("<lastmod>"), content="true")
+}
