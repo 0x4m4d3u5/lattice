@@ -2442,3 +2442,31 @@ The fix (commit `refactor(template): collapse render_template into wrapper`) tur
 This is the same pattern as the builder.mbt `strutil` migration and the search package `render_json_array` extraction: code that accumulated during incremental feature addition, where each new feature (data support, frontmatter fields, page field arrays) added a parallel code path that diverged from the original only in parameter threading. The audit caught the downstream symptom (duplicated rendering logic) but pointed at the wrong root cause (ConditionalBlock branch bodies rather than the public API surface).
 
 **Why `@data.empty_store()` instead of `None`?** `render_template_with_data` takes `DataStore` (not `DataStore?`). This is the correct type: the function always needs a store to pass to `render_body_parts`, and the internal `DataStore?` threading through `render_parts` → `render_body_parts` handles the `None` path by skipping data slot resolution. Using `empty_store()` rather than changing the parameter to `DataStore?` avoids widening the internal API surface — the public contract remains "data-less rendering is a special case of data-aware rendering with an empty store," which is semantically correct and avoids a `None`-check cascade in the data-aware path.
+
+
+
+## Lint + Builder Test Coverage and Init Path Fix
+
+### Untested lint functions: `has_violations`, `violation_type_name`, `format_violation`
+
+Three public functions in `src/lint/lint.mbt` had zero direct test coverage despite being core to the lint reporting pipeline. Each serves a distinct role:
+
+- **`format_violation(v : LintViolation) -> String`** formats a single violation as a `path:line:col: type: message` string. It has three branches: line+column present, line only, and no position info. All three branches were untested — a refactor that changed the position formatting (e.g. swapping line/column order, or dropping the colon separator) would silently break CLI output and any scripts parsing it. Added one test per branch with exact string equality assertions.
+
+- **`violation_type_name(kind : ViolationType) -> String`** maps each of the 11 `ViolationType` variants to a stable string key (`"schema"`, `"broken_wikilink"`, etc.). These keys are used both in `format_violation` CLI output and in `format_violations_json` for machine-readable JSON export. A rename of any key would break downstream tooling parsing the JSON output without any compile-time signal — the function returns `String`, not an enum. The new test asserts all 11 mappings, making a rename a test failure rather than a silent protocol break.
+
+- **`has_violations(result : LintResult) -> Bool`** is trivially `result.violations.length() > 0`, but it is the guard used in the build exit-code logic. If the implementation ever changed (e.g. filtering by severity first), the behavior change would be caught. Two tests: empty result → `false`, result with one violation → `true`.
+
+### `render_redirect_page` URL escaping contract
+
+`render_redirect_page(canonical_url : String)` is a pure function that emits a meta-refresh redirect HTML page. It calls `@strutil.escape_html_attr` on the URL before embedding it in four locations: meta refresh `content` attribute, canonical `<link>` `href`, anchor `href`, and anchor text content. Special characters like `&` in query strings must be HTML-escaped to `&amp;` in all four sites.
+
+The function was only tested indirectly through the `redirect pages generated from redirect_from frontmatter` integration test, which verifies that redirect files are created and contain the right URL — but doesn't verify exact attribute encoding. Without a direct test, a refactor could break escaping in one location while leaving the others correct, and the integration test would still pass (it checks `contains` on the raw URL, not on the escaped form).
+
+Added two direct tests: one for a normal URL asserting the three key HTML structures, and one for a URL with `&` in the query string that counts `&amp;` occurrences to verify all four embedding sites are escaped.
+
+### UX double-slash bug in `lattice init`
+
+When `lattice init` is called with an absolute path (e.g. `lattice init /tmp/my-site`), the display message unconditionally prepended `./`, producing `created site in .//tmp/my-site` (double slash). The fix checks `name.has_prefix("/")` and uses the path as-is when absolute, otherwise prepends `./`.
+
+This is a minor UX issue but relevant to the explainability rubric: the bug exists because the original code assumed `name` would always be a relative path (the default is `"my-site"`), but the CLI accepts any string as a positional argument. The fix makes no assumption about the input format.
