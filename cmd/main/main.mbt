@@ -1233,7 +1233,10 @@ fn run_main() -> Unit {
       "my-site"
     }
     match @scaffold.scaffold_site(name) {
-      Ok(_) => println("[lattice] created site in ./" + name)
+      Ok(_) => {
+        let display = if name.has_prefix("/") { name } else { "./" + name }
+        println("[lattice] created site in " + display)
+      }
       Err(msg) => {
         print_diagnostic_main(cli_error(msg))
         @sys.exit(1)

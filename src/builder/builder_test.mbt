@@ -4777,3 +4777,28 @@ test "README.md in content root is not treated as root page" {
   }
   assert_true(index_html.contains("Home"))
 }
+
+
+///|
+test "render_redirect_page normal URL" {
+  let html = @builder.render_redirect_page("/posts/hello/")
+  assert_true(
+    html.contains(
+      "<meta http-equiv=\"refresh\" content=\"0; url=/posts/hello/\">",
+    ),
+  )
+  assert_true(
+    html.contains("<link rel=\"canonical\" href=\"/posts/hello/\">"),
+  )
+  assert_true(html.contains("<a href=\"/posts/hello/\">"))
+}
+
+///|
+test "render_redirect_page escapes special chars in URL" {
+  let html = @builder.render_redirect_page("/search?q=foo&bar=1")
+  // The & must be HTML-escaped to &amp; in all four embedding sites
+  // (meta refresh, canonical link, anchor href, anchor text)
+  let parts = html.split("&amp;").to_array()
+  let amp_count = parts.length() - 1
+  assert_eq(amp_count, 4)
+}

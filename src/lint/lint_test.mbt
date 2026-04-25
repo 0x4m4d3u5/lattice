@@ -207,3 +207,83 @@ test "lint summarize single violation" {
   assert_eq(summary.by_file[0].path, "x.md")
   assert_eq(summary.by_file[0].count, 1)
 }
+
+
+
+///|
+test "lint has_violations returns false for empty result" {
+  let result = empty_result()
+  assert_true(!has_violations(result))
+}
+
+///|
+test "lint has_violations returns true when violations present" {
+  let violations : Array[LintViolation] = [
+    {
+      path: "a.md",
+      line: None,
+      column: None,
+      kind: SchemaError,
+      message: "bad",
+    },
+  ]
+  let result : LintResult = { violations, messages: [] }
+  assert_true(has_violations(result))
+}
+
+///|
+test "lint violation_type_name maps all variants" {
+  assert_eq(violation_type_name(SchemaError), "schema")
+  assert_eq(
+    violation_type_name(MissingRequiredFrontmatter),
+    "missing_required_field",
+  )
+  assert_eq(violation_type_name(BrokenWikilink), "broken_wikilink")
+  assert_eq(violation_type_name(DanglingTagReference), "dangling_tag")
+  assert_eq(violation_type_name(TemplateSlotError), "template_slot")
+  assert_eq(violation_type_name(DataError), "data")
+  assert_eq(violation_type_name(ShortcodeError), "shortcode")
+  assert_eq(violation_type_name(FrontmatterError), "frontmatter")
+  assert_eq(violation_type_name(CollectionsError), "collections")
+  assert_eq(violation_type_name(DuplicateSlug), "duplicate_slug")
+  assert_eq(violation_type_name(IOError), "io")
+}
+
+///|
+test "lint format_violation with line and column" {
+  let v : LintViolation = {
+    path: "path/file.md",
+    line: Some(5),
+    column: Some(12),
+    kind: BrokenWikilink,
+    message: "target not found",
+  }
+  let s = format_violation(v)
+  assert_eq(s, "path/file.md:5:12: broken_wikilink: target not found")
+}
+
+///|
+test "lint format_violation with line only" {
+  let v : LintViolation = {
+    path: "path/file.md",
+    line: Some(5),
+    column: None,
+    kind: SchemaError,
+    message: "bad value",
+  }
+  let s = format_violation(v)
+  assert_eq(s, "path/file.md:5: schema: bad value")
+}
+
+///|
+test "lint format_violation with no position" {
+  let v : LintViolation = {
+    path: "path/file.md",
+    line: None,
+    column: None,
+    kind: MissingRequiredFrontmatter,
+    message: "required",
+  }
+  let s = format_violation(v)
+  assert_eq(s, "path/file.md: missing_required_field: required")
+}
