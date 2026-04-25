@@ -97,3 +97,90 @@ test "shortcode missing required param" {
     Err(_) => assert_true(false)
   }
 }
+
+///|
+test "shortcode image InvalidParamType when width is a string" {
+  // Catches: optional_int_param returning Err(InvalidParamType) when the
+  // param exists but is StringParam rather than IntParam.
+  // width="800" parses as StringParam; width=800 parses as IntParam.
+  let params : Map[String, ShortcodeParam] = Map::new()
+  params.set("src", StringParam("/img.png"))
+  params.set("alt", StringParam("a photo"))
+  params.set("width", StringParam("800"))
+  let call : ShortcodeCall = { name: "image", params }
+  match render(call) {
+    Ok(_) => assert_true(false)
+    Err(InvalidParamType(shortcode, param, expected)) => {
+      assert_eq(shortcode, "image")
+      assert_eq(param, "width")
+      assert_eq(expected, "Int")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "shortcode parse bool params" {
+  match parse("callout type=\"note\" collapse=true") {
+    Ok(call) => {
+      match call.params.get("collapse") {
+        Some(BoolParam(v)) => assert_eq(v, true)
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "shortcode render callout note" {
+  let params : Map[String, ShortcodeParam] = Map::new()
+  params.set("type", StringParam("note"))
+  params.set("title", StringParam("Note Title"))
+  params.set("body", StringParam("Body text"))
+  let call : ShortcodeCall = { name: "callout", params }
+  match render(call) {
+    Ok(html) => {
+      assert_true(html.contains("callout-note"))
+      assert_true(html.contains("Note Title"))
+      assert_true(html.contains("Body text"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "shortcode callout invalid type produces InvalidParamType" {
+  let params : Map[String, ShortcodeParam] = Map::new()
+  params.set("type", StringParam("invalid"))
+  let call : ShortcodeCall = { name: "callout", params }
+  match render(call) {
+    Ok(_) => assert_true(false)
+    Err(InvalidParamType(shortcode, param, expected)) => {
+      assert_eq(shortcode, "callout")
+      assert_eq(param, "type")
+      assert_eq(expected, "note|warning|tip|danger")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "shortcode error_text formats all 4 variants" {
+  assert_eq(
+    error_text(UnknownShortcode("fancy")),
+    "unknown shortcode 'fancy'",
+  )
+  assert_eq(
+    error_text(MissingParam("image", "src")),
+    "shortcode 'image' missing param 'src'",
+  )
+  assert_eq(
+    error_text(InvalidParamType("image", "width", "Int")),
+    "shortcode 'image' param 'width' expected Int",
+  )
+  assert_eq(
+    error_text(InvalidSyntax("unexpected EOF")),
+    "shortcode syntax: unexpected EOF",
+  )
+}

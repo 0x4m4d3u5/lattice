@@ -19,12 +19,12 @@ pub(all) struct ShortcodeCall {
 }
 
 ///|
-pub enum ShortcodeError {
+pub(all) enum ShortcodeError {
   UnknownShortcode(String)
   MissingParam(String, String)
   InvalidParamType(String, String, String)
   InvalidSyntax(String)
-}
+} derive(Eq, Show)
 
 ///|
 fn parse_int_shortcode(s : String) -> Int? {
