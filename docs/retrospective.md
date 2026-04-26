@@ -2499,3 +2499,46 @@ Initial test coverage was 6 tests covering the main success paths (roundtrip, ne
 4. **Top-level field ordering** — the parser expects `"version"` then `"entries"`. Wrong field names, missing commas, or trailing content after the closing brace are all rejected with specific error messages.
 
 The result is 31 new tests achieving 100% line coverage on the manifest module. The pattern is the same one documented for sitemap `normalize_lastmod`: when a function's contract is "accept this exact shape, reject everything else," the rejection branches need explicit test coverage because they are the most fragile part of the implementation. A refactor that accidentally widens the acceptance criteria will not break any existing test that exercises the happy path — it will only be caught by a test that specifically verifies the rejection behavior.
+
+
+
+## Watch Package: diff_paths and Calendar Logic
+
+The `watch` package was the only package in the codebase with zero test coverage — 0 lines in any `*_test.mbt` file. It contains two independently verifiable algorithms: `diff_paths` (merge comparison of sorted file snapshots, drives the `--watch` rebuild loop) and `unix_days_to_ymd` (Howard Hinnant's calendar algorithm, drives `today_ymd()` for `lattice new` date generation). Bugs in either are silent at runtime.
+
+### Eliminating duplication before testing
+
+`unix_days_to_ymd`, `pad2_ymd`, and `pad4_ymd` were duplicated verbatim between `watch_native.mbt` and `watch_stub.mbt`. The FFI split is necessary — native uses real `mtime()` syscalls, non-native uses a content-hash stub — but the calendar conversion has no platform dependency. The duplication existed only because `today_ymd()` lives in both files and the private helpers were not in scope across files.
+
+Moving the three functions to `watch.mbt` as `pub fn` (renamed `ymd_pad2`/`ymd_pad4` to avoid collision) eliminated ~80 lines of duplication and gave the test suite a single canonical target. This is the same pattern as any FFI shim: the platform-specific code should be as thin as possible, delegating to shared logic the moment there is no platform dependency. The duplication was invisible as long as neither copy had tests — a refactor that changed one copy without changing the other would have produced divergent behavior across targets.
+
+### diff_paths: merge comparison algorithm
+
+`diff_paths` walks two pre-sorted `Array[SnapshotEntry]` simultaneously, comparing paths lexicographically. Paths in one array but not the other, or in both with different stamps, are collected as changed. The function's correctness depends on both inputs being sorted — `take_snapshot` guarantees this by sorting roots and calling `children.sort()` during directory traversal.
+
+Twelve tests cover: both empty, identical entries (no change), stamp changed, file added, file removed, both trailing-drain directions, a mixed add/remove/modify scenario, empty-prev/nonempty-curr, nonempty-prev/empty-curr, and stamp=0 (valid directory sentinel, must not cause false positive).
+
+### unix_days_to_ymd: Howard Hinnant's algorithm
+
+The algorithm converts an integer day count (Unix epoch = day 0) to `YYYY-MM-DD` using a closed-form formula. No loops, no lookup tables — just integer arithmetic derived from the Gregorian leap-year rule (divisible by 4, except centuries, except 400-year centuries).
+
+Ten tests pin specific day-to-date mappings derived from first principles:
+
+| Day | Expected | Derivation |
+|-----|----------|-----------|
+| 0 | 1970-01-01 | epoch |
+| -1 | 1969-12-31 | pre-epoch |
+| 364 | 1970-12-31 | 1970 not leap |
+| 365 | 1971-01-01 | year boundary |
+| 730 | 1972-01-01 | two non-leap years |
+| 789 | 1972-02-29 | first post-epoch leap day |
+| 10957 | 2000-01-01 | 30yr: 23×365 + 7×366 |
+| 11016 | 2000-02-29 | 2000 is leap (400-divisible) |
+| 20569 | 2026-04-26 | today |
+| 1155 | 1973-03-01 | post-leap March boundary |
+
+The 2000-02-29 case is the load-bearing one. Year 2000 is divisible by 100 (normally not a leap year) but also by 400 (the override rule). An implementation that only checked `year % 4 == 0` would accept 2000 as leap incorrectly for century years generally, while an implementation that applied the century rule without the 400-year exception would reject 2000's February 29 entirely. The test makes the algorithm's treatment of this edge explicit.
+
+### Engineering quality signal
+
+The refactor and 32 new tests bring the watch package from the only zero-coverage package to a fully tested one. Total suite: 979 tests.

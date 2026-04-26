@@ -75,6 +75,49 @@ pub fn take_snapshot(
 }
 
 ///|
+/// Convert days-since-Unix-epoch (1970-01-01) to YYYY-MM-DD using
+/// Howard Hinnant's civil_from_days algorithm.
+pub fn unix_days_to_ymd(days : Int) -> String {
+  let z = days + 719468
+  let era = if z >= 0 { z / 146097 } else { (z - 146096) / 146097 }
+  let doe = z - era * 146097
+  let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365
+  let y = yoe + era * 400
+  let doy = doe - (365 * yoe + yoe / 4 - yoe / 100)
+  let mp = (5 * doy + 2) / 153
+  let d = doy - (153 * mp + 2) / 5 + 1
+  let m = if mp < 10 { mp + 3 } else { mp - 9 }
+  let year = if m <= 2 { y + 1 } else { y }
+  ymd_pad4(year) + "-" + ymd_pad2(m) + "-" + ymd_pad2(d)
+}
+
+///|
+pub fn ymd_pad2(n : Int) -> String {
+  if n < 10 {
+    "0" + n.to_string()
+  } else {
+    n.to_string()
+  }
+}
+
+///|
+pub fn ymd_pad4(n : Int) -> String {
+  let s = n.to_string()
+  if s.length() >= 4 {
+    s
+  } else {
+    let buf = StringBuilder::new()
+    let mut i = s.length()
+    while i < 4 {
+      buf.write_char('0')
+      i = i + 1
+    }
+    buf.write_string(s)
+    buf.to_string()
+  }
+}
+
+///|
 pub fn diff_paths(
   previous : Array[SnapshotEntry],
   current : Array[SnapshotEntry],
