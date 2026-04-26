@@ -146,3 +146,320 @@ test "cache render and parse preserves special characters in slug" {
   }
   assert_eq(parsed.entries[0].slug, "path/with\"quotes")
 }
+
+/// ============================================================
+/// Error-path tests for the cache JSON parser
+/// ============================================================
+
+///|
+/// expect_char_cache: wrong character — parser expects '{' but gets something else
+test "cache parse reject non-brace first char" {
+  let raised = try {
+    let _ = parse("  x")
+    false
+  } catch {
+    ParseFailure(msg) => {
+      assert_true(msg.contains("'{'"))
+      true
+    }
+  }
+  assert_true(raised)
+}
+
+///|
+/// expect_char_cache: end-of-input where a character is expected
+test "cache parse reject empty input" {
+  let raised = try {
+    let _ = parse("")
+    false
+  } catch {
+    ParseFailure(_) => true
+  }
+  assert_true(raised)
+}
+
+///|
+/// parse_json_string_cache: input is not a string (starts with a digit, not a quote)
+test "cache parse reject version value as non-string key" {
+  let raised = try {
+    let _ = parse("{123}")
+    false
+  } catch {
+    ParseFailure(msg) => {
+      assert_true(msg.contains("string"))
+      true
+    }
+  }
+  assert_true(raised)
+}
+
+///|
+/// parse_json_string_cache: \\u escape is rejected
+test "cache parse reject unicode escape in string" {
+  let raised = try {
+    let _ = parse(
+      "{\"version\":1,\"entries\":[{\"slug\":\"hello\\u0041\",\"fingerprint\":\"fp\"}]}",
+    )
+    false
+  } catch {
+    ParseFailure(msg) => {
+      assert_true(msg.contains("unicode"))
+      true
+    }
+  }
+  assert_true(raised)
+}
+
+///|
+/// parse_json_string_cache: invalid escape character (\\x)
+test "cache parse reject invalid escape in string" {
+  let raised = try {
+    let _ = parse(
+      "{\"version\":1,\"entries\":[{\"slug\":\"\\x\",\"fingerprint\":\"fp\"}]}",
+    )
+    false
+  } catch {
+    ParseFailure(msg) => {
+      assert_true(msg.contains("invalid escape"))
+      true
+    }
+  }
+  assert_true(raised)
+}
+
+///|
+/// parse_json_string_cache: unterminated escape (backslash at end of input)
+test "cache parse reject unterminated escape" {
+  let raised = try {
+    let _ = parse(
+      "{\"version\":1,\"entries\":[{\"slug\":\"abc\\",
+    )
+    false
+  } catch {
+    ParseFailure(msg) => {
+      assert_true(msg.contains("unterminated escape"))
+      true
+    }
+  }
+  assert_true(raised)
+}
+
+///|
+/// parse_json_string_cache: unterminated string (no closing quote)
+test "cache parse reject unterminated string" {
+  let raised = try {
+    let _ = parse(
+      "{\"version\":1,\"entries\":[{\"slug\":\"no-end",
+    )
+    false
+  } catch {
+    ParseFailure(msg) => {
+      assert_true(msg.contains("unterminated string"))
+      true
+    }
+  }
+  assert_true(raised)
+}
+
+///|
+/// parse_int_cache: not an integer (first char is not a digit)
+test "cache parse reject non-integer version value" {
+  let raised = try {
+    let _ = parse("{\"version\":\"not-a-number\"")
+    false
+  } catch {
+    ParseFailure(msg) => {
+      assert_true(msg.contains("integer"))
+      true
+    }
+  }
+  assert_true(raised)
+}
+
+///|
+/// parse_entry_cache: unterminated object (entry object never closes)
+test "cache parse reject unterminated entry object" {
+  let raised = try {
+    let _ = parse(
+      "{\"version\":1,\"entries\":[{\"slug\":\"a\",\"fingerprint\":\"b\"",
+    )
+    false
+  } catch {
+    ParseFailure(msg) => {
+      assert_true(msg.contains("unterminated"))
+      true
+    }
+  }
+  assert_true(raised)
+}
+
+///|
+/// parse_entry_cache: missing required field when '}' seen (only slug, no fingerprint)
+test "cache parse reject entry missing fingerprint field" {
+  let raised = try {
+    let _ = parse("{\"version\":1,\"entries\":[{\"slug\":\"a\"}]}")
+    false
+  } catch {
+    ParseFailure(msg) => {
+      assert_true(msg.contains("required"))
+      true
+    }
+  }
+  assert_true(raised)
+}
+
+///|
+/// parse_entry_cache: missing required field when '}' seen (only fingerprint, no slug)
+test "cache parse reject entry missing slug field" {
+  let raised = try {
+    let _ = parse("{\"version\":1,\"entries\":[{\"fingerprint\":\"fp\"}]}")
+    false
+  } catch {
+    ParseFailure(msg) => {
+      assert_true(msg.contains("required"))
+      true
+    }
+  }
+  assert_true(raised)
+}
+
+///|
+/// parse_entry_cache: unknown entry field
+test "cache parse reject unknown entry field" {
+  let raised = try {
+    let _ = parse(
+      "{\"version\":1,\"entries\":[{\"slug\":\"a\",\"fingerprint\":\"b\",\"bogus\":1}]}",
+    )
+    false
+  } catch {
+    ParseFailure(msg) => {
+      assert_true(msg.contains("unknown"))
+      true
+    }
+  }
+  assert_true(raised)
+}
+
+///|
+/// parse_entry_cache: missing comma or '}' between fields
+test "cache parse reject missing comma in entry" {
+  let raised = try {
+    let _ = parse(
+      "{\"version\":1,\"entries\":[{\"slug\":\"a\" \"fingerprint\":\"b\"}]}",
+    )
+    false
+  } catch {
+    ParseFailure(_) => true
+  }
+  assert_true(raised)
+}
+
+///|
+/// parse: wrong first field (not "version")
+test "cache parse reject wrong first field" {
+  let raised = try {
+    let _ = parse("{\"entries\":[],\"version\":1}")
+    false
+  } catch {
+    ParseFailure(msg) => {
+      assert_true(msg.contains("version"))
+      true
+    }
+  }
+  assert_true(raised)
+}
+
+///|
+/// parse: no comma after version field
+test "cache parse reject missing comma after version" {
+  let raised = try {
+    let _ = parse("{\"version\":1\"entries\":[]}")
+    false
+  } catch {
+    ParseFailure(msg) => {
+      assert_true(msg.contains(","))
+      true
+    }
+  }
+  assert_true(raised)
+}
+
+///|
+/// parse: wrong second field (not "entries")
+test "cache parse reject wrong second field" {
+  let raised = try {
+    let _ = parse("{\"version\":1,\"data\":[]}")
+    false
+  } catch {
+    ParseFailure(msg) => {
+      assert_true(msg.contains("entries"))
+      true
+    }
+  }
+  assert_true(raised)
+}
+
+///|
+/// parse: no closing '}' at end of cache file
+test "cache parse reject missing closing brace" {
+  let raised = try {
+    let _ = parse("{\"version\":1,\"entries\":[]")
+    false
+  } catch {
+    ParseFailure(msg) => {
+      assert_true(msg.contains("}"))
+      true
+    }
+  }
+  assert_true(raised)
+}
+
+///|
+/// parse: trailing characters after the closing '}'
+test "cache parse reject trailing characters after close" {
+  let raised = try {
+    let _ = parse("{\"version\":1,\"entries\":[]}  extra")
+    false
+  } catch {
+    ParseFailure(msg) => {
+      assert_true(msg.contains("trailing"))
+      true
+    }
+  }
+  assert_true(raised)
+}
+
+///|
+/// parse_entries_cache: missing ']' at end of entries array
+test "cache parse reject unterminated entries array" {
+  let raised = try {
+    let _ = parse(
+      "{\"version\":1,\"entries\":[{\"slug\":\"a\",\"fingerprint\":\"b\"}",
+    )
+    false
+  } catch {
+    ParseFailure(msg) => {
+      assert_true(
+        msg.contains("unterminated") || msg.contains(",") || msg.contains("'") || msg.contains(
+          "expected",
+        ),
+      )
+      true
+    }
+  }
+  assert_true(raised)
+}
+
+///|
+/// parse_entries_cache: wrong separator between entries (semicolon instead of comma)
+test "cache parse reject wrong separator between entries" {
+  let raised = try {
+    let _ = parse(
+      "{\"version\":1,\"entries\":[{\"slug\":\"a\",\"fingerprint\":\"b\"};{\"slug\":\"c\",\"fingerprint\":\"d\"}]}",
+    )
+    false
+  } catch {
+    ParseFailure(_) => true
+  }
+  assert_true(raised)
+}
