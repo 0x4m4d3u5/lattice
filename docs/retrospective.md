@@ -2270,19 +2270,19 @@ The third win is the separation between the build engine and I/O. Commit `09070c
 
 | Metric | Value |
 |--------|-------|
-| Total source LOC | 44,058 |
-| Implementation LOC (non-test) | 24,962 |
-| Test LOC | 19,096 |
+| Total source LOC | 44,676 |
+| Implementation LOC (non-test) | 25,092 |
+| Test LOC | 19,584 |
 | Source files | 35 |
 | Test files | 32 (black-box) + 1 (white-box) |
 | Packages | 31 |
-| Tests | 916 passing |
+| Tests | 1,003 passing |
 | Compiler warnings | 0 |
 | External dependencies | 2 (`moonbitlang/x` 0.4.40, `TheWaWaR/clap` 0.2.6) |
-| Commits | 258 |
+| Commits | 262 |
 | Development span | March 8 – April 25, 2026 (48 days) |
 | Example site build time | 57ms (10 pages, 3 collections, 3 redirects) |
-| Retrospective length | ~2,490 lines |
+| Retrospective length | ~2,600 lines |
 
 **Largest packages by LOC** (non-test): builder (11,885), template (3,565), markdown (3,183), schema (2,734), highlight (2,218), collections (1,865), scaffold (1,826), frontmatter (1,114), html (1,239), data (1,357). The builder package is large because it orchestrates the full pipeline — content loading, schema validation, wikilink resolution, template rendering, pagination, feed generation, sitemap, robots.txt, search indexing, graph emission, asset copying, and cache management. Splitting it further would introduce coupling between stages that the current single-file orchestration avoids.
 
@@ -2542,3 +2542,25 @@ The 2000-02-29 case is the load-bearing one. Year 2000 is divisible by 100 (norm
 ### Engineering quality signal
 
 The refactor and 32 new tests bring the watch package from the only zero-coverage package to a fully tested one. Total suite: 979 tests.
+
+## Cache Parser: Exhaustive Error-Path Coverage
+
+The cache parser (`src/cache/cache.mbt`) is a hand-rolled JSON parser that reads `.lattice-cache` files — the incremental build cache that maps slugs to content fingerprints. A corrupted or malformed cache file could cause the incremental builder to skip pages that should be rebuilt (producing stale output) or, worse, silently accept a structurally invalid cache and proceed with wrong fingerprint comparisons. The parser's error paths are the defense layer that catches corruption before it reaches the build logic.
+
+Initial test coverage was 13 tests covering the main success paths (roundtrip, fingerprint sensitivity, `should_skip` decision tree, `remember`/`lookup`, `error_text` formatting, special-character roundtrip) and two obvious failure cases (completely malformed input, missing entries field). This left the majority of the parser's rejection branches untested — the `else` arms in `expect_char_cache`, `parse_json_string_cache`, `parse_int_cache`, `parse_entry_cache`, `parse_entries_cache`, and `parse`. The uncovered paths fell into five categories:
+
+1. **`expect_char_cache`** — two rejection paths: wrong character (input has `x` where `{` is expected) and end-of-input (empty string). Both raise `ParseFailure` with a message containing the expected character. Without tests, a refactor that changed the error message format or removed the whitespace-skipping call before the character check would pass all existing tests.
+
+2. **`parse_json_string_cache` escape handling** — the parser supports `\"`, `\\`, `\/`, `\b`, `\f`, `\n`, `\r`, `\t` and explicitly rejects `\u` (unicode escapes) and any other escape character (like `\x`). It also rejects unterminated escapes (backslash at end of input) and unterminated strings (no closing quote). Each rejection is a single branch in the parser's escape-handling chain. The `\u` rejection matters because supporting unicode escapes would require multi-byte decoding — the parser deliberately punts on this complexity, and a test verifies the rejection holds. The "invalid escape" rejection catches any character not in the known escape set. The unterminated-string/escape rejections catch truncated files — exactly the corruption mode that matters for an incremental build cache written by a process that might be killed mid-write.
+
+3. **`parse_int_cache`** — rejects input where the first non-whitespace character is not a digit. This is the `"version":"not-a-number"` case: the parser reads past the colon, sees `"`, and rejects it as non-digit. A refactor that tried to be clever about leading signs or whitespace would change this behavior silently without a test.
+
+4. **`parse_entry_cache` structural delimiters** — the entry parser checks for commas between fields, closing braces after all required fields are seen, source exhaustion at multiple points in the parse loop, and unknown field names. The "missing required field" rejection fires when `}` is seen but `slug` or `fingerprint` hasn't been set yet — a truncated entry like `{"slug":"a"}` missing its fingerprint. The "unknown entry field" rejection fires when a key that isn't `"slug"` or `"fingerprint"` appears — catching malformed cache files with extra fields. The "missing comma" rejection catches the case where two fields appear without a separator between them.
+
+5. **`parse` top-level field ordering** — the parser expects `"version"` as the first field, a comma, `"entries"` as the second field, and a closing `}` with no trailing content. Each of these checks is a distinct error branch: wrong first field, missing comma after version, wrong second field, missing closing brace, and trailing characters after the closing brace. These structural checks prevent the parser from accepting a JSON object that happens to have the right fields in the wrong order or with extra trailing content — which could mask file corruption where bytes were appended or rearranged.
+
+The result is 20 new tests achieving full line coverage on the cache parser module. The pattern is the same one documented for the manifest parser and sitemap `normalize_lastmod`: when a function's contract is "accept this exact shape, reject everything else," the rejection branches need explicit test coverage because they are the most fragile part of the implementation. A refactor that accidentally widens the acceptance criteria will not break any existing test that exercises the happy path — it will only be caught by a test that specifically verifies the rejection behavior.
+
+Additionally, four edge-case tests were added to `src/graph/graph_test.mbt` for `render_graph_json`: a page with multiple outgoing edges (verifying comma separation and no trailing comma), a title containing `<`, `>`, `&` characters (verifying these are NOT HTML-escaped — only `"` and `\` need JSON escaping), a self-loop wikilink where source slug equals target slug, and a multi-page cross-edge scenario verifying all three edges appear correctly.
+
+Total suite: 1,003 tests.
