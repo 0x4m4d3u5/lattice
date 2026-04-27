@@ -698,3 +698,379 @@ test "collections reject DateTime with unknown bound key" {
     Err(_) => assert_true(true)
   }
 }
+
+// ── Error path tests ────────────────────────────────────────────────────────
+
+///|
+test "collections error: empty input returns EmptyConfig" {
+  match parse("") {
+    Err(@collections.EmptyConfig) => assert_true(true)
+    _ => assert_true(false)
+  }
+}
+
+///|
+test "collections error: comment-only input returns EmptyConfig" {
+  match parse("# just a comment") {
+    Err(@collections.EmptyConfig) => assert_true(true)
+    _ => assert_true(false)
+  }
+}
+
+///|
+test "collections error: whitespace-only input returns EmptyConfig" {
+  match parse("   \n\n   ") {
+    Err(@collections.EmptyConfig) => assert_true(true)
+    _ => assert_true(false)
+  }
+}
+
+///|
+test "collections error: assignment outside section" {
+  let src = "schema = title:String\n"
+  match parse(src) {
+    Err(@collections.InvalidLine(line, msg)) => {
+      assert_eq(line, 1)
+      assert_eq(msg, "assignment outside section")
+    }
+    _ => assert_true(false)
+  }
+}
+
+///|
+test "collections error: key=value line before any section" {
+  let src = "dir = content/posts\n[posts]\nschema = title:String\ndir = content/posts\n"
+  match parse(src) {
+    Err(@collections.InvalidLine(line, msg)) => {
+      assert_eq(line, 1)
+      assert_eq(msg, "assignment outside section")
+    }
+    _ => assert_true(false)
+  }
+}
+
+///|
+test "collections error: line without equals sign" {
+  let src = "[posts]\nbadline\n"
+  match parse(src) {
+    Err(@collections.InvalidLine(line, msg)) => {
+      assert_eq(line, 2)
+      assert_eq(msg, "expected key=value")
+    }
+    _ => assert_true(false)
+  }
+}
+
+///|
+test "collections error: equals at start of line" {
+  let src = "[posts]\n=value\n"
+  match parse(src) {
+    Err(@collections.InvalidLine(line, msg)) => {
+      assert_eq(line, 2)
+      assert_eq(msg, "expected key=value")
+    }
+    _ => assert_true(false)
+  }
+}
+
+///|
+test "collections error: equals at end of line" {
+  let src = "[posts]\nschema=\n"
+  match parse(src) {
+    Err(@collections.InvalidLine(line, msg)) => {
+      assert_eq(line, 2)
+      assert_eq(msg, "expected key=value")
+    }
+    _ => assert_true(false)
+  }
+}
+
+///|
+test "collections error: page_size non-numeric" {
+  let src = "[posts]\nschema = title:String\ndir = content/posts\npage_size = abc\n"
+  match parse(src) {
+    Err(@collections.InvalidLine(line, msg)) => {
+      assert_eq(line, 4)
+      assert_eq(msg, "page_size must be a positive integer")
+    }
+    _ => assert_true(false)
+  }
+}
+
+///|
+test "collections error: page_size negative" {
+  let src = "[posts]\nschema = title:String\ndir = content/posts\npage_size = -5\n"
+  match parse(src) {
+    Err(@collections.InvalidLine(line, msg)) => {
+      assert_eq(line, 4)
+      assert_eq(msg, "page_size must be a positive integer")
+    }
+    _ => assert_true(false)
+  }
+}
+
+///|
+test "collections error: page_size zero" {
+  let src = "[posts]\nschema = title:String\ndir = content/posts\npage_size = 0\n"
+  match parse(src) {
+    Err(@collections.InvalidLine(line, msg)) => {
+      assert_eq(line, 4)
+      assert_eq(msg, "page_size must be a positive integer")
+    }
+    _ => assert_true(false)
+  }
+}
+
+///|
+test "collections error: unknown key in collection section" {
+  let src = "[posts]\nfoo = bar\n"
+  match parse(src) {
+    Err(@collections.InvalidLine(line, msg)) => {
+      assert_eq(line, 2)
+      assert_eq(msg, "unknown key in section 'posts': foo")
+    }
+    _ => assert_true(false)
+  }
+}
+
+///|
+test "collections error: unknown key in data section" {
+  let src = "[data.nav]\nfoo = bar\n"
+  match parse(src) {
+    Err(@collections.InvalidLine(line, msg)) => {
+      assert_eq(line, 2)
+      assert_eq(msg, "unknown key in section 'data.nav': foo")
+    }
+    _ => assert_true(false)
+  }
+}
+
+///|
+test "collections error: duplicate collection name" {
+  let src =
+    "[posts]\nschema = title:String\ndir = content/posts\n\n" +
+    "[posts]\nschema = title:String\ndir = content/posts2\n"
+  match parse(src) {
+    Err(@collections.DuplicateCollection(name)) => assert_eq(name, "posts")
+    _ => assert_true(false)
+  }
+}
+
+///|
+test "collections error: duplicate data schema name" {
+  let src =
+    "[posts]\nschema = title:String\ndir = content/posts\n\n" +
+    "[data.nav]\nrequired = title\n\n" +
+    "[data.nav]\nrequired = subtitle\n"
+  match parse(src) {
+    Err(@collections.DuplicateDataSchema(name)) => assert_eq(name, "nav")
+    _ => assert_true(false)
+  }
+}
+
+///|
+test "collections error: missing required field in data section" {
+  let src =
+    "[posts]\nschema = title:String\ndir = content/posts\n\n" +
+    "[data.nav]\n"
+  match parse(src) {
+    Err(@collections.MissingRequiredField(section, field)) => {
+      assert_eq(section, "data.nav")
+      assert_eq(field, "required")
+    }
+    _ => assert_true(false)
+  }
+}
+
+///|
+test "collections error: missing schema in collection" {
+  let src = "[posts]\ndir = content/posts\n"
+  match parse(src) {
+    Err(@collections.MissingRequiredField(name, field)) => {
+      assert_eq(name, "posts")
+      assert_eq(field, "schema")
+    }
+    _ => assert_true(false)
+  }
+}
+
+///|
+test "collections error: missing dir in collection" {
+  let src = "[posts]\nschema = title:String\n"
+  match parse(src) {
+    Err(@collections.MissingRequiredField(name, field)) => {
+      assert_eq(name, "posts")
+      assert_eq(field, "dir")
+    }
+    _ => assert_true(false)
+  }
+}
+
+///|
+test "collections error: section header too short (single bracket)" {
+  let src = "[\n"
+  match parse(src) {
+    Err(@collections.InvalidLine(line, msg)) => {
+      assert_eq(line, 1)
+      assert_eq(msg, "invalid section header")
+    }
+    _ => assert_true(false)
+  }
+}
+
+///|
+test "collections error: section header missing closing bracket" {
+  let src = "[posts\nschema = title:String\n"
+  match parse(src) {
+    Err(@collections.InvalidLine(line, msg)) => {
+      assert_eq(line, 1)
+      assert_eq(msg, "invalid section header")
+    }
+    _ => assert_true(false)
+  }
+}
+
+///|
+test "collections error: empty section header" {
+  let src = "[  ]\nschema = title:String\n"
+  match parse(src) {
+    Err(@collections.InvalidLine(line, msg)) => {
+      assert_eq(line, 1)
+      assert_eq(msg, "empty section header")
+    }
+    _ => assert_true(false)
+  }
+}
+
+///|
+test "collections error: invalid data schema name (empty after data.)" {
+  let src = "[data.]\nrequired = title\n"
+  match parse(src) {
+    Err(@collections.InvalidLine(line, msg)) => {
+      assert_eq(line, 1)
+      assert_eq(msg, "invalid data schema name")
+    }
+    _ => assert_true(false)
+  }
+}
+
+///|
+test "collections error: invalid data schema name (numeric)" {
+  let src = "[data.123]\nrequired = title\n"
+  match parse(src) {
+    Err(@collections.InvalidLine(line, msg)) => {
+      assert_eq(line, 1)
+      assert_eq(msg, "invalid data schema name")
+    }
+    _ => assert_true(false)
+  }
+}
+
+///|
+test "collections error: invalid collection name (starts with digit)" {
+  let src = "[123]\nschema = title:String\n"
+  match parse(src) {
+    Err(@collections.InvalidLine(line, msg)) => {
+      assert_eq(line, 1)
+      assert_eq(msg, "invalid collection name")
+    }
+    _ => assert_true(false)
+  }
+}
+
+///|
+test "collections error: invalid collection name (special chars)" {
+  let src = "[hello-world!]\nschema = title:String\n"
+  match parse(src) {
+    Err(@collections.InvalidLine(line, msg)) => {
+      assert_eq(line, 1)
+      assert_eq(msg, "invalid collection name")
+    }
+    _ => assert_true(false)
+  }
+}
+
+///|
+test "collections error: unterminated quoted string value" {
+  let src = "[posts]\nschema = \"unterminated\n"
+  match parse(src) {
+    Err(@collections.InvalidLine(line, msg)) => {
+      assert_eq(line, 2)
+      assert_eq(msg, "unterminated quoted string")
+    }
+    _ => assert_true(false)
+  }
+}
+
+///|
+test "collections error: unterminated quoted string (just opening quote)" {
+  let src = "[posts]\nschema = \"\n"
+  match parse(src) {
+    Err(@collections.InvalidLine(line, msg)) => {
+      assert_eq(line, 2)
+      assert_eq(msg, "unterminated quoted string")
+    }
+    _ => assert_true(false)
+  }
+}
+
+///|
+test "collections error: invalid sort value" {
+  let src = "[posts]\nschema = title:String\ndir = content/posts\nsort = invalid:order\n"
+  match parse(src) {
+    Err(@collections.InvalidLine(line, msg)) => {
+      assert_eq(line, 4)
+      assert_true(msg.contains("invalid sort value"))
+    }
+    _ => assert_true(false)
+  }
+}
+
+///|
+test "collections error: invalid schema field declaration (no colon)" {
+  let src = "[posts]\nschema = titleString\ndir = content/posts\n"
+  match parse(src) {
+    Err(@collections.InvalidSchema(name, msg)) => {
+      assert_eq(name, "posts")
+      assert_true(msg.contains("invalid field declaration"))
+    }
+    _ => assert_true(false)
+  }
+}
+
+///|
+test "collections error: invalid schema field name" {
+  let src = "[posts]\nschema = 123:String\ndir = content/posts\n"
+  match parse(src) {
+    Err(@collections.InvalidSchema(name, msg)) => {
+      assert_eq(name, "posts")
+      assert_true(msg.contains("invalid field name"))
+    }
+    _ => assert_true(false)
+  }
+}
+
+///|
+test "collections error: empty schema (no fields)" {
+  let src = "[posts]\nschema = \ndir = content/posts\n"
+  match parse(src) {
+    Err(@collections.InvalidLine(line, msg)) => {
+      // schema = with empty value triggers "expected key=value" since value after = is empty after trim
+      assert_eq(line, 2)
+      assert_eq(msg, "expected key=value")
+    }
+    _ => assert_true(false)
+  }
+}
+
+///|
+test "collections error: unknown field type in schema" {
+  let src = "[posts]\nschema = title:UnknownType\ndir = content/posts\n"
+  match parse(src) {
+    Err(@collections.InvalidSchema(name, msg)) => {
+      assert_eq(name, "posts")
+      assert_true(msg.contains("unknown field type"))
+    }
+    _ => assert_true(false)
+  }
+}
