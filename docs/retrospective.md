@@ -2564,3 +2564,34 @@ The result is 20 new tests achieving full line coverage on the cache parser modu
 Additionally, four edge-case tests were added to `src/graph/graph_test.mbt` for `render_graph_json`: a page with multiple outgoing edges (verifying comma separation and no trailing comma), a title containing `<`, `>`, `&` characters (verifying these are NOT HTML-escaped — only `"` and `\` need JSON escaping), a self-loop wikilink where source slug equals target slug, and a multi-page cross-edge scenario verifying all three edges appear correctly.
 
 Total suite: 1,003 tests.
+
+
+## Collections Parser: Exhaustive Error-Path Coverage
+
+The collections config parser (`src/collections/collections.mbt`) reads `collections.cfg` text and produces typed `CollectionDef` and `DataSchemaDef` structs. The config format uses `[section_name]` headers and `key = value` assignments. A malformed collections config could produce a build pipeline with missing content directories, untyped schemas, or duplicate collection names — errors that would only surface when rendering fails, not when the config is loaded. The parser's error paths are the structural barrier that catches config mistakes at ingest time.
+
+Initial test coverage was 40 tests covering the main success paths: schema type parsing (String, Date, DateTime, Int, Float, Bool, Url, Slug, Array, Optional, Enum, Ref), sort orders (all five variants plus invalid), data schemas, template overrides, page sizes, description fields, and a handful of schema-level failures (unknown type, malformed Enum). The structural error paths in `parse()` and the `finalize_*()` helpers were untested. The uncovered paths fell into eight categories:
+
+1. **`EmptyConfig`** — config text with only comments, whitespace, or no `[section]` headers at all. Both `parse("")` and `parse("# just a comment")` must return `Err(EmptyConfig)`. Without a test, a refactor that changed the "no definitions found" check from `defs.length() == 0` to some other emptiness signal would silently change the error category.
+
+2. **Assignment outside section** — a `key = value` line before any `[section]` header. The parser tracks `current_section` and rejects lines that aren't comments, section headers, or assignments within a section. The error message is `"assignment outside section"`. Without a test, a refactor that initialized `current_section` to a default section instead of `None` would accept orphaned assignments silently.
+
+3. **Malformed key=value lines** — lines that don't contain `=`, or where `=` is at position 0 (no key) or at the end (no value). Each case triggers `"expected key=value"`. These guard against typos like bare field names or `= value` without a key.
+
+4. **`page_size` validation** — non-numeric (`abc`), negative (`-5`), and zero (`0`) values all trigger `"page_size must be a positive integer"`. The `parse_positive_int_collections` helper rejects anything that isn't a sequence of digits producing a value > 0. Without tests, the zero case is especially fragile — a refactor that checked `parsed > 0` as `parsed >= 0` would accept zero as a page size.
+
+5. **Unknown keys** — a key that isn't `schema`, `dir`, `template`, `page_size`, `sort`, or `description` in a collection section, or isn't `required` in a data section. The error message includes the section name and the unknown key, making the diagnostic actionable. Without tests, adding a new valid key to the parser without updating the rejection branch would cause the "unknown key" check to reject the new key — a regression that only manifests when users try the new feature.
+
+6. **Duplicate names** — two `[posts]` sections produce `DuplicateCollection("posts")`; two `[data.nav]` sections produce `DuplicateDataSchema("nav")`. The `finalize_*` helpers check a `seen` map before adding definitions. Without tests, a refactor that removed the deduplication check would silently merge or overwrite collections, producing wrong builds.
+
+7. **Missing required fields** — a collection missing `schema` or `dir`, or a data section missing `required`. Each produces `MissingRequiredField(section, field_name)`. These are the most user-facing errors — a typo like `dri = content/posts` instead of `dir = content/posts` should produce a clear "missing dir" message, not a cryptic downstream failure.
+
+8. **Section header validation** — `parse_section_header` rejects headers that are too short (`[` alone), missing closing brackets (`[posts`), empty (`[  ]`), have invalid names (starting with a digit, containing special characters), or have invalid data schema names (empty after `data.`, starting with a digit). Each rejection is a single branch that could be collapsed by a refactor. The "invalid collection name" check uses `is_valid_field_name`, which requires the name to start with a letter or underscore and contain only alphanumeric characters, hyphens, and underscores.
+
+9. **Value literal errors** — `parse_value_literal` rejects unterminated quoted strings (opening `"` without closing `"`). This catches the case where a user writes `schema = "title:String` without the closing quote.
+
+10. **Schema-level errors propagated through parse** — invalid field declarations (no colon), invalid field names (starting with a digit), and unknown field types all produce `InvalidSchema` errors. These are the same errors that `parse_schema_string` produces, but they must also propagate correctly through the full `parse()` pipeline.
+
+The result is 32 new tests bringing the collections module to 72 total tests. The pattern continues the one documented for the manifest parser, cache parser, and sitemap utilities: when a parser's contract is "accept this exact shape, reject everything else," the rejection branches need explicit test coverage because they are the most fragile part of the implementation. Happy-path tests verify that the parser works for valid input; error-path tests verify that it continues to reject invalid input after refactoring.
+
+Total suite: 1,035 tests.
