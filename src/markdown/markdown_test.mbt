@@ -1070,3 +1070,100 @@ test "inline html span with class passthrough" {
   )
   assert_true(rendered.contains("<span class=\"highlight\">word</span>"))
 }
+
+// ── is_hrule ──────────────────────────────────────────────────────────────────
+
+///|
+test "is_hrule accepts dash star underscore" {
+  assert_true(is_hrule("---"))
+  assert_true(is_hrule("***"))
+  assert_true(is_hrule("___"))
+  assert_true(is_hrule("  ---  "))
+}
+
+///|
+test "is_hrule rejects short and mixed" {
+  assert_true(!is_hrule("--"))
+  assert_true(!is_hrule("--text"))
+  assert_true(!is_hrule("-*-"))
+  assert_true(!is_hrule(""))
+  assert_true(!is_hrule("---text"))
+}
+
+// ── is_blockquote_line ────────────────────────────────────────────────────────
+
+///|
+test "is_blockquote_line accepts prefixed lines" {
+  assert_true(is_blockquote_line("> text"))
+  assert_true(is_blockquote_line("> "))
+  assert_true(is_blockquote_line(">>"))
+}
+
+///|
+test "is_blockquote_line rejects non-prefixed" {
+  assert_true(!is_blockquote_line("text"))
+  assert_true(!is_blockquote_line(""))
+  assert_true(!is_blockquote_line(" > indented"))
+}
+
+// ── blockquote rendering ──────────────────────────────────────────────────────
+
+///|
+test "blockquote basic renders blockquote with p" {
+  let rendered = render("> quoted text", empty_wl())
+  assert_true(rendered.contains("<blockquote>"))
+  assert_true(rendered.contains("<p>quoted text</p>"))
+  assert_true(rendered.contains("</blockquote>"))
+}
+
+///|
+test "blockquote nested renders nested blockquotes" {
+  let rendered = render("> > inner", empty_wl())
+  // Outer blockquote contains an inner blockquote
+  assert_true(rendered.contains("<blockquote>"))
+  // Two blockquote tags — outer and nested
+  let bq_count = rendered.split("<blockquote>").to_array().length()
+  assert_eq(bq_count, 3) // split produces n+1 parts for n occurrences
+}
+
+///|
+test "blockquote with inline formatting" {
+  let rendered = render("> **bold** text", empty_wl())
+  assert_true(rendered.contains("<blockquote>"))
+  assert_true(rendered.contains("<strong>bold</strong>"))
+}
+
+// ── horizontal rule rendering ─────────────────────────────────────────────────
+
+///|
+test "hrule renders hr tag" {
+  let rendered = render("---", empty_wl())
+  assert_true(rendered.contains("<hr />"))
+}
+
+///|
+test "hrule surrounded by paragraphs" {
+  let body = "Before.\n\n---\n\nAfter."
+  let rendered = render(body, empty_wl())
+  assert_true(rendered.contains("<p>Before.</p>"))
+  assert_true(rendered.contains("<hr />"))
+  assert_true(rendered.contains("<p>After.</p>"))
+}
+
+// ── fence helpers ─────────────────────────────────────────────────────────────
+
+///|
+test "fence_char_of returns correct char" {
+  assert_eq(fence_char_of("```"), '`')
+  assert_eq(fence_char_of("~~~"), '~')
+  assert_eq(fence_char_of(""), '`')
+}
+
+///|
+test "is_fence_end matching and non-matching" {
+  assert_true(is_fence_end("```", '`'))
+  assert_true(is_fence_end("~~~", '~'))
+  assert_true(!is_fence_end("```", '~'))
+  assert_true(!is_fence_end("``", '`'))
+  assert_true(!is_fence_end("", '`'))
+}

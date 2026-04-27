@@ -386,3 +386,265 @@ test "substr extracts expected range" {
   assert_eq(substr("abc", 0, 3), "abc")
   assert_eq(substr("abc", 1, 2), "b")
 }
+
+// ── char_at ───────────────────────────────────────────────────────────────────
+
+///|
+test "char_at returns correct character" {
+  assert_eq(char_at("hello", 0), 'h')
+  assert_eq(char_at("hello", 4), 'o')
+}
+
+///|
+test "char_at last index" {
+  assert_eq(char_at("abc", 2), 'c')
+}
+
+// ── trim variants ─────────────────────────────────────────────────────────────
+
+///|
+test "trim removes all whitespace" {
+  assert_eq(trim("  hello  "), "hello")
+  assert_eq(trim("\t\nhello\r\n"), "hello")
+  assert_eq(trim("hello"), "hello")
+  assert_eq(trim(""), "")
+}
+
+///|
+test "trim_start removes leading whitespace" {
+  assert_eq(trim_start("  hello  "), "hello  ")
+  assert_eq(trim_start("\n\thello"), "hello")
+  assert_eq(trim_start("hello"), "hello")
+}
+
+///|
+test "trim_end removes trailing whitespace" {
+  assert_eq(trim_end("  hello  "), "  hello")
+  assert_eq(trim_end("hello\r\n"), "hello")
+  assert_eq(trim_end("hello"), "hello")
+}
+
+///|
+test "trim_h horizontal only preserves newlines" {
+  assert_eq(trim_h("  hello  "), "hello")
+  assert_eq(trim_h("\n  hello  \n"), "\n  hello  \n")
+  assert_eq(trim_h("hello"), "hello")
+  assert_eq(trim_h(""), "")
+}
+
+// ── character classifiers ─────────────────────────────────────────────────────
+
+///|
+test "is_digit true and false boundaries" {
+  assert_true(is_digit('0'))
+  assert_true(is_digit('5'))
+  assert_true(is_digit('9'))
+  assert_true(!is_digit('/'))
+  assert_true(!is_digit(':'))
+  assert_true(!is_digit('a'))
+}
+
+///|
+test "is_alpha true and false boundaries" {
+  assert_true(is_alpha('a'))
+  assert_true(is_alpha('z'))
+  assert_true(is_alpha('A'))
+  assert_true(is_alpha('Z'))
+  assert_true(!is_alpha('`'))
+  assert_true(!is_alpha('{'))
+  assert_true(!is_alpha('0'))
+}
+
+///|
+test "is_ident_start accepts alpha and underscore only" {
+  assert_true(is_ident_start('a'))
+  assert_true(is_ident_start('Z'))
+  assert_true(is_ident_start('_'))
+  assert_true(!is_ident_start('0'))
+  assert_true(!is_ident_start('-'))
+}
+
+///|
+test "is_ident_part accepts alpha digit and underscore" {
+  assert_true(is_ident_part('a'))
+  assert_true(is_ident_part('0'))
+  assert_true(is_ident_part('_'))
+  assert_true(!is_ident_part('-'))
+  assert_true(!is_ident_part(' '))
+}
+
+///|
+test "is_whitespace recognizes space tab cr lf" {
+  assert_true(is_whitespace(' '))
+  assert_true(is_whitespace('\t'))
+  assert_true(is_whitespace('\n'))
+  assert_true(is_whitespace('\r'))
+  assert_true(!is_whitespace('a'))
+  assert_true(!is_whitespace('.'))
+}
+
+///|
+test "is_hex_digit covers 0-9 a-f A-F" {
+  assert_true(is_hex_digit('0'))
+  assert_true(is_hex_digit('9'))
+  assert_true(is_hex_digit('a'))
+  assert_true(is_hex_digit('f'))
+  assert_true(is_hex_digit('A'))
+  assert_true(is_hex_digit('F'))
+  assert_true(!is_hex_digit('g'))
+  assert_true(!is_hex_digit('G'))
+}
+
+///|
+test "is_octal_digit 0-7 true 8-9 false" {
+  assert_true(is_octal_digit('0'))
+  assert_true(is_octal_digit('7'))
+  assert_true(!is_octal_digit('8'))
+  assert_true(!is_octal_digit('9'))
+  assert_true(!is_octal_digit('a'))
+}
+
+///|
+test "is_operator_char covers arithmetic and comparison" {
+  assert_true(is_operator_char('+'))
+  assert_true(is_operator_char('-'))
+  assert_true(is_operator_char('*'))
+  assert_true(is_operator_char('/'))
+  assert_true(is_operator_char('='))
+  assert_true(is_operator_char('!'))
+  assert_true(is_operator_char('<'))
+  assert_true(is_operator_char('>'))
+  assert_true(!is_operator_char('a'))
+  assert_true(!is_operator_char(' '))
+}
+
+///|
+test "is_punct_char covers brackets and separators" {
+  assert_true(is_punct_char('('))
+  assert_true(is_punct_char(')'))
+  assert_true(is_punct_char('{'))
+  assert_true(is_punct_char('}'))
+  assert_true(is_punct_char(';'))
+  assert_true(is_punct_char(','))
+  assert_true(is_punct_char('.'))
+  assert_true(is_punct_char(':'))
+  assert_true(!is_punct_char('a'))
+  assert_true(!is_punct_char('+'))
+}
+
+// ── starts_with / ends_with / starts_with_at ─────────────────────────────────
+
+///|
+test "starts_with basic and empty prefix" {
+  assert_true(starts_with("hello", "hel"))
+  assert_true(starts_with("hello", ""))
+  assert_true(!starts_with("hello", "world"))
+  assert_true(starts_with("", ""))
+  assert_true(!starts_with("", "a"))
+}
+
+///|
+test "ends_with basic and empty suffix" {
+  assert_true(ends_with("hello", "llo"))
+  assert_true(ends_with("hello", ""))
+  assert_true(!ends_with("hello", "hel"))
+  assert_true(ends_with("", ""))
+  assert_true(!ends_with("", "a"))
+}
+
+///|
+test "starts_with_at position-based matching" {
+  assert_true(starts_with_at("hello world", 0, "hello"))
+  assert_true(starts_with_at("hello world", 6, "world"))
+  assert_true(!starts_with_at("hello world", 0, "world"))
+  assert_true(!starts_with_at("short", 3, "rtx"))
+  assert_true(starts_with_at("abc", 0, ""))
+}
+
+// ── hex_nibble ────────────────────────────────────────────────────────────────
+
+///|
+test "hex_nibble maps 0-15 to hex chars" {
+  assert_eq(hex_nibble(0), '0')
+  assert_eq(hex_nibble(9), '9')
+  assert_eq(hex_nibble(10), 'a')
+  assert_eq(hex_nibble(15), 'f')
+}
+
+// ── ascii_lower_char ─────────────────────────────────────────────────────────
+
+///|
+test "ascii_lower_char converts uppercase leaves rest unchanged" {
+  assert_eq(ascii_lower_char('A'), 'a')
+  assert_eq(ascii_lower_char('Z'), 'z')
+  assert_eq(ascii_lower_char('a'), 'a')
+  assert_eq(ascii_lower_char('0'), '0')
+  assert_eq(ascii_lower_char(' '), ' ')
+}
+
+// ── skip_ws / skip_ws_h ──────────────────────────────────────────────────────
+
+///|
+test "skip_ws skips all whitespace including newlines" {
+  assert_eq(skip_ws("  \n\t  hello", 0), 6)
+  assert_eq(skip_ws("hello", 0), 0)
+  assert_eq(skip_ws("  hello", 0), 2)
+}
+
+///|
+test "skip_ws_h skips horizontal whitespace only" {
+  assert_eq(skip_ws_h("  \thello", 0), 3)
+  assert_eq(skip_ws_h("\nhello", 0), 0)
+  assert_eq(skip_ws_h("hello", 0), 0)
+}
+
+// ── find_char / find_str ─────────────────────────────────────────────────────
+
+///|
+test "find_char found and not-found cases" {
+  assert_eq(find_char("hello world", 0, 'o', 11), 4)
+  assert_eq(find_char("hello world", 6, 'o', 11), 7)
+  assert_eq(find_char("hello", 0, 'z', 5), -1)
+  assert_eq(find_char("abc", 5, 'a', 3), -1)
+}
+
+///|
+test "find_str found and not-found cases" {
+  assert_eq(find_str("hello world", 0, "world", 11), 6)
+  assert_eq(find_str("hello world", 0, "xyz", 11), -1)
+  assert_eq(find_str("abc abc", 0, "abc", 7), 0)
+  assert_eq(find_str("abc abc", 1, "abc", 7), 4)
+  assert_eq(find_str("ab", 0, "abc", 2), -1)
+}
+
+// ── insertion_sort ────────────────────────────────────────────────────────────
+
+///|
+test "insertion_sort empty single sorted reversed duplicates" {
+  let empty : Array[Int] = []
+  insertion_sort(empty, (a, b) => a.compare(b))
+  assert_eq(empty.length(), 0)
+
+  let single = [42]
+  insertion_sort(single, (a, b) => a.compare(b))
+  assert_eq(single[0], 42)
+
+  let sorted = [1, 2, 3]
+  insertion_sort(sorted, (a, b) => a.compare(b))
+  assert_eq(sorted[0], 1)
+  assert_eq(sorted[1], 2)
+  assert_eq(sorted[2], 3)
+
+  let reversed = [3, 2, 1]
+  insertion_sort(reversed, (a, b) => a.compare(b))
+  assert_eq(reversed[0], 1)
+  assert_eq(reversed[1], 2)
+  assert_eq(reversed[2], 3)
+
+  let dups = [2, 1, 2, 1]
+  insertion_sort(dups, (a, b) => a.compare(b))
+  assert_eq(dups[0], 1)
+  assert_eq(dups[1], 1)
+  assert_eq(dups[2], 2)
+  assert_eq(dups[3], 2)
+}
