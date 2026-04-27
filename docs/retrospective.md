@@ -2276,7 +2276,7 @@ The third win is the separation between the build engine and I/O. Commit `09070c
 | Source files | 35 |
 | Test files | 32 (black-box) + 1 (white-box) |
 | Packages | 31 |
-| Tests | 1,003 passing |
+| Tests | 1,115 passing |
 | Compiler warnings | 0 |
 | External dependencies | 2 (`moonbitlang/x` 0.4.40, `TheWaWaR/clap` 0.2.6) |
 | Commits | 262 |
@@ -2635,3 +2635,41 @@ Two tests required correction after initial implementation. The MoonBit `tokeniz
 The result is 44 new tests bringing the highlight module from 22 to 66 tests. The module went from smoke-test coverage to edge-case coverage across all public API functions and all supported languages. The lossless-roundtrip tests are the most valuable — they are property tests that will catch any tokenizer regression that drops or duplicates characters, regardless of which token boundary logic was changed.
 
 Total suite: 1,079 tests.
+
+
+---
+
+## Strutil and Markdown: Gap Coverage for Utility Primitives and Structural Blocks
+
+The `strutil` and `markdown` packages are lattice's lowest and middle layers respectively. `strutil` provides character classifiers, whitespace trimmers, string search, and sorting primitives consumed by the frontmatter parser, the schema validator, the markdown renderer, the wikilink resolver, and the template engine. `markdown` converts markdown bodies to HTML, handling block-level structures (headings, lists, blockquotes, code fences, horizontal rules) and inline formatting.
+
+Both packages had significant test coverage gaps despite being heavily depended upon. `strutil` had 50 tests covering HTML escaping, JSON serialization, URL assembly, numeric parsing, date validation, and line operations — but zero tests for the character classifiers (`is_digit`, `is_alpha`, `is_ident_start`, `is_ident_part`, `is_whitespace`, `is_hex_digit`, `is_octal_digit`, `is_operator_char`, `is_punct_char`), the trim variants (`trim`, `trim_start`, `trim_end`, `trim_h`), the string search helpers (`find_char`, `find_str`, `starts_with_at`, `starts_with`, `ends_with`), the position-based whitespace skippers (`skip_ws`, `skip_ws_h`), the case conversion helpers (`ascii_lower_char`, `hex_nibble`), the character accessor (`char_at`), and the in-place sort (`insertion_sort`). `markdown` had 113 tests covering inline formatting, nested lists, definition lists, task lists, footnotes, tables, math, HTML passthrough, shortcodes, and autolinks — but zero tests for blockquote parsing/rendering, horizontal rule rendering, and the fence helper functions (`fence_char_of`, `is_fence_end`).
+
+### Why these gaps matter
+
+**Character classifiers are consumed by multiple parsers.** `is_ident_start` and `is_ident_part` are used by the frontmatter parser to validate field names, by the slug generator to determine which characters are alphanumeric, and by the markdown inline parser for underscore word-boundary detection. If `is_ident_start` incorrectly classified `'0'` as an identifier start character, slug generation would produce wrong anchors, frontmatter field validation would accept numeric-leading field names, and underscore emphasis detection would break at word boundaries adjacent to digits. The true/false boundary tests pin the contract: `is_ident_start('0')` is `false`, `is_ident_start('_')` is `true`, `is_ident_part('0')` is `true`. These are not trivial assertions — they are the boundary conditions where a refactor that merged the two functions (or changed the implementation from explicit character ranges to a regex-like approach) would silently introduce bugs.
+
+**The trim variants have different whitespace definitions.** `trim`/`trim_start`/`trim_end` strip space, tab, CR, and LF. `trim_h` strips only space, tab, and CR — it preserves newlines. This distinction matters because `trim_h` is used in contexts where line structure is significant (e.g., the URL normalizer strips horizontal whitespace but must not collapse multi-line input). The test `trim_h("\n  hello  \n") == "\n  hello  \n"` pins this contract. Without it, a refactor that unified `trim_h` with `trim` would collapse newlines in URL normalization.
+
+**`skip_ws` vs `skip_ws_h` mirrors the trim distinction.** `skip_ws` advances past all whitespace including newlines; `skip_ws_h` only horizontal whitespace. The tests verify that `skip_ws("\nhello", 0) == 1` while `skip_ws_h("\nhello", 0) == 0`. These position-returning functions are the building blocks for the markdown block parser's line scanning — a wrong return value would shift all subsequent parsing by one or more characters.
+
+**`find_char` and `find_str` have a limit parameter** that bounds the search range. The tests verify that the search respects this boundary (`find_str("ab", 0, "abc", 2)` returns `-1` because the needle exceeds the limit) and that the `from` parameter correctly offsets the search start (`find_char("hello world", 6, 'o', 11)` returns `7`, not `4`). These are the functions that the markdown inline parser uses to locate closing delimiters — an off-by-one in the limit parameter would cause unterminated emphasis or runaway scanning.
+
+**`insertion_sort` is the sort for feed entries** and other small arrays where the overhead of a comparison-based sort is acceptable. The test covers the four canonical cases: empty array (no panic), single element (identity), already sorted (identity), reverse sorted (full reversal), and duplicates (stability). The duplicate test verifies that equal elements maintain their relative order — this is the stable-sort contract that the comment on `insertion_sort` claims but no test previously verified.
+
+**The markdown blockquote gap** existed because the 113 existing tests focused on inline formatting, nested lists, tables, and shortcodes — the more complex block types. Basic structural blocks like blockquote and horizontal rule had no rendering tests at all. The `is_hrule` function has a narrow acceptance criterion: the trimmed line must be exactly `"---"`, `"***"`, or `"___"`. No spaces between characters, no mixed characters, no partial matches. The tests verify this exact contract — `is_hrule("---")` is `true`, `is_hrule("- - -")` is `false`, `is_hrule("--text")` is `false`. The blockquote tests verify that `> text` renders as `<blockquote><p>text</p></blockquote>`, that nested `> > inner` produces two nested `<blockquote>` elements, and that inline formatting inside blockquotes (`> **bold** text`) renders correctly. The horizontal rule test verifies that `---` renders `<hr />` and that paragraphs surrounding a horizontal rule are preserved.
+
+**The fence helper tests** (`fence_char_of`, `is_fence_end`) verify the fence-matching contract. `fence_char_of("```")` returns backtick, `fence_char_of("~~~")` returns tilde. `is_fence_end` requires at least 3 characters matching the fence char — `is_fence_end("```", '`')` is true but `is_fence_end("``", '`')` is false. These are the predicates that determine when a fenced code block terminates; a wrong fence char match would swallow content into code blocks.
+
+### Test strategy
+
+For the strutil classifiers: one test per function with true/false boundary pairs. The boundaries are chosen to test the edge of each character range (e.g., `'/'` and `':'` bracket `'0'`–`'9'` in ASCII, `'`'` and `'{'` bracket `'a'`–`'z'`).
+
+For the search functions: position-offset tests verifying that `from` and `limit` parameters are respected, plus found/not-found cases.
+
+For insertion_sort: the four canonical cases plus duplicates, covering the full decision tree of the sort's comparison logic.
+
+For markdown blockquote/hrule: structural rendering tests verifying the HTML output contains the expected elements, plus predicate tests (`is_hrule`, `is_blockquote_line`) verifying the exact acceptance criteria.
+
+25 new strutil tests, 11 new markdown tests. Total suite: 1,115 tests.
+
