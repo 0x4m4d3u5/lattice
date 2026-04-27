@@ -507,3 +507,208 @@ test "yaml frontmatter missing colon gives clear error" {
     Err(e) => assert_true(e.contains("':' separator"))
   }
 }
+
+///|
+test "frontmatter empty TOML block produces empty fields and preserves body" {
+  let src = "+++\n+++\nbody text here\n"
+  match @frontmatter.parse(src) {
+    Ok(fm) => {
+      assert_eq(fm.fields.length(), 0)
+      assert_eq(fm.body, "body text here\n")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "frontmatter empty YAML block produces empty fields and preserves body" {
+  let src = "---\n---\nbody text here\n"
+  match @frontmatter.parse(src) {
+    Ok(fm) => {
+      assert_eq(fm.fields.length(), 0)
+      assert_eq(fm.body, "body text here\n")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "frontmatter TOML boolean true parses as FBool(true)" {
+  // Tests only covered false before — true is a separate branch in parse_value_at
+  let src = "+++\ndraft = true\npublished = false\n+++\n"
+  match @frontmatter.parse(src) {
+    Ok(fm) => {
+      match fm.fields.get("draft") {
+        Some(FBool(v)) => assert_eq(v, true)
+        _ => assert_true(false)
+      }
+      match fm.fields.get("published") {
+        Some(FBool(v)) => assert_eq(v, false)
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "frontmatter TOML negative integer parses as FInt" {
+  // parse_int_str handles negation — tests previously only used positive values
+  let src = "+++\noffset = -42\nzero = 0\n+++\n"
+  match @frontmatter.parse(src) {
+    Ok(fm) => {
+      match fm.fields.get("offset") {
+        Some(FInt(v)) => assert_eq(v, -42)
+        _ => assert_true(false)
+      }
+      match fm.fields.get("zero") {
+        Some(FInt(v)) => assert_eq(v, 0)
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "frontmatter TOML empty array produces FArray with length 0" {
+  // parse_array_at has an early-return branch for the empty case — untested
+  let src = "+++\ntags = []\n+++\n"
+  match @frontmatter.parse(src) {
+    Ok(fm) =>
+      match fm.fields.get("tags") {
+        Some(FArray(items)) => assert_eq(items.length(), 0)
+        _ => assert_true(false)
+      }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "frontmatter TOML with no body text produces empty body string" {
+  // body is the substring after the closing delimiter — empty when file ends there
+  let src = "+++\ntitle = \"hello\"\n+++\n"
+  match @frontmatter.parse(src) {
+    Ok(fm) => {
+      match fm.fields.get("title") {
+        Some(FStr(v)) => assert_eq(v, "hello")
+        _ => assert_true(false)
+      }
+      assert_eq(fm.body, "")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "frontmatter YAML boolean true and false parse correctly" {
+  // YAML uses parse_yaml_value → parse_value_strict → starts_with "true"/"false"
+  let src = "---\nactive: true\ndisabled: false\n---\n"
+  match @frontmatter.parse(src) {
+    Ok(fm) => {
+      match fm.fields.get("active") {
+        Some(FBool(v)) => assert_eq(v, true)
+        _ => assert_true(false)
+      }
+      match fm.fields.get("disabled") {
+        Some(FBool(v)) => assert_eq(v, false)
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "frontmatter YAML negative integer parses as FInt" {
+  let src = "---\npriority: -5\nbase: -1\n---\n"
+  match @frontmatter.parse(src) {
+    Ok(fm) => {
+      match fm.fields.get("priority") {
+        Some(FInt(v)) => assert_eq(v, -5)
+        _ => assert_true(false)
+      }
+      match fm.fields.get("base") {
+        Some(FInt(v)) => assert_eq(v, -1)
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "frontmatter YAML empty value colon produces FStr empty string" {
+  // parse_yaml_assignment: when value after colon is empty and no block items follow,
+  // returns FStr(""). This is the fallback for "field:" with no value.
+  let src = "---\ndescription:\ntitle: hello\n---\n"
+  match @frontmatter.parse(src) {
+    Ok(fm) => {
+      match fm.fields.get("description") {
+        Some(FStr(v)) => assert_eq(v, "")
+        _ => assert_true(false)
+      }
+      match fm.fields.get("title") {
+        Some(FStr(v)) => assert_eq(v, "hello")
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "frontmatter YAML no body produces empty body string" {
+  let src = "---\ntitle: hello\n---\n"
+  match @frontmatter.parse(src) {
+    Ok(fm) => {
+      match fm.fields.get("title") {
+        Some(FStr(v)) => assert_eq(v, "hello")
+        _ => assert_true(false)
+      }
+      assert_eq(fm.body, "")
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "frontmatter TOML unterminated array gives parse error" {
+  // parse_array_at: no closing ] → Err("unterminated array literal")
+  let src = "+++\ntags = [1, 2\n+++\n"
+  match @frontmatter.parse(src) {
+    Ok(_) => assert_true(false)
+    Err(msg) => assert_true(msg.contains("unterminated array"))
+  }
+}
+
+///|
+test "frontmatter parse_toml rejects non-TOML delimiter directly" {
+  // parse_toml is a public function — test it directly with wrong delimiter
+  match @frontmatter.parse_toml("---\ntitle: hello\n---\n") {
+    Ok(_) => assert_true(false)
+    Err(msg) => assert_true(msg.contains("+++"))
+  }
+}
+
+///|
+test "frontmatter parse_yaml rejects non-YAML delimiter directly" {
+  // parse_yaml is a public function — test it directly with wrong delimiter
+  match @frontmatter.parse_yaml("+++\ntitle = \"hello\"\n+++\n") {
+    Ok(_) => assert_true(false)
+    Err(msg) => assert_true(msg.contains("---"))
+  }
+}
+
+///|
+test "frontmatter TOML comment-only block produces empty fields" {
+  // Lines starting with # are skipped; the block should produce no fields
+  let src = "+++\n# this is a comment\n# another comment\n+++\nbody\n"
+  match @frontmatter.parse(src) {
+    Ok(fm) => {
+      assert_eq(fm.fields.length(), 0)
+      assert_eq(fm.body, "body\n")
+    }
+    Err(_) => assert_true(false)
+  }
+}

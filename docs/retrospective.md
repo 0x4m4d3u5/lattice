@@ -2673,3 +2673,39 @@ For markdown blockquote/hrule: structural rendering tests verifying the HTML out
 
 25 new strutil tests, 11 new markdown tests. Total suite: 1,115 tests.
 
+
+---
+
+## Frontmatter Parser: Boundary and Branch Coverage
+
+The `frontmatter` package is lattice's content ingestion gate. Every piece of content that the SSG processes flows through `parse()` first — the typed `FrontmatterValue` tree it produces is what schema validation, wikilink extraction, and template rendering all operate on. If the parser misclassifies a value (a `-42` integer becoming a string, a `true` boolean becoming a string, an empty array causing a panic), every downstream system that assumed the correct type will misbehave silently or produce wrong output.
+
+The 17 existing frontmatter tests covered the happy-path of TOML and YAML parsing in depth: full documents with multiple field types, nested arrays, string escapes, date validation, float parsing, and error messages for malformed input. What they left uncovered were the **boundary conditions** of individual parsing branches — the points in the code where a small change in the parser's logic would silently alter behavior for valid inputs.
+
+### Gaps identified and why they matter
+
+**`true` boolean in TOML was not tested.** The existing tests included `draft = false` but not `draft = true`. In `parse_value_at`, both branches are separate `starts_with` checks: `starts_with_at(s, i, "true")` and `starts_with_at(s, i, "false")`. These are independent code paths. If a refactor unified the boolean check (or swapped the branch order, or changed the string literal), the `false` tests would still pass while `true` broke silently. The same gap existed in YAML, where boolean parsing routes through `parse_value_strict` and then the same `starts_with` logic. Two tests, one for TOML and one for YAML, pin both branches.
+
+**Negative integers were not tested.** The `parse_int_str` function handles the leading `-` character explicitly: it reads it, sets `neg = true`, then parses the digit sequence and negates the result. The `parse_float_str` function does the same. All prior tests used positive values, meaning the negation branch in both functions had zero coverage. A refactor that dropped the `-` handling (e.g., making `parse_int_str` call the stdlib's integer parser without checking for a leading minus) would break negative int parsing without any test catching it. Tested with `offset = -42` in TOML and `priority: -5` in YAML.
+
+**Empty arrays were not tested.** `parse_array_at` has an early-return branch for the empty case: after consuming `[` and whitespace, if the next character is `]`, it immediately returns `FArray([])` without entering the item-parsing loop. No prior test exercised this path — all array tests had at least one item. The empty-array early return is simple code, but its absence from tests means that a refactor removing it (or accidentally breaking the `]` check) would silently turn `tags = []` into a parse error. One test for `tags = []` producing `FArray` of length 0 closes this gap.
+
+**Empty frontmatter blocks were not tested.** A document with `+++\n+++\nbody` is valid — the frontmatter block contains zero fields. The TOML parser skips all lines, finds the closing `+++`, and returns a `Frontmatter` with an empty fields map and the body text. Without a test, a parser change that required at least one field, or that failed on an empty field section, would go undetected. The tests verify both TOML and YAML empty blocks (`+++\n+++\n` and `---\n---\n`) produce `fields.length() == 0` with the body preserved.
+
+**Comment-only frontmatter blocks were not tested.** A TOML block containing only `# comment` lines is valid and produces zero fields. The parser's loop explicitly skips lines where `char_at(l, 0) == '#'`. Without a test, a refactor that removed the comment-skip condition would treat the comment line as a key-value assignment and emit a parse error. The test for `+++\n# this is a comment\n# another comment\n+++\nbody\n` verifies the skip-and-continue logic.
+
+**No-body documents were not tested.** When a file ends immediately after the closing delimiter (`+++\n...fields...\n+++\n` with nothing after), the body substring is empty. The `parse_toml` function computes `body_start = if line_end + 1 <= n { line_end + 1 } else { n }` and then returns `substr(content, body_start, n)`, which is `""` when `body_start == n`. No prior test verified this — all tests had at least a newline or body text after the closing delimiter. A refactor that used `line_end + 1` unconditionally (dropping the bounds check) would panic or return a wrong slice on a no-body document. Tests for both TOML and YAML no-body documents pin this edge case.
+
+**YAML empty value colon produces `FStr("")`** — a subtlety not tested before. When a YAML line is `description:` with nothing after the colon, `parse_yaml_assignment` returns `FStr("")` because there are no block-list items (`-`) following. This is the correct behavior (the field exists with an empty string value), but it wasn't tested. The subtle danger: a content author who writes `description:` expecting a null/optional value gets an empty string instead. The test documents the actual contract so future attempts to change it (e.g., to return `None` or skip the field) are immediately visible.
+
+**`parse_toml` and `parse_yaml` called directly with wrong delimiters.** Both functions are `pub` API — they can be called directly, not just through `parse()`. The error messages they produce for wrong delimiters (`"missing opening '+++' delimiter"` and `"missing opening '---' delimiter"`) are not tested anywhere. A refactor that changed these messages (or accidentally dropped the delimiter check) would break callers that parse for specific format without first auto-detecting. Two direct-call tests close this gap.
+
+### Test strategy
+
+For boolean completeness: pair tests covering both `true` and `false` in the same test, so the relationship between the two branches is visible. A single test that only checks `true` or only checks `false` is weaker than one that checks both in the same document.
+
+For boundary inputs (empty arrays, empty blocks, no-body): minimize the input to the exact structure that exercises the branch. `+++\n+++\nbody` is simpler than a full document — its simplicity makes the test's intent obvious.
+
+For error messages: use `contains` rather than `eq` to allow the error text to be improved without breaking the test. The test asserts the diagnostic is actionable (mentions the relevant token), not that the wording is frozen.
+
+14 new frontmatter tests, total suite: 1,129 tests.
