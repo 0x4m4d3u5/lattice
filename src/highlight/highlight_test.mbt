@@ -413,3 +413,493 @@ test "highlight dispatch includes toml and yaml" {
   assert_true(has_kind(yaml, Identifier))
   assert_true(has_kind(yml, Identifier))
 }
+
+/// ============================================================
+/// Comprehensive edge-case and boundary tests
+/// ============================================================
+
+///|
+test "highlight lossless roundtrip moonbit with special characters" {
+  let src = "fn demo() -> String {\n" +
+    "  let s = \"hello\\nworld\\t!\"\n" +
+    "  let c = '\\\\'\n" +
+    "  let hex = 0xFF\n" +
+    "  let bin = 0b1010\n" +
+    "  // comment with <tag> & \"quotes\"\n" +
+    "  /* block * comment */\n" +
+    "  let n = 42\n" +
+    "}\n"
+  let tokens = tokenize_moonbit(src)
+  assert_eq(flatten_text(tokens), src)
+}
+
+///|
+test "highlight lossless roundtrip python with mixed content" {
+  let src = "def f(x):\n" +
+    "  # hash comment\n" +
+    "  y = \"double 'quote' inside\"\n" +
+    "  z = 'single \"quote\" inside'\n" +
+    "  w = \"\"\"triple\nline\"\"\"\n" +
+    "  return x + 1\n"
+  let tokens = tokenize_python(src)
+  assert_eq(flatten_text(tokens), src)
+}
+
+///|
+test "highlight lossless roundtrip json with edge cases" {
+  let src = "{\n" +
+    "  \"escapes\": \"\\\"\\\\\\/\\b\\f\\n\\r\\t\",\n" +
+    "  \"neg\": -42,\n" +
+    "  \"exp\": 1.5e10,\n" +
+    "  \"negexp\": -3.2E-5,\n" +
+    "  \"bool\": true,\n" +
+    "  \"nil\": null\n" +
+    "}\n"
+  let tokens = tokenize_json(src)
+  assert_eq(flatten_text(tokens), src)
+}
+
+///|
+test "highlight lossless roundtrip html with entities and nesting" {
+  let src = "<div class=\"main\">\n" +
+    "  <p>Hello &amp; world!</p>\n" +
+    "  <!-- a comment -->\n" +
+    "  <span id=\"x\">text</span>\n" +
+    "</div>\n"
+  let tokens = tokenize_html(src)
+  assert_eq(flatten_text(tokens), src)
+}
+
+///|
+test "highlight lossless roundtrip css with at-rules and colors" {
+  let src = "@media (min-width: 768px) {\n" +
+    "  .hero {\n" +
+    "    background: #1a2b3c;\n" +
+    "    color: #fff;\n" +
+    "    font-size: 16px;\n" +
+    "  }\n" +
+    "  /* comment */\n" +
+    "}\n"
+  let tokens = tokenize_css(src)
+  assert_eq(flatten_text(tokens), src)
+}
+
+///|
+test "highlight lossless roundtrip sql with mixed keywords" {
+  let src = "select id, name\n" +
+    "from users\n" +
+    "where active = true\n" +
+    "  and age > 25\n" +
+    "order by name asc\n" +
+    "limit 10;\n" +
+    "-- end\n"
+  let tokens = tokenize_sql(src)
+  assert_eq(flatten_text(tokens), src)
+}
+
+///|
+test "highlight lossless roundtrip bash with dollar vars" {
+  let src = "#!/bin/bash\n" +
+    "export NAME=\"world\"\n" +
+    "echo \"Hello ${NAME}!\"\n" +
+    "echo $HOME\n" +
+    "cd /tmp\n"
+  let tokens = tokenize_bash(src)
+  assert_eq(flatten_text(tokens), src)
+}
+
+///|
+test "highlight lossless roundtrip rust with lifetimes and attributes" {
+  let src = "fn main() {\n" +
+    "  let s: &'static str = \"hi\";\n" +
+    "  #[derive(Debug)]\n" +
+    "  struct Foo;\n" +
+    "  let c = 'x';\n" +
+    "}\n"
+  let tokens = tokenize_rust(src)
+  assert_eq(flatten_text(tokens), src)
+}
+
+///|
+test "highlight lossless roundtrip toml with array of tables" {
+  let src = "# config\n" +
+    "[server]\n" +
+    "host = \"localhost\"\n" +
+    "port = 8080\n" +
+    "debug = true\n" +
+    "\n" +
+    "[[items]]\n" +
+    "name = 'first'\n"
+  let tokens = tokenize_toml(src)
+  assert_eq(flatten_text(tokens), src)
+}
+
+///|
+test "highlight lossless roundtrip yaml with anchors and null" {
+  let src = "---\n" +
+    "name: test\n" +
+    "ref: &anchor value\n" +
+    "alias: *anchor\n" +
+    "nil_val: null\n" +
+    "bool_val: true\n" +
+    "num: 3.14\n"
+  let tokens = tokenize_yaml(src)
+  assert_eq(flatten_text(tokens), src)
+}
+
+///|
+test "highlight language_supported recognizes all aliases" {
+  assert_true(language_supported("moonbit"))
+  assert_true(language_supported("mbt"))
+  assert_true(language_supported("typescript"))
+  assert_true(language_supported("ts"))
+  assert_true(language_supported("js"))
+  assert_true(language_supported("python"))
+  assert_true(language_supported("py"))
+  assert_true(language_supported("bash"))
+  assert_true(language_supported("sh"))
+  assert_true(language_supported("shell"))
+  assert_true(language_supported("zsh"))
+  assert_true(language_supported("go"))
+  assert_true(language_supported("c"))
+  assert_true(language_supported("html"))
+  assert_true(language_supported("css"))
+  assert_true(language_supported("json"))
+  assert_true(language_supported("rust"))
+  assert_true(language_supported("rs"))
+  assert_true(language_supported("sql"))
+  assert_true(language_supported("toml"))
+  assert_true(language_supported("yaml"))
+  assert_true(language_supported("yml"))
+}
+
+///|
+test "highlight language_supported rejects unknown languages" {
+  assert_false(language_supported("ruby"))
+  assert_false(language_supported("java"))
+  assert_false(language_supported("cpp"))
+  assert_false(language_supported("php"))
+  assert_false(language_supported(""))
+  assert_false(language_supported("Markdown"))
+  assert_false(language_supported("unknown"))
+}
+
+///|
+test "render highlighted escapes all HTML special characters" {
+  let tokens : Array[Token] = [
+    { kind: Identifier, text: "x<y>z" },
+    { kind: Whitespace, text: " " },
+    { kind: StringLit, text: "\"a&b\"" },
+  ]
+  let html = render_highlighted(tokens)
+  assert_true(html.contains("x&lt;y&gt;z"))
+  assert_true(html.contains("&amp;"))
+  assert_true(html.contains("&amp;b"))
+  // Whitespace should be raw, not in a span
+  assert_false(html.contains("<span class=\"hl-whitespace\">"))
+}
+
+///|
+test "render highlighted does not wrap whitespace in spans" {
+  let tokens : Array[Token] = [
+    { kind: Keyword, text: "fn" },
+    { kind: Whitespace, text: "  \n\t " },
+    { kind: Identifier, text: "demo" },
+  ]
+  let html = render_highlighted(tokens)
+  assert_true(html.contains("<span class=\"hl-keyword\">fn</span>"))
+  assert_true(html.contains("<span class=\"hl-identifier\">demo</span>"))
+  // Whitespace should appear raw, not in a span
+  assert_false(html.contains("hl-whitespace"))
+}
+
+///|
+test "css_classes contains all expected class names" {
+  let css = css_classes()
+  assert_true(css.contains("hl-keyword"))
+  assert_true(css.contains("hl-type"))
+  assert_true(css.contains("hl-string"))
+  assert_true(css.contains("hl-char"))
+  assert_true(css.contains("hl-number"))
+  assert_true(css.contains("hl-comment"))
+  assert_true(css.contains("hl-operator"))
+  assert_true(css.contains("hl-punct"))
+  assert_true(css.contains("hl-identifier"))
+  assert_true(css.contains("hl-builtin"))
+  assert_true(css.contains("hl-unknown"))
+  assert_true(css.contains("pre.highlight"))
+}
+
+///|
+test "highlight empty input returns empty array for all tokenizers" {
+  assert_eq(tokenize_moonbit("").length(), 0)
+  assert_eq(tokenize_typescript("").length(), 0)
+  assert_eq(tokenize_python("").length(), 0)
+  assert_eq(tokenize_bash("").length(), 0)
+  assert_eq(tokenize_go("").length(), 0)
+  assert_eq(tokenize_c("").length(), 0)
+  assert_eq(tokenize_html("").length(), 0)
+  assert_eq(tokenize_css("").length(), 0)
+  assert_eq(tokenize_json("").length(), 0)
+  assert_eq(tokenize_rust("").length(), 0)
+  assert_eq(tokenize_sql("").length(), 0)
+  assert_eq(tokenize_toml("").length(), 0)
+  assert_eq(tokenize_yaml("").length(), 0)
+  assert_eq(tokenize_plain("").length(), 0)
+}
+
+///|
+test "highlight moonbit classifies all keywords" {
+  let src = "fn pub priv let match enum struct trait impl type derive test if else return for while break continue true false is as in raise try catch throw"
+  let tokens = tokenize_moonbit(src)
+  assert_true(has_token(tokens, "fn", Keyword))
+  assert_true(has_token(tokens, "pub", Keyword))
+  assert_true(has_token(tokens, "priv", Keyword))
+  assert_true(has_token(tokens, "let", Keyword))
+  assert_true(has_token(tokens, "match", Keyword))
+  assert_true(has_token(tokens, "enum", Keyword))
+  assert_true(has_token(tokens, "struct", Keyword))
+  assert_true(has_token(tokens, "trait", Keyword))
+  assert_true(has_token(tokens, "impl", Keyword))
+  assert_true(has_token(tokens, "type", Keyword))
+  assert_true(has_token(tokens, "derive", Identifier))
+  assert_true(has_token(tokens, "test", Identifier))
+}
+
+///|
+test "highlight moonbit hex number prefix" {
+  let src = "let a = 0xFF\nlet b = 0x2A\n"
+  let tokens = tokenize_moonbit(src)
+  assert_eq(flatten_text(tokens), src)
+  assert_true(has_token(tokens, "0xFF", Number))
+  assert_true(has_token(tokens, "0x2A", Number))
+}
+
+///|
+test "highlight moonbit block comment is lossless" {
+  let src = "/* this is a\n   multiline comment */\nlet x = 1\n"
+  let tokens = tokenize_moonbit(src)
+  assert_eq(flatten_text(tokens), src)
+  assert_true(has_token(tokens, "/* this is a\n   multiline comment */", Comment))
+}
+
+///|
+test "highlight rust lifetime annotations" {
+  let src = "fn foo<'a>(x: &'a str) -> &'a str {\n  x\n}\n"
+  let tokens = tokenize_rust(src)
+  assert_eq(flatten_text(tokens), src)
+  assert_true(has_token(tokens, "'a", Keyword))
+}
+
+///|
+test "highlight rust raw string literal r#" {
+  let src = "let s = r#\"raw string\"#;\n"
+  let tokens = tokenize_rust(src)
+  assert_eq(flatten_text(tokens), src)
+  assert_true(has_kind(tokens, StringLit))
+}
+
+///|
+test "highlight rust attribute bracket" {
+  let src = "#[cfg(test)]\nfn main() {}\n"
+  let tokens = tokenize_rust(src)
+  assert_eq(flatten_text(tokens), src)
+  assert_true(has_token(tokens, "#[cfg(test)]", Comment))
+}
+
+///|
+test "highlight json null true false as keywords" {
+  let src = "{\"a\": true, \"b\": false, \"c\": null}\n"
+  let tokens = tokenize_json(src)
+  assert_eq(flatten_text(tokens), src)
+  assert_true(has_token(tokens, "true", Keyword))
+  assert_true(has_token(tokens, "false", Keyword))
+  assert_true(has_token(tokens, "null", Keyword))
+}
+
+///|
+test "highlight json negative number and exponent" {
+  let src = "{\"a\": -1, \"b\": 2.5e10, \"c\": -3.2E-5}\n"
+  let tokens = tokenize_json(src)
+  assert_eq(flatten_text(tokens), src)
+  assert_true(has_token(tokens, "-1", Number))
+  assert_true(has_token(tokens, "2.5e10", Number))
+  assert_true(has_token(tokens, "-3.2E-5", Number))
+}
+
+///|
+test "highlight html text between tags is unknown" {
+  let src = "<p>Hello world</p>\n"
+  let tokens = tokenize_html(src)
+  assert_eq(flatten_text(tokens), src)
+  assert_true(has_token(tokens, "Hello world", Unknown))
+  assert_true(has_token(tokens, "p", Keyword))
+}
+
+///|
+test "highlight html attribute names and values" {
+  let src = "<div class=\"hero\" id=\"main\"></div>\n"
+  let tokens = tokenize_html(src)
+  assert_eq(flatten_text(tokens), src)
+  assert_true(has_token(tokens, "class", Identifier))
+  assert_true(has_token(tokens, "id", Identifier))
+  assert_true(has_token(tokens, "\"hero\"", StringLit))
+  assert_true(has_token(tokens, "\"main\"", StringLit))
+}
+
+///|
+test "highlight python line comment with hash" {
+  let src = "# this is a comment\nx = 1\n"
+  let tokens = tokenize_python(src)
+  assert_eq(flatten_text(tokens), src)
+  assert_true(has_token(tokens, "# this is a comment", Comment))
+}
+
+///|
+test "highlight python triple single quote string" {
+  let src = "x = '''hello\nworld'''\n"
+  let tokens = tokenize_python(src)
+  assert_eq(flatten_text(tokens), src)
+  assert_true(has_token(tokens, "'''hello\nworld'''", StringLit))
+}
+
+///|
+test "highlight bash dollar brace variable expansion" {
+  let src = "echo ${HOME}/path\n"
+  let tokens = tokenize_bash(src)
+  assert_eq(flatten_text(tokens), src)
+  assert_true(has_token(tokens, "${HOME}", Builtin))
+}
+
+///|
+test "highlight bash dollar variable without braces" {
+  let src = "echo $HOME\n"
+  let tokens = tokenize_bash(src)
+  assert_eq(flatten_text(tokens), src)
+  assert_true(has_token(tokens, "$HOME", Builtin))
+}
+
+///|
+test "highlight go raw string backtick" {
+  let src = "var s = `raw string`\n"
+  let tokens = tokenize_go(src)
+  assert_eq(flatten_text(tokens), src)
+  assert_true(has_token(tokens, "`raw string`", StringLit))
+}
+
+///|
+test "highlight css hex color values" {
+  let src = ".x { color: #abc; background: #123456; }\n"
+  let tokens = tokenize_css(src)
+  assert_eq(flatten_text(tokens), src)
+  assert_true(has_token(tokens, "#abc", Number))
+  assert_true(has_token(tokens, "#123456", Number))
+}
+
+///|
+test "highlight css at-keyword rules" {
+  let src = "@media screen {}\n@keyframes fade {}\n"
+  let tokens = tokenize_css(src)
+  assert_eq(flatten_text(tokens), src)
+  assert_true(has_token(tokens, "@media", Keyword))
+  assert_true(has_token(tokens, "@keyframes", Keyword))
+}
+
+///|
+test "highlight sql case insensitive keywords" {
+  let src = "select * from users\n"
+  let tokens = tokenize_sql(src)
+  assert_eq(flatten_text(tokens), src)
+  assert_true(has_token(tokens, "select", Keyword))
+  assert_true(has_token(tokens, "from", Keyword))
+}
+
+///|
+test "highlight sql single quoted strings" {
+  let src = "SELECT * FROM users WHERE name = 'Alice'\n"
+  let tokens = tokenize_sql(src)
+  assert_eq(flatten_text(tokens), src)
+  assert_true(has_token(tokens, "'Alice'", StringLit))
+}
+
+///|
+test "highlight sql double dash comment" {
+  let src = "-- this is a comment\nSELECT 1\n"
+  let tokens = tokenize_sql(src)
+  assert_eq(flatten_text(tokens), src)
+  assert_true(has_token(tokens, "-- this is a comment", Comment))
+}
+
+///|
+test "highlight toml array of tables" {
+  let src = "[[items]]\nname = 'first'\n"
+  let tokens = tokenize_toml(src)
+  assert_eq(flatten_text(tokens), src)
+  assert_true(has_token(tokens, "[[items]]", Keyword))
+}
+
+///|
+test "highlight toml true false keywords" {
+  let src = "a = true\nb = false\n"
+  let tokens = tokenize_toml(src)
+  assert_eq(flatten_text(tokens), src)
+  assert_true(has_token(tokens, "true", Keyword))
+  assert_true(has_token(tokens, "false", Keyword))
+}
+
+///|
+test "highlight yaml document marker" {
+  let src = "---\ntitle: test\n...\n"
+  let tokens = tokenize_yaml(src)
+  assert_eq(flatten_text(tokens), src)
+  assert_true(has_token(tokens, "---", Keyword))
+  assert_true(has_token(tokens, "...", Keyword))
+}
+
+///|
+test "highlight yaml anchor and alias" {
+  let src = "base: &default value\nref: *default\n"
+  let tokens = tokenize_yaml(src)
+  assert_eq(flatten_text(tokens), src)
+  assert_true(has_token(tokens, "&default", Identifier))
+  assert_true(has_token(tokens, "*default", Identifier))
+}
+
+///|
+test "highlight yaml null scalar keyword" {
+  let src = "x: null\ny: ~\n"
+  let tokens = tokenize_yaml(src)
+  assert_eq(flatten_text(tokens), src)
+  assert_true(has_token(tokens, "null", Keyword))
+  // ~ is not an ident-start character, so it is tokenized as Unknown
+  assert_true(has_token(tokens, "~", Unknown))
+}
+
+///|
+test "highlight typescript template literal backtick" {
+  let src = "const s = `hello ${name}`\n"
+  let tokens = tokenize_typescript(src)
+  assert_eq(flatten_text(tokens), src)
+  assert_true(has_kind(tokens, StringLit))
+}
+
+///|
+test "highlight typescript decorator annotation" {
+  let src = "@injectable\n"
+  let tokens = tokenize_typescript(src)
+  assert_eq(flatten_text(tokens), src)
+  assert_true(has_token(tokens, "@injectable", Builtin))
+}
+
+///|
+test "highlight render highlighted escapes ampersand in token text" {
+  let tokens : Array[Token] = [
+    { kind: Operator, text: "&&" },
+    { kind: Whitespace, text: " " },
+    { kind: StringLit, text: "\"<b>&</b>\"" },
+  ]
+  let html = render_highlighted(tokens)
+  assert_true(html.contains("&amp;&amp;"))
+  assert_true(html.contains("&lt;b&gt;"))
+  assert_true(html.contains("&amp;"))
+}
