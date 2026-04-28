@@ -2846,3 +2846,51 @@ Two edge cases remain untested and are documented here as known limitations:
 2. **Param values containing `=`.** An unquoted value like `key=a=b` is consumed by the `while` loop in `parse_value_shortcode` up to the next whitespace, producing `StringParam("a=b")`. The `=` inside the value is not special — only the first `=` after the key is the delimiter. This is correct behavior but could confuse content authors who expect `key=value` to be strictly `key` then `=` then `value` with no `=` in the value. No test exercises this pattern.
 
 Both are low-priority because they don't affect correctness (the parser handles them consistently) and the affected user base is content authors writing edge-case shortcode syntax. But they are worth knowing about if the shortcode syntax is ever extended with more complex value types.
+
+
+
+## TRef Integration Tests — End-to-End Structural Guarantee
+
+**Date:** 2026-04-15
+**Commit:** test(builder): TRef cross-collection validation end-to-end
+
+### Why schema unit tests alone aren't enough
+
+The schema module's `validate_refs` function has comprehensive unit tests in `src/schema/schema_test.mbt` — they cover unknown slugs, wrong-collection refs, absent optional refs, and array-of-refs cases. But these unit tests test the *algorithm*, not the *pipeline plumbing*. They construct a `slug_owner` map by hand, call `validate_refs` directly, and assert on the returned errors. The question they don't answer is: "does the builder actually call `validate_refs` with the correct `slug_owner` map built from real filesystem content?"
+
+The two-pass build architecture creates a join point where pass-1's slug collection feeds into pass-2's cross-reference validation. If that join point breaks — if the builder skips `validate_refs`, passes an empty `slug_owner`, or passes the wrong schema — the unit tests would still pass but the structural guarantee would be gone. The integration tests close this gap by exercising the full pipeline from filesystem fixtures through `check()` to violation assertions.
+
+### What the integration tests prove
+
+Four tests added to `src/builder/builder_test.mbt`:
+
+1. **"check detects TRef pointing to non-existent slug"**: Two collections (`posts`, `pages`), a post has `related_post: Ref` pointing to `"ghost-post"` which doesn't exist anywhere. Asserts `SchemaError` violation with message containing `"ghost-post"`.
+
+2. **"check detects TRef collection constraint violation"**: Two collections (`posts`, `projects`), a project has `related_post: Ref[posts]` but references `"another-project"` which exists in `projects`, not `posts`. Asserts `SchemaError` with message containing both the slug and expected collection `"posts"`. This is the tightest structural guarantee in the schema system — not just "does the slug exist?" but "does it exist in the *right* collection?"
+
+3. **"check passes for valid TRef field"**: Same as test 1 but `"about"` (the referenced slug) actually exists in the `pages` collection. Asserts zero `SchemaError` violations referencing `related_post`.
+
+4. **"check passes for absent Optional TRef"**: A page with `related_post: Optional[Ref]` that omits the field entirely. Asserts zero violations of any kind.
+
+These tests prove that a broken cross-collection reference is a build-time E002 (`SchemaError`), not a silent 404 at render time. This is the core SCC thesis claim with end-to-end proof.
+
+### The TRef(Some("collection")) guarantee
+
+The collection-constraint test deserves special attention. `TRef(Some("posts"))` means the schema declares not just "this field is a reference" but "this field must reference a document in the `posts` collection." This is the kind of structural guarantee that distinguishes lattice from behavioral SSGs — Astro's content layer would discover a wrong-collection reference at render time (the template tries to access `.title` on a document that has different fields), while lattice catches it at build time during pass-2 validation. The integration test proves the pipeline actually enforces this.
+
+## Shortcode: parse_int Edge Cases and Round-Trip Coverage
+
+**Date:** 2026-04-15
+**Commit:** test(shortcode): parse_int negative integers, bare minus fallthrough, callout param type errors, parse-then-render round-trips
+
+### What was covered
+
+40 tests committed in a separate session after the main shortcode coverage work:
+
+- **Negative integers in `parse_int_shortcode`**: The parser handles leading `-` as negation (`-42` → `FInt(-42)`). Tests verify negative values parse correctly and that bare `-` (no digits following) falls through to string handling rather than producing `FInt(0)` or panicking.
+- **Callout parameter type errors**: Callout shortcodes accept typed params (e.g., `severity = 3`). If a content author writes `severity = "high"` (string where int expected), the parser must reject it with an actionable error, not silently coerce or produce wrong output.
+- **Parse-then-render round-trips**: For each shortcode type, parse a shortcode call, render it, and verify the HTML output matches expectations. These are not true round-trips (shortcode → HTML → shortcode) but rather end-to-end checks that the parse-encode-decode-render chain is consistent. They catch cases where the parser correctly extracts values but the renderer misuses them.
+
+### Why separate from main shortcode coverage
+
+The main shortcode test session focused on per-function unit tests (parse_name, parse_quoted_value, etc.) and per-shortcode-type render tests. The edge-case session was driven by `moon coverage` output showing uncovered branches — specifically the negative-integer path in `parse_int_shortcode` and the type-mismatch path in callout param processing. Running coverage after the initial session revealed these gaps, which is the expected workflow: write tests → measure → fill gaps.
