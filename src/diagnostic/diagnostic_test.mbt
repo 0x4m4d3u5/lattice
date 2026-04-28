@@ -256,3 +256,310 @@ test "of_lint_violation is always Error severity" {
     assert_eq(of_lint_violation(v).severity, Error)
   }
 }
+
+
+///|
+test "error() constructor sets severity=Error and all optional fields=None" {
+  let d = error("something went wrong")
+  assert_eq(d.severity, Error)
+  assert_eq(d.code, None)
+  assert_eq(d.path, None)
+  assert_eq(d.line, None)
+  assert_eq(d.column, None)
+  assert_eq(d.message, "something went wrong")
+  assert_eq(d.note, None)
+}
+
+///|
+test "warning() constructor sets severity=Warning and all optional fields=None" {
+  let d = warning("minor issue")
+  assert_eq(d.severity, Warning)
+  assert_eq(d.code, None)
+  assert_eq(d.path, None)
+  assert_eq(d.line, None)
+  assert_eq(d.column, None)
+  assert_eq(d.message, "minor issue")
+  assert_eq(d.note, None)
+}
+
+///|
+test "format_diagnostic with no path no code no note" {
+  let rendered = format_diagnostic({
+    severity: Error,
+    code: None,
+    path: None,
+    line: None,
+    column: None,
+    message: "bare error",
+    note: None,
+  })
+  // Should contain the severity label and message, no location, no code, no newline
+  assert_true(rendered.contains("[error]"))
+  assert_true(rendered.contains("bare error"))
+  assert_true(!rendered.contains(":"))
+  assert_true(!rendered.contains("\n"))
+  assert_true(!rendered.contains("hint:"))
+}
+
+///|
+test "format_diagnostic with path but no line" {
+  let rendered = format_diagnostic({
+    severity: Error,
+    code: None,
+    path: Some("config.toml"),
+    line: None,
+    column: None,
+    message: "config error",
+    note: None,
+  })
+  // Path should appear without colon+line number
+  assert_true(rendered.contains("config.toml"))
+  assert_true(!rendered.contains("config.toml:"))
+  assert_true(rendered.contains("[error]"))
+  assert_true(rendered.contains("config error"))
+}
+
+///|
+test "format_diagnostic with path + line + column" {
+  let rendered = format_diagnostic({
+    severity: Warning,
+    code: None,
+    path: Some("src/main.mbt"),
+    line: Some(42),
+    column: Some(7),
+    message: "unused variable",
+    note: None,
+  })
+  // Full location path:line:col
+  assert_true(rendered.contains("src/main.mbt:42:7"))
+  assert_true(rendered.contains("[warning]"))
+  assert_true(rendered.contains("unused variable"))
+}
+
+///|
+test "of_lint_violation MissingRequiredFrontmatter maps to E001" {
+  let v : @lint.LintViolation = {
+    path: "a.md",
+    line: None,
+    column: None,
+    kind: @lint.MissingRequiredFrontmatter,
+    message: "missing title",
+  }
+  let d = of_lint_violation(v)
+  assert_eq(d.code, Some("E001"))
+  assert_eq(d.severity, Error)
+  assert_true(!(d.note is None))
+}
+
+///|
+test "of_lint_violation SchemaError maps to E002" {
+  let v : @lint.LintViolation = {
+    path: "b.md",
+    line: Some(3),
+    column: None,
+    kind: @lint.SchemaError,
+    message: "bad schema",
+  }
+  let d = of_lint_violation(v)
+  assert_eq(d.code, Some("E002"))
+  assert_true(!(d.note is None))
+}
+
+///|
+test "of_lint_violation FrontmatterError maps to E003" {
+  let v : @lint.LintViolation = {
+    path: "c.md",
+    line: None,
+    column: None,
+    kind: @lint.FrontmatterError,
+    message: "bad frontmatter",
+  }
+  let d = of_lint_violation(v)
+  assert_eq(d.code, Some("E003"))
+  assert_true(!(d.note is None))
+}
+
+///|
+test "of_lint_violation DanglingTagReference maps to E005" {
+  let v : @lint.LintViolation = {
+    path: "d.md",
+    line: None,
+    column: None,
+    kind: @lint.DanglingTagReference,
+    message: "dangling tag",
+  }
+  let d = of_lint_violation(v)
+  assert_eq(d.code, Some("E005"))
+  assert_true(!(d.note is None))
+}
+
+///|
+test "of_lint_violation TemplateSlotError maps to E006" {
+  let v : @lint.LintViolation = {
+    path: "e.md",
+    line: None,
+    column: None,
+    kind: @lint.TemplateSlotError,
+    message: "bad slot",
+  }
+  let d = of_lint_violation(v)
+  assert_eq(d.code, Some("E006"))
+  assert_true(!(d.note is None))
+}
+
+///|
+test "of_lint_violation DataError maps to E007" {
+  let v : @lint.LintViolation = {
+    path: "f.md",
+    line: None,
+    column: None,
+    kind: @lint.DataError,
+    message: "data error",
+  }
+  let d = of_lint_violation(v)
+  assert_eq(d.code, Some("E007"))
+  assert_true(!(d.note is None))
+}
+
+///|
+test "of_lint_violation ShortcodeError maps to E008" {
+  let v : @lint.LintViolation = {
+    path: "g.md",
+    line: None,
+    column: None,
+    kind: @lint.ShortcodeError,
+    message: "shortcode error",
+  }
+  let d = of_lint_violation(v)
+  assert_eq(d.code, Some("E008"))
+  assert_true(!(d.note is None))
+}
+
+///|
+test "of_lint_violation CollectionsError maps to E009" {
+  let v : @lint.LintViolation = {
+    path: "h.md",
+    line: None,
+    column: None,
+    kind: @lint.CollectionsError,
+    message: "collections error",
+  }
+  let d = of_lint_violation(v)
+  assert_eq(d.code, Some("E009"))
+  assert_true(!(d.note is None))
+}
+
+///|
+test "of_lint_violation IOError maps to E011" {
+  let v : @lint.LintViolation = {
+    path: "i.md",
+    line: None,
+    column: None,
+    kind: @lint.IOError,
+    message: "file not found",
+  }
+  let d = of_lint_violation(v)
+  assert_eq(d.code, Some("E011"))
+  assert_true(!(d.note is None))
+}
+
+///|
+test "format_summary with zero violations shows no hint" {
+  let diagnostics : Array[Diagnostic] = []
+  let summary = summarize(diagnostics)
+  let text = format_summary(summary)
+  assert_true(text.contains("Summary: 0 error(s), 0 warning(s)"))
+  assert_true(!text.contains("By code:"))
+  assert_true(!text.contains("By file:"))
+  assert_true(!text.contains("hint:"))
+}
+
+///|
+test "format_summary with warnings only no hint when no codes" {
+  let diagnostics : Array[Diagnostic] = [
+    {
+      severity: Warning,
+      code: None,
+      path: None,
+      line: None,
+      column: None,
+      message: "orphan warning",
+      note: None,
+    },
+  ]
+  let summary = summarize(diagnostics)
+  let text = format_summary(summary)
+  assert_true(text.contains("Summary: 0 error(s), 1 warning(s)"))
+  // No codes → no by_code section → no hint line
+  assert_true(!text.contains("By code:"))
+  assert_true(!text.contains("hint:"))
+}
+
+///|
+test "summarize with multiple distinct codes sorted by count descending" {
+  let diagnostics : Array[Diagnostic] = [
+    {
+      severity: Error,
+      code: Some("E004"),
+      path: Some("a.md"),
+      line: None,
+      column: None,
+      message: "wikilink",
+      note: None,
+    },
+    {
+      severity: Error,
+      code: Some("E002"),
+      path: Some("b.md"),
+      line: None,
+      column: None,
+      message: "schema1",
+      note: None,
+    },
+    {
+      severity: Error,
+      code: Some("E002"),
+      path: Some("c.md"),
+      line: None,
+      column: None,
+      message: "schema2",
+      note: None,
+    },
+    {
+      severity: Error,
+      code: Some("E002"),
+      path: Some("d.md"),
+      line: None,
+      column: None,
+      message: "schema3",
+      note: None,
+    },
+    {
+      severity: Error,
+      code: Some("E004"),
+      path: Some("e.md"),
+      line: None,
+      column: None,
+      message: "wikilink2",
+      note: None,
+    },
+    {
+      severity: Error,
+      code: Some("E001"),
+      path: Some("f.md"),
+      line: None,
+      column: None,
+      message: "missing",
+      note: None,
+    },
+  ]
+  let summary = summarize(diagnostics)
+  assert_eq(summary.by_code.length(), 3)
+  // E002 has 3, E004 has 2, E001 has 1 — sorted descending
+  assert_eq(summary.by_code[0].code, "E002")
+  assert_eq(summary.by_code[0].count, 3)
+  assert_eq(summary.by_code[1].code, "E004")
+  assert_eq(summary.by_code[1].count, 2)
+  assert_eq(summary.by_code[2].code, "E001")
+  assert_eq(summary.by_code[2].count, 1)
+}

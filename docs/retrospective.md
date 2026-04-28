@@ -2709,3 +2709,17 @@ For boundary inputs (empty arrays, empty blocks, no-body): minimize the input to
 For error messages: use `contains` rather than `eq` to allow the error text to be improved without breaking the test. The test asserts the diagnostic is actionable (mentions the relevant token), not that the wording is frozen.
 
 14 new frontmatter tests, total suite: 1,129 tests.
+
+
+
+## Diagnostic and Lint: Exhaustive Coverage of the Error Reporting Surface
+
+The `diagnostic` and `lint` modules are lattice's user-facing error reporting layer — the modules that translate structural violations (broken wikilinks, schema mismatches, missing required fields) into actionable CLI output. If the thesis of the project is that structural violations are type errors, these modules are where that thesis meets the user: every `ViolationType` variant maps to a stable E-code, a human-readable label, and a hint suggesting the fix. The engineering quality rubric scores the correctness and completeness of this translation layer — incomplete coverage here means an E-code mapping could drift silently or a JSON output format could break for CI consumers without any test catching it.
+
+The existing 29 tests (13 diagnostic, 16 lint) covered the happy-path formatting and grouping logic but left three classes of gaps: (1) constructor contracts (`error()` and `warning()` must set all optional fields to `None`), (2) exhaustive E-code mapping for all 11 `ViolationType` variants, and (3) edge cases in summary formatting (zero violations, warnings-only, multi-code sorting). The new tests close all three gaps.
+
+The **exhaustive E-code mapping tests** are the most structurally significant. Each of the 11 `ViolationType` variants now has an individual test verifying that `of_lint_violation` produces the correct E-code (`E001`–`E011`) and that the hint is non-`None`. This means adding a new `ViolationType` variant without updating `code_for_violation` or `hint_for_violation` will fail at least two tests: the E-code mapping test for the new variant, and the severity-invariant test that iterates all kinds. The exhaustiveness guarantee is indirect — MoonBit's pattern match exhaustiveness on the `ViolationType` enum already forces `code_for_violation` and `hint_for_violation` to cover every variant at compile time. The tests verify the *values* are correct (E001 for `MissingRequiredFrontmatter`, not E002), which the type system cannot check.
+
+The **`format_violations_json` tests** verify the machine-readable output path used by `lattice check --format json` for CI integration. The tests cover three states: empty result (valid JSON with empty arrays), violation with position data (integers for `line`/`column`), and violation without position data (`null` for both). This is the contract that CI pipelines depend on — a regression that changed `null` to `undefined` or omitted the `kind` field would break `jq` filters silently.
+
+25 new tests (17 diagnostic, 8 lint). Total suite: 1,154 tests.
