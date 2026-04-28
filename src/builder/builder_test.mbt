@@ -5246,3 +5246,374 @@ test "frontmatter_to_arrays no arrays in document produces empty map" {
   let m = @builder.frontmatter_to_arrays(fm)
   assert_eq(m.length(), 0)
 }
+
+
+// ── TRef cross-collection validation integration tests ─────────────────────────
+//
+// These tests exercise the full two-pass builder pipeline for TRef validation:
+//   Pass 1: collect slugs from all pages → build slug_owner (slug → collection_name)
+//   Pass 2: validate_refs(fm, schema, slug_owner) for each document
+//
+// The schema unit tests (src/schema/schema_test.mbt) validate the algorithm
+// in isolation. These integration tests prove the pipeline plumbing actually
+// connects pass-1's slug index to pass-2's cross-reference check. A broken
+// TRef surfaces as a SchemaError (E002) at build time, not a silent 404.
+
+///|
+test "check detects TRef pointing to non-existent slug" {
+  // Two collections: "posts" with a TRef(None) field and "pages" with a simple
+  // schema. The post references a slug that does not exist anywhere in the
+  // page index — this must surface as a SchemaError in check mode.
+  let root = "./_tmp_builder_tref_nonexistent_slug"
+  let content_root = root + "/content"
+  let posts_root = content_root + "/posts"
+  let pages_root = content_root + "/pages"
+  let data_root = content_root + "/data"
+  let templates_root = root + "/templates"
+  let output_root = root + "/dist"
+  ensure_dir_test(root)
+  ensure_dir_test(content_root)
+  ensure_dir_test(posts_root)
+  ensure_dir_test(pages_root)
+  ensure_dir_test(data_root)
+  ensure_dir_test(templates_root)
+  ensure_dir_test(output_root)
+
+  // A post that references a slug "ghost-post" which does not exist
+  assert_true(
+    write_file_test(
+      posts_root + "/my-post.md",
+      "+++\n" +
+      "title = \"My Post\"\n" +
+      "date = 2026-01-15\n" +
+      "related_post = \"ghost-post\"\n" +
+      "+++\n\n" +
+      "Some content.\n",
+    ),
+  )
+  // A page in the "pages" collection — unrelated
+  assert_true(
+    write_file_test(
+      pages_root + "/about.md",
+      "+++\n" +
+      "title = \"About\"\n" +
+      "date = 2026-01-01\n" +
+      "+++\n\n" +
+      "About page.\n",
+    ),
+  )
+  assert_true(
+    write_file_test(
+      templates_root + "/page.html",
+      "<html><body>{{content}}</body></html>\n",
+    ),
+  )
+  let site_cfg = "title = TRefNonExistent\n" +
+    "base_url = /\n" +
+    "templates_dir = " +
+    templates_root +
+    "\n" +
+    "output_dir = " +
+    output_root +
+    "\n" +
+    "[[collections]]\n" +
+    "name = posts\n" +
+    "dir = " +
+    posts_root +
+    "\n" +
+    "schema = title:String,date:Date,related_post:Ref\n" +
+    "[[collections]]\n" +
+    "name = pages\n" +
+    "dir = " +
+    pages_root +
+    "\n" +
+    "schema = title:String,date:Date\n"
+  let site = match @config.parse(site_cfg) {
+    Ok(parsed) => parsed
+    Err(_) => {
+      assert_true(false)
+      abort("site config parse failed")
+    }
+  }
+  let result = @builder.check({
+    content_dir: content_root,
+    output_dir: output_root,
+    config_path: root + "/site.cfg",
+    site,
+    collections_path: None,
+    force_rebuild: false,
+    include_drafts: false,
+  })
+  let schema_violations = result.violations.filter(fn(v) {
+    v.kind == @lint.SchemaError
+  })
+  assert_true(schema_violations.length() > 0)
+  assert_true(schema_violations[0].message.contains("ghost-post"))
+}
+
+///|
+test "check detects TRef collection constraint violation" {
+  // Two collections: "posts" and "projects". A "projects" page has a
+  // TRef(Some("posts")) field (constrained to the "posts" collection), but
+  // the value references a slug that exists in "projects" — wrong collection.
+  // This is the tightest structural guarantee: not just "does the slug exist?"
+  // but "does it exist in the *right* collection?"
+  let root = "./_tmp_builder_tref_wrong_collection"
+  let content_root = root + "/content"
+  let posts_root = content_root + "/posts"
+  let projects_root = content_root + "/projects"
+  let data_root = content_root + "/data"
+  let templates_root = root + "/templates"
+  let output_root = root + "/dist"
+  ensure_dir_test(root)
+  ensure_dir_test(content_root)
+  ensure_dir_test(posts_root)
+  ensure_dir_test(projects_root)
+  ensure_dir_test(data_root)
+  ensure_dir_test(templates_root)
+  ensure_dir_test(output_root)
+
+  // A post that the project wants to reference — but it's in the wrong collection
+  assert_true(
+    write_file_test(
+      posts_root + "/hello-world.md",
+      "+++\n" +
+      "title = \"Hello World\"\n" +
+      "date = 2026-01-01\n" +
+      "+++\n\n" +
+      "Hello.\n",
+    ),
+  )
+  // A project with a Ref[posts] field that points to another project (wrong collection)
+  assert_true(
+    write_file_test(
+      projects_root + "/lattice-ssg.md",
+      "+++\n" +
+      "title = \"Lattice SSG\"\n" +
+      "date = 2026-02-01\n" +
+      "related_post = \"another-project\"\n" +
+      "+++\n\n" +
+      "Project content.\n",
+    ),
+  )
+  // The referenced slug exists but is in the "projects" collection, not "posts"
+  assert_true(
+    write_file_test(
+      projects_root + "/another-project.md",
+      "+++\n" +
+      "title = \"Another Project\"\n" +
+      "date = 2026-03-01\n" +
+      "+++\n\n" +
+      "Another project.\n",
+    ),
+  )
+  assert_true(
+    write_file_test(
+      templates_root + "/page.html",
+      "<html><body>{{content}}</body></html>\n",
+    ),
+  )
+  let site_cfg = "title = TRefWrongColl\n" +
+    "base_url = /\n" +
+    "templates_dir = " +
+    templates_root +
+    "\n" +
+    "output_dir = " +
+    output_root +
+    "\n" +
+    "[[collections]]\n" +
+    "name = posts\n" +
+    "dir = " +
+    posts_root +
+    "\n" +
+    "schema = title:String,date:Date\n" +
+    "[[collections]]\n" +
+    "name = projects\n" +
+    "dir = " +
+    projects_root +
+    "\n" +
+    "schema = title:String,date:Date,related_post:Ref[posts]\n"
+  let site = match @config.parse(site_cfg) {
+    Ok(parsed) => parsed
+    Err(_) => {
+      assert_true(false)
+      abort("site config parse failed")
+    }
+  }
+  let result = @builder.check({
+    content_dir: content_root,
+    output_dir: output_root,
+    config_path: root + "/site.cfg",
+    site,
+    collections_path: None,
+    force_rebuild: false,
+    include_drafts: false,
+  })
+  let schema_violations = result.violations.filter(fn(v) {
+    v.kind == @lint.SchemaError
+  })
+  assert_true(schema_violations.length() > 0)
+  // The message must reference both the slug and the expected collection
+  let tref_msg = schema_violations[0].message
+  assert_true(tref_msg.contains("another-project"))
+  assert_true(tref_msg.contains("posts"))
+}
+
+///|
+test "check passes for valid TRef field" {
+  // Same setup as "nonexistent slug" test, but the referenced slug actually
+  // exists in the page index — no SchemaError should be produced for the
+  // TRef field.
+  let root = "./_tmp_builder_tref_valid"
+  let content_root = root + "/content"
+  let posts_root = content_root + "/posts"
+  let pages_root = content_root + "/pages"
+  let data_root = content_root + "/data"
+  let templates_root = root + "/templates"
+  let output_root = root + "/dist"
+  ensure_dir_test(root)
+  ensure_dir_test(content_root)
+  ensure_dir_test(posts_root)
+  ensure_dir_test(pages_root)
+  ensure_dir_test(data_root)
+  ensure_dir_test(templates_root)
+  ensure_dir_test(output_root)
+
+  // The page that will be referenced
+  assert_true(
+    write_file_test(
+      pages_root + "/about.md",
+      "+++\n" +
+      "title = \"About\"\n" +
+      "date = 2026-01-01\n" +
+      "+++\n\n" +
+      "About page.\n",
+    ),
+  )
+  // A post that references an existing slug
+  assert_true(
+    write_file_test(
+      posts_root + "/my-post.md",
+      "+++\n" +
+      "title = \"My Post\"\n" +
+      "date = 2026-01-15\n" +
+      "related_post = \"about\"\n" +
+      "+++\n\n" +
+      "Some content.\n",
+    ),
+  )
+  assert_true(
+    write_file_test(
+      templates_root + "/page.html",
+      "<html><body>{{content}}</body></html>\n",
+    ),
+  )
+  let site_cfg = "title = TRefValid\n" +
+    "base_url = /\n" +
+    "templates_dir = " +
+    templates_root +
+    "\n" +
+    "output_dir = " +
+    output_root +
+    "\n" +
+    "[[collections]]\n" +
+    "name = posts\n" +
+    "dir = " +
+    posts_root +
+    "\n" +
+    "schema = title:String,date:Date,related_post:Ref\n" +
+    "[[collections]]\n" +
+    "name = pages\n" +
+    "dir = " +
+    pages_root +
+    "\n" +
+    "schema = title:String,date:Date\n"
+  let site = match @config.parse(site_cfg) {
+    Ok(parsed) => parsed
+    Err(_) => {
+      assert_true(false)
+      abort("site config parse failed")
+    }
+  }
+  let result = @builder.check({
+    content_dir: content_root,
+    output_dir: output_root,
+    config_path: root + "/site.cfg",
+    site,
+    collections_path: None,
+    force_rebuild: false,
+    include_drafts: false,
+  })
+  let tref_violations = result.violations.filter(fn(v) {
+    v.kind == @lint.SchemaError &&
+    v.message.contains("related_post")
+  })
+  assert_eq(tref_violations.length(), 0)
+}
+
+///|
+test "check passes for absent Optional TRef" {
+  // A page with an Optional[Ref(...)] field that simply omits the field.
+  // No violation should be produced — the field is optional and absent.
+  let root = "./_tmp_builder_tref_optional_absent"
+  let content_root = root + "/content"
+  let posts_root = content_root + "/posts"
+  let data_root = content_root + "/data"
+  let templates_root = root + "/templates"
+  let output_root = root + "/dist"
+  ensure_dir_test(root)
+  ensure_dir_test(content_root)
+  ensure_dir_test(posts_root)
+  ensure_dir_test(data_root)
+  ensure_dir_test(templates_root)
+  ensure_dir_test(output_root)
+
+  // A post with no related_post field — Optional[Ref] means it's fine
+  assert_true(
+    write_file_test(
+      posts_root + "/solo-post.md",
+      "+++\n" +
+      "title = \"Solo Post\"\n" +
+      "date = 2026-01-15\n" +
+      "+++\n\n" +
+      "Content without references.\n",
+    ),
+  )
+  assert_true(
+    write_file_test(
+      templates_root + "/page.html",
+      "<html><body>{{content}}</body></html>\n",
+    ),
+  )
+  let site_cfg = "title = TRefOptionalAbsent\n" +
+    "base_url = /\n" +
+    "templates_dir = " +
+    templates_root +
+    "\n" +
+    "output_dir = " +
+    output_root +
+    "\n" +
+    "[[collections]]\n" +
+    "name = posts\n" +
+    "dir = " +
+    posts_root +
+    "\n" +
+    "schema = title:String,date:Date,related_post:Optional[Ref]\n"
+  let site = match @config.parse(site_cfg) {
+    Ok(parsed) => parsed
+    Err(_) => {
+      assert_true(false)
+      abort("site config parse failed")
+    }
+  }
+  let result = @builder.check({
+    content_dir: content_root,
+    output_dir: output_root,
+    config_path: root + "/site.cfg",
+    site,
+    collections_path: None,
+    force_rebuild: false,
+    include_drafts: false,
+  })
+  assert_eq(result.violations.length(), 0)
+}
