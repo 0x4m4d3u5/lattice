@@ -2798,3 +2798,51 @@ These two error paths map directly to `ShortcodeError::InvalidSyntax` in the dia
 `render_image`, `render_video`, and `render_figure` all have optional parameters (`caption`, `width`, `poster`, `link`). The original tests always supplied all parameters; none tested the omission paths. The `optional_string_param` and `optional_int_param` functions return `Ok(None)` for absent params and `Err(InvalidParamType)` if the param is present with the wrong type. The tests for the `Ok(None)` path — where the param is simply absent — verify that the rendered HTML does not include the optional attribute or element. The `render_video` without `poster` test confirms no `poster=` appears in the output. The `render_figure` without `link` test confirms no `<a href=` appears. The `render_image` without `caption` and `width` test confirms no `figcaption` element and no `width=` attribute appear, and that the output is a bare `<img>` without the `<figure>` wrapper. These tests pin the optional-absence behavior: a refactor that made `caption` a required parameter would fail the no-caption test immediately.
 
 31 new shortcode tests. Total suite: 1,201 tests.
+
+
+
+## Shortcode: Dead Code, Unreachable Guards, and Residual Coverage Gaps
+
+After the 31 tests added in the previous session, coverage analysis shows 5 uncovered lines remaining in `src/shortcode/shortcode.mbt`. These are not gaps in test discipline — they are dead code and unreachable guards whose existence is worth documenting because they represent architectural artifacts of the module's evolution.
+
+### The five uncovered lines
+
+**Line 32: `parse_int_shortcode` empty-string early return.** The function opens with `if s.length() == 0 { return None }`. This guard is unreachable through `parse()` because `parse_value_shortcode` is only called after `parse()` has consumed a key and `=` sign, and `parse_value_shortcode` itself checks `pos >= s.length()` before reading the value. An empty string can never reach `parse_int_shortcode` through the public API. The guard is defensive — it protects against direct calls to `parse_int_shortcode` with an empty string — but it is never exercised because `parse_int_shortcode` is a private function only called from `parse_value_shortcode`, which already handles the empty case.
+
+**Line 74: `parse_quoted_shortcode` "expected quote" guard.** The function begins with `if pos >= s.length() || char_at(s, pos) != '"' { return Err("expected quote") }`. This duplicates the condition in `parse_value_shortcode` that dispatches to `parse_quoted_shortcode` only when `char_at(s, pos) == '"'`. The guard can only fire if `parse_quoted_shortcode` is called directly (not through `parse_value_shortcode`), or if a future refactor removes the dispatch check. Since `parse_quoted_shortcode` is private and only called from `parse_value_shortcode`, the guard is unreachable.
+
+**Line 152: `parse()` "closing shortcode is not a call" branch.** This is the dead code discovered during test writing — `parse_name_shortcode` consumes only ident characters (letters, digits, underscores), so it never produces a name starting with `/`. The `starts_with(name, "/")` check always evaluates to false. The closing-tag detection happens at the block scanner level (in the markdown pipeline), not inside `parse()`. This branch has existed since the module was created and is a vestige of an earlier design where `parse()` was intended to handle closing tags directly.
+
+**Lines 191–194: `parse_open_close_tag` closing-tag branches.** Same root cause as line 152. `parse_name_shortcode` stops at `/`, returning an empty name for input like `/foo`. The empty name triggers the `name.length() == 0` early return before the `starts_with(name, "/")` check is reached. The closing-tag detection logic in `parse_open_close_tag` is unreachable through its public API because it depends on `parse_name_shortcode` producing a name that starts with `/`, which `parse_name_shortcode` structurally cannot do.
+
+### Why these lines persist
+
+These are not bugs — they are defensive code written at module creation that became unreachable due to the constraint that `parse_name_shortcode` only consumes ident characters. The guard in `parse_quoted_shortcode` protects against a hypothetical direct caller. The closing-tag branches in `parse()` and `parse_open_close_tag` reflect a design that was superseded by the block-scanner architecture but never cleaned up.
+
+Removing them would be a valid cleanup: the guards add zero runtime safety because the callers already enforce the preconditions, and the dead branches add cognitive overhead for anyone reading the parser. But removing them changes the public behavior of `parse_open_close_tag` (which currently returns `(None, false)` for `/foo` instead of `(Some("foo"), true)`), and that behavior is now pinned by tests. The honest documentation position is: these lines are dead code that should be removed in a future cleanup pass, but their removal is not urgent because they don't affect correctness.
+
+### The `parse_int_shortcode` empty-string path is structurally unreachable
+
+The test for `parse("image src=\"a.png\" alt=\"test\" key= ")` exercises the `key=` with trailing whitespace case, but this fails in `parse_value_shortcode` with "expected value" before `parse_int_shortcode` is ever called with an empty string. The `parse_int_shortcode` empty-string guard exists at a layer of the call stack that is never reached from the public API. To cover it, we would need to either (a) make `parse_int_shortcode` public and test it directly, or (b) construct an input that somehow produces an empty raw value inside `parse_value_shortcode` after the `while` loop and `trim` — which is not possible because the `while` loop consumes at least one non-whitespace character before termination when `pos < s.length()`.
+
+The practical implication: if `parse_int_shortcode` is ever refactored to use the stdlib's integer parser instead of the hand-rolled digit loop, the empty-string guard would become part of the stdlib's contract rather than local code. Until then, it is an internal assertion that costs nothing at runtime but cannot be tested without breaking the module's encapsulation boundary.
+
+### The `@strutil` migration residual
+
+The shortcode module's four local helpers (`char_at_shortcode`, `substr_shortcode`, `trim_shortcode`, `is_digit_shortcode`) were migrated to `@strutil` calls in commit `ba6bee8`, documented in the "Shortcode strutil Migration" section of this retrospective. The migration eliminated the redundancy but introduced a dependency surface: the shortcode module now imports `@strutil` for six functions (`char_at`, `substr`, `trim`, `is_digit`, `is_ident_part`, `is_whitespace`, `skip_ws`, `starts_with`, `escape_html_attr`). If `@strutil` changes the behavior of any of these functions, the shortcode parser's behavior changes silently. This is the expected tradeoff of shared utility packages — the consolidation benefit outweighs the coupling risk — but it is worth noting because the shortcode module is one of the few where the string utilities are correctness-critical (off-by-one in `parse_name_shortcode` or `parse_quoted_shortcode` directly affects content authoring).
+
+### HTML attribute escaping correctness
+
+The test "shortcode render escapes html in attributes" was added in the previous session but deserves retrospective attention. It verifies that `render_image` escapes `<script>alert(1)</script>` in `src` and `" onload="x` in `alt` using `@strutil.escape_html_attr`. This is an XSS protection test — it confirms that content-author-provided strings are not emitted raw into HTML attributes. The escaping is applied at the render boundary (inside `render_image`, `render_video`, `render_figure`, `render_callout`), not at the parse boundary. This means the parsed `ShortcodeCall` carries the raw user input, and the renderer is responsible for sanitizing it at the point of HTML construction.
+
+This is the correct architectural choice: escaping at the render boundary is the standard pattern (escape at the point of output, not at the point of input) because it avoids double-escaping. If the parser escaped values, a content author writing `alt="5 &quot;inches"` would get `alt="5 &amp;quot;inches"` in the HTML — the `&quot;` would be re-escaped. By escaping at render time, the parser preserves the author's intent and the renderer ensures the output is safe. The test pins this contract: `escape_html_attr` must escape `<`, `>`, `&`, and `"` in attribute contexts, and the renderers must call it for every user-provided string.
+
+### Known edge cases not tested
+
+Two edge cases remain untested and are documented here as known limitations:
+
+1. **Duplicate parameter keys.** If a content author writes `image src="a.png" src="b.png"`, the parser processes both `key=value` pairs sequentially and `params.set("src", ...)` overwrites the first value with the second. The behavior is last-write-wins, which is reasonable but undocumented. There is no test for it, and no error diagnostic for duplicate keys. A strict mode could flag this, but the current design silently takes the last value.
+
+2. **Param values containing `=`.** An unquoted value like `key=a=b` is consumed by the `while` loop in `parse_value_shortcode` up to the next whitespace, producing `StringParam("a=b")`. The `=` inside the value is not special — only the first `=` after the key is the delimiter. This is correct behavior but could confuse content authors who expect `key=value` to be strictly `key` then `=` then `value` with no `=` in the value. No test exercises this pattern.
+
+Both are low-priority because they don't affect correctness (the parser handles them consistently) and the affected user base is content authors writing edge-case shortcode syntax. But they are worth knowing about if the shortcode syntax is ever extended with more complex value types.
