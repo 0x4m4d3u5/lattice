@@ -2761,3 +2761,40 @@ The builder module has 4,900 lines and most of its test suite exercises the full
 All 16 tests are pure unit tests: parse frontmatter from a TOML string, call the function under test, assert on the returned map. No filesystem access required. This keeps the tests fast and isolates the function's contract from the full build pipeline. The test boundary is the frontmatter `Map` API — tests use `m.get("field")` and pattern-match on `Some(v)` or `None`, which verifies both that the field is present and that its value is correct.
 
 16 new builder tests. Total suite: 1,170 tests.
+
+
+## Shortcode: Parser Edge Cases and Renderer Coverage
+
+The shortcode module is lattice's authoring-surface boundary — the point where content author markup (`{{< image src="..." alt="..." >}}`) is parsed into typed structures and validated against renderer expectations. It is one of the most structurally interesting modules in the codebase: the parser produces a closed sum type (`ShortcodeParam` = `StringParam | IntParam | BoolParam`), the renderer pattern-matches on the expected variant, and mismatches produce `ShortcodeError::InvalidParamType` rather than silently coercing the value or emitting a wrong attribute. Despite this architectural significance, the module had 13 tests for 433 lines — and several entire function surfaces had zero coverage.
+
+### parse_open_close_tag: an untested public function
+
+`parse_open_close_tag` is a public function used by the block scanner to determine whether a `{{< ... >}}` token is an opening or closing tag. It parses the name from the raw content between the delimiters and returns `(name_opt, is_close)`. The function was completely untested — no test in the suite called it directly, and it is not exercised through integration tests because the example content does not use block-style shortcodes with explicit closing tags.
+
+Writing the tests surfaced an architectural subtlety: the "closing shortcode is not a call" branch inside `parse()` is dead code. The branch checks `starts_with(name, "/")`, expecting that a name like `/foo` might be returned by `parse_name_shortcode`. But `parse_name_shortcode` only consumes ident characters — letters, digits, and underscores. `/` is not an ident character, so `parse_name_shortcode` stops before it and returns an empty name. A raw input of `/foo` produces name="" → "missing shortcode name", not the closing-tag branch. The dead branch has existed since the module was written. The tests document the actual behavior: `/foo` emits `InvalidSyntax("missing shortcode name")`, not `InvalidSyntax("closing shortcode is not a call")`. This is not a bug — the closing-tag detection happens at the block scanner level, where the whole `{{< /foo >}}` token is processed before calling `parse_open_close_tag` — but the dead code in `parse()` is now visible rather than hidden.
+
+### Escape sequences: the fallthrough case
+
+`parse_quoted_shortcode` handles four named escapes (`\n`, `\t`, `\"`, `\\`) and one fallthrough: any unrecognized escape sequence passes the character after the backslash through literally. This fallthrough is permissive by design — a content author writing `\x` gets `x`, not a parse error. None of the five paths had any test coverage. The escape tests use `parse()` end-to-end: constructing a shortcode string with the escape sequence in a quoted param and asserting on the resulting `StringParam` value. For the fallthrough test, `"hello\xworld"` produces `"helloxworld"` — the backslash and the `x` together become just `x`, since `x` is passed through without the backslash. A refactor that changed the fallthrough to emit a parse error, or that preserved the backslash in the output, would fail this test.
+
+### Error paths in parse_quoted_shortcode
+
+Three error paths in `parse_quoted_shortcode` had no coverage:
+
+**`Err("expected quote")`** fires when the position does not point to a `"` character. This path is not reachable from `parse_value_shortcode` under normal circumstances — `parse_value_shortcode` only calls `parse_quoted_shortcode` when `char_at(s, pos) == '"'`. The guard duplicates the condition. Testing it requires calling `parse_quoted_shortcode` directly or constructing an input that somehow reaches the wrong dispatch — which is not straightforward from `parse()`. The test instead focuses on the two practically reachable error paths.
+
+**`Err("unterminated escape")`** fires when a backslash is the last character in a quoted string: `"hello\"`. The quote is open, a backslash appears, and there is no next character to consume. The test passes `image src="\\"` (backslash followed by end of input inside the quoted value) and asserts the `InvalidSyntax` message contains "unterminated escape".
+
+**`Err("unterminated quoted value")`** fires when a quoted string has no closing `"`. The test passes `image src="no_end` and asserts the `InvalidSyntax` message contains "unterminated quoted value".
+
+These two error paths map directly to `ShortcodeError::InvalidSyntax` in the diagnostic pipeline, which becomes `ViolationType::ShortcodeError` → E008 in the lint report. A content author who writes a malformed shortcode gets a structured build error with file and line location rather than a silent render failure.
+
+### Callout type completeness
+
+`render_callout` accepts exactly four `type` values: `"note"`, `"warning"`, `"tip"`, `"danger"`. Only `"note"` was tested. The other three types are structurally identical paths through the same code — they use the same `aside` element with a `callout-{type}` class — but the completeness guarantee matters: a refactor that removed `"warning"` from the valid set, or that changed the condition from a chain of equality checks to a lookup in a set, would not fail any existing test. Each of the three missing types now has a dedicated test verifying the CSS class, title, and body appear in the rendered HTML.
+
+### Optional parameter omission
+
+`render_image`, `render_video`, and `render_figure` all have optional parameters (`caption`, `width`, `poster`, `link`). The original tests always supplied all parameters; none tested the omission paths. The `optional_string_param` and `optional_int_param` functions return `Ok(None)` for absent params and `Err(InvalidParamType)` if the param is present with the wrong type. The tests for the `Ok(None)` path — where the param is simply absent — verify that the rendered HTML does not include the optional attribute or element. The `render_video` without `poster` test confirms no `poster=` appears in the output. The `render_figure` without `link` test confirms no `<a href=` appears. The `render_image` without `caption` and `width` test confirms no `figcaption` element and no `width=` attribute appear, and that the output is a bare `<img>` without the `<figure>` wrapper. These tests pin the optional-absence behavior: a refactor that made `caption` a required parameter would fail the no-caption test immediately.
+
+31 new shortcode tests. Total suite: 1,201 tests.
