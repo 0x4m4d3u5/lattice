@@ -5043,3 +5043,206 @@ test "build with broken wikilink renders page as warning not error" {
   // The page must still be produced
   assert_true(@fs.path_exists(output_root + "/posts/hello/index.html"))
 }
+
+// ── frontmatter_to_strings ────────────────────────────────────────────────────
+
+///|
+fn parse_fm_builder(src : String) -> @frontmatter.Frontmatter {
+  match @frontmatter.parse(src) {
+    Ok(fm) => fm
+    Err(e) => abort("frontmatter parse failed: " + e)
+  }
+}
+
+///|
+test "frontmatter_to_strings converts FStr fields to string" {
+  let fm = parse_fm_builder("+++\ntitle = \"Hello World\"\n+++\n")
+  let m = @builder.frontmatter_to_strings(fm)
+  match m.get("title") {
+    Some(v) => assert_eq(v, "Hello World")
+    None => assert_true(false)
+  }
+}
+
+///|
+test "frontmatter_to_strings converts FDate field to date string" {
+  let fm = parse_fm_builder("+++\ndate = 2026-04-15\n+++\n")
+  let m = @builder.frontmatter_to_strings(fm)
+  match m.get("date") {
+    Some(v) => assert_eq(v, "2026-04-15")
+    None => assert_true(false)
+  }
+}
+
+///|
+test "frontmatter_to_strings converts FInt field to integer string" {
+  let fm = parse_fm_builder("+++\nweight = 42\n+++\n")
+  let m = @builder.frontmatter_to_strings(fm)
+  match m.get("weight") {
+    Some(v) => assert_eq(v, "42")
+    None => assert_true(false)
+  }
+}
+
+///|
+test "frontmatter_to_strings converts negative FInt" {
+  let fm = parse_fm_builder("+++\npriority = -3\n+++\n")
+  let m = @builder.frontmatter_to_strings(fm)
+  match m.get("priority") {
+    Some(v) => assert_eq(v, "-3")
+    None => assert_true(false)
+  }
+}
+
+///|
+test "frontmatter_to_strings converts FBool true to string true" {
+  let fm = parse_fm_builder("+++\ndraft = true\n+++\n")
+  let m = @builder.frontmatter_to_strings(fm)
+  match m.get("draft") {
+    Some(v) => assert_eq(v, "true")
+    None => assert_true(false)
+  }
+}
+
+///|
+test "frontmatter_to_strings converts FBool false to string false" {
+  let fm = parse_fm_builder("+++\ndraft = false\n+++\n")
+  let m = @builder.frontmatter_to_strings(fm)
+  match m.get("draft") {
+    Some(v) => assert_eq(v, "false")
+    None => assert_true(false)
+  }
+}
+
+///|
+test "frontmatter_to_strings converts FArray to comma-joined string" {
+  let fm = parse_fm_builder(
+    "+++\ntags = [\"moonbit\", \"ssg\", \"types\"]\n+++\n",
+  )
+  let m = @builder.frontmatter_to_strings(fm)
+  match m.get("tags") {
+    Some(v) => assert_eq(v, "moonbit, ssg, types")
+    None => assert_true(false)
+  }
+}
+
+///|
+test "frontmatter_to_strings converts single-element FArray without trailing comma" {
+  let fm = parse_fm_builder("+++\ntags = [\"only\"]\n+++\n")
+  let m = @builder.frontmatter_to_strings(fm)
+  match m.get("tags") {
+    Some(v) => assert_eq(v, "only")
+    None => assert_true(false)
+  }
+}
+
+///|
+test "frontmatter_to_strings converts empty FArray to empty string" {
+  let fm = parse_fm_builder("+++\ntags = []\n+++\n")
+  let m = @builder.frontmatter_to_strings(fm)
+  match m.get("tags") {
+    Some(v) => assert_eq(v, "")
+    None => assert_true(false)
+  }
+}
+
+///|
+test "frontmatter_to_strings includes all fields from the document" {
+  let fm = parse_fm_builder(
+    "+++\ntitle = \"Post\"\ndate = 2026-01-01\nweight = 5\n+++\n",
+  )
+  let m = @builder.frontmatter_to_strings(fm)
+  assert_true(m.length() >= 3)
+  match m.get("title") {
+    Some(v) => assert_eq(v, "Post")
+    None => assert_true(false)
+  }
+  match m.get("date") {
+    Some(v) => assert_eq(v, "2026-01-01")
+    None => assert_true(false)
+  }
+  match m.get("weight") {
+    Some(v) => assert_eq(v, "5")
+    None => assert_true(false)
+  }
+}
+
+// ── frontmatter_to_arrays ─────────────────────────────────────────────────────
+
+///|
+test "frontmatter_to_arrays extracts FArray fields as string arrays" {
+  let fm = parse_fm_builder(
+    "+++\ntags = [\"moonbit\", \"ssg\", \"types\"]\n+++\n",
+  )
+  let m = @builder.frontmatter_to_arrays(fm)
+  match m.get("tags") {
+    Some(arr) => {
+      assert_eq(arr.length(), 3)
+      assert_eq(arr[0], "moonbit")
+      assert_eq(arr[1], "ssg")
+      assert_eq(arr[2], "types")
+    }
+    None => assert_true(false)
+  }
+}
+
+///|
+test "frontmatter_to_arrays skips non-array fields" {
+  let fm = parse_fm_builder(
+    "+++\ntitle = \"Hello\"\ndate = 2026-01-01\nweight = 5\ntags = [\"a\"]\n+++\n",
+  )
+  let m = @builder.frontmatter_to_arrays(fm)
+  // Only the array field should appear
+  assert_true(m.get("tags") is Some(_))
+  assert_true(m.get("title") is None)
+  assert_true(m.get("date") is None)
+  assert_true(m.get("weight") is None)
+}
+
+///|
+test "frontmatter_to_arrays empty FArray produces empty array" {
+  let fm = parse_fm_builder("+++\ntags = []\n+++\n")
+  let m = @builder.frontmatter_to_arrays(fm)
+  match m.get("tags") {
+    Some(arr) => assert_eq(arr.length(), 0)
+    None => assert_true(false)
+  }
+}
+
+///|
+test "frontmatter_to_arrays converts FInt elements to strings" {
+  let fm = parse_fm_builder("+++\nscores = [1, 2, 3]\n+++\n")
+  let m = @builder.frontmatter_to_arrays(fm)
+  match m.get("scores") {
+    Some(arr) => {
+      assert_eq(arr.length(), 3)
+      assert_eq(arr[0], "1")
+      assert_eq(arr[1], "2")
+      assert_eq(arr[2], "3")
+    }
+    None => assert_true(false)
+  }
+}
+
+///|
+test "frontmatter_to_arrays converts FBool elements to strings" {
+  let fm = parse_fm_builder("+++\nflags = [true, false]\n+++\n")
+  let m = @builder.frontmatter_to_arrays(fm)
+  match m.get("flags") {
+    Some(arr) => {
+      assert_eq(arr.length(), 2)
+      assert_eq(arr[0], "true")
+      assert_eq(arr[1], "false")
+    }
+    None => assert_true(false)
+  }
+}
+
+///|
+test "frontmatter_to_arrays no arrays in document produces empty map" {
+  let fm = parse_fm_builder(
+    "+++\ntitle = \"Hello\"\ndate = 2026-01-01\n+++\n",
+  )
+  let m = @builder.frontmatter_to_arrays(fm)
+  assert_eq(m.length(), 0)
+}

@@ -2723,3 +2723,41 @@ The **exhaustive E-code mapping tests** are the most structurally significant. E
 The **`format_violations_json` tests** verify the machine-readable output path used by `lattice check --format json` for CI integration. The tests cover three states: empty result (valid JSON with empty arrays), violation with position data (integers for `line`/`column`), and violation without position data (`null` for both). This is the contract that CI pipelines depend on — a regression that changed `null` to `undefined` or omitted the `kind` field would break `jq` filters silently.
 
 25 new tests (17 diagnostic, 8 lint). Total suite: 1,154 tests.
+
+
+## Builder: frontmatter_to_strings and frontmatter_to_arrays Direct Coverage
+
+`frontmatter_to_strings` and `frontmatter_to_arrays` are two public functions in `src/builder/builder.mbt` that sit at the boundary between frontmatter parsing and template rendering. Every template slot that shows `{{title}}`, `{{date}}`, or `{{weight}}` ultimately comes from `frontmatter_to_strings`. Every `{{#each tags}}` block comes from `frontmatter_to_arrays`. Despite being used throughout the rendering pipeline, both functions had zero direct unit tests before this session — they were exercised only transitively through full build tests.
+
+### What the functions do
+
+`frontmatter_to_strings` iterates every field in a `Frontmatter` struct and converts its `FrontmatterValue` to a `String`. The conversion rules are:
+- `FStr(s)` → `s` (pass-through)
+- `FDate(d)` → `d` (date string, already normalized)
+- `FInt(n)` → `n.to_string()`
+- `FFloat(n)` → `n.to_string()`
+- `FBool(true)` → `"true"`, `FBool(false)` → `"false"`
+- `FArray([...])` → comma-joined string of recursively-converted items
+- `FMap(_)` → `""` (not yet supported)
+
+`frontmatter_to_arrays` iterates only `FArray` fields and returns a `Map[String, Array[String]]` where each string is produced by the scalar conversion rules above. Non-array fields are silently skipped. This is the map consumed by the template engine's `{{#each field}}` loop.
+
+### Why the gap existed
+
+The builder module has 4,900 lines and most of its test suite exercises the full build pipeline through filesystem-level integration tests. Those tests verify that a page's rendered output contains expected tag links or date strings, which transitively covers `frontmatter_to_strings` — but only for the paths exercised by the example content. The FArray-to-comma-joined-string conversion path in `frontmatter_to_strings` was never tested directly. The mixed-type FArray case (integers, booleans as array elements) in `frontmatter_to_arrays` was never exercised at all.
+
+### Why the gaps matter
+
+**The FArray → comma-joined-string conversion in `frontmatter_to_strings`** is used when a template slot like `{{tags}}` renders a flat string representation of a list field (e.g., for `<meta name="keywords">` tags). The existing integration tests used string arrays where all elements were already strings, so the recursive `convert_value` call for non-string array elements had no coverage. A refactor that changed the array join logic or removed the recursive conversion would fail silently: the rendered output would show an empty string or a wrong format, but no test would catch it.
+
+**The non-array field skip in `frontmatter_to_arrays`** is critical for template correctness. If `frontmatter_to_arrays` accidentally returned scalar fields as single-element arrays, a template that writes `{{#each title}}` would iterate over the characters of the title string rather than doing nothing. The tests verify explicitly that `title`, `date`, and `weight` fields do not appear in the output map — only the `FArray` field does.
+
+**Negative integers in `frontmatter_to_strings`** deserve a dedicated test because the conversion calls `.to_string()` on `FInt(n)`, which must handle negative values without dropping the minus sign or returning an integer parse error. The test confirms that `weight = -3` in frontmatter produces `"-3"` in the string map.
+
+**Empty FArray** has two behaviors that need to be tested separately: in `frontmatter_to_strings`, an empty array produces `""` (the join loop body never runs); in `frontmatter_to_arrays`, an empty array produces `[]` (an empty `Array[String]`). These are structurally different results (an empty string vs. an empty array) and a refactor that confused the two representations would break template rendering for tags fields that are legitimately empty.
+
+### Test strategy
+
+All 16 tests are pure unit tests: parse frontmatter from a TOML string, call the function under test, assert on the returned map. No filesystem access required. This keeps the tests fast and isolates the function's contract from the full build pipeline. The test boundary is the frontmatter `Map` API — tests use `m.get("field")` and pattern-match on `Some(v)` or `None`, which verifies both that the field is present and that its value is correct.
+
+16 new builder tests. Total suite: 1,170 tests.
