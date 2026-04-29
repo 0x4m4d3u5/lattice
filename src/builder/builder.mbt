@@ -3344,6 +3344,11 @@ fn process_document(
     return { document: None, diagnostics }
   }
   if !render_page_html {
+    // Even on cache hit we need body_text for content-index.json.
+    // Render markdown with an empty wikilink map (wikilinks render as their
+    // target text, which is fine for plain-text extraction).
+    let cache_markdown = @markdown.render_with_diagnostics(fm.body, Map::new())
+    let cache_body_text = @strutil.strip_html_tags(cache_markdown.html)
     return {
       document: Some({
         html: "",
@@ -3354,7 +3359,7 @@ fn process_document(
         date: date_value,
         weight: weight_value,
         excerpt,
-        body_text: "",
+        body_text: cache_body_text,
         resolved_links: resolved,
         tags: page_tags,
       }),
