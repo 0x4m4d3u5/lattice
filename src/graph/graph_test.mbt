@@ -121,14 +121,77 @@ test "render_graph_json multiple outgoing edges from single page" {
       weight: None,
       outgoing: [raw_link("alpha"), raw_link("beta"), raw_link("gamma")],
     },
+    {
+      slug: "alpha",
+      title: "Alpha",
+      url: "/alpha",
+      description: None,
+      date: None,
+      weight: None,
+      outgoing: [],
+    },
+    {
+      slug: "beta",
+      title: "Beta",
+      url: "/beta",
+      description: None,
+      date: None,
+      weight: None,
+      outgoing: [],
+    },
+    {
+      slug: "gamma",
+      title: "Gamma",
+      url: "/gamma",
+      description: None,
+      date: None,
+      weight: None,
+      outgoing: [],
+    },
   ]
   let json = render_graph_json(pages)
-  // All three edges should appear
+  // All three edges should appear (targets exist as nodes)
   assert_eq(json.contains("\"source\": \"hub\", \"target\": \"alpha\""), true)
   assert_eq(json.contains("\"source\": \"hub\", \"target\": \"beta\""), true)
   assert_eq(json.contains("\"source\": \"hub\", \"target\": \"gamma\""), true)
   // No trailing comma after the last edge — gamma is the last edge, next line should be ]
   assert_true(!json.contains("gamma\"},\n"))
+}
+
+///|
+/// Edges targeting slugs absent from the nodes array are filtered out
+test "render_graph_json filters dangling edges to excluded pages" {
+  let pages : Array[GraphPage] = [
+    {
+      slug: "home",
+      title: "Home",
+      url: "/",
+      description: None,
+      date: None,
+      weight: None,
+      outgoing: [
+        raw_link("guide"),
+        raw_link("draft-page"),
+        raw_link("another-draft"),
+      ],
+    },
+    {
+      slug: "guide",
+      title: "Guide",
+      url: "/guide",
+      description: None,
+      date: None,
+      weight: None,
+      outgoing: [],
+    },
+    // draft-page and another-draft are NOT in the nodes array
+  ]
+  let json = render_graph_json(pages)
+  // Only the valid edge (home → guide) should appear
+  assert_eq(json.contains("\"source\": \"home\", \"target\": \"guide\""), true)
+  // Dangling edges should NOT appear
+  assert_true(!json.contains("draft-page"))
+  assert_true(!json.contains("another-draft"))
 }
 
 ///|

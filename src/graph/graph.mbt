@@ -44,6 +44,14 @@ pub fn render_graph_json(pages : Array[GraphPage]) -> String {
     buf.write_char('\n')
   }
   buf.write_string("  ],\n")
+  // Build a set of all node slugs so we can skip edges that point to
+  // draft/excluded pages not present in the nodes array.
+  let slug_set : Map[String, Bool] = Map::new()
+  i = 0
+  while i < pages.length() {
+    slug_set[pages[i].slug] = true
+    i = i + 1
+  }
   buf.write_string("  \"edges\": [\n")
   let mut first_edge = true
   i = 0
@@ -52,15 +60,18 @@ pub fn render_graph_json(pages : Array[GraphPage]) -> String {
     let mut j = 0
     while j < page.outgoing.length() {
       let edge = page.outgoing[j]
-      if !first_edge {
-        buf.write_string(",\n")
+      // Skip edges whose target is not a node in the graph (e.g. drafts)
+      if slug_set.contains(edge.raw.target) {
+        if !first_edge {
+          buf.write_string(",\n")
+        }
+        buf.write_string("    {\"source\": ")
+        @strutil.write_json_string(buf, page.slug)
+        buf.write_string(", \"target\": ")
+        @strutil.write_json_string(buf, edge.raw.target)
+        buf.write_char('}')
+        first_edge = false
       }
-      buf.write_string("    {\"source\": ")
-      @strutil.write_json_string(buf, page.slug)
-      buf.write_string(", \"target\": ")
-      @strutil.write_json_string(buf, edge.raw.target)
-      buf.write_char('}')
-      first_edge = false
       j = j + 1
     }
     i = i + 1
