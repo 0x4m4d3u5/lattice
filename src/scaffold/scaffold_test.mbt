@@ -239,3 +239,110 @@ test "new_content_file - refuses to overwrite existing file" {
   // Clean up
   ignore(@fs.remove_file(path))
 }
+
+///|
+test "new_content_file - schema with required and optional fields includes field guide" {
+  let test_dir = "/tmp/lattice-test-field-guide"
+  let schema : @schema.Schema = {
+    name: "test",
+    fields: [
+      { name: "title", field_type: @schema.TString(None, None), required: true },
+      { name: "date", field_type: @schema.TDate(None, None), required: true },
+      {
+        name: "tags",
+        field_type: @schema.TOptional(@schema.TArray(@schema.TString(None, None))),
+        required: false,
+      },
+      {
+        name: "draft",
+        field_type: @schema.TOptional(@schema.TBool),
+        required: false,
+      },
+    ],
+  }
+  @fs.create_dir(test_dir) catch {
+    _ => ()
+  }
+  let file_path = new_content_file(test_dir, schema, "field-guide-test", "2026-04-29")
+  match file_path {
+    Err(msg) => fail("expected success, got: " + msg)
+    Ok(path) => {
+      let content = @fs.read_file_to_string(path) catch {
+        @fs.IOError(msg) => fail("cannot read file: " + msg)
+      }
+      // The HTML comment block should list required and optional fields
+      assert_true(content.contains("<!--"))
+      assert_true(content.contains("-->"))
+      assert_true(content.contains("Required fields: title, date"))
+      assert_true(content.contains("Optional fields: tags, draft"))
+      // Clean up
+      ignore(@fs.remove_file(path))
+    }
+  }
+}
+
+///|
+test "new_content_file - schema with only required fields omits optional line" {
+  let test_dir = "/tmp/lattice-test-field-guide-required-only"
+  let schema : @schema.Schema = {
+    name: "test",
+    fields: [
+      { name: "title", field_type: @schema.TString(None, None), required: true },
+      { name: "date", field_type: @schema.TDate(None, None), required: true },
+    ],
+  }
+  @fs.create_dir(test_dir) catch {
+    _ => ()
+  }
+  let file_path = new_content_file(
+    test_dir, schema, "required-only-test", "2026-04-29",
+  )
+  match file_path {
+    Err(msg) => fail("expected success, got: " + msg)
+    Ok(path) => {
+      let content = @fs.read_file_to_string(path) catch {
+        @fs.IOError(msg) => fail("cannot read file: " + msg)
+      }
+      // Should have the HTML comment block with required fields
+      assert_true(content.contains("Required fields: title, date"))
+      // Should NOT have "Optional fields:" line since no optional fields exist
+      assert_true(!content.contains("Optional fields:"))
+      // Clean up
+      ignore(@fs.remove_file(path))
+    }
+  }
+}
+
+///|
+test "new_content_file - happy path creates file with frontmatter and body stub" {
+  let test_dir = "/tmp/lattice-test-happy-path"
+  let schema : @schema.Schema = {
+    name: "test",
+    fields: [
+      { name: "title", field_type: @schema.TString(None, None), required: true },
+      { name: "date", field_type: @schema.TDate(None, None), required: true },
+    ],
+  }
+  @fs.create_dir(test_dir) catch {
+    _ => ()
+  }
+  let file_path = new_content_file(test_dir, schema, "happy-path-test", "2026-04-29")
+  match file_path {
+    Err(msg) => fail("expected success, got: " + msg)
+    Ok(path) => {
+      // File should exist
+      assert_true(@fs.path_exists(path))
+      let content = @fs.read_file_to_string(path) catch {
+        @fs.IOError(msg) => fail("cannot read file: " + msg)
+      }
+      // Should contain frontmatter delimiters
+      assert_true(content.contains("---"))
+      // Should contain a heading stub
+      assert_true(content.contains("# Title"))
+      // Should contain the body stub text
+      assert_true(content.contains("Write your content here."))
+      // Clean up
+      ignore(@fs.remove_file(path))
+    }
+  }
+}
