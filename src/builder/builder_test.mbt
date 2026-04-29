@@ -5617,3 +5617,114 @@ test "check passes for absent Optional TRef" {
   })
   assert_eq(result.violations.length(), 0)
 }
+
+///|
+test "build content-index body_text populated on cache-hit rebuild" {
+  let root = "./_tmp_builder_cache_hit_body_text"
+  let content_root = root + "/content"
+  let posts_root = content_root + "/posts"
+  let data_root = content_root + "/data"
+  let output_root = root + "/dist"
+  ensure_dir_test(root)
+  ensure_dir_test(content_root)
+  ensure_dir_test(posts_root)
+  ensure_dir_test(data_root)
+  ensure_dir_test(output_root)
+
+  // Write a post with distinctive body text
+  assert_true(
+    write_file_test(
+      posts_root + "/cache-test.md",
+      "---\n" +
+      "title: Cache Hit Test\n" +
+      "date: 2026-04-29\n" +
+      "description: Testing body_text on cache hit\n" +
+      "---\n\n" +
+      "Hello world this is a test post for cache hit body text.\n",
+    ),
+  )
+  let site_cfg = "title = Test\n" +
+    "base_url = /\n" +
+    "data_dir = " +
+    data_root +
+    "\n" +
+    "content_index_file = content-index.json\n" +
+    "output_dir = " +
+    output_root +
+    "\n" +
+    "[[collections]]\n" +
+    "name = posts\n" +
+    "dir = " +
+    posts_root +
+    "\n" +
+    "schema = title:String,date:Date,description:String\n"
+  assert_true(write_file_test(root + "/site.cfg", site_cfg))
+  let site = match @config.parse(site_cfg) {
+    Ok(parsed) => parsed
+    Err(_) => {
+      assert_true(false)
+      abort("config parse failed")
+    }
+  }
+
+  // First build with force_rebuild: false and empty cache.
+  // Since the cache is empty, all pages are rebuilt (no cache hits yet),
+  // but the cache.json is saved at the end of a successful build.
+  let result1 = @builder.build(
+    {
+      content_dir: content_root,
+      output_dir: output_root,
+      config_path: root + "/site.cfg",
+      site,
+      collections_path: None,
+      force_rebuild: false,
+      include_drafts: false,
+    },
+    @cache.empty(output_root),
+  )
+  assert_eq(result1.errors, 0)
+
+  // First build should have rebuilt the page (not a cache hit)
+  assert_eq(result1.rebuilt_pages, 1)
+
+  // Load the cache saved by the first build
+  let loaded_cache = match @cache.load(output_root) {
+    Ok(store) => store
+    Err(err) => {
+      assert_true(false)
+      abort("cache load failed: " + @cache.error_text(err))
+    }
+  }
+
+  // Second build with the loaded cache and force_rebuild: false.
+  // The HTML file exists on disk and the fingerprint matches → cache hit.
+  let result2 = @builder.build(
+    {
+      content_dir: content_root,
+      output_dir: output_root,
+      config_path: root + "/site.cfg",
+      site,
+      collections_path: None,
+      force_rebuild: false,
+      include_drafts: false,
+    },
+    loaded_cache,
+  )
+  assert_eq(result2.errors, 0)
+
+  // Regression: cache hit must have occurred
+  assert_true(result2.unchanged_pages > 0)
+
+  // Regression: content-index.json must have non-empty body text
+  // for the cached page (this was the bug — body_text was "" on cache hit)
+  let content_index = @fs.read_file_to_string(
+    output_root + "/content-index.json",
+  ) catch {
+    @fs.IOError(_) => ""
+  }
+  assert_true(content_index.length() > 0)
+  // The body field must contain the distinctive text from the post
+  assert_true(
+    content_index.contains("Hello world this is a test post"),
+  )
+}
