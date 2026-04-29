@@ -1546,11 +1546,64 @@ pub fn generate_frontmatter(schema : @schema.Schema, today : String) -> String {
 }
 
 ///|
+/// Generate an HTML comment block listing required and optional field names
+/// from a schema. Used in the body stub of newly created content files to
+/// guide authors on what fields are available.
+///
+/// Returns an empty string if the schema has no fields (shouldn't happen in
+/// practice, but keeps the output clean).
+fn generate_field_comment(schema : @schema.Schema) -> String {
+  let required_fields : Array[String] = []
+  let optional_fields : Array[String] = []
+  let mut i = 0
+  while i < schema.fields.length() {
+    let fdef = schema.fields[i]
+    if fdef.required {
+      required_fields.push(fdef.name)
+    } else {
+      optional_fields.push(fdef.name)
+    }
+    i = i + 1
+  }
+
+  fn join_names(names : Array[String]) -> String {
+    let buf = StringBuilder::new()
+    let mut j = 0
+    while j < names.length() {
+      if j > 0 {
+        buf.write_string(", ")
+      }
+      buf.write_string(names[j])
+      j = j + 1
+    }
+    buf.to_string()
+  }
+
+  let buf = StringBuilder::new()
+  buf.write_string("<!--\n")
+  if required_fields.length() > 0 {
+    buf.write_string("Required fields: ")
+    buf.write_string(join_names(required_fields))
+    buf.write_string("\n")
+  }
+  if optional_fields.length() > 0 {
+    buf.write_string("Optional fields: ")
+    buf.write_string(join_names(optional_fields))
+    buf.write_string("\n")
+  }
+  buf.write_string("-->")
+  buf.to_string()
+}
+
+///|
 /// Generate a new content file from a collection schema.
 ///
 /// Takes a content directory, schema definition, and slug, generates a
 /// markdown file with frontmatter stubs for all required fields, and writes
 /// it to the content directory.
+///
+/// The body includes an HTML comment listing required vs optional fields
+/// from the schema, helping the author understand what to fill in.
 ///
 /// Returns the path of the created file on success.
 pub fn new_content_file(
@@ -1577,8 +1630,15 @@ pub fn new_content_file(
   // Generate frontmatter
   let frontmatter = generate_frontmatter(schema, today)
 
-  // Build the full file content: frontmatter + body stub
-  let content = frontmatter + "\n\n# \n"
+  // Generate schema field comment for the body
+  let field_comment = generate_field_comment(schema)
+
+  // Build the full file content: frontmatter + body stub with field guide
+  let content =
+    frontmatter +
+    "\n\n" +
+    field_comment +
+    "\n\n# Title\n\nWrite your content here.\n"
 
   // Write the file
   write_file(file_path, content).map(_ => file_path)
