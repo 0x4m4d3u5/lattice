@@ -2894,3 +2894,47 @@ The collection-constraint test deserves special attention. `TRef(Some("posts"))`
 ### Why separate from main shortcode coverage
 
 The main shortcode test session focused on per-function unit tests (parse_name, parse_quoted_value, etc.) and per-shortcode-type render tests. The edge-case session was driven by `moon coverage` output showing uncovered branches — specifically the negative-integer path in `parse_int_shortcode` and the type-mismatch path in callout param processing. Running coverage after the initial session revealed these gaps, which is the expected workflow: write tests → measure → fill gaps.
+
+
+
+## UX Rubric: CLI and Content Authoring Ergonomics
+
+**Date:** 2026-04-29
+**Commits:**
+- `feat(cli): add --version/-V flag — standard CLI contract for UX rubric`
+- `feat(scaffold): schema-aware field guide in generated content stubs — UX rubric`
+
+### Decision 1: `--version` flag as a top-level parser flag
+
+Added `--version` / `-V` as a top-level flag in `build_parser()`, handled before subcommand dispatch in `run_main()`. This is the standard CLI contract — every mature CLI tool responds to `--version` with a version string and clean exit.
+
+**Implementation choice**: Rather than making `--version` a subcommand (like `lattice version`), it's a global flag on the root parser. This means `lattice --version` works regardless of what subcommand would have been selected — consistent with how `--help` behaves. The flag is checked after clap parsing succeeds but before subcommand dispatch, so `lattice --version build` still prints the version and exits cleanly.
+
+The version string is hardcoded as `"lattice 0.1.0"` rather than read from `moon.mod.json`. This is intentional: the CLI binary is a compiled artifact, and its version should be a compile-time constant, not a runtime file read that could fail or be inconsistent with the actual compiled code. When the version changes, a single string literal update is sufficient.
+
+### Decision 2: Schema-aware field guide in scaffold stubs
+
+Previously, `lattice new posts --name my-post` generated a file with typed frontmatter stubs but an empty `# \n` body. The author had to consult the collections config to discover which fields are required vs optional — a documentation-discovery gap.
+
+The improvement adds an HTML comment block after the frontmatter:
+
+```markdown
+<!--
+Required fields: title, date, description, author
+Optional fields: tags, draft
+-->
+
+# Title
+
+Write your content here.
+```
+
+**Why HTML comments, not visible text**: The comment is invisible in rendered output but visible in the editor. This keeps the scaffold clean for build purposes while being informative at authoring time. If we used visible text, it would appear in the rendered page — a worse UX than no guidance at all.
+
+**Why list both required and optional**: Required fields already appear as populated frontmatter entries, but the author may not know which are required (must keep) vs optional (can delete). Optional fields appear as commented-out frontmatter lines, but the explicit list reinforces the schema structure. Together, the frontmatter stubs + comment block give the author a complete picture of the schema contract without leaving the file.
+
+**Architectural pattern**: This is content authoring ergonomics improved by surfacing structural information at *creation time*, not *discovery time*. The same `Schema` type that enforces validation at build time now guides the author at authoring time. The `generate_field_comment()` function walks the same `FieldDef` array that `validate_frontmatter()` walks — one produces guidance, the other produces errors. Both derive from the same source of truth.
+
+### AI usage note
+
+Both features were identified from the task specification as targeted UX rubric items. The `--version` implementation followed the existing clap flag pattern (modeled on `--drafts`). The scaffold improvement required understanding the `FieldDef` struct's `required: Bool` field to partition fields into required/optional lists — the schema system's type definitions directly enabled the implementation.
