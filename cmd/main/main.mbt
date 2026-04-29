@@ -165,7 +165,12 @@ fn build_parser() -> @clap.Parser {
   @clap.Parser::new(
     prog="lattice",
     description="A static site generator where structural violations are type errors.",
-    args={},
+    args={
+      "version": @clap.Arg::flag(
+        short='V',
+        help="Print version and exit",
+      ),
+    },
     subcmds={
       "build": @clap.SubCommand::new(
         args={
@@ -1211,6 +1216,12 @@ fn run_main() -> Unit {
       @sys.exit(1)
       return
     }
+  }
+
+  // Handle --version flag before subcommand dispatch
+  if sv.get_flag("version").unwrap_or(false) {
+    println("lattice 0.1.0")
+    return
   }
 
   // Determine which subcommand was selected
