@@ -2938,3 +2938,70 @@ Write your content here.
 ### AI usage note
 
 Both features were identified from the task specification as targeted UX rubric items. The `--version` implementation followed the existing clap flag pattern (modeled on `--drafts`). The scaffold improvement required understanding the `FieldDef` struct's `required: Bool` field to partition fields into required/optional lists — the schema system's type definitions directly enabled the implementation.
+
+## Content Index Integrity on Incremental Builds
+
+**Date:** 2026-04-29
+**Commit:** `fix(builder): populate body_text from markdown even for cache-hit pages`
+
+### What the bug was
+
+`process_document` in `src/builder/builder.mbt` returned early on cache hit with `body_text: ""`. The `body_text` field feeds `content-index.json` for full-text search — every search entry for any page cached from a previous build had an empty body. First build was correct; second and subsequent builds silently regressed. The search index looked structurally valid (all entries present, correct URLs and titles) but the `body` field was empty, making full-text search useless for any site built incrementally.
+
+### Why it was silent
+
+The existing test suite used `force_rebuild: true` or `@cache.empty(output_root)` on every build call. The incremental code path — where `should_skip()` returns `true` because the HTML file exists on disk and the fingerprint matches — was never exercised in tests. The bug existed in production but not in the test matrix.
+
+This is a classic coverage gap: the cache system had thorough unit tests (`src/cache/cache_test.mbt`), and the builder had thorough integration tests, but no test connected the two by building twice with a real cache round-trip. The regression test added in `7a55791` explicitly exercises this path: build once (cache miss, writes `cache.json`), load cache from disk, build again (cache hit), then assert `unchanged_pages > 0` *and* `content-index.json` contains the expected body text.
+
+### The fix
+
+On cache hit, `process_document` now renders the markdown body through `@markdown.render_with_diagnostics` with an empty wikilink map (wikilinks render as their target text, which is acceptable for plain-text extraction) and strips HTML tags via `@strutil.strip_html_tags`. This produces the same `body_text` that the full render path produces, without the overhead of template rendering or file I/O.
+
+The key design choice: using an empty wikilink map rather than the resolved one. On cache hit, we skip the full wikilink resolution pass (that would defeat the purpose of caching). Wikilinks in the body text render as their target text — e.g., `[[my-post]]` becomes `my-post`. For full-text search, this is acceptable: the link target is still searchable text. The alternative (resolving wikilinks on cache hit) would require keeping the entire slug resolution index in memory for every cache hit, which is exactly the cost the cache is supposed to avoid.
+
+### What the regression test proves
+
+The test `"build content-index body_text populated on cache-hit rebuild"` (`src/builder/builder_test.mbt`) performs a two-phase build:
+
+1. **Phase 1**: Build with `force_rebuild: false` and `@cache.empty(output_root)` — empty cache means all pages are rebuilt. Cache is saved at end of build.
+2. **Phase 2**: Load cache from disk via `@cache.load(output_root)`. Build again with loaded cache — HTML files exist + fingerprints match → cache hits occur.
+
+The test asserts:
+- `result2.unchanged_pages > 0` — at least one page was served from cache (proves the incremental path was exercised)
+- `content-index.json` contains the distinctive body text `"Hello world this is a test post"` — proves body_text is populated even for cached pages
+
+### AI usage note
+
+The bug was identified from the task specification's description of commit `f4b7447`. The regression test structure (two-phase build, cache load, body text assertion) was specified by the task. The implementation details — using `@cache.load` and `@cache.error_text` for error handling, matching the `BuildConfig` struct fields from the existing test patterns — were adapted from reading the existing test code in `builder_test.mbt` and the cache API in `src/cache/cache.mbt`.
+
+## Graph Integrity: Dangling Edges to Draft and Excluded Pages
+
+**Date:** 2026-04-29
+**Commit:** `fix(graph): filter dangling edges to draft/excluded pages`
+
+### What the bug was
+
+The content graph (`src/graph/graph.mbt`) included edges from published pages to draft/excluded pages. A published post linking to a draft post via wikilink would have that edge in the graph, and the link graph could reference slugs that never appear in the output. Downstream consumers of the graph data (backlinks, link visualization, any future graph queries) would see relationships to pages that don't exist in the built site.
+
+### Why this matters for the structural guarantee
+
+Lattice's core pitch is that broken links are build-time errors, not runtime 404s. Including edges to non-published pages in the graph data undercuts that guarantee — the graph would claim relationships that don't exist in the output. If a graph consumer (e.g., a JavaScript widget rendering a site map) follows these edges, it would link to pages that return 404s. The structural guarantee should extend to graph integrity: the graph should be a truthful representation of what the built site contains.
+
+### The structural fix
+
+`build_graph` now filters edges where the target slug is not in `slug_owner` (the set of non-draft, non-excluded pages included in the current build). Dangling edges are dropped before the graph is returned. This is a structural fix, not a behavioral patch — the graph's type contract implicitly promises that all referenced slugs exist, and this filter ensures that invariant holds.
+
+### Test coverage
+
+The 65-line test addition in `src/graph/graph_test.mbt` covers:
+- **Published → draft links filtered**: A published page with a wikilink to a draft page has the edge removed from the graph.
+- **Published → published links kept**: Normal wikilinks between published pages remain in the graph.
+- **Excluded pages filtered**: Pages excluded from the build (via config) don't appear as edge targets.
+- **Mixed graph**: A graph with multiple edge types has only valid edges retained.
+
+These tests prove the graph integrity invariant: every edge in the output graph connects two pages that exist in the built site.
+
+### AI usage note
+
+This section documents a fix that was already committed (`78fed24`) with its own test coverage. The retrospective entry was written from the task specification's description of the bug and fix, cross-referenced with the actual code in `src/graph/graph.mbt` and `src/graph/graph_test.mbt` to verify the description matches the implementation.
