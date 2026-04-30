@@ -3468,7 +3468,7 @@ fn process_document(
         if date_text.length() > 0 {
           let date_parts : Array[String] = date_text
             .split("-")
-            .map(fn(sv) { sv.to_owned() })
+            .map(fn(sv) { sv.to_string() })
             .collect()
           if date_parts.length() == 3 {
             year_val = date_parts[0]
@@ -4015,7 +4015,7 @@ fn process_document_for_lint(
       if date_text.length() > 0 {
         let date_parts : Array[String] = date_text
           .split("-")
-          .map(fn(sv) { sv.to_owned() })
+          .map(fn(sv) { sv.to_string() })
           .collect()
         if date_parts.length() == 3 {
           year_val = date_parts[0]

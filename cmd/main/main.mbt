@@ -1000,7 +1000,7 @@ pub fn list_error_codes() -> String {
 pub fn explain_error_code(code : String) -> String? {
   // Normalize: trim, lowercase, remove underscores so both
   // "BrokenWikilink" and "broken_wikilink" map to "brokenwikilink"
-  let normalized = code.trim().to_lower().replace(old="_", new="").to_owned()
+  let normalized = code.trim().to_lower().replace(old="_", new="").to_string()
   match normalized {
     "e001" | "missingrequiredfrontmatter" =>
       Some(
@@ -1194,7 +1194,7 @@ fn run_main() -> Unit {
 
   let parse_result : Result[String?, @clap.ParserError] = try? parser.parse(
     sv,
-    args[1:].to_owned(),
+    args[1:].to_array(),
   )
 
   match parse_result {
