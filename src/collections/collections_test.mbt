@@ -523,7 +523,7 @@ test "collections parse description field" {
   match parse(src) {
     Ok(cfg) => {
       assert_eq(cfg.definitions.length(), 1)
-      assert_eq(cfg.definitions[0].description, Some("My blog posts"))
+      assert_true(cfg.definitions[0].description == Some("My blog posts"))
     }
     Err(_) => assert_true(false)
   }
@@ -535,7 +535,7 @@ test "collections description defaults to None when not specified" {
   match parse(src) {
     Ok(cfg) => {
       assert_eq(cfg.definitions.length(), 1)
-      assert_eq(cfg.definitions[0].description, None)
+      assert_true(cfg.definitions[0].description == None)
     }
     Err(_) => assert_true(false)
   }
@@ -551,7 +551,7 @@ test "collections parse description and sort together" {
   match parse(src) {
     Ok(cfg) => {
       assert_eq(cfg.definitions.length(), 1)
-      assert_eq(cfg.definitions[0].description, Some("All my posts"))
+      assert_true(cfg.definitions[0].description == Some("All my posts"))
       match cfg.definitions[0].sort_order {
         @collections.TitleAsc => assert_true(true)
         _ => assert_true(false)
@@ -574,8 +574,8 @@ test "collections parse description across multiple sections" {
   match parse(src) {
     Ok(cfg) => {
       assert_eq(cfg.definitions.length(), 2)
-      assert_eq(cfg.definitions[0].description, Some("Blog"))
-      assert_eq(cfg.definitions[1].description, Some("Static pages"))
+      assert_true(cfg.definitions[0].description == Some("Blog"))
+      assert_true(cfg.definitions[1].description == Some("Static pages"))
     }
     Err(_) => assert_true(false)
   }
@@ -847,8 +847,7 @@ test "collections error: unknown key in data section" {
 
 ///|
 test "collections error: duplicate collection name" {
-  let src =
-    "[posts]\nschema = title:String\ndir = content/posts\n\n" +
+  let src = "[posts]\nschema = title:String\ndir = content/posts\n\n" +
     "[posts]\nschema = title:String\ndir = content/posts2\n"
   match parse(src) {
     Err(@collections.DuplicateCollection(name)) => assert_eq(name, "posts")
@@ -858,8 +857,7 @@ test "collections error: duplicate collection name" {
 
 ///|
 test "collections error: duplicate data schema name" {
-  let src =
-    "[posts]\nschema = title:String\ndir = content/posts\n\n" +
+  let src = "[posts]\nschema = title:String\ndir = content/posts\n\n" +
     "[data.nav]\nrequired = title\n\n" +
     "[data.nav]\nrequired = subtitle\n"
   match parse(src) {
@@ -870,8 +868,7 @@ test "collections error: duplicate data schema name" {
 
 ///|
 test "collections error: missing required field in data section" {
-  let src =
-    "[posts]\nschema = title:String\ndir = content/posts\n\n" +
+  let src = "[posts]\nschema = title:String\ndir = content/posts\n\n" +
     "[data.nav]\n"
   match parse(src) {
     Err(@collections.MissingRequiredField(section, field)) => {

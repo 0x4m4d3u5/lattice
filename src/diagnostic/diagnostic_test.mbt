@@ -189,8 +189,24 @@ test "count_errors returns zero for empty array" {
 ///|
 test "count_errors ignores warnings" {
   let items : Array[Diagnostic] = [
-    { severity: Warning, code: None, path: None, line: None, column: None, message: "w", note: None },
-    { severity: Warning, code: None, path: None, line: None, column: None, message: "w2", note: None },
+    {
+      severity: Warning,
+      code: None,
+      path: None,
+      line: None,
+      column: None,
+      message: "w",
+      note: None,
+    },
+    {
+      severity: Warning,
+      code: None,
+      path: None,
+      line: None,
+      column: None,
+      message: "w2",
+      note: None,
+    },
   ]
   assert_eq(count_errors(items), 0)
 }
@@ -198,9 +214,33 @@ test "count_errors ignores warnings" {
 ///|
 test "count_errors counts only errors in mixed array" {
   let items : Array[Diagnostic] = [
-    { severity: Error, code: Some("E001"), path: None, line: None, column: None, message: "e1", note: None },
-    { severity: Warning, code: None, path: None, line: None, column: None, message: "w", note: None },
-    { severity: Error, code: Some("E004"), path: None, line: None, column: None, message: "e2", note: None },
+    {
+      severity: Error,
+      code: Some("E001"),
+      path: None,
+      line: None,
+      column: None,
+      message: "e1",
+      note: None,
+    },
+    {
+      severity: Warning,
+      code: None,
+      path: None,
+      line: None,
+      column: None,
+      message: "w",
+      note: None,
+    },
+    {
+      severity: Error,
+      code: Some("E004"),
+      path: None,
+      line: None,
+      column: None,
+      message: "e2",
+      note: None,
+    },
   ]
   assert_eq(count_errors(items), 2)
 }
@@ -216,9 +256,9 @@ test "of_lint_violation assigns correct E-code for BrokenWikilink" {
   }
   let d = of_lint_violation(v)
   assert_eq(d.severity, Error)
-  assert_eq(d.code, Some("E004"))
-  assert_eq(d.path, Some("content/posts/hello.md"))
-  assert_eq(d.line, Some(5))
+  assert_true(d.code == Some("E004"))
+  assert_true(d.path == Some("content/posts/hello.md"))
+  assert_true(d.line == Some(5))
   assert_eq(d.message, "broken wikilink: [[missing]]")
   // BrokenWikilink has a hint
   assert_true(!(d.note is None))
@@ -235,8 +275,8 @@ test "of_lint_violation assigns correct E-code for DuplicateSlug" {
   }
   let d = of_lint_violation(v)
   assert_eq(d.severity, Error)
-  assert_eq(d.code, Some("E010"))
-  assert_eq(d.path, Some("content/posts/dup.md"))
+  assert_true(d.code == Some("E010"))
+  assert_true(d.path == Some("content/posts/dup.md"))
 }
 
 ///|
@@ -252,34 +292,39 @@ test "of_lint_violation is always Error severity" {
     @lint.IOError,
   ]
   for kind in kinds {
-    let v : @lint.LintViolation = { path: "x.md", line: None, column: None, kind, message: "msg" }
+    let v : @lint.LintViolation = {
+      path: "x.md",
+      line: None,
+      column: None,
+      kind,
+      message: "msg",
+    }
     assert_eq(of_lint_violation(v).severity, Error)
   }
 }
-
 
 ///|
 test "error() constructor sets severity=Error and all optional fields=None" {
   let d = error("something went wrong")
   assert_eq(d.severity, Error)
-  assert_eq(d.code, None)
-  assert_eq(d.path, None)
-  assert_eq(d.line, None)
-  assert_eq(d.column, None)
+  assert_true(d.code == None)
+  assert_true(d.path == None)
+  assert_true(d.line == None)
+  assert_true(d.column == None)
   assert_eq(d.message, "something went wrong")
-  assert_eq(d.note, None)
+  assert_true(d.note == None)
 }
 
 ///|
 test "warning() constructor sets severity=Warning and all optional fields=None" {
   let d = warning("minor issue")
   assert_eq(d.severity, Warning)
-  assert_eq(d.code, None)
-  assert_eq(d.path, None)
-  assert_eq(d.line, None)
-  assert_eq(d.column, None)
+  assert_true(d.code == None)
+  assert_true(d.path == None)
+  assert_true(d.line == None)
+  assert_true(d.column == None)
   assert_eq(d.message, "minor issue")
-  assert_eq(d.note, None)
+  assert_true(d.note == None)
 }
 
 ///|
@@ -346,7 +391,7 @@ test "of_lint_violation MissingRequiredFrontmatter maps to E001" {
     message: "missing title",
   }
   let d = of_lint_violation(v)
-  assert_eq(d.code, Some("E001"))
+  assert_true(d.code == Some("E001"))
   assert_eq(d.severity, Error)
   assert_true(!(d.note is None))
 }
@@ -361,7 +406,7 @@ test "of_lint_violation SchemaError maps to E002" {
     message: "bad schema",
   }
   let d = of_lint_violation(v)
-  assert_eq(d.code, Some("E002"))
+  assert_true(d.code == Some("E002"))
   assert_true(!(d.note is None))
 }
 
@@ -375,7 +420,7 @@ test "of_lint_violation FrontmatterError maps to E003" {
     message: "bad frontmatter",
   }
   let d = of_lint_violation(v)
-  assert_eq(d.code, Some("E003"))
+  assert_true(d.code == Some("E003"))
   assert_true(!(d.note is None))
 }
 
@@ -389,7 +434,7 @@ test "of_lint_violation DanglingTagReference maps to E005" {
     message: "dangling tag",
   }
   let d = of_lint_violation(v)
-  assert_eq(d.code, Some("E005"))
+  assert_true(d.code == Some("E005"))
   assert_true(!(d.note is None))
 }
 
@@ -403,7 +448,7 @@ test "of_lint_violation TemplateSlotError maps to E006" {
     message: "bad slot",
   }
   let d = of_lint_violation(v)
-  assert_eq(d.code, Some("E006"))
+  assert_true(d.code == Some("E006"))
   assert_true(!(d.note is None))
 }
 
@@ -417,7 +462,7 @@ test "of_lint_violation DataError maps to E007" {
     message: "data error",
   }
   let d = of_lint_violation(v)
-  assert_eq(d.code, Some("E007"))
+  assert_true(d.code == Some("E007"))
   assert_true(!(d.note is None))
 }
 
@@ -431,7 +476,7 @@ test "of_lint_violation ShortcodeError maps to E008" {
     message: "shortcode error",
   }
   let d = of_lint_violation(v)
-  assert_eq(d.code, Some("E008"))
+  assert_true(d.code == Some("E008"))
   assert_true(!(d.note is None))
 }
 
@@ -445,7 +490,7 @@ test "of_lint_violation CollectionsError maps to E009" {
     message: "collections error",
   }
   let d = of_lint_violation(v)
-  assert_eq(d.code, Some("E009"))
+  assert_true(d.code == Some("E009"))
   assert_true(!(d.note is None))
 }
 
@@ -459,7 +504,7 @@ test "of_lint_violation IOError maps to E011" {
     message: "file not found",
   }
   let d = of_lint_violation(v)
-  assert_eq(d.code, Some("E011"))
+  assert_true(d.code == Some("E011"))
   assert_true(!(d.note is None))
 }
 

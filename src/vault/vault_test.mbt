@@ -11,17 +11,17 @@ fn parse_fm(src : String) -> @frontmatter.Frontmatter {
 ///|
 test "extract_vault_metadata returns None when no vault fields present" {
   let fm = parse_fm("+++\ntitle = \"Hello\"\ndate = 2026-01-01\n+++\nBody")
-  assert_eq(extract_vault_metadata(fm), None)
+  assert_true(extract_vault_metadata(fm) == None)
 }
 
 ///|
 test "extract_vault_metadata extracts type and status" {
   let fm = parse_fm("+++\ntype = \"project\"\nstatus = \"active\"\n+++\n")
   let meta = extract_vault_metadata(fm).unwrap()
-  assert_eq(meta.note_type, Some("project"))
-  assert_eq(meta.status, Some("active"))
-  assert_eq(meta.purpose, None)
-  assert_eq(meta.goal, None)
+  assert_true(meta.note_type == Some("project"))
+  assert_true(meta.status == Some("active"))
+  assert_true(meta.purpose == None)
+  assert_true(meta.goal == None)
 }
 
 ///|
@@ -30,18 +30,18 @@ test "extract_vault_metadata extracts all fields" {
     "+++\ntype = \"area\"\nstatus = \"active\"\npurpose = \"research\"\ngoal = \"learn moonbit\"\nsource = \"notes\"\n+++\n",
   )
   let meta = extract_vault_metadata(fm).unwrap()
-  assert_eq(meta.note_type, Some("area"))
-  assert_eq(meta.status, Some("active"))
-  assert_eq(meta.purpose, Some("research"))
-  assert_eq(meta.goal, Some("learn moonbit"))
-  assert_eq(meta.source, Some("notes"))
+  assert_true(meta.note_type == Some("area"))
+  assert_true(meta.status == Some("active"))
+  assert_true(meta.purpose == Some("research"))
+  assert_true(meta.goal == Some("learn moonbit"))
+  assert_true(meta.source == Some("notes"))
 }
 
 ///|
 test "extract_vault_metadata treats FDate created as string" {
   let fm = parse_fm("+++\ncreated = 2026-03-15\n+++\n")
   let meta = extract_vault_metadata(fm).unwrap()
-  assert_eq(meta.created, Some("2026-03-15"))
+  assert_true(meta.created == Some("2026-03-15"))
 }
 
 // ── is_active_project ─────────────────────────────────────────────────────────
@@ -53,7 +53,9 @@ test "is_active_project returns false for None" {
 
 ///|
 test "is_active_project returns true for active statuses" {
-  let statuses = ["active", "Active", "ACTIVE", "in-progress", "doing", "ongoing", "in progress"]
+  let statuses = [
+    "active", "Active", "ACTIVE", "in-progress", "doing", "ongoing", "in progress",
+  ]
   for s in statuses {
     let fm = parse_fm("+++\nstatus = \"" + s + "\"\n+++\n")
     let meta = extract_vault_metadata(fm)

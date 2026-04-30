@@ -101,13 +101,13 @@ test "explain_error_code returns explanation for E011" {
 ///|
 test "explain_error_code returns None for unknown code E999" {
   let result = explain_error_code("E999")
-  assert_eq(result, None)
+  assert_true(result == None)
 }
 
 ///|
 test "explain_error_code returns None for empty string" {
   let result = explain_error_code("")
-  assert_eq(result, None)
+  assert_true(result == None)
 }
 
 ///|
@@ -116,7 +116,7 @@ test "explain_error_code is case-insensitive for codes" {
   let upper = explain_error_code("E004")
   assert_true(lower is Some(_))
   assert_true(upper is Some(_))
-  assert_eq(lower, upper)
+  assert_true(lower == upper)
 }
 
 ///|
@@ -126,8 +126,8 @@ test "explain_error_code accepts enum name (case-insensitive)" {
   let code = explain_error_code("E004")
   assert_true(lower is Some(_))
   assert_true(upper is Some(_))
-  assert_eq(lower, code)
-  assert_eq(upper, code)
+  assert_true(lower == code)
+  assert_true(upper == code)
 }
 
 ///|

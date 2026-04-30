@@ -140,7 +140,7 @@ test "generate_frontmatter - basic schema" {
   let result = generate_frontmatter(schema, "2026-04-01")
   let lines : Array[String] = result
     .split("\n")
-    .map(fn(sv) { sv.to_string() })
+    .map(fn(sv) { sv.to_owned() })
     .collect()
   // Should start with ---
   assert_eq(lines[0], "---")
@@ -170,7 +170,7 @@ test "generate_frontmatter - array field required" {
   let result = generate_frontmatter(schema, "2026-04-01")
   let lines : Array[String] = result
     .split("\n")
-    .map(fn(sv) { sv.to_string() })
+    .map(fn(sv) { sv.to_owned() })
     .collect()
   inspect(lines[1], content="items:")
   inspect(lines[2], content="  - placeholder")
@@ -191,7 +191,7 @@ test "generate_frontmatter - TInt with min" {
   let result = generate_frontmatter(schema, "2026-04-01")
   let lines : Array[String] = result
     .split("\n")
-    .map(fn(sv) { sv.to_string() })
+    .map(fn(sv) { sv.to_owned() })
     .collect()
   inspect(lines[1], content="priority: 1")
 }
@@ -250,7 +250,9 @@ test "new_content_file - schema with required and optional fields includes field
       { name: "date", field_type: @schema.TDate(None, None), required: true },
       {
         name: "tags",
-        field_type: @schema.TOptional(@schema.TArray(@schema.TString(None, None))),
+        field_type: @schema.TOptional(
+          @schema.TArray(@schema.TString(None, None)),
+        ),
         required: false,
       },
       {
@@ -263,7 +265,9 @@ test "new_content_file - schema with required and optional fields includes field
   @fs.create_dir(test_dir) catch {
     _ => ()
   }
-  let file_path = new_content_file(test_dir, schema, "field-guide-test", "2026-04-29")
+  let file_path = new_content_file(
+    test_dir, schema, "field-guide-test", "2026-04-29",
+  )
   match file_path {
     Err(msg) => fail("expected success, got: " + msg)
     Ok(path) => {
@@ -326,7 +330,9 @@ test "new_content_file - happy path creates file with frontmatter and body stub"
   @fs.create_dir(test_dir) catch {
     _ => ()
   }
-  let file_path = new_content_file(test_dir, schema, "happy-path-test", "2026-04-29")
+  let file_path = new_content_file(
+    test_dir, schema, "happy-path-test", "2026-04-29",
+  )
   match file_path {
     Err(msg) => fail("expected success, got: " + msg)
     Ok(path) => {

@@ -3183,22 +3183,22 @@ test "404.md in content root is not treated as root page" {
 
 ///|
 test "reading_time_minutes returns None for zero" {
-  assert_eq(@builder.reading_time_minutes(0), None)
+  assert_true(@builder.reading_time_minutes(0) == None)
 }
 
 ///|
 test "reading_time_minutes returns Some(1) for small count" {
-  assert_eq(@builder.reading_time_minutes(50), Some(1))
+  assert_true(@builder.reading_time_minutes(50) == Some(1))
 }
 
 ///|
 test "reading_time_minutes returns Some(2) for 450 words" {
-  assert_eq(@builder.reading_time_minutes(450), Some(2))
+  assert_true(@builder.reading_time_minutes(450) == Some(2))
 }
 
 ///|
 test "reading_time_minutes returns Some(10) for 2250 words" {
-  assert_eq(@builder.reading_time_minutes(2250), Some(10))
+  assert_true(@builder.reading_time_minutes(2250) == Some(10))
 }
 
 ///|
@@ -4651,8 +4651,6 @@ test "standalone page with backlinks from collection page" {
   assert_true(hello_output.contains("href=\"/about/\""))
 }
 
-
-
 ///|
 test "is_non_content_file excludes well-known non-content files" {
   assert_true(@builder.is_non_content_file("404.md"))
@@ -4778,7 +4776,6 @@ test "README.md in content root is not treated as root page" {
   assert_true(index_html.contains("Home"))
 }
 
-
 ///|
 test "render_redirect_page normal URL" {
   let html = @builder.render_redirect_page("/posts/hello/")
@@ -4787,9 +4784,7 @@ test "render_redirect_page normal URL" {
       "<meta http-equiv=\"refresh\" content=\"0; url=/posts/hello/\">",
     ),
   )
-  assert_true(
-    html.contains("<link rel=\"canonical\" href=\"/posts/hello/\">"),
-  )
+  assert_true(html.contains("<link rel=\"canonical\" href=\"/posts/hello/\">"))
   assert_true(html.contains("<a href=\"/posts/hello/\">"))
 }
 
@@ -5240,13 +5235,10 @@ test "frontmatter_to_arrays converts FBool elements to strings" {
 
 ///|
 test "frontmatter_to_arrays no arrays in document produces empty map" {
-  let fm = parse_fm_builder(
-    "+++\ntitle = \"Hello\"\ndate = 2026-01-01\n+++\n",
-  )
+  let fm = parse_fm_builder("+++\ntitle = \"Hello\"\ndate = 2026-01-01\n+++\n")
   let m = @builder.frontmatter_to_arrays(fm)
   assert_eq(m.length(), 0)
 }
-
 
 // ── TRef cross-collection validation integration tests ─────────────────────────
 //
@@ -5545,8 +5537,7 @@ test "check passes for valid TRef field" {
     include_drafts: false,
   })
   let tref_violations = result.violations.filter(fn(v) {
-    v.kind == @lint.SchemaError &&
-    v.message.contains("related_post")
+    v.kind == @lint.SchemaError && v.message.contains("related_post")
   })
   assert_eq(tref_violations.length(), 0)
 }
@@ -5724,7 +5715,5 @@ test "build content-index body_text populated on cache-hit rebuild" {
   }
   assert_true(content_index.length() > 0)
   // The body field must contain the distinctive text from the post
-  assert_true(
-    content_index.contains("Hello world this is a test post"),
-  )
+  assert_true(content_index.contains("Hello world this is a test post"))
 }

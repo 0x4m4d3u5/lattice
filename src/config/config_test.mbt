@@ -29,9 +29,9 @@ test "config parse single [[collections]] block" {
       let coll = cfg.collections[0]
       assert_eq(coll.name, "posts")
       assert_eq(coll.dir, "./content/posts")
-      assert_eq(coll.schema, Some("title:String,date:Date"))
-      assert_eq(coll.template, Some("post.html"))
-      assert_eq(coll.page_size, Some(7))
+      assert_true(coll.schema == Some("title:String,date:Date"))
+      assert_true(coll.template == Some("post.html"))
+      assert_true(coll.page_size == Some(7))
     }
     Err(_) => assert_true(false)
   }
@@ -61,8 +61,8 @@ test "config parse multiple [[collections]] blocks" {
       assert_eq(cfg.collections[1].dir, "./content/pages")
       assert_eq(cfg.collections[2].name, "docs")
       assert_eq(cfg.collections[2].dir, "./content/docs")
-      assert_eq(cfg.collections[2].schema, None)
-      assert_eq(cfg.collections[2].page_size, None)
+      assert_true(cfg.collections[2].schema == None)
+      assert_true(cfg.collections[2].page_size == None)
     }
     Err(_) => assert_true(false)
   }
@@ -126,7 +126,7 @@ test "config parse backward compatibility with collections_file" {
   match parse(src) {
     Ok(cfg) => {
       assert_eq(cfg.collections.length(), 0)
-      assert_eq(cfg.collections_file, Some("./vault.collections.cfg"))
+      assert_true(cfg.collections_file == Some("./vault.collections.cfg"))
     }
     Err(_) => assert_true(false)
   }
@@ -148,11 +148,11 @@ test "config parse [[collections]] with description" {
   match parse(src) {
     Ok(cfg) => {
       assert_eq(cfg.collections.length(), 2)
-      assert_eq(
-        cfg.collections[0].description,
+      assert_true(
+        cfg.collections[0].description ==
         Some("Blog posts about interesting things."),
       )
-      assert_eq(cfg.collections[1].description, None)
+      assert_true(cfg.collections[1].description == None)
     }
     Err(_) => assert_true(false)
   }
@@ -177,7 +177,7 @@ test "config parse standalone_dir" {
 test "config standalone_dir defaults to None when omitted" {
   let src = "title = Example\n" + "base_url = https://example.test\n"
   match parse(src) {
-    Ok(cfg) => assert_eq(cfg.standalone_dir, None)
+    Ok(cfg) => assert_true(cfg.standalone_dir == None)
     Err(_) => assert_true(false)
   }
 }
@@ -194,7 +194,7 @@ test "config parse [[collections]] with sort_order" {
   match parse(src) {
     Ok(cfg) => {
       assert_eq(cfg.collections.length(), 1)
-      assert_eq(cfg.collections[0].sort_order, Some("title:asc"))
+      assert_true(cfg.collections[0].sort_order == Some("title:asc"))
     }
     Err(_) => assert_true(false)
   }
@@ -217,10 +217,10 @@ test "config parse [[collections]] with description and sort_order" {
   match parse(src) {
     Ok(cfg) => {
       assert_eq(cfg.collections.length(), 2)
-      assert_eq(cfg.collections[0].description, Some("My posts"))
-      assert_eq(cfg.collections[0].sort_order, Some("date:asc"))
-      assert_eq(cfg.collections[1].description, None)
-      assert_eq(cfg.collections[1].sort_order, None)
+      assert_true(cfg.collections[0].description == Some("My posts"))
+      assert_true(cfg.collections[0].sort_order == Some("date:asc"))
+      assert_true(cfg.collections[1].description == None)
+      assert_true(cfg.collections[1].sort_order == None)
     }
     Err(_) => assert_true(false)
   }
@@ -235,7 +235,7 @@ test "config sort_order defaults to None when not specified" {
     "dir = ./content/posts\n" +
     "schema = title:String\n"
   match parse(src) {
-    Ok(cfg) => assert_eq(cfg.collections[0].sort_order, None)
+    Ok(cfg) => assert_true(cfg.collections[0].sort_order == None)
     Err(_) => assert_true(false)
   }
 }
@@ -377,22 +377,21 @@ test "config InvalidLine for line without equals sign" {
 test "config parses output_dir" {
   let src = "title = Example\nbase_url = https://example.test\noutput_dir = dist\n"
   match parse(src) {
-    Ok(cfg) => assert_eq(cfg.output_dir, Some("dist"))
+    Ok(cfg) => assert_true(cfg.output_dir == Some("dist"))
     Err(_) => assert_true(false)
   }
 }
 
 ///|
 test "config parses description and og_image" {
-  let src =
-    "title = Example\n" +
+  let src = "title = Example\n" +
     "base_url = https://example.test\n" +
     "description = A test site\n" +
     "og_image = https://example.test/card.png\n"
   match parse(src) {
     Ok(cfg) => {
-      assert_eq(cfg.description, Some("A test site"))
-      assert_eq(cfg.og_image, Some("https://example.test/card.png"))
+      assert_true(cfg.description == Some("A test site"))
+      assert_true(cfg.og_image == Some("https://example.test/card.png"))
     }
     Err(_) => assert_true(false)
   }
@@ -400,15 +399,14 @@ test "config parses description and og_image" {
 
 ///|
 test "config parses templates_dir and static_dir" {
-  let src =
-    "title = Example\n" +
+  let src = "title = Example\n" +
     "base_url = https://example.test\n" +
     "templates_dir = templates\n" +
     "static_dir = public\n"
   match parse(src) {
     Ok(cfg) => {
-      assert_eq(cfg.templates_dir, Some("templates"))
-      assert_eq(cfg.static_dir, Some("public"))
+      assert_true(cfg.templates_dir == Some("templates"))
+      assert_true(cfg.static_dir == Some("public"))
     }
     Err(_) => assert_true(false)
   }
@@ -416,15 +414,14 @@ test "config parses templates_dir and static_dir" {
 
 ///|
 test "config parses page_size and feed_limit" {
-  let src =
-    "title = Example\n" +
+  let src = "title = Example\n" +
     "base_url = https://example.test\n" +
     "page_size = 10\n" +
     "feed_limit = 20\n"
   match parse(src) {
     Ok(cfg) => {
-      assert_eq(cfg.page_size, Some(10))
-      assert_eq(cfg.feed_limit, Some(20))
+      assert_true(cfg.page_size == Some(10))
+      assert_true(cfg.feed_limit == Some(20))
     }
     Err(_) => assert_true(false)
   }
@@ -432,15 +429,14 @@ test "config parses page_size and feed_limit" {
 
 ///|
 test "config parses robots_txt and archive_pages booleans" {
-  let src =
-    "title = Example\n" +
+  let src = "title = Example\n" +
     "base_url = https://example.test\n" +
     "robots_txt = true\n" +
     "archive_pages = false\n"
   match parse(src) {
     Ok(cfg) => {
-      assert_eq(cfg.robots_txt, Some(true))
-      assert_eq(cfg.archive_pages, Some(false))
+      assert_true(cfg.robots_txt == Some(true))
+      assert_true(cfg.archive_pages == Some(false))
     }
     Err(_) => assert_true(false)
   }
@@ -448,20 +444,18 @@ test "config parses robots_txt and archive_pages booleans" {
 
 ///|
 test "config parses site_feed_enabled boolean" {
-  let src =
-    "title = Example\n" +
+  let src = "title = Example\n" +
     "base_url = https://example.test\n" +
     "site_feed_enabled = yes\n"
   match parse(src) {
-    Ok(cfg) => assert_eq(cfg.site_feed_enabled, Some(true))
+    Ok(cfg) => assert_true(cfg.site_feed_enabled == Some(true))
     Err(_) => assert_true(false)
   }
 }
 
 ///|
 test "config InvalidValue for bad robots_txt value" {
-  let src =
-    "title = Example\n" +
+  let src = "title = Example\n" +
     "base_url = https://example.test\n" +
     "robots_txt = maybe\n"
   match parse(src) {
@@ -476,8 +470,7 @@ test "config InvalidValue for bad robots_txt value" {
 
 ///|
 test "config InvalidValue for bad feed_limit value" {
-  let src =
-    "title = Example\n" +
+  let src = "title = Example\n" +
     "base_url = https://example.test\n" +
     "feed_limit = abc\n"
   match parse(src) {
@@ -492,8 +485,7 @@ test "config InvalidValue for bad feed_limit value" {
 
 ///|
 test "config unknown top-level keys are ignored" {
-  let src =
-    "title = Example\n" +
+  let src = "title = Example\n" +
     "base_url = https://example.test\n" +
     "unknown_key = some_value\n" +
     "another_unknown = 42\n"
@@ -508,8 +500,7 @@ test "config unknown top-level keys are ignored" {
 
 ///|
 test "config comment lines are ignored" {
-  let src =
-    "# This is a comment\n" +
+  let src = "# This is a comment\n" +
     "title = Example\n" +
     "# Another comment\n" +
     "base_url = https://example.test\n"
@@ -524,15 +515,14 @@ test "config comment lines are ignored" {
 
 ///|
 test "config parses search_index_file and content_index_file" {
-  let src =
-    "title = Example\n" +
+  let src = "title = Example\n" +
     "base_url = https://example.test\n" +
     "search_index_file = search.json\n" +
     "content_index_file = content.json\n"
   match parse(src) {
     Ok(cfg) => {
-      assert_eq(cfg.search_index_file, Some("search.json"))
-      assert_eq(cfg.content_index_file, Some("content.json"))
+      assert_true(cfg.search_index_file == Some("search.json"))
+      assert_true(cfg.content_index_file == Some("content.json"))
     }
     Err(_) => assert_true(false)
   }
@@ -540,15 +530,14 @@ test "config parses search_index_file and content_index_file" {
 
 ///|
 test "config parses data_dir and tags_field" {
-  let src =
-    "title = Example\n" +
+  let src = "title = Example\n" +
     "base_url = https://example.test\n" +
     "data_dir = _data\n" +
     "tags_field = categories\n"
   match parse(src) {
     Ok(cfg) => {
-      assert_eq(cfg.data_dir, Some("_data"))
-      assert_eq(cfg.tags_field, Some("categories"))
+      assert_true(cfg.data_dir == Some("_data"))
+      assert_true(cfg.tags_field == Some("categories"))
     }
     Err(_) => assert_true(false)
   }

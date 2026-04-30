@@ -166,10 +166,7 @@ fn build_parser() -> @clap.Parser {
     prog="lattice",
     description="A static site generator where structural violations are type errors.",
     args={
-      "version": @clap.Arg::flag(
-        short='V',
-        help="Print version and exit",
-      ),
+      "version": @clap.Arg::flag(short='V', help="Print version and exit"),
     },
     subcmds={
       "build": @clap.SubCommand::new(
@@ -1003,7 +1000,7 @@ pub fn list_error_codes() -> String {
 pub fn explain_error_code(code : String) -> String? {
   // Normalize: trim, lowercase, remove underscores so both
   // "BrokenWikilink" and "broken_wikilink" map to "brokenwikilink"
-  let normalized = code.trim().to_lower().replace(old="_", new="").to_string()
+  let normalized = code.trim().to_lower().replace(old="_", new="").to_owned()
   match normalized {
     "e001" | "missingrequiredfrontmatter" =>
       Some(
@@ -1197,7 +1194,7 @@ fn run_main() -> Unit {
 
   let parse_result : Result[String?, @clap.ParserError] = try? parser.parse(
     sv,
-    args[1:].to_array(),
+    args[1:].to_owned(),
   )
 
   match parse_result {
@@ -1294,7 +1291,9 @@ fn run_main() -> Unit {
     let slug = safe_get_one(subcmd_sv, "name").unwrap_or("")
     if slug.length() == 0 {
       print_diagnostic_main(
-        cli_error("--name <slug> is required (e.g. lattice new posts --name my-first-post)"),
+        cli_error(
+          "--name <slug> is required (e.g. lattice new posts --name my-first-post)",
+        ),
       )
       @sys.exit(1)
       return

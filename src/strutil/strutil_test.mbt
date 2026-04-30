@@ -162,14 +162,20 @@ test "normalize_base_url treats bare slash as root-relative" {
 
 ///|
 test "normalize_base_url trims horizontal whitespace" {
-  assert_eq(normalize_base_url("  https://example.com  "), "https://example.com")
+  assert_eq(
+    normalize_base_url("  https://example.com  "),
+    "https://example.com",
+  )
 }
 
 // ── absolute_url ──────────────────────────────────────────────────────────────
 
 ///|
 test "absolute_url joins base and path" {
-  assert_eq(absolute_url("https://example.com", "/about/"), "https://example.com/about/")
+  assert_eq(
+    absolute_url("https://example.com", "/about/"),
+    "https://example.com/about/",
+  )
 }
 
 ///|
@@ -179,7 +185,10 @@ test "absolute_url returns path unchanged when base is empty" {
 
 ///|
 test "absolute_url adds slash between base and relative path" {
-  assert_eq(absolute_url("https://example.com", "about/"), "https://example.com/about/")
+  assert_eq(
+    absolute_url("https://example.com", "about/"),
+    "https://example.com/about/",
+  )
 }
 
 // ── join_path ─────────────────────────────────────────────────────────────────
@@ -238,27 +247,27 @@ test "to_ascii_lower lowercases ASCII, preserves non-ASCII" {
 
 ///|
 test "parse_int handles positive, negative, and zero" {
-  assert_eq(parse_int("42"), Some(42))
-  assert_eq(parse_int("-17"), Some(-17))
-  assert_eq(parse_int("0"), Some(0))
+  assert_true(parse_int("42") == Some(42))
+  assert_true(parse_int("-17") == Some(-17))
+  assert_true(parse_int("0") == Some(0))
 }
 
 ///|
 test "parse_int rejects non-numeric input" {
-  assert_eq(parse_int(""), None)
-  assert_eq(parse_int("abc"), None)
-  assert_eq(parse_int("-"), None)
-  assert_eq(parse_int("1.5"), None)
+  assert_true(parse_int("") == None)
+  assert_true(parse_int("abc") == None)
+  assert_true(parse_int("-") == None)
+  assert_true(parse_int("1.5") == None)
 }
 
 // ── parse_positive_int ────────────────────────────────────────────────────────
 
 ///|
 test "parse_positive_int accepts positive, rejects zero and negative" {
-  assert_eq(parse_positive_int("5"), Some(5))
-  assert_eq(parse_positive_int("0"), None)
-  assert_eq(parse_positive_int(""), None)
-  assert_eq(parse_positive_int("abc"), None)
+  assert_true(parse_positive_int("5") == Some(5))
+  assert_true(parse_positive_int("0") == None)
+  assert_true(parse_positive_int("") == None)
+  assert_true(parse_positive_int("abc") == None)
 }
 
 // ── parse_float ───────────────────────────────────────────────────────────────
@@ -269,15 +278,15 @@ test "parse_float handles integer and decimal forms" {
     Some(v) => assert_true(v > 3.13 && v < 3.15)
     None => assert_true(false)
   }
-  assert_eq(parse_float("42"), Some(42.0))
-  assert_eq(parse_float("-1.5"), Some(-1.5))
+  assert_true(parse_float("42") == Some(42.0))
+  assert_true(parse_float("-1.5") == Some(-1.5))
 }
 
 ///|
 test "parse_float rejects non-numeric input" {
-  assert_eq(parse_float(""), None)
-  assert_eq(parse_float("abc"), None)
-  assert_eq(parse_float("."), None)
+  assert_true(parse_float("") == None)
+  assert_true(parse_float("abc") == None)
+  assert_true(parse_float(".") == None)
 }
 
 // ── is_leap_year and days_in_month ───────────────────────────────────────────

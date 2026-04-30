@@ -119,12 +119,11 @@ test "shortcode image InvalidParamType when width is a string" {
 ///|
 test "shortcode parse bool params" {
   match parse("callout type=\"note\" collapse=true") {
-    Ok(call) => {
+    Ok(call) =>
       match call.params.get("collapse") {
         Some(BoolParam(v)) => assert_eq(v, true)
         _ => assert_true(false)
       }
-    }
     Err(_) => assert_true(false)
   }
 }
@@ -164,10 +163,7 @@ test "shortcode callout invalid type produces InvalidParamType" {
 
 ///|
 test "shortcode error_text formats all 4 variants" {
-  assert_eq(
-    error_text(UnknownShortcode("fancy")),
-    "unknown shortcode 'fancy'",
-  )
+  assert_eq(error_text(UnknownShortcode("fancy")), "unknown shortcode 'fancy'")
   assert_eq(
     error_text(MissingParam("image", "src")),
     "shortcode 'image' missing param 'src'",
@@ -189,28 +185,28 @@ test "shortcode error_text formats all 4 variants" {
 ///|
 test "shortcode parse_open_close_tag empty string" {
   let (name, is_close) = parse_open_close_tag("")
-  assert_eq(name, None)
+  assert_true(name == None)
   assert_eq(is_close, false)
 }
 
 ///|
 test "shortcode parse_open_close_tag whitespace only" {
   let (name, is_close) = parse_open_close_tag("   ")
-  assert_eq(name, None)
+  assert_true(name == None)
   assert_eq(is_close, false)
 }
 
 ///|
 test "shortcode parse_open_close_tag valid name" {
   let (name, is_close) = parse_open_close_tag("image")
-  assert_eq(name, Some("image"))
+  assert_true(name == Some("image"))
   assert_eq(is_close, false)
 }
 
 ///|
 test "shortcode parse_open_close_tag name with leading whitespace" {
   let (name, is_close) = parse_open_close_tag("  video  ")
-  assert_eq(name, Some("video"))
+  assert_true(name == Some("video"))
   assert_eq(is_close, false)
 }
 
@@ -219,14 +215,14 @@ test "shortcode parse_open_close_tag slash prefix non-ident yields None" {
   // parse_name_shortcode stops at '/' (not an ident char), so name is ""
   // and the function returns (None, false) before reaching the slash check.
   let (name, is_close) = parse_open_close_tag("/foo")
-  assert_eq(name, None)
+  assert_true(name == None)
   assert_eq(is_close, false)
 }
 
 ///|
 test "shortcode parse_open_close_tag bare slash yields None" {
   let (name, is_close) = parse_open_close_tag("/")
-  assert_eq(name, None)
+  assert_true(name == None)
   assert_eq(is_close, false)
 }
 
@@ -234,7 +230,7 @@ test "shortcode parse_open_close_tag bare slash yields None" {
 test "shortcode parse_open_close_tag non-ident start yields None" {
   // '+' is not an ident char (not alpha, digit, or underscore)
   let (name, is_close) = parse_open_close_tag("+bad")
-  assert_eq(name, None)
+  assert_true(name == None)
   assert_eq(is_close, false)
 }
 
@@ -242,7 +238,7 @@ test "shortcode parse_open_close_tag non-ident start yields None" {
 test "shortcode parse_open_close_tag digits are valid ident parts" {
   // Digits are valid ident continuations, so "123" is a valid name.
   let (name, is_close) = parse_open_close_tag("123")
-  assert_eq(name, Some("123"))
+  assert_true(name == Some("123"))
   assert_eq(is_close, false)
 }
 
@@ -250,7 +246,7 @@ test "shortcode parse_open_close_tag digits are valid ident parts" {
 test "shortcode parse_open_close_tag name with trailing content" {
   // parse_name_shortcode stops at whitespace, so only "image" is the name
   let (name, is_close) = parse_open_close_tag("image src=\"x\"")
-  assert_eq(name, Some("image"))
+  assert_true(name == Some("image"))
   assert_eq(is_close, false)
 }
 
@@ -261,12 +257,11 @@ test "shortcode parse_open_close_tag name with trailing content" {
 ///|
 test "shortcode parse escape newline" {
   match parse("image src=\"line1\\nline2\" alt=\"test\"") {
-    Ok(call) => {
+    Ok(call) =>
       match call.params.get("src") {
         Some(StringParam(v)) => assert_eq(v, "line1\nline2")
         _ => assert_true(false)
       }
-    }
     Err(_) => assert_true(false)
   }
 }
@@ -274,12 +269,11 @@ test "shortcode parse escape newline" {
 ///|
 test "shortcode parse escape tab" {
   match parse("image src=\"col1\\tcol2\" alt=\"test\"") {
-    Ok(call) => {
+    Ok(call) =>
       match call.params.get("src") {
         Some(StringParam(v)) => assert_eq(v, "col1\tcol2")
         _ => assert_true(false)
       }
-    }
     Err(_) => assert_true(false)
   }
 }
@@ -287,12 +281,11 @@ test "shortcode parse escape tab" {
 ///|
 test "shortcode parse escape quote" {
   match parse("image src=\"say \\\"hello\\\"\" alt=\"test\"") {
-    Ok(call) => {
+    Ok(call) =>
       match call.params.get("src") {
         Some(StringParam(v)) => assert_eq(v, "say \"hello\"")
         _ => assert_true(false)
       }
-    }
     Err(_) => assert_true(false)
   }
 }
@@ -300,12 +293,11 @@ test "shortcode parse escape quote" {
 ///|
 test "shortcode parse escape backslash" {
   match parse("image src=\"path\\\\file\" alt=\"test\"") {
-    Ok(call) => {
+    Ok(call) =>
       match call.params.get("src") {
         Some(StringParam(v)) => assert_eq(v, "path\\file")
         _ => assert_true(false)
       }
-    }
     Err(_) => assert_true(false)
   }
 }
@@ -314,12 +306,11 @@ test "shortcode parse escape backslash" {
 test "shortcode parse escape fallthrough passes char through" {
   // \x is not a recognized escape, so 'x' is passed through literally
   match parse("image src=\"hello\\xworld\" alt=\"test\"") {
-    Ok(call) => {
+    Ok(call) =>
       match call.params.get("src") {
         Some(StringParam(v)) => assert_eq(v, "helloxworld")
         _ => assert_true(false)
       }
-    }
     Err(_) => assert_true(false)
   }
 }
@@ -332,9 +323,7 @@ test "shortcode parse escape fallthrough passes char through" {
 test "shortcode parse unterminated escape" {
   // Real unterminated escape: backslash at end of input inside an open quote
   match parse("image src=\"\\") {
-    Err(InvalidSyntax(msg)) => {
-      assert_true(msg.contains("unterminated escape"))
-    }
+    Err(InvalidSyntax(msg)) => assert_true(msg.contains("unterminated escape"))
     _ => assert_true(false)
   }
 }
@@ -343,9 +332,8 @@ test "shortcode parse unterminated escape" {
 test "shortcode parse unterminated quoted value" {
   // Opening quote with no closing quote before end of input
   match parse("image src=\"no_end") {
-    Err(InvalidSyntax(msg)) => {
+    Err(InvalidSyntax(msg)) =>
       assert_true(msg.contains("unterminated quoted value"))
-    }
     _ => assert_true(false)
   }
 }
@@ -354,9 +342,7 @@ test "shortcode parse unterminated quoted value" {
 test "shortcode parse expected value at end of input" {
   // key= at the very end of input with no value
   match parse("image src=") {
-    Err(InvalidSyntax(msg)) => {
-      assert_true(msg.contains("expected value"))
-    }
+    Err(InvalidSyntax(msg)) => assert_true(msg.contains("expected value"))
     _ => assert_true(false)
   }
 }
@@ -380,9 +366,7 @@ test "shortcode parse missing shortcode name" {
   // parse_name_shortcode never produces a name starting with '/'.
   // Instead, "/foo" produces name="" → "missing shortcode name".
   match parse("/foo") {
-    Err(InvalidSyntax(msg)) => {
-      assert_eq(msg, "missing shortcode name")
-    }
+    Err(InvalidSyntax(msg)) => assert_eq(msg, "missing shortcode name")
     _ => assert_true(false)
   }
 }
@@ -390,9 +374,8 @@ test "shortcode parse missing shortcode name" {
 ///|
 test "shortcode parse missing equals after key" {
   match parse("image src") {
-    Err(InvalidSyntax(msg)) => {
+    Err(InvalidSyntax(msg)) =>
       assert_true(msg.contains("expected '=' after parameter 'src'"))
-    }
     _ => assert_true(false)
   }
 }
@@ -410,9 +393,7 @@ test "shortcode parse invalid parameter key" {
   // After parsing the name, if the next non-ws char is not an ident start
   // (e.g. '='), parse_name_shortcode returns "", triggering invalid key
   match parse("image =bad") {
-    Err(InvalidSyntax(msg)) => {
-      assert_eq(msg, "invalid parameter key")
-    }
+    Err(InvalidSyntax(msg)) => assert_eq(msg, "invalid parameter key")
     _ => assert_true(false)
   }
 }
@@ -584,12 +565,11 @@ test "shortcode render image with caption but no width" {
 test "shortcode parse negative integer value" {
   // Exercises parse_int_shortcode neg=true branch (line 37, 53)
   match parse("image src=\"a.png\" alt=\"test\" width=-42") {
-    Ok(call) => {
+    Ok(call) =>
       match call.params.get("width") {
         Some(IntParam(v)) => assert_eq(v, -42)
         _ => assert_true(false)
       }
-    }
     Err(_) => assert_true(false)
   }
 }
@@ -599,12 +579,11 @@ test "shortcode parse integer with non-digit trailing char fails" {
   // Exercises parse_int_shortcode return None on non-digit (line 47)
   // "12x" won't parse as int, so it falls through to StringParam
   match parse("image src=\"a.png\" alt=\"test\" key=12x") {
-    Ok(call) => {
+    Ok(call) =>
       match call.params.get("key") {
         Some(StringParam(v)) => assert_eq(v, "12x")
         _ => assert_true(false)
       }
-    }
     Err(_) => assert_true(false)
   }
 }
@@ -613,12 +592,11 @@ test "shortcode parse integer with non-digit trailing char fails" {
 test "shortcode parse bare minus is string not int" {
   // Exercises parse_int_shortcode: i >= s.length() after consuming '-' (line 41)
   match parse("image src=\"a.png\" alt=\"test\" key=-") {
-    Ok(call) => {
+    Ok(call) =>
       match call.params.get("key") {
         Some(StringParam(v)) => assert_eq(v, "-")
         _ => assert_true(false)
       }
-    }
     Err(_) => assert_true(false)
   }
 }
@@ -631,12 +609,11 @@ test "shortcode parse bare minus is string not int" {
 test "shortcode parse false bool param" {
   // Exercises the `raw == "false"` branch (line 131)
   match parse("image src=\"a.png\" alt=\"test\" visible=false") {
-    Ok(call) => {
+    Ok(call) =>
       match call.params.get("visible") {
         Some(BoolParam(v)) => assert_eq(v, false)
         _ => assert_true(false)
       }
-    }
     Err(_) => assert_true(false)
   }
 }
@@ -649,12 +626,11 @@ test "shortcode parse false bool param" {
 test "shortcode parse unquoted string param value" {
   // Exercises the StringParam fallback when not bool or int (line 135)
   match parse("image src=\"a.png\" alt=\"test\" klass=hero") {
-    Ok(call) => {
+    Ok(call) =>
       match call.params.get("klass") {
         Some(StringParam(v)) => assert_eq(v, "hero")
         _ => assert_true(false)
       }
-    }
     Err(_) => assert_true(false)
   }
 }
@@ -954,9 +930,7 @@ test "shortcode parse name-only has no params" {
 test "shortcode parse empty string value after equals" {
   // "image src=" — already tested, but ensure value_pos >= length path
   match parse("image src=") {
-    Err(InvalidSyntax(msg)) => {
-      assert_true(msg.contains("expected value"))
-    }
+    Err(InvalidSyntax(msg)) => assert_true(msg.contains("expected value"))
     _ => assert_true(false)
   }
 }
@@ -970,9 +944,7 @@ test "shortcode parse unquoted param value is empty after trim" {
   // "key= " — after = the value_pos is past end → parse_value_shortcode fails
   // with "expected value" since pos >= s.length()
   match parse("image src=\"a.png\" alt=\"test\" key= ") {
-    Err(InvalidSyntax(msg)) => {
-      assert_true(msg.contains("expected value"))
-    }
+    Err(InvalidSyntax(msg)) => assert_true(msg.contains("expected value"))
     _ => assert_true(false)
   }
 }
@@ -984,7 +956,7 @@ test "shortcode parse unquoted param value is empty after trim" {
 ///|
 test "shortcode full round-trip image" {
   match parse("image src=\"/photo.png\" alt=\"A photo\" width=100") {
-    Ok(call) => {
+    Ok(call) =>
       match render(call) {
         Ok(html) => {
           assert_true(html.contains("<img src=\"/photo.png\""))
@@ -992,7 +964,6 @@ test "shortcode full round-trip image" {
         }
         Err(_) => assert_true(false)
       }
-    }
     Err(_) => assert_true(false)
   }
 }
@@ -1000,7 +971,7 @@ test "shortcode full round-trip image" {
 ///|
 test "shortcode full round-trip callout warning minimal" {
   match parse("callout type=\"warning\"") {
-    Ok(call) => {
+    Ok(call) =>
       match render(call) {
         Ok(html) => {
           assert_true(html.contains("callout-warning"))
@@ -1009,7 +980,6 @@ test "shortcode full round-trip callout warning minimal" {
         }
         Err(_) => assert_true(false)
       }
-    }
     Err(_) => assert_true(false)
   }
 }
@@ -1017,7 +987,7 @@ test "shortcode full round-trip callout warning minimal" {
 ///|
 test "shortcode full round-trip video" {
   match parse("video src=\"/vid.mp4\"") {
-    Ok(call) => {
+    Ok(call) =>
       match render(call) {
         Ok(html) => {
           assert_true(html.contains("<video controls"))
@@ -1026,15 +996,17 @@ test "shortcode full round-trip video" {
         }
         Err(_) => assert_true(false)
       }
-    }
     Err(_) => assert_true(false)
   }
 }
 
 ///|
 test "shortcode full round-trip figure with link and caption" {
-  match parse("figure src=\"/fig.png\" alt=\"diagram\" caption=\"See this\" link=\"/details\"") {
-    Ok(call) => {
+  match
+    parse(
+      "figure src=\"/fig.png\" alt=\"diagram\" caption=\"See this\" link=\"/details\"",
+    ) {
+    Ok(call) =>
       match render(call) {
         Ok(html) => {
           assert_true(html.contains("<a href=\"/details\">"))
@@ -1042,7 +1014,6 @@ test "shortcode full round-trip figure with link and caption" {
         }
         Err(_) => assert_true(false)
       }
-    }
     Err(_) => assert_true(false)
   }
 }
