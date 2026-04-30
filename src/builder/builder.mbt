@@ -3468,9 +3468,9 @@ fn process_document(
         if date_text.length() > 0 {
           let date_parts = date_text.split("-").to_array()
           if date_parts.length() == 3 {
-            year_val = date_parts[0].to_owned()
-            month_val = date_parts[1].to_owned()
-            day_val = date_parts[2].to_owned()
+            year_val = date_parts[0].to_string()
+            month_val = date_parts[1].to_string()
+            day_val = date_parts[2].to_string()
           }
         }
         slots.set(@template.Year, year_val)
@@ -4012,9 +4012,9 @@ fn process_document_for_lint(
       if date_text.length() > 0 {
         let date_parts = date_text.split("-").to_array()
         if date_parts.length() == 3 {
-          year_val = date_parts[0].to_owned()
-          month_val = date_parts[1].to_owned()
-          day_val = date_parts[2].to_owned()
+          year_val = date_parts[0].to_string()
+          month_val = date_parts[1].to_string()
+          day_val = date_parts[2].to_string()
         }
       }
       slots.set(@template.Year, year_val)

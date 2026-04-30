@@ -1833,7 +1833,7 @@ fn render_block_with_issues(
             Text(t) =>
               if t.has_prefix("[ ] ") {
                 task_checked = false
-                let stripped = t[4:].to_owned()
+                let stripped = t[4:].to_string()
                 // Build new array with stripped text and remaining inlines
                 let new_inlines : Array[Inline] = [Text(stripped)]
                 let mut j = 1
@@ -1844,7 +1844,7 @@ fn render_block_with_issues(
                 task_prefix_stripped = new_inlines
               } else if t.has_prefix("[x] ") || t.has_prefix("[X] ") {
                 task_checked = true
-                let stripped = t[4:].to_owned()
+                let stripped = t[4:].to_string()
                 // Build new array with stripped text and remaining inlines
                 let new_inlines : Array[Inline] = [Text(stripped)]
                 let mut j = 1
