@@ -3005,3 +3005,30 @@ These tests prove the graph integrity invariant: every edge in the output graph 
 ### AI usage note
 
 This section documents a fix that was already committed (`78fed24`) with its own test coverage. The retrospective entry was written from the task specification's description of the bug and fix, cross-referenced with the actual code in `src/graph/graph.mbt` and `src/graph/graph_test.mbt` to verify the description matches the implementation.
+
+
+
+## Graph JSON: Deduplicating Parallel Edges
+
+**Date:** 2026-04-29
+**Commit:** `fix(graph): deduplicate parallel edges in render_graph_json`
+
+### What the bug was
+
+`render_graph_json` iterated `page.outgoing` without checking for duplicate `(source, target)` pairs. A page with two wikilinks to the same target produced two identical edges in `graph.json`. The example site's `typed-content-tour` page contains two links to `template-composition`, so the generated graph had one duplicate edge.
+
+### Why the data model should keep duplicates
+
+`GraphPage.outgoing` stores all wikilink occurrences, not unique targets. This is intentional: the backlink index and other pass-2 consumers may care about occurrence frequency. Deduplication at the data model level would change the semantics for backlinks. The fix belongs in `render_graph_json`, which produces a link-graph where parallel edges have no meaning.
+
+### The fix
+
+Added a `seen_edges` map keyed by `"\(source):\(target)"` inside `render_graph_json`. Before emitting an edge, the function checks whether the pair has already been written. First occurrence is emitted; subsequent occurrences are skipped. The map is local to the function — no interface changes.
+
+### What the regression test proves
+
+The new test in `src/graph/graph_test.mbt` constructs a page with two outgoing wikilinks to the same target. The rendered JSON is parsed for the edge pattern and asserted to appear exactly once. This prevents the duplicate from silently returning if `render_graph_json` is later refactored.
+
+### AI usage note
+
+Bug identified by checking the example site's `graph.json` output and counting unique vs total edges with a short Python script. The fix and test were straightforward given the existing `render_graph_json` structure.
