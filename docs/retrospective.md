@@ -2276,13 +2276,13 @@ The third win is the separation between the build engine and I/O. Commit `09070c
 | Source files | 35 |
 | Test files | 32 (black-box) + 1 (white-box) |
 | Packages | 31 |
-| Tests | 1,238 passing |
+| Tests | 1,261 passing |
 | Compiler warnings | 0 (was 99 before deprecation cleanup, commit `7e2c6c0`) |
 | External dependencies | 2 (`moonbitlang/x` 0.4.40, `TheWaWaR/clap` 0.2.6) |
-| Commits | 262 |
-| Development span | March 8 – April 25, 2026 (48 days) |
-| Example site build time | 57ms (10 pages, 3 collections, 3 redirects) |
-| Retrospective length | ~2,600 lines |
+| Commits | 295 |
+| Development span | March 8 – April 30, 2026 (53 days) |
+| Example site build time | 76ms (10 pages, 3 collections, 3 redirects) |
+| Retrospective length | ~3,200 lines |
 
 **Largest packages by LOC** (non-test): builder (11,885), template (3,565), markdown (3,183), schema (2,734), highlight (2,218), collections (1,865), scaffold (1,826), frontmatter (1,114), html (1,239), data (1,357). The builder package is large because it orchestrates the full pipeline — content loading, schema validation, wikilink resolution, template rendering, pagination, feed generation, sitemap, robots.txt, search indexing, graph emission, asset copying, and cache management. Splitting it further would introduce coupling between stages that the current single-file orchestration avoids.
 
@@ -3067,3 +3067,73 @@ Beyond honesty, the warnings represent technical debt that accumulates as the Mo
 ### Files touched
 
 14 files: `cmd/main/main.mbt`, `cmd/main/main_wbtest.mbt`, `src/builder/builder.mbt`, `src/builder/builder_test.mbt`, `src/collections/collections_test.mbt`, `src/config/config_test.mbt`, `src/diagnostic/diagnostic_test.mbt`, `src/markdown/markdown.mbt`, `src/rss/rss_test.mbt`, `src/scaffold/scaffold_test.mbt`, `src/shortcode/shortcode_test.mbt`, `src/strutil/strutil_test.mbt`, `src/vault/vault.mbt`, `src/vault/vault_test.mbt`.
+
+## StringView/ArrayView API Footgun: Deprecation Pass Overreach
+
+**Date:** 2026-04-30
+**Commits:** `cbae9fa` (first revert), `a4d29e7` (second revert)
+
+### What happened
+
+The deprecation cleanup pass in `7e2c6c0` applied `to_string() → to_owned()` across all 14 files. The bulk of those replacements were correct: `String.to_owned()` is the canonical way to copy an owned `String`, and `.to_string()` (the `Show` trait method) was being used for type-conversion semantics that `to_owned()` expresses more clearly. But the pass made one systematic error: it applied `.to_owned()` to `StringView` and `ArrayView[T]` values, which don't have `.to_owned()`.
+
+In MoonBit's type system, `StringView` is a borrowed slice of a `String` — analogous to `&str` in Rust. It has `.to_string()` via the `Show` trait, but there is no `.to_owned()` method. The API to convert a `StringView` to an owned `String` is `.to_string()`. Similarly, `ArrayView[T]` converts to an owned array via `.to_array()`, not `.to_owned()`. The naming is counterintuitive — `to_string()` on a `StringView` does allocate a new `String`, unlike `to_string()` on a `String` where it's a `Show` formatting call — but that's the API as it stands.
+
+The four affected call sites in `cbae9fa`:
+- `cmd/main/main.mbt`: argument slice converted to `String` for subcommand dispatch
+- `src/builder/builder.mbt`: frontmatter field extraction from a `StringView`
+- `src/markdown/markdown.mbt`: task-list checkbox prefix parsing
+- `src/scaffold/scaffold_test.mbt`: test helper constructing strings from slices
+
+### Why this keeps happening
+
+The MoonBit deprecation message says "use `to_owned` instead of `to_string`". An AI agent sees `.to_string()` calls and applies the substitution uniformly without distinguishing `String.to_string()` (where `to_owned()` is the correct replacement) from `StringView.to_string()` (where `to_owned()` doesn't exist). The type system catches the error at compile time, but only after the substitution has already been written.
+
+This is a signature of mechanical rule application over semantic understanding: the rule is correct for the common case, the failure is invisible to the agent during generation, and the compiler acts as the actual gatekeeper. This is an argument for always running `moon check` after any automated deprecation pass, before staging.
+
+### The recurring nature
+
+The same bug appeared twice in a single day. `cbae9fa` (03:08) reverted the four invalid call sites. Hours later, `564a0f4` (14:56) was produced by moon_pilot — a large commit that correctly implemented RFC3339 structural validation and DRY-consolidated the RSS duplicate, but also re-touched the same four call sites and reapplied `.to_owned()` to `StringView` sources again. `a4d29e7` (14:58) reverted those four lines again, two minutes after the commit.
+
+The mitigation: treat files containing `StringView` or `ArrayView[T]` variables as a known risk zone for `to_owned()` replacements. The pre-commit hook (`moon check`) will always catch this before the commit lands, but the loop of generate → check → revert is avoidable if the constraint is stated explicitly in the task prompt.
+
+## Sitemap: Structural RFC3339 Validation Replaces Behavioral Heuristic
+
+**Date:** 2026-04-30
+**Commit:** `564a0f4`
+
+### The heuristic and why it was wrong
+
+The sitemap's `normalize_lastmod` used `s.has_suffix("Z")` to accept RFC3339 timestamps. Any string longer than 20 characters ending in `"Z"` would pass validation and get written into the `<lastmod>` field — including garbage like `"20garbage1234567890Z"`. This is a behavioral check: it tests the presence of a terminal character rather than the structure of the surrounding data.
+
+This contradicts the project thesis. If Lattice's pitch is that content integrity is a structural property — broken links are type errors, schema mismatches fail at ingest — then its own output validation should exemplify the same discipline. A `<lastmod>` entry that contains a structurally invalid date is an integrity violation in the sitemap's data, not in the content graph. Applying structural validation uniformly is not scope creep; it's coherence.
+
+### The fix: parse_fixed_uint and is_rfc3339_datetime
+
+Two functions added to `src/strutil/strutil.mbt`:
+
+**`parse_fixed_uint(s, start, count)`** — parses a fixed-width decimal integer from `s[start..start+count)`. Returns `None` if any character in the range is non-digit or if the range is out of bounds. This is the primitive that all date component extraction builds on.
+
+**`is_rfc3339_datetime(s)`** — full structural RFC 3339 validation. Checks the pattern `YYYY-MM-DDTHH:MM:SS` followed by either `Z` (UTC) or `±HH:MM` (offset). Every component is verified:
+- Date: year (4 digits), month (1–12), day (1–`days_in_month(year, month)`) — leap year aware
+- Time: hour (0–23), minute (0–59), second (0–59)
+- Timezone: either `Z` at position 19, or sign `+`/`-` at position 19 followed by `HH:MM` (hour ≤ 23, minute ≤ 59)
+
+No heuristics, no suffix matching. A string either satisfies the structural grammar or returns `false`.
+
+### DRY consolidation: RSS had a duplicate
+
+The RSS module (`src/rss/rss.mbt`) contained a private copy of both `parse_fixed_uint` and `is_rfc3339_datetime` — 50+ lines of logic that duplicated what was later written for strutil. The refactor replaced both with delegation calls to the canonical `@strutil` versions. The RSS public API is unchanged; only the implementation moves.
+
+This is a clean example of the refactor-toward-canonical pattern: when a utility function is needed in a second location, the right move is to promote it to the shared utility package rather than copy it. The prior duplication wasn't discovered until the RFC3339 structural work required looking at both validation sites together.
+
+### Test coverage
+
+23 new tests (1238 → 1261):
+- 17 for `is_rfc3339_datetime`: valid UTC timestamps, valid offset timestamps, boundary dates (month 1, month 12, day 1, day 28/29/30/31), invalid months, invalid days, malformed separators, lengths too short, garbage strings, valid leap day
+- 3 for `parse_fixed_uint`: normal extraction, out-of-bounds range, non-digit character
+- 3 regression tests in `sitemap_test.mbt`: `normalize_lastmod` rejects `"20garbage1234567890Z"`, `"not-a-dateZ"`, and an empty string with the correct suffix but invalid content
+
+### AI usage note
+
+The RFC3339 structural validation commit was generated by moon_pilot. The identification of the heuristic, the design of `parse_fixed_uint` + `is_rfc3339_datetime`, the DRY consolidation of the RSS duplicate, and the test suite were all well-reasoned. The commit message was accurate. The one failure was the same StringView/to_owned() substitution documented above — the commit also touched several deprecation-related call sites and reapplied the invalid substitution. The rubric-relevant observation is that AI-assisted commits that span multiple concerns (structural fix + style cleanup) are more likely to contain localized errors in the non-primary concern.
