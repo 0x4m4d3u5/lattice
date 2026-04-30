@@ -49,7 +49,9 @@ test "manifest parse accepts entries without targets" {
 test "manifest roundtrip preserves negative mtime" {
   let manifest : ManifestFile = {
     version: 1,
-    entries: [{ src: "a.md", mtime: -1000L, out: "dist/a/index.html", targets: [] }],
+    entries: [
+      { src: "a.md", mtime: -1000L, out: "dist/a/index.html", targets: [] },
+    ],
   }
   let parsed = parse(render(manifest)) catch {
     ParseError(_) => {
@@ -117,9 +119,7 @@ test "manifest parse rejects non-string value where string expected" {
 test "manifest parse rejects unterminated string escape" {
   // Covers: parse_json_string_manifest line 55 — raise when string ends with \
   let raised = try {
-    let _ = parse(
-      "{\"version\":1,\"entries\":[{\"src\":\"a\\",
-    )
+    let _ = parse("{\"version\":1,\"entries\":[{\"src\":\"a\\")
     false
   } catch {
     ParseError(_) => true
@@ -147,14 +147,12 @@ test "manifest parse handles backslash and forward slash escape" {
   // (not \uXXXX — those are for control chars below 0x20 that the parser can't read)
   let manifest : ManifestFile = {
     version: 1,
-    entries: [
-      { src: "a\\b/c", mtime: 1L, out: "o\nr\tt", targets: [] },
-    ],
+    entries: [{ src: "a\\b/c", mtime: 1L, out: "o\nr\tt", targets: [] }],
   }
   let rendered = render(manifest)
   let parsed = parse(rendered) catch {
     ParseError(msg) => {
-      assert_true(false, msg=msg)
+      assert_true(false, msg~)
       { version: 0, entries: [] }
     }
   }
@@ -171,7 +169,7 @@ test "manifest parse handles forward slash escape in JSON string" {
   let source = "{\"version\":1,\"entries\":[{\"src\":\"a\\/b.md\",\"mtime\":1,\"out\":\"o\"}]}"
   let parsed = parse(source) catch {
     ParseError(msg) => {
-      assert_true(false, msg=msg)
+      assert_true(false, msg~)
       { version: 0, entries: [] }
     }
   }
@@ -186,7 +184,7 @@ test "manifest parse handles backspace escape in JSON string" {
   let source = "{\"version\":1,\"entries\":[{\"src\":\"a\\bb.md\",\"mtime\":1,\"out\":\"o\"}]}"
   let parsed = parse(source) catch {
     ParseError(msg) => {
-      assert_true(false, msg=msg)
+      assert_true(false, msg~)
       { version: 0, entries: [] }
     }
   }
@@ -199,7 +197,7 @@ test "manifest parse handles formfeed escape in JSON string" {
   let source = "{\"version\":1,\"entries\":[{\"src\":\"a\\fb.md\",\"mtime\":1,\"out\":\"o\"}]}"
   let parsed = parse(source) catch {
     ParseError(msg) => {
-      assert_true(false, msg=msg)
+      assert_true(false, msg~)
       { version: 0, entries: [] }
     }
   }
@@ -212,7 +210,7 @@ test "manifest parse handles carriage return escape in JSON string" {
   let source = "{\"version\":1,\"entries\":[{\"src\":\"a\\rb.md\",\"mtime\":1,\"out\":\"o\"}]}"
   let parsed = parse(source) catch {
     ParseError(msg) => {
-      assert_true(false, msg=msg)
+      assert_true(false, msg~)
       { version: 0, entries: [] }
     }
   }
@@ -224,9 +222,7 @@ test "manifest parse rejects entry with immediate closing brace" {
   // Covers: parse_entry_manifest line 178 — '}' reached at top of while loop
   // before any fields are parsed (all seen_* flags are false)
   let raised = try {
-    let _ = parse(
-      "{\"version\":1,\"entries\":[{}]}",
-    )
+    let _ = parse("{\"version\":1,\"entries\":[{}]}")
     false
   } catch {
     ParseError(_) => true
@@ -239,9 +235,7 @@ test "manifest parse rejects entry truncated after field comma" {
   // Covers: parse_entry_manifest line 175 — source exhaustion after processing
   // a field and consuming the comma separator (top of while loop: i >= source.length())
   let raised = try {
-    let _ = parse(
-      "{\"version\":1,\"entries\":[{\"src\":\"a.md\",",
-    )
+    let _ = parse("{\"version\":1,\"entries\":[{\"src\":\"a.md\",")
     false
   } catch {
     ParseError(_) => true
@@ -289,9 +283,7 @@ test "manifest parse rejects empty source for integer" {
   // This exercises the "i >= source.length()" path by passing a value position
   // where there is nothing after the colon. We trigger this via mtime field.
   let raised = try {
-    let _ = parse(
-      "{\"version\":1,\"entries\":[{\"src\":\"a.md\",\"mtime\":",
-    )
+    let _ = parse("{\"version\":1,\"entries\":[{\"src\":\"a.md\",\"mtime\":")
     false
   } catch {
     ParseError(_) => true
@@ -331,9 +323,7 @@ test "manifest parse accepts negative sign followed by digits for mtime" {
 test "manifest parse rejects unterminated string at end of source" {
   // Covers: parse_json_string_manifest final raise ("unterminated string")
   let raised = try {
-    let _ = parse(
-      "{\"version\":1,\"entries\":[{\"src\":\"unterminated",
-    )
+    let _ = parse("{\"version\":1,\"entries\":[{\"src\":\"unterminated")
     false
   } catch {
     ParseError(_) => true
@@ -386,9 +376,7 @@ test "manifest parse rejects bad separator in targets array" {
 test "manifest parse rejects unterminated entry object" {
   // Covers: parse_entry_manifest line 175 — raise when source ends mid-entry
   let raised = try {
-    let _ = parse(
-      "{\"version\":1,\"entries\":[{\"src\":\"a.md\"",
-    )
+    let _ = parse("{\"version\":1,\"entries\":[{\"src\":\"a.md\"")
     false
   } catch {
     ParseError(_) => true
@@ -400,9 +388,7 @@ test "manifest parse rejects unterminated entry object" {
 test "manifest parse rejects entry closed without required fields" {
   // Covers: parse_entry_manifest line 178 — raise when '}' seen before src/mtime/out
   let raised = try {
-    let _ = parse(
-      "{\"version\":1,\"entries\":[{\"src\":\"a.md\"}]}",
-    )
+    let _ = parse("{\"version\":1,\"entries\":[{\"src\":\"a.md\"}]}")
     false
   } catch {
     ParseError(_) => true

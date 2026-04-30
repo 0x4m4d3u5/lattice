@@ -84,9 +84,8 @@ fn transliterate_latin(c : Char) -> String {
   } else if cp == 0xDF {
     // ß → "ss"
     "ss"
-  }
-  // Uppercase Latin accented (map directly to lowercase ASCII)
-  else if cp >= 0xC0 && cp <= 0xC5 {
+    // Uppercase Latin accented (map directly to lowercase ASCII)
+  } else if cp >= 0xC0 && cp <= 0xC5 {
     // À Á Â Ã Ä Å → "a"
     "a"
   } else if cp == 0xC6 {
@@ -116,9 +115,8 @@ fn transliterate_latin(c : Char) -> String {
   } else if cp == 0xDD {
     // Ý → "y"
     "y"
-  }
-  // Latin Extended: œ (U+0153), Œ (U+0152)
-  else if cp == 0x153 {
+    // Latin Extended: œ (U+0153), Œ (U+0152)
+  } else if cp == 0x153 {
     "oe"
   } else if cp == 0x152 {
     "oe"

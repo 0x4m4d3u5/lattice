@@ -680,7 +680,9 @@ test "highlight moonbit block comment is lossless" {
   let src = "/* this is a\n   multiline comment */\nlet x = 1\n"
   let tokens = tokenize_moonbit(src)
   assert_eq(flatten_text(tokens), src)
-  assert_true(has_token(tokens, "/* this is a\n   multiline comment */", Comment))
+  assert_true(
+    has_token(tokens, "/* this is a\n   multiline comment */", Comment),
+  )
 }
 
 ///|

@@ -208,8 +208,6 @@ test "lint summarize single violation" {
   assert_eq(summary.by_file[0].count, 1)
 }
 
-
-
 ///|
 test "lint has_violations returns false for empty result" {
   let result = empty_result()
@@ -287,7 +285,6 @@ test "lint format_violation with no position" {
   let s = format_violation(v)
   assert_eq(s, "path/file.md: missing_required_field: required")
 }
-
 
 ///|
 test "lint summarize sorts by_type by count descending with three types" {
@@ -454,7 +451,9 @@ test "lint format_violation with line and no column produces path:line format" {
     message: "collection cfg parse error",
   }
   let s = format_violation(v)
-  assert_eq(s, "deep/nested/file.md:99: collections: collection cfg parse error")
+  assert_eq(
+    s, "deep/nested/file.md:99: collections: collection cfg parse error",
+  )
 }
 
 ///|

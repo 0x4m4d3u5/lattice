@@ -166,9 +166,11 @@ test "value_to_string FBool false" {
 test "value_to_string FArray" {
   assert_eq(
     value_to_string(
-      @frontmatter.FArray(
-        [@frontmatter.FStr("a"), @frontmatter.FStr("b"), @frontmatter.FStr("c")],
-      ),
+      @frontmatter.FArray([
+        @frontmatter.FStr("a"),
+        @frontmatter.FStr("b"),
+        @frontmatter.FStr("c"),
+      ]),
     ),
     "a, b, c",
   )
@@ -230,9 +232,7 @@ test "resolve returns error for missing key" {
 test "data boolean and integer values parse correctly" {
   let root = "./_tmp_data_types"
   reset_dir(root)
-  assert_true(
-    write_file_test(root + "/cfg.toml", "active = true\ncount = 7\n"),
-  )
+  assert_true(write_file_test(root + "/cfg.toml", "active = true\ncount = 7\n"))
   let schemas : Map[String, DataSchema] = Map::new()
   match load_from_dir(root, schemas) {
     Ok(store) => {

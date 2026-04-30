@@ -139,11 +139,10 @@ fn is_rfc3339_datetime(s : String) -> Bool {
   let minute = parse_fixed_uint(s, 14, 2)
   let second = parse_fixed_uint(s, 17, 2)
   match (hour, minute, second) {
-    (Some(h), Some(min_), Some(sec)) => {
+    (Some(h), Some(min_), Some(sec)) =>
       if h > 23 || min_ > 59 || sec > 59 {
         return false
       }
-    }
     _ => return false
   }
   // Check timezone: either Z or ±HH:MM

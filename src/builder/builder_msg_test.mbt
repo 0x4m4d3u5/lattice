@@ -75,7 +75,10 @@ test "build result messages contain progress header" {
   assert_eq(result.errors, 0)
   // messages array must be non-empty and contain the build header
   assert_true(result.messages.length() > 0)
-  assert_eq(count_messages_with_prefix(result.messages, "[lattice] building"), 1)
+  assert_eq(
+    count_messages_with_prefix(result.messages, "[lattice] building"),
+    1,
+  )
   // exactly one [build] progress entry — one post was built
   assert_eq(count_messages_with_prefix(result.messages, "[build]"), 1)
   // no [skip] entries on a forced full rebuild

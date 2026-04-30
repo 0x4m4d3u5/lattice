@@ -124,11 +124,21 @@ test "cache parse rejects input missing entries field" {
 ///|
 test "cache error_text formats all three error variants with context" {
   assert_true(error_text(ReadError("disk I/O failure")).contains("read failed"))
-  assert_true(error_text(ReadError("disk I/O failure")).contains("disk I/O failure"))
-  assert_true(error_text(ParseError("unexpected token")).contains("parse failed"))
-  assert_true(error_text(ParseError("unexpected token")).contains("unexpected token"))
-  assert_true(error_text(WriteError("permission denied")).contains("write failed"))
-  assert_true(error_text(WriteError("permission denied")).contains("permission denied"))
+  assert_true(
+    error_text(ReadError("disk I/O failure")).contains("disk I/O failure"),
+  )
+  assert_true(
+    error_text(ParseError("unexpected token")).contains("parse failed"),
+  )
+  assert_true(
+    error_text(ParseError("unexpected token")).contains("unexpected token"),
+  )
+  assert_true(
+    error_text(WriteError("permission denied")).contains("write failed"),
+  )
+  assert_true(
+    error_text(WriteError("permission denied")).contains("permission denied"),
+  )
 }
 
 ///|
@@ -231,9 +241,7 @@ test "cache parse reject invalid escape in string" {
 /// parse_json_string_cache: unterminated escape (backslash at end of input)
 test "cache parse reject unterminated escape" {
   let raised = try {
-    let _ = parse(
-      "{\"version\":1,\"entries\":[{\"slug\":\"abc\\",
-    )
+    let _ = parse("{\"version\":1,\"entries\":[{\"slug\":\"abc\\")
     false
   } catch {
     ParseFailure(msg) => {
@@ -248,9 +256,7 @@ test "cache parse reject unterminated escape" {
 /// parse_json_string_cache: unterminated string (no closing quote)
 test "cache parse reject unterminated string" {
   let raised = try {
-    let _ = parse(
-      "{\"version\":1,\"entries\":[{\"slug\":\"no-end",
-    )
+    let _ = parse("{\"version\":1,\"entries\":[{\"slug\":\"no-end")
     false
   } catch {
     ParseFailure(msg) => {
@@ -440,9 +446,10 @@ test "cache parse reject unterminated entries array" {
   } catch {
     ParseFailure(msg) => {
       assert_true(
-        msg.contains("unterminated") || msg.contains(",") || msg.contains("'") || msg.contains(
-          "expected",
-        ),
+        msg.contains("unterminated") ||
+        msg.contains(",") ||
+        msg.contains("'") ||
+        msg.contains("expected"),
       )
       true
     }

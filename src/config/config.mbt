@@ -257,7 +257,8 @@ pub fn parse(input : String) -> Result[SiteConfig, ConfigError] {
       // Finalize previous data block if exists
       if in_data_block {
         match current_data_name {
-          Some(n) => data_entries.push({ name: n, required: current_data_required })
+          Some(n) =>
+            data_entries.push({ name: n, required: current_data_required })
           None => ()
         }
       }
@@ -302,7 +303,8 @@ pub fn parse(input : String) -> Result[SiteConfig, ConfigError] {
       // Finalize previous data block if exists
       if in_data_block {
         match current_data_name {
-          Some(n) => data_entries.push({ name: n, required: current_data_required })
+          Some(n) =>
+            data_entries.push({ name: n, required: current_data_required })
           None => ()
         }
       }

@@ -88,7 +88,9 @@ test "format_error FileWriteError includes path and reason" {
 ///|
 test "copy_static is a no-op when site root does not exist" {
   assert_eq(
-    copy_static("_tmp_assets_missing_9x7z", "_tmp_assets_missing_out_9x7z", "static"),
+    copy_static(
+      "_tmp_assets_missing_9x7z", "_tmp_assets_missing_out_9x7z", "static",
+    ),
     Ok(0),
   )
 }

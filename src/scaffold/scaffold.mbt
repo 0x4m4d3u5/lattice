@@ -1634,8 +1634,7 @@ pub fn new_content_file(
   let field_comment = generate_field_comment(schema)
 
   // Build the full file content: frontmatter + body stub with field guide
-  let content =
-    frontmatter +
+  let content = frontmatter +
     "\n\n" +
     field_comment +
     "\n\n# Title\n\nWrite your content here.\n"
