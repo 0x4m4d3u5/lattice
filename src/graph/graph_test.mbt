@@ -279,3 +279,44 @@ test "render_graph_json cross-edges between multiple pages" {
   // No edge from c
   assert_true(!json.contains("\"source\": \"c\""))
 }
+
+
+
+///|
+/// Duplicate wikilinks to the same target must produce exactly one edge.
+/// This is a regression test for parallel-edge deduplication in render_graph_json.
+test "render_graph_json deduplicates parallel edges from same source" {
+  let pages : Array[GraphPage] = [
+    {
+      slug: "typed-content-tour",
+      title: "Typed Content Tour",
+      url: "/typed-content-tour",
+      description: None,
+      date: None,
+      weight: None,
+      // Two wikilinks to the same target — should produce one edge
+      outgoing: [raw_link("template-composition"), raw_link("template-composition")],
+    },
+    {
+      slug: "template-composition",
+      title: "Template Composition",
+      url: "/template-composition",
+      description: None,
+      date: None,
+      weight: None,
+      outgoing: [],
+    },
+  ]
+  let json = render_graph_json(pages)
+  let edge_str = "\"source\": \"typed-content-tour\", \"target\": \"template-composition\""
+  // Count occurrences of the edge string — must be exactly 1
+  let mut count = 0
+  let mut pos = 0
+  while pos <= json.length() - edge_str.length() {
+    if json[pos : pos + edge_str.length()] == edge_str {
+      count = count + 1
+    }
+    pos = pos + 1
+  }
+  inspect!(count, content="1")
+}

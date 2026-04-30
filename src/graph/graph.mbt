@@ -54,6 +54,10 @@ pub fn render_graph_json(pages : Array[GraphPage]) -> String {
   }
   buf.write_string("  \"edges\": [\n")
   let mut first_edge = true
+  // Track seen (source, target) pairs to deduplicate parallel edges.
+  // A page may contain multiple wikilinks to the same target; the graph
+  // should emit each unique edge exactly once.
+  let seen_edges : Map[String, Bool] = Map::new()
   i = 0
   while i < pages.length() {
     let page = pages[i]
@@ -62,15 +66,19 @@ pub fn render_graph_json(pages : Array[GraphPage]) -> String {
       let edge = page.outgoing[j]
       // Skip edges whose target is not a node in the graph (e.g. drafts)
       if slug_set.contains(edge.raw.target) {
-        if !first_edge {
-          buf.write_string(",\n")
+        let edge_key = page.slug + ":" + edge.raw.target
+        if !seen_edges.contains(edge_key) {
+          seen_edges[edge_key] = true
+          if !first_edge {
+            buf.write_string(",\n")
+          }
+          buf.write_string("    {\"source\": ")
+          @strutil.write_json_string(buf, page.slug)
+          buf.write_string(", \"target\": ")
+          @strutil.write_json_string(buf, edge.raw.target)
+          buf.write_char('}')
+          first_edge = false
         }
-        buf.write_string("    {\"source\": ")
-        @strutil.write_json_string(buf, page.slug)
-        buf.write_string(", \"target\": ")
-        @strutil.write_json_string(buf, edge.raw.target)
-        buf.write_char('}')
-        first_edge = false
       }
       j = j + 1
     }
