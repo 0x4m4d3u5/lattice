@@ -657,3 +657,113 @@ test "insertion_sort empty single sorted reversed duplicates" {
   assert_eq(dups[2], 2)
   assert_eq(dups[3], 2)
 }
+
+// ── parse_fixed_uint ─────────────────────────────────────────────────────────
+
+///|
+test "parse_fixed_uint extracts valid number" {
+  assert_true(parse_fixed_uint("12345", 0, 3) == Some(123))
+  assert_true(parse_fixed_uint("2026-03", 0, 4) == Some(2026))
+  assert_true(parse_fixed_uint("2026-03", 5, 2) == Some(3))
+}
+
+///|
+test "parse_fixed_uint returns None for non-digits" {
+  assert_true(parse_fixed_uint("ABCD", 0, 4) == None)
+  assert_true(parse_fixed_uint("20AB", 0, 4) == None)
+}
+
+///|
+test "parse_fixed_uint returns None for out-of-bounds" {
+  assert_true(parse_fixed_uint("abc", 0, 5) == None)
+  assert_true(parse_fixed_uint("ab", 2, 2) == None)
+}
+
+// ── is_rfc3339_datetime ─────────────────────────────────────────────────────
+
+///|
+test "is_rfc3339_datetime accepts valid UTC timestamp" {
+  assert_true(is_rfc3339_datetime("2026-03-17T14:30:00Z"))
+}
+
+///|
+test "is_rfc3339_datetime accepts valid positive offset" {
+  assert_true(is_rfc3339_datetime("2026-03-17T14:30:00+05:30"))
+}
+
+///|
+test "is_rfc3339_datetime accepts valid negative offset" {
+  assert_true(is_rfc3339_datetime("2026-03-17T14:30:00-08:00"))
+}
+
+///|
+test "is_rfc3339_datetime rejects too-short string" {
+  assert_true(!is_rfc3339_datetime("2026-03-17T14:30"))
+}
+
+///|
+test "is_rfc3339_datetime rejects missing T separator" {
+  assert_true(!is_rfc3339_datetime("2026-03-17 14:30:00Z"))
+}
+
+///|
+test "is_rfc3339_datetime rejects invalid month 13" {
+  assert_true(!is_rfc3339_datetime("2026-13-17T00:00:00Z"))
+}
+
+///|
+test "is_rfc3339_datetime rejects invalid day 32" {
+  assert_true(!is_rfc3339_datetime("2026-01-32T00:00:00Z"))
+}
+
+///|
+test "is_rfc3339_datetime rejects invalid hour 25" {
+  assert_true(!is_rfc3339_datetime("2026-01-01T25:00:00Z"))
+}
+
+///|
+test "is_rfc3339_datetime rejects invalid minute 61" {
+  assert_true(!is_rfc3339_datetime("2026-01-01T14:61:00Z"))
+}
+
+///|
+test "is_rfc3339_datetime rejects invalid second 61" {
+  assert_true(!is_rfc3339_datetime("2026-01-01T14:30:61Z"))
+}
+
+///|
+test "is_rfc3339_datetime rejects invalid timezone offset" {
+  assert_true(!is_rfc3339_datetime("2026-03-17T14:30:00+25:00"))
+}
+
+///|
+test "is_rfc3339_datetime rejects garbage with Z suffix" {
+  // This is the key test: behavioral heuristic (ends with Z) would accept this,
+  // structural validation rejects it
+  assert_true(!is_rfc3339_datetime("20garbage1234567890Z"))
+}
+
+///|
+test "is_rfc3339_datetime accepts midnight" {
+  assert_true(is_rfc3339_datetime("2026-01-01T00:00:00Z"))
+}
+
+///|
+test "is_rfc3339_datetime accepts end of day" {
+  assert_true(is_rfc3339_datetime("2026-12-31T23:59:59Z"))
+}
+
+///|
+test "is_rfc3339_datetime accepts Feb 29 in leap year" {
+  assert_true(is_rfc3339_datetime("2024-02-29T12:00:00Z"))
+}
+
+///|
+test "is_rfc3339_datetime rejects Feb 29 in non-leap year" {
+  assert_true(!is_rfc3339_datetime("2025-02-29T12:00:00Z"))
+}
+
+///|
+test "is_rfc3339_datetime rejects wrong length with offset" {
+  assert_true(!is_rfc3339_datetime("2026-03-17T14:30:00+5:30"))
+}

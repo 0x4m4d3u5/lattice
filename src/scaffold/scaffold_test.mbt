@@ -140,7 +140,7 @@ test "generate_frontmatter - basic schema" {
   let result = generate_frontmatter(schema, "2026-04-01")
   let lines : Array[String] = result
     .split("\n")
-    .map(fn(sv) { sv.to_string() })
+    .map(fn(sv) { sv.to_owned() })
     .collect()
   // Should start with ---
   assert_eq(lines[0], "---")
@@ -170,7 +170,7 @@ test "generate_frontmatter - array field required" {
   let result = generate_frontmatter(schema, "2026-04-01")
   let lines : Array[String] = result
     .split("\n")
-    .map(fn(sv) { sv.to_string() })
+    .map(fn(sv) { sv.to_owned() })
     .collect()
   inspect(lines[1], content="items:")
   inspect(lines[2], content="  - placeholder")
@@ -191,7 +191,7 @@ test "generate_frontmatter - TInt with min" {
   let result = generate_frontmatter(schema, "2026-04-01")
   let lines : Array[String] = result
     .split("\n")
-    .map(fn(sv) { sv.to_string() })
+    .map(fn(sv) { sv.to_owned() })
     .collect()
   inspect(lines[1], content="priority: 1")
 }

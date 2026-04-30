@@ -3466,11 +3466,14 @@ fn process_document(
         let mut month_val = ""
         let mut day_val = ""
         if date_text.length() > 0 {
-          let date_parts = date_text.split("-").to_array()
+          let date_parts : Array[String] = date_text
+            .split("-")
+            .map(fn(sv) { sv.to_owned() })
+            .collect()
           if date_parts.length() == 3 {
-            year_val = date_parts[0].to_string()
-            month_val = date_parts[1].to_string()
-            day_val = date_parts[2].to_string()
+            year_val = date_parts[0]
+            month_val = date_parts[1]
+            day_val = date_parts[2]
           }
         }
         slots.set(@template.Year, year_val)
@@ -4010,11 +4013,14 @@ fn process_document_for_lint(
       let mut month_val = ""
       let mut day_val = ""
       if date_text.length() > 0 {
-        let date_parts = date_text.split("-").to_array()
+        let date_parts : Array[String] = date_text
+          .split("-")
+          .map(fn(sv) { sv.to_owned() })
+          .collect()
         if date_parts.length() == 3 {
-          year_val = date_parts[0].to_string()
-          month_val = date_parts[1].to_string()
-          day_val = date_parts[2].to_string()
+          year_val = date_parts[0]
+          month_val = date_parts[1]
+          day_val = date_parts[2]
         }
       }
       slots.set(@template.Year, year_val)

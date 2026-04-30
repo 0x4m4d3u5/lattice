@@ -15,8 +15,13 @@ fn sitemap_priority_for(slug : String) -> String {
 ///|
 /// Normalize a raw date string to a W3C Datetime value suitable for lastmod.
 ///
-/// Accepts YYYY-MM-DD (returned as-is) or a RFC3339 timestamp ending in Z
-/// (returned as-is). Returns None for empty, missing, or malformed input.
+/// Accepts YYYY-MM-DD (returned as-is) or a structurally validated RFC3339
+/// timestamp. Returns None for empty, missing, or malformed input.
+///
+/// Structural decision: RFC3339 timestamps are validated structurally
+/// (digit-by-digit, range-checked) rather than accepted by heuristic suffix
+/// matching ("ends with Z"). This prevents garbage strings like
+/// "20garbage1234567890Z" from leaking into the sitemap.
 fn normalize_lastmod(raw : String?) -> String? {
   match raw {
     None => None
@@ -27,26 +32,12 @@ fn normalize_lastmod(raw : String?) -> String? {
       }
       // YYYY-MM-DD
       if s.length() == 10 {
-        if @strutil.char_at(s, 4) != '-' || @strutil.char_at(s, 7) != '-' {
-          return None
-        }
-        let mut all_digits = true
-        let mut k = 0
-        while k < 10 {
-          if k != 4 && k != 7 {
-            if !@strutil.is_digit(@strutil.char_at(s, k)) {
-              all_digits = false
-            }
-          }
-          k = k + 1
-        }
-        if all_digits {
+        if @strutil.is_valid_iso8601_date(s) {
           Some(s)
         } else {
           None
         }
-      } else if s.length() >= 20 && s.has_suffix("Z") {
-        // RFC3339 / ISO 8601 with Z suffix
+      } else if @strutil.is_rfc3339_datetime(s) {
         Some(s)
       } else {
         None

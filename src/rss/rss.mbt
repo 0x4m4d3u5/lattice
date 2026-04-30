@@ -31,21 +31,11 @@ pub(all) struct FeedChannel {
 }
 
 ///|
+/// Parse a fixed-width unsigned integer from `s[start..start+count)`.
+///
+/// Returns `None` if the range is out of bounds or contains non-digit characters.
 fn parse_fixed_uint(s : String, start : Int, count : Int) -> Int? {
-  if start + count > s.length() {
-    return None
-  }
-  let mut i = 0
-  let mut value = 0
-  while i < count {
-    let c = @strutil.char_at(s, start + i)
-    if !@strutil.is_digit(c) {
-      return None
-    }
-    value = value * 10 + (c.to_int() - '0'.to_int())
-    i = i + 1
-  }
-  Some(value)
+  @strutil.parse_fixed_uint(s, start, count)
 }
 
 ///|
@@ -99,72 +89,10 @@ pub fn normalize_feed_datetime(raw : String?) -> String? {
 ///|
 /// Structural RFC 3339 datetime validation.
 ///
-/// Checks that `s` matches the pattern `YYYY-MM-DDTHH:MM:SS` followed by
-/// either `Z` (UTC) or `±HH:MM` (offset). Every numeric component is
-/// verified to contain digits only, and the date portion is validated
-/// (month 1–12, day within days-in-month).
+/// Delegates to the canonical `@strutil.is_rfc3339_datetime` to avoid
+/// duplicating the validation logic between RSS and sitemap renderers.
 fn is_rfc3339_datetime(s : String) -> Bool {
-  let n = s.length()
-  // Minimum: "2026-01-01T00:00:00Z" = 20 chars
-  if n < 20 {
-    return false
-  }
-  // Check date separator positions
-  if @strutil.char_at(s, 4) != '-' ||
-    @strutil.char_at(s, 7) != '-' ||
-    @strutil.char_at(s, 10) != 'T' {
-    return false
-  }
-  // Validate date components
-  let year = parse_fixed_uint(s, 0, 4)
-  let month = parse_fixed_uint(s, 5, 2)
-  let day = parse_fixed_uint(s, 8, 2)
-  match (year, month, day) {
-    (Some(y), Some(m), Some(d)) => {
-      if m < 1 || m > 12 {
-        return false
-      }
-      let max_day = @strutil.days_in_month(y, m)
-      if d < 1 || d > max_day {
-        return false
-      }
-    }
-    _ => return false
-  }
-  // Validate time components: HH:MM:SS
-  if @strutil.char_at(s, 13) != ':' || @strutil.char_at(s, 16) != ':' {
-    return false
-  }
-  let hour = parse_fixed_uint(s, 11, 2)
-  let minute = parse_fixed_uint(s, 14, 2)
-  let second = parse_fixed_uint(s, 17, 2)
-  match (hour, minute, second) {
-    (Some(h), Some(min_), Some(sec)) =>
-      if h > 23 || min_ > 59 || sec > 59 {
-        return false
-      }
-    _ => return false
-  }
-  // Check timezone: either Z or ±HH:MM
-  if n == 20 {
-    @strutil.char_at(s, 19) == 'Z'
-  } else if n == 25 {
-    let sign = @strutil.char_at(s, 19)
-    if sign != '+' && sign != '-' {
-      return false
-    }
-    if @strutil.char_at(s, 22) != ':' {
-      return false
-    }
-    let tz_h = parse_fixed_uint(s, 20, 2)
-    let tz_m = parse_fixed_uint(s, 23, 2)
-    match (tz_h, tz_m) {
-      (Some(th), Some(tm)) => th <= 23 && tm <= 59
-      _ => false
-    }
-  } else {
-    false
-  }
+  @strutil.is_rfc3339_datetime(s)
 }
 
 ///|

@@ -295,3 +295,61 @@ test "render_sitemap rejects date that is neither plain nor RFC3339" {
 
   inspect(!xml.contains("<lastmod>"), content="true")
 }
+
+///|
+test "render_sitemap rejects garbage string ending in Z" {
+  // Regression: the old behavioral heuristic (s.has_suffix("Z")) would accept
+  // this as a valid RFC3339 date. Structural validation correctly rejects it.
+  let pages : Array[@graph.GraphPage] = [
+    {
+      slug: "garbage-date",
+      title: "Garbage Date",
+      url: "/garbage/",
+      description: None,
+      date: Some("20garbage1234567890Z"),
+      outgoing: [],
+      weight: None,
+    },
+  ]
+  let xml = @sitemap.render_sitemap("https://example.com", pages)
+  inspect(!xml.contains("<lastmod>"), content="true")
+}
+
+///|
+test "render_sitemap rejects RFC3339 with invalid month" {
+  // Structural validation catches month 13 even with Z suffix
+  let pages : Array[@graph.GraphPage] = [
+    {
+      slug: "bad-month",
+      title: "Bad Month",
+      url: "/bad-month/",
+      description: None,
+      date: Some("2024-13-01T00:00:00Z"),
+      outgoing: [],
+      weight: None,
+    },
+  ]
+  let xml = @sitemap.render_sitemap("https://example.com", pages)
+  inspect(!xml.contains("<lastmod>"), content="true")
+}
+
+///|
+test "render_sitemap accepts RFC3339 with timezone offset" {
+  // Structural validation should accept valid ±HH:MM offsets
+  let pages : Array[@graph.GraphPage] = [
+    {
+      slug: "tz-offset",
+      title: "TZ Offset",
+      url: "/tz/",
+      description: None,
+      date: Some("2024-06-15T10:30:00+05:30"),
+      outgoing: [],
+      weight: None,
+    },
+  ]
+  let xml = @sitemap.render_sitemap("https://example.com", pages)
+  inspect(
+    xml.contains("<lastmod>2024-06-15T10:30:00+05:30</lastmod>"),
+    content="true",
+  )
+}
