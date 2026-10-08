@@ -20,7 +20,7 @@ registry cache. `compatibility.patch` shows the complete changes to upstream cod
   its asserted command enum. Parser algorithms and help text are unchanged.
 
 Two local tests in `src/value_compat_test.mbt` additionally verify numeric boundaries
-and error wrapping. Run `moon -C vendor/clap test`; all 15 tests pass on the pinned compiler.
+and error wrapping. Run `moon -C vendor/clap test --target js`; all 15 tests pass on the pinned toolchain with the JavaScript backend. See [the baseline backend limitation](../../docs/reliability-baseline.md#local-results-and-backend-limitation) for the tagged compiler distribution's WebAssembly allocation defect.
 Return to a registry dependency when upstream publishes a compatible release and
 these tests plus Lattice's CLI tests pass. Generated `_build` and `.mbti` files are
 ignored and are not part of this copy.

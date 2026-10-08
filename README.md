@@ -34,12 +34,12 @@ These are content-validation diagnostics in lattice:
 
 | Violation | What happens |
 |-----------|-------------|
-| Missing required frontmatter field | `ValidationError` — render never runs |
-| Frontmatter type mismatch (e.g., string where int expected) | `SchemaError` — render never runs |
+| Missing required frontmatter field | `ValidationError` — that document is not rendered |
+| Frontmatter type mismatch (e.g., string where int expected) | `SchemaError` — that document is not rendered |
 | Broken wikilink `[[target]]` to non-existent page | `BrokenWikilink` violation in `check`; warning in `build` |
 | Collection schema constraint violated (bounds, enum, URL format) | Precise diagnostic with constraint and rejected value |
 | Duplicate slug between collections/standalone/root | `DuplicateSlug` — only one page claims the URL |
-| Invalid template slot name | `TemplateSlotError` before any rendering |
+| Invalid template slot name | `TemplateSlotError` diagnostic |
 | Data file missing required field | `DataError` — template never receives incomplete data |
 
 The schema language supports domain constraints as type parameters:
@@ -56,6 +56,8 @@ schema = title:String(minlen=5,maxlen=80),
 A project with `priority: 0` or `status: completed` fails at validation — not at render time, not at reader time.
 
 ## Quick Start
+
+See [pinned installation and baseline instructions](docs/reliability-baseline.md#reproduce) for the verified durable toolchain. The default-target commands below require a working native compiler. The durable tagged compiler distribution is verified with JavaScript: use `moon build --target js` and add `--target js` before `--` in each `moon run` command. See [the backend limitation](docs/reliability-baseline.md#local-results-and-backend-limitation) for details.
 
 ### Build from source
 

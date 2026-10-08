@@ -1,6 +1,6 @@
 # Schema Syntax
 
-Schemas define which frontmatter fields a collection accepts and what types those fields must have. lattice validates that contract before rendering, so schema mistakes fail the build instead of appearing later as broken templates, missing metadata, or malformed search entries.
+Schemas define which frontmatter fields a collection accepts and what types those fields must have. lattice validates each document against that contract before rendering it. A schema failure skips that document and makes the build fail; other valid documents can still be written, and previous output can remain.
 
 ## Where schemas are declared
 
