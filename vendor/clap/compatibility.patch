@@ -1,0 +1,101 @@
+--- a/src/value.mbt
++++ b/src/value.mbt
+@@ -1,8 +1,8 @@
+ ///|
+ pub(all) struct SimpleValue {
+   name : String
+-  args : @hashmap.HashMap[String, Array[String]]
+-  flags : @hashmap.HashMap[String, Bool]
++  args : Map[String, Array[String]]
++  flags : Map[String, Bool]
+   positional_args : Array[String]
+   mut subcmd : SimpleValue?
+ } derive(Show, Eq)
+@@ -12,8 +12,8 @@
+ pub fn SimpleValue::new(name : String) -> SimpleValue {
+   SimpleValue::{
+     name,
+-    args: @hashmap.new(),
+-    flags: @hashmap.new(),
++    args: Map([]),
++    flags: Map([]),
+     positional_args: [],
+     subcmd: None,
+   }
+@@ -94,37 +94,37 @@
+ 
+ ///|
+ pub(open) trait BasicValue {
+-  parse(input : String) -> Self raise @strconv.StrConvError
++  parse(input : String) -> Self raise
+ }
+ 
+ ///|
+-pub impl BasicValue for String with parse(input : String) -> String raise @strconv.StrConvError {
++pub impl BasicValue for String with parse(input : String) -> String raise {
+   input
+ }
+ 
+ ///|
+-pub impl BasicValue for Double with parse(input : String) -> Double raise @strconv.StrConvError {
+-  @strconv.parse_double(input)
++pub impl BasicValue for Double with parse(input : String) -> Double raise {
++  @string.parse_double(input[:])
+ }
+ 
+ ///|
+-pub impl BasicValue for Int with parse(input : String) -> Int raise @strconv.StrConvError {
+-  @strconv.parse_int(input)
++pub impl BasicValue for Int with parse(input : String) -> Int raise {
++  @string.parse_int(input[:])
+ }
+ 
+ ///|
+-pub impl BasicValue for Int64 with parse(input : String) -> Int64 raise @strconv.StrConvError {
+-  @strconv.parse_int64(input)
++pub impl BasicValue for Int64 with parse(input : String) -> Int64 raise {
++  @string.parse_int64(input[:])
+ }
+ 
+ ///|
+-pub impl BasicValue for UInt with parse(input : String) -> UInt raise @strconv.StrConvError {
+-  @strconv.parse_uint(input)
++pub impl BasicValue for UInt with parse(input : String) -> UInt raise {
++  @string.parse_uint(input[:])
+ }
+ 
+ ///|
+-pub impl BasicValue for UInt64 with parse(input : String) -> UInt64 raise @strconv.StrConvError {
+-  @strconv.parse_uint64(input)
++pub impl BasicValue for UInt64 with parse(input : String) -> UInt64 raise {
++  @string.parse_uint64(input[:])
+ }
+ 
+ ///|
+--- a/src/parser_test.mbt
++++ b/src/parser_test.mbt
+@@ -167,7 +167,7 @@
+ ///|
+ enum CustomCommands {
+   SubCommand1(verbose~ : Bool, positional_args~ : Array[UInt])
+-} derive(Show, Eq)
++} derive(Show, Eq, Debug)
+ 
+ ///|
+ impl Value for CustomValue with set_flag(self, name : String, value : Bool) -> Unit raise ParserError {
+@@ -208,7 +208,7 @@
+     Some(SubCommand1(positional_args~, ..)) =>
+       match name {
+         "arg2" => {
+-          let parsed_value = try? @strconv.parse_uint(value)
++          let parsed_value = try? @string.parse_uint(value[:])
+           guard parsed_value is Ok(uint_value) else {
+             raise ParserError::InvalidArgumentValue(
+               "Invalid value \{value} for argument \{name}",
+--- a/src/moon.pkg.json
++++ b/src/moon.pkg.json
+@@ -1 +1,3 @@
+-{ }
++{
++  "import": ["moonbitlang/core/hashmap", "moonbitlang/core/string"]
++}

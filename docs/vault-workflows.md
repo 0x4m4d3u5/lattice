@@ -66,7 +66,9 @@ if @vault.is_archived(meta) {
 }
 ```
 
-### Exclude private notes
+### Exclusion helper (not a publication boundary)
+
+`should_exclude_from_index` is a library helper. The current builder does not call it; setting a vault type does not prevent publication. The snippets below demonstrate the helper, not an enforced CLI exclusion policy.
 
 Filter notes that should not appear in public indexes:
 
@@ -178,4 +180,4 @@ Common status values are recognized:
 - `archived`, `completed`, `done`, `finished`
 
 **Private/WIP notes**:
-- `private`, `inbox`, `wip`, `work in progress` (excluded from indexes)
+- `private`, `inbox`, `wip`, `work in progress` (recognized by the exclusion helper; not enforced by the builder)

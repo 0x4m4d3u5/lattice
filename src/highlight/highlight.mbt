@@ -13,13 +13,13 @@ pub(all) enum TokenKind {
   Builtin
   Whitespace
   Unknown
-} derive(Show, Eq, ToJson)
+} derive(Show, Eq, Debug, ToJson)
 
 ///|
 pub(all) struct Token {
   kind : TokenKind
   text : String
-} derive(Show, Eq, ToJson)
+} derive(Show, Eq, Debug, ToJson)
 
 ///|
 fn is_pascal_case_ident(s : String) -> Bool {

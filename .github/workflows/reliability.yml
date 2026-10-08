@@ -1,0 +1,29 @@
+name: Reliability baseline
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  baseline:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      MOON_HOME: ${{ github.workspace }}/.ci-moon
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '26.10.0'
+      - name: Install pinned Rust build prerequisite
+        run: rustup toolchain install 1.99.0 --profile minimal
+      - id: install
+        name: Install tagged compiler and pinned Moon source
+        run: |
+          bash scripts/install-ci-toolchain.sh
+          echo "$MOON_HOME/bin" >> "$GITHUB_PATH"
+      - name: Resolve declared dependencies
+        run: moon update
+      - name: Check, test, and build
+        run: bash scripts/check-baseline.sh

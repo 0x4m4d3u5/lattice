@@ -2,7 +2,7 @@
 
 This guide walks through the smallest useful lattice site using the same syntax and file layout as the checked-in `example/` site.
 
-The core idea is simple: define site metadata, declare at least one collection with a schema, add Markdown files that satisfy that schema, then render everything through HTML templates. If a page violates the schema, lattice fails the build before it writes HTML.
+The core idea is simple: define site metadata, declare at least one collection with a schema, add Markdown files that satisfy that schema, then render everything through HTML templates. If a page violates the schema, lattice skips rendering that page and reports a build error. Other valid pages can still be written. Run `lattice check` first for validation without output writes.
 
 ## Directory layout
 
@@ -98,7 +98,7 @@ required = title,subtitle,cta
 required = owner,footer
 ```
 
-This schema is the structural contract for every file in `content/posts`. If `date` is missing, or `tags` is not an array of strings, the build stops before rendering.
+This schema is the structural contract for every file in `content/posts`. If `date` is missing, or `tags` is not an array of strings, lattice skips rendering that document and reports a build error. Other valid documents can still be written.
 
 ## 3. Add the data files used by the templates
 
@@ -275,4 +275,4 @@ robots_txt = false
 
 Accepted boolean values: `true/false`, `yes/no`, `1/0`, or `on/off`. When disabled, lattice logs "robots.txt skipped (disabled)" instead of writing the file.
 
-The important constraint is that output only happens after the structural checks pass: frontmatter, schema, data slots, template slots, and wikilinks are validated first. That keeps bad content from silently leaking into generated pages.
+Validation is not a site-wide gate before output. A document that fails schema validation is skipped, but other valid documents can be written before the build reports failure, and stale output can remain. Broken wikilinks are warnings in `build`, which still renders the page; `lattice check` reports them as violations without writing output. Run `lattice check` before building when you need validation without changing generated files.

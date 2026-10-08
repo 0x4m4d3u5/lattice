@@ -4937,6 +4937,7 @@ test "check detects broken wikilink as BrokenWikilink violation" {
       abort("site config parse failed")
     }
   }
+  assert_true(write_file_test(output_root + "/sentinel.txt", "LAST_GOOD"))
   let result = @builder.check({
     content_dir: content_root,
     output_dir: output_root,
@@ -4952,6 +4953,11 @@ test "check detects broken wikilink as BrokenWikilink violation" {
   })
   assert_true(wl_violations.length() > 0)
   assert_true(wl_violations[0].message.contains("missing-page"))
+  assert_false(@fs.path_exists(output_root + "/posts/hello/index.html"))
+  let sentinel = @fs.read_file_to_string(output_root + "/sentinel.txt") catch {
+    @fs.IOError(_) => abort("check changed existing output")
+  }
+  assert_eq(sentinel, "LAST_GOOD")
 }
 
 ///|
@@ -5035,10 +5041,113 @@ test "build with broken wikilink renders page as warning not error" {
     d.message.contains("missing-page")
   })
   assert_true(wl_warnings.length() > 0)
+  for warning in wl_warnings {
+    assert_true(warning.severity == @diagnostic.Warning)
+  }
   // The page must still be produced
   assert_true(@fs.path_exists(output_root + "/posts/hello/index.html"))
 }
 
+///|
+test "failed build writes valid pages and retains stale invalid page output" {
+  // Synthetic content records the current per-document output contract.
+  let root = "./_tmp_builder_partial_failure"
+  let content_root = root + "/content"
+  let posts_root = content_root + "/posts"
+  let data_root = content_root + "/data"
+  let templates_root = root + "/templates"
+  let output_root = root + "/dist"
+  ensure_dir_test(root)
+  ensure_dir_test(content_root)
+  ensure_dir_test(posts_root)
+  ensure_dir_test(data_root)
+  ensure_dir_test(templates_root)
+  ensure_dir_test(output_root)
+
+  assert_true(
+    write_file_test(
+      posts_root + "/hello.md",
+      "---\n" +
+      "title: Hello\n" +
+      "date: 2026-04-01\n" +
+      "---\n\n" +
+      "Valid synthetic body.\n",
+    ),
+  )
+  assert_true(
+    write_file_test(
+      templates_root + "/page.html",
+      "<html><body>{{content}}</body></html>\n",
+    ),
+  )
+  assert_true(
+    write_file_test(
+      templates_root + "/index.html",
+      "<html><body>{{content}}</body></html>\n",
+    ),
+  )
+  let site_cfg = "title = PartialFailure\n" +
+    "base_url = /\n" +
+    "templates_dir = " +
+    templates_root +
+    "\n" +
+    "output_dir = " +
+    output_root +
+    "\n" +
+    "[[collections]]\n" +
+    "name = posts\n" +
+    "dir = " +
+    posts_root +
+    "\n" +
+    "schema = title:String,date:Date\n"
+  let site = match @config.parse(site_cfg) {
+    Ok(parsed) => parsed
+    Err(_) => {
+      assert_true(false)
+      abort("site config parse failed")
+    }
+  }
+  // Seed a last-good output for a page that is now invalid.
+  ensure_dir_test(output_root + "/posts")
+  ensure_dir_test(output_root + "/posts/invalid")
+  ensure_dir_test(output_root + "/posts/hello")
+  assert_true(write_file_test(output_root + "/posts/hello/index.html", "OLD_VALID"))
+  assert_true(
+    write_file_test(output_root + "/posts/invalid/index.html", "LAST_GOOD"),
+  )
+  assert_true(
+    write_file_test(
+      posts_root + "/invalid.md",
+      "---\ntitle: Invalid\n---\nMissing required date.\n",
+    ),
+  )
+  let result = @builder.build(
+    {
+      content_dir: content_root,
+      output_dir: output_root,
+      config_path: root + "/site.cfg",
+      site,
+      collections_path: None,
+      force_rebuild: true,
+      include_drafts: false,
+    },
+    @cache.empty(output_root),
+  )
+  // A failing site build is not transactional: the valid page is emitted,
+  // while the invalid page's previous output survives unchanged.
+  assert_true(result.errors > 0)
+  let valid = @fs.read_file_to_string(output_root + "/posts/hello/index.html") catch {
+    @fs.IOError(_) => abort("missing valid page output")
+  }
+  assert_true(valid.contains("Valid synthetic body."))
+  assert_false(valid.contains("OLD_VALID"))
+  let stale = @fs.read_file_to_string(output_root + "/posts/invalid/index.html") catch {
+    @fs.IOError(_) => abort("missing seeded last-good page")
+  }
+  assert_eq(stale, "LAST_GOOD")
+}
+
+///|
 // ── frontmatter_to_strings ────────────────────────────────────────────────────
 
 ///|
