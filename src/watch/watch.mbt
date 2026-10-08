@@ -34,10 +34,11 @@ fn collect_snapshot_entries(
   if !is_dir {
     return
   }
-  let children = @fs.read_dir(path) catch {
+  let child_names = @fs.read_dir(path) catch {
     @fs.IOError(msg) =>
       raise IOError("cannot read directory " + path + ": " + msg)
   }
+  let children = child_names.to_array()
   children.sort()
   let mut i = 0
   while i < children.length() {

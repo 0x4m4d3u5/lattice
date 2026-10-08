@@ -3,7 +3,7 @@
 A MoonBit static site generator for the 2026 MoonBit Software Synthesis Challenge.
 
 `lattice` is built around one claim: content integrity should be structural.
-Typed frontmatter schemas, validated wikilinks, and content contracts are checked during the build pipeline so violations are surfaced as hard errors instead of runtime surprises.
+Typed frontmatter schemas and content contracts are validated at runtime. `check` reports broken wikilinks as violations without writing output; `build` reports them as warnings and still renders the page.
 
 ## Purpose
 
@@ -13,18 +13,18 @@ Typed frontmatter schemas, validated wikilinks, and content contracts are checke
 
 ## Structural-integrity angle
 
-`lattice` treats these as build-time failures:
+Schema violations are build-time failures; wikilink severity depends on the command:
 
 - Missing required frontmatter fields (for example `title`, `date`).
 - Frontmatter type mismatches (for example `tags` is not `Array[String]`).
-- Broken wikilinks (`[[target]]` where target is missing from the page index).
+- Broken wikilinks (`[[target]]` where target is missing) are violations in `check`, but warnings in `build`.
 
 The builder performs a two-pass build:
 
 1. Collect all markdown sources, compute slugs, and build a complete page index.
 2. Parse frontmatter, validate schema, resolve wikilinks, render markdown, emit HTML.
 
-Because wikilinks resolve against the complete index from pass 1, forward references are deterministic and unresolved targets are hard errors.
+The index supports forward references. Validation and output happen per document: a failing build can write valid pages and retain stale output for invalid pages. It does not preserve a whole-site last-good snapshot. See [the reliability baseline](docs/reliability-baseline.md).
 
 ## Project structure
 

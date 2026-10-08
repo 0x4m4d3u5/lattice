@@ -11,7 +11,7 @@ pub(all) enum AssetCopyError {
   DestCreateError(String, String)
   FileReadError(String, String)
   FileWriteError(String, String)
-} derive(Eq, Show)
+} derive(Eq, Show, Debug)
 
 ///|
 pub struct AssetValidation {

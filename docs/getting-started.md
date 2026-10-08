@@ -2,7 +2,7 @@
 
 This guide walks through the smallest useful lattice site using the same syntax and file layout as the checked-in `example/` site.
 
-The core idea is simple: define site metadata, declare at least one collection with a schema, add Markdown files that satisfy that schema, then render everything through HTML templates. If a page violates the schema, lattice fails the build before it writes HTML.
+The core idea is simple: define site metadata, declare at least one collection with a schema, add Markdown files that satisfy that schema, then render everything through HTML templates. If a page violates the schema, lattice skips rendering that page and reports a build error. Other valid pages can still be written. Run `lattice check` first for validation without output writes.
 
 ## Directory layout
 

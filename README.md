@@ -1,7 +1,7 @@
 <h1 align="center">lattice</h1>
 
 <p align="center">
-  <strong>A static site generator where structural violations are type errors, not runtime surprises.</strong>
+  <strong>A MoonBit static site generator with typed content models and runtime validation.</strong>
 </p>
 
 <p align="center">
@@ -17,26 +17,26 @@
 
 Every static site generator discovers content errors too late. Hugo renders pages with `page.title` as an empty string. Astro's content layer checks schemas at runtime. Wikilinks to deleted pages become silent 404s. A missing required field doesn't fail the build — it produces wrong output that someone has to catch by eye.
 
-**lattice** makes content integrity a structural property of the build pipeline. Schema violations, broken wikilinks, type mismatches, and missing required fields are caught before a single HTML file is written. The render pipeline structurally cannot produce output from invalid input.
+**lattice** models frontmatter and validation errors with MoonBit types. Content validation happens at runtime during `check` and `build`; it is not a compile-time proof of site correctness. Use `lattice check` for strict validation without output writes.
 
 ## How It Works
 
 lattice uses a **two-pass build**:
 
-1. **Pass 1 — Collect & Index.** Walk all markdown sources, compute slugs, parse frontmatter, validate schemas, and build a complete page index.
+1. **Pass 1 — Collect & Index.** Walk markdown sources, compute slugs, and build a page index.
 2. **Pass 2 — Validate & Render.** Resolve wikilinks against the full index, render markdown, apply templates, and emit HTML.
 
-Because the page index is complete before rendering begins, forward references are deterministic and unresolved targets are hard errors. The HTML renderer receives pre-validated data — it cannot produce broken links or missing-field output.
+The page index supports forward references. Unresolved wikilinks are errors in `check`, but warnings in `build`, which still emits the page. Schema failures prevent that document from rendering; other valid documents can already have been written when the build fails. Output is not transactional, and stale files can remain.
 
 ### Structural Guarantees
 
-These are build-time failures in lattice:
+These are content-validation diagnostics in lattice:
 
 | Violation | What happens |
 |-----------|-------------|
 | Missing required frontmatter field | `ValidationError` — render never runs |
 | Frontmatter type mismatch (e.g., string where int expected) | `SchemaError` — render never runs |
-| Broken wikilink `[[target]]` to non-existent page | `BrokenWikilink` diagnostic at exact file:line:col |
+| Broken wikilink `[[target]]` to non-existent page | `BrokenWikilink` violation in `check`; warning in `build` |
 | Collection schema constraint violated (bounds, enum, URL format) | Precise diagnostic with constraint and rejected value |
 | Duplicate slug between collections/standalone/root | `DuplicateSlug` — only one page claims the URL |
 | Invalid template slot name | `TemplateSlotError` before any rendering |
@@ -180,10 +180,10 @@ Defaults: `content-dir` → `./content`, config → `<content-dir>/lattice.conf`
 
 - **~25k lines** of MoonBit in `src/` (43k total including tests)
 - **31 packages** with focused responsibilities
-- **897 tests**, all passing
+- **1,262 test declarations**; see [Reliability baseline](docs/reliability-baseline.md) for actual check results
 - **249 commits** across 47 days of development
-- **2 external dependencies**: [`moonbitlang/x`](https://github.com/moonbitlang/x) (filesystem, system) and [`TheWaWaR/clap`](https://github.com/TheWaWaR/clap) (CLI parsing)
-- Builds cleanly with `moon build` (0 errors, 0 warnings)
+- **2 dependencies**: [`moonbitlang/x`](https://github.com/moonbitlang/x) (filesystem, system) and [`TheWaWaR/clap`](https://github.com/TheWaWaR/clap) (CLI parsing; vendored with a compatibility patch)
+- `scripts/check-baseline.sh` passes on the pinned toolchain with the JavaScript target: 1,262 project tests; existing warnings remain
 
 ## Example Site
 
