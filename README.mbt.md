@@ -24,7 +24,7 @@ The builder performs a two-pass build:
 1. Collect all markdown sources, compute slugs, and build a complete page index.
 2. Parse frontmatter, validate schema, resolve wikilinks, render markdown, emit HTML.
 
-The index supports forward references. Validation and output happen per document: a failing build can write valid pages and retain stale output for invalid pages. It does not preserve a whole-site last-good snapshot. See [the reliability baseline](docs/reliability-baseline.md).
+The index supports forward references. Build validation, rendering, and static asset reads finish before output publication starts. Validation or generation failures preserve existing output, cache, and manifest. Publication I/O is not atomic, and stale files can remain. See [build safety](docs/build-safety.md) and [the reliability baseline](docs/reliability-baseline.md).
 
 ## Project structure
 

@@ -4,7 +4,8 @@
 /// Two-pass design:
 ///   Pass 1: Collect all .md source files; compute slugs; build the complete
 ///           page index (slug → canonical URL).
-///   Pass 2: For each source, run the full pipeline and write HTML output.
+///   Pass 2: Validate/render all sources and prepare every output in memory.
+///   Publish only after preparation succeeds; publication I/O is not atomic.
 ///
 /// Structural property: the page index is complete before any wikilink is
 /// resolved. Every [[link]] target is known at render time — no forward-
@@ -737,7 +738,20 @@ fn render_archive_page(
     "Archive for " + collection_name + " — " + year + "-" + month
   }
   let archive_url = site.base_url + "/" + collection_name
-  let slots = Map::new()
+  let slots = build_template_slots(
+    title,
+    content,
+    "",
+    description,
+    archive_url,
+    site.title,
+    nav_links_html,
+    custom_css,
+    "",
+    "",
+    site.base_url,
+    og_type="website",
+  )
   slots.set(@template.Title, title)
   slots.set(@template.Content, content)
   slots.set(@template.BodyNoH1, @html.strip_leading_h1(content))
@@ -764,6 +778,15 @@ fn render_archive_page(
   slots.set(@template.Day, "")
   slots.set(@template.Tags, tags_html)
   slots.set(@template.Description, description)
+
+  // Archives are single pages even when they reuse a paginated index template.
+  let archive_path = "/" +
+    collection_name +
+    "/" +
+    year +
+    "/" +
+    (if month == "" { "" } else { month + "/" })
+  set_pagination_slots(slots, 1, 1, None, None, archive_path)
 
   match archive_template {
     Some(tpl) =>
@@ -856,7 +879,20 @@ pub fn render_archive_index(
     site.base_url,
     "/" + collection_name + "/archive/",
   )
-  let slots = Map::new()
+  let slots = build_template_slots(
+    "Archive",
+    content,
+    "",
+    "Archive for " + collection_name,
+    all_archive_url,
+    site.title,
+    nav_links_html,
+    custom_css,
+    "",
+    "",
+    site.base_url,
+    og_type="website",
+  )
   slots.set(@template.Title, "Archive")
   slots.set(@template.Content, content)
   slots.set(@template.BodyNoH1, @html.strip_leading_h1(content))
@@ -879,6 +915,16 @@ pub fn render_archive_index(
   slots.set(@template.Year, "")
   slots.set(@template.Month, "")
   slots.set(@template.Day, "")
+
+  // Archives are single pages even when they reuse a paginated index template.
+  set_pagination_slots(
+    slots,
+    1,
+    1,
+    None,
+    None,
+    "/" + collection_name + "/archive/",
+  )
 
   match archive_template {
     Some(tpl) =>
@@ -924,6 +970,7 @@ fn build_archive_pages(
   custom_css : String,
   data_store : @data.DataStore,
   messages : Array[String],
+  output : OutputPlan,
 ) -> (Int, Int) {
   // Only build if collection has dated pages
   let has_dates = {
@@ -997,8 +1044,8 @@ fn build_archive_pages(
       }
       let year_out_path = coll_dir + "/" + group.year + "/index.html"
       let year_write_ok = try {
-        ensure_dir(coll_dir + "/" + group.year)
-        @fs.write_string_to_file(year_out_path, year_archive_html)
+        output.ensure_dir(coll_dir + "/" + group.year)
+        output.write_text(year_out_path, year_archive_html)
         messages.push("[lattice] wrote " + year_out_path)
         true
       } catch {
@@ -1056,8 +1103,8 @@ fn build_archive_pages(
       group.month +
       "/index.html"
     let month_write_ok = try {
-      ensure_dir(coll_dir + "/" + group.year + "/" + group.month)
-      @fs.write_string_to_file(month_out_path, month_archive_html)
+      output.ensure_dir(coll_dir + "/" + group.year + "/" + group.month)
+      output.write_text(month_out_path, month_archive_html)
       messages.push("[lattice] wrote " + month_out_path)
       true
     } catch {
@@ -1103,8 +1150,8 @@ fn build_archive_pages(
     let archive_dir = coll_dir + "/archive"
     let archive_index_path = archive_dir + "/index.html"
     let archive_write_ok = try {
-      ensure_dir(archive_dir)
-      @fs.write_string_to_file(archive_index_path, archive_index_html)
+      output.ensure_dir(archive_dir)
+      output.write_text(archive_index_path, archive_index_html)
       messages.push("[lattice] wrote " + archive_index_path)
       true
     } catch {
@@ -1259,6 +1306,7 @@ fn emit_redirects_for_page(
   base_url : String,
   redirect_sources : Array[RedirectSource],
   diagnostics : Array[@diagnostic.Diagnostic],
+  output : OutputPlan,
 ) -> Int {
   let paths = extract_redirect_paths(raw_content)
   if paths.length() == 0 {
@@ -1271,7 +1319,7 @@ fn emit_redirects_for_page(
   while k < paths.length() {
     let redirect_url = paths[k]
     // Track redirect source for duplicate detection
-    redirect_sources.push({ redirect_path: redirect_url, page_url })
+    redirect_sources.push({ redirect_path: redirect_url, page_url, })
     let redirect_out_path = output_dir +
       "/" +
       redirect_url_to_output_path(redirect_url)
@@ -1290,8 +1338,8 @@ fn emit_redirects_for_page(
       } else {
         "."
       }
-      ensure_dir(redirect_dir)
-      @fs.write_string_to_file(redirect_out_path, redirect_html)
+      output.ensure_dir(redirect_dir)
+      output.write_text(redirect_out_path, redirect_html)
       written = written + 1
     } catch {
       @fs.IOError(msg) =>
@@ -4130,28 +4178,6 @@ pub fn collect_sources(
 }
 
 ///|
-/// Ensure a single-level directory exists, creating it if absent.
-fn ensure_dir(path : String) -> Unit raise @fs.IOError {
-  if !@fs.path_exists(path) {
-    @fs.create_dir(path)
-  }
-}
-
-///|
-fn ensure_parent_dirs_for_file(path : String) -> Unit raise @fs.IOError {
-  let mut i = 0
-  while i < path.length() {
-    if @strutil.char_at(path, i) == '/' && i > 0 {
-      let dir = @strutil.substr(path, 0, i)
-      if !@fs.path_exists(dir) {
-        @fs.create_dir(dir)
-      }
-    }
-    i = i + 1
-  }
-}
-
-///|
 fn manifest_path_for_build(config : BuildConfig) -> String {
   config.output_dir + "/.lattice-manifest.json"
 }
@@ -4389,6 +4415,7 @@ fn write_manifest(
   config : BuildConfig,
   collection_sources : Array[CollectionSources],
   collections : Array[@collections.CollectionDef],
+  output : OutputPlan,
 ) -> Result[Unit, String] {
   let dependency_entries = match
     dependency_manifest_entries(config, collections) {
@@ -4409,10 +4436,10 @@ fn write_manifest(
   }
   let manifest_path = manifest_path_for_build(config)
   try {
-    ensure_parent_dirs_for_file(manifest_path)
-    @fs.write_string_to_file(
+    output.ensure_parent_dirs(manifest_path)
+    output.write_text(
       manifest_path,
-      @manifest.render({ version: 1, entries: merged }),
+      @manifest.render({ version: 1, entries: merged, }),
     )
     Ok(())
   } catch {
@@ -4463,7 +4490,8 @@ fn mark_backlink_targets_changed(
 /// Returns the build summary (0 errors = clean build).
 ///
 /// Pass 1: read the content directory, compute slugs, build the page index.
-/// Pass 2: run each source through the pipeline, write HTML to output_dir.
+/// Pass 2: prepare generated files and static bytes without output mutation.
+/// Publish only when all preparation diagnostics are error-free.
 ///
 /// Each page is written to `output_dir/<slug>/index.html` for clean URLs.
 pub fn build(
@@ -4475,6 +4503,7 @@ pub fn build(
     "[lattice] building " + config.content_dir + " → " + config.output_dir,
   )
   let diagnostics : Array[@diagnostic.Diagnostic] = []
+  let output = OutputPlan::new(config.output_dir)
 
   let layout = match load_project_layout(config) {
     Ok(parsed) => parsed
@@ -4568,7 +4597,7 @@ pub fn build(
       }
     }
     source_count = source_count + sources.length()
-    collection_sources.push({ definition: collection_def, sources })
+    collection_sources.push({ definition: collection_def, sources, })
     i = i + 1
   }
   messages.push("[lattice] found " + source_count.to_string() + " source files")
@@ -4771,7 +4800,7 @@ pub fn build(
 
   // Ensure output directory exists
   let dir_ok = try {
-    ensure_dir(config.output_dir)
+    output.ensure_dir(config.output_dir)
     true
   } catch {
     @fs.IOError(msg) => {
@@ -4798,14 +4827,12 @@ pub fn build(
     }
   }
 
-  // Write default CSS (once, if not already present)
+  // Default CSS is optional and write-once; its historical I/O warning policy
+  // also applies during publication, where an actual disk write can fail.
   let css_path = config.output_dir + "/style.css"
   if !@fs.path_exists(css_path) {
-    let write_ok = try {
-      @fs.write_string_to_file(css_path, custom_css)
-      true
-    } catch {
-      @fs.IOError(msg) => {
+    output.write_optional_text(css_path, custom_css) catch {
+      @fs.IOError(msg) =>
         diagnostics.push(
           build_warning(
             Some(css_path),
@@ -4814,11 +4841,6 @@ pub fn build(
             "could not write style.css: " + msg,
           ),
         )
-        false
-      }
-    }
-    if write_ok {
-      messages.push("[lattice] wrote " + css_path)
     }
   }
 
@@ -4863,7 +4885,7 @@ pub fn build(
     }
     let collection_root = config.output_dir + "/" + coll.definition.name
     let collection_dir_ok = try {
-      ensure_dir(collection_root)
+      output.ensure_dir(collection_root)
       true
     } catch {
       @fs.IOError(msg) => {
@@ -4949,7 +4971,7 @@ pub fn build(
         nav_links_html,
         custom_css,
         page_backlinks_html,
-        should_rebuild,
+        true, // Validate generation even when publication can reuse cached HTML.
         prev_post_url,
         prev_post_title,
         next_post_url,
@@ -4985,13 +5007,12 @@ pub fn build(
           } else {
             let page_dir = collection_root + "/" + src.slug
             try {
-              ensure_dir(page_dir)
-              @fs.write_string_to_file(out_path, doc.html)
+              output.ensure_dir(page_dir)
+              output.write_text(out_path, doc.html)
               if is_root_page_for_site(config.site, src.slug) {
                 match doc.root_html {
-                  Some(root_html) =>
-                    @fs.write_string_to_file(root_out_path, root_html)
-                  None => @fs.write_string_to_file(root_out_path, doc.html)
+                  Some(root_html) => output.write_text(root_out_path, root_html)
+                  None => output.write_text(root_out_path, doc.html)
                 }
               }
               Some(out_path)
@@ -5031,6 +5052,7 @@ pub fn build(
                 config.site.base_url,
                 redirect_sources,
                 diagnostics,
+                output,
               )
               redirect_count = redirect_count + redirects_generated
 
@@ -5061,7 +5083,7 @@ pub fn build(
                     }
                     None =>
                       tag_pages_by_slug.set(tag.slug, [
-                        { title: doc.title, url: doc.url, slug: src.slug },
+                        { title: doc.title, url: doc.url, slug: src.slug, },
                       ])
                   }
                   k = k + 1
@@ -5180,8 +5202,8 @@ pub fn build(
         Some(doc) => {
           let page_dir = config.output_dir + "/" + src.slug
           let write_ok = try {
-            ensure_dir(page_dir)
-            @fs.write_string_to_file(out_path, doc.html)
+            output.ensure_dir(page_dir)
+            output.write_text(out_path, doc.html)
             messages.push("[lattice] wrote " + out_path)
             true
           } catch {
@@ -5208,6 +5230,7 @@ pub fn build(
                 config.site.base_url,
                 redirect_sources,
                 diagnostics,
+                output,
               )
             // Add to graph for sitemap and search
             let page : @graph.GraphPage = {
@@ -5309,7 +5332,7 @@ pub fn build(
           // everything else writes to dist/<slug>/index.html
           let write_ok = if src.slug == "index" {
             try {
-              @fs.write_string_to_file(out_path, doc.html)
+              output.write_text(out_path, doc.html)
               messages.push("[lattice] wrote " + out_path + " (root homepage)")
               true
             } catch {
@@ -5328,8 +5351,8 @@ pub fn build(
           } else {
             let page_dir = config.output_dir + "/" + src.slug
             try {
-              ensure_dir(page_dir)
-              @fs.write_string_to_file(out_path, doc.html)
+              output.ensure_dir(page_dir)
+              output.write_text(out_path, doc.html)
               messages.push("[lattice] wrote " + out_path)
               true
             } catch {
@@ -5357,6 +5380,7 @@ pub fn build(
                 config.site.base_url,
                 redirect_sources,
                 diagnostics,
+                output,
               )
             let page : @graph.GraphPage = {
               slug: src.slug,
@@ -5428,7 +5452,7 @@ pub fn build(
           config.site.feed_limit,
         )
         let out_path = coll_dir + "/feed.xml"
-        @fs.write_string_to_file(out_path, feed_xml)
+        output.write_text(out_path, feed_xml)
         messages.push("[lattice] wrote " + out_path)
         true
       } catch {
@@ -5461,7 +5485,7 @@ pub fn build(
           json_feed_url,
         )
         let json_out_path = coll_dir + "/feed.json"
-        @fs.write_string_to_file(json_out_path, json_feed)
+        output.write_text(json_out_path, json_feed)
         messages.push("[lattice] wrote " + json_out_path)
         true
       } catch {
@@ -5535,8 +5559,8 @@ pub fn build(
                 pagination.page_number.to_string() +
                 "/index.html"
               }
-              ensure_parent_dirs_for_file(out_path)
-              @fs.write_string_to_file(out_path, html)
+              output.ensure_parent_dirs(out_path)
+              output.write_text(out_path, html)
               messages.push("[lattice] wrote " + out_path)
               // Emit a content-index entry for page 1 of the collection index
               if pagination.page_number == 1 {
@@ -5604,9 +5628,18 @@ pub fn build(
         custom_css,
         data_store,
         messages,
+        output,
       )
       if archive_errors > 0 {
         error_count = error_count + archive_errors
+        diagnostics.push(
+          build_error(
+            None,
+            None,
+            None,
+            "archive generation failed for collection '" + coll.name + "'",
+          ),
+        )
       }
 
       i = i + 1
@@ -5615,7 +5648,7 @@ pub fn build(
     if error_count == 0 {
       let tags_root = config.output_dir + "/tags"
       let tags_dir_ok = try {
-        ensure_dir(tags_root)
+        output.ensure_dir(tags_root)
         true
       } catch {
         @fs.IOError(msg) => {
@@ -5645,7 +5678,7 @@ pub fn build(
           }
           let tag_dir = tags_root + "/" + tag_slug
           let tag_dir_ok = try {
-            ensure_dir(tag_dir)
+            output.ensure_dir(tag_dir)
             true
           } catch {
             @fs.IOError(msg) => {
@@ -5714,8 +5747,8 @@ pub fn build(
                       pagination.page_number.to_string() +
                       "/index.html"
                     }
-                    ensure_parent_dirs_for_file(out_path)
-                    @fs.write_string_to_file(out_path, html)
+                    output.ensure_parent_dirs(out_path)
+                    output.write_text(out_path, html)
                     messages.push("[lattice] wrote " + out_path)
                     true
                   } catch {
@@ -5773,7 +5806,7 @@ pub fn build(
           let mut page_idx = 0
           while page_idx < paginated_tags_index.length() {
             let pagination = paginated_tags_index[page_idx]
-            let tags_index : @tags.TagIndex = { tags: pagination.documents }
+            let tags_index : @tags.TagIndex = { tags: pagination.documents, }
             let tags_index_html = match
               render_tags_index_html(
                 tags_index,
@@ -5812,8 +5845,8 @@ pub fn build(
                     pagination.page_number.to_string() +
                     "/index.html"
                   }
-                  ensure_parent_dirs_for_file(out_path)
-                  @fs.write_string_to_file(out_path, html)
+                  output.ensure_parent_dirs(out_path)
+                  output.write_text(out_path, html)
                   messages.push("[lattice] wrote " + out_path)
                   true
                 } catch {
@@ -5869,7 +5902,7 @@ pub fn build(
             config.site.feed_limit,
           )
           let out_path = config.output_dir + "/feed.xml"
-          @fs.write_string_to_file(out_path, site_feed_xml)
+          output.write_text(out_path, site_feed_xml)
           messages.push("[lattice] wrote " + out_path + " (site-wide feed)")
           true
         } catch {
@@ -5902,7 +5935,7 @@ pub fn build(
             site_json_feed_url,
           )
           let json_out_path = config.output_dir + "/feed.json"
-          @fs.write_string_to_file(json_out_path, site_json_feed)
+          output.write_text(json_out_path, site_json_feed)
           messages.push(
             "[lattice] wrote " + json_out_path + " (site-wide JSON feed)",
           )
@@ -5933,7 +5966,7 @@ pub fn build(
           graph_pages,
         )
         let out_path = config.output_dir + "/sitemap.xml"
-        @fs.write_string_to_file(out_path, sitemap_xml)
+        output.write_text(out_path, sitemap_xml)
         messages.push("[lattice] wrote " + out_path)
         true
       } catch {
@@ -5965,7 +5998,7 @@ pub fn build(
       if robots_txt_content.length() > 0 {
         let robots_write_ok = try {
           let out_path = config.output_dir + "/robots.txt"
-          @fs.write_string_to_file(out_path, robots_txt_content)
+          output.write_text(out_path, robots_txt_content)
           messages.push("[lattice] wrote " + out_path)
           true
         } catch {
@@ -5994,8 +6027,8 @@ pub fn build(
         let out_path = config.output_dir +
           "/" +
           search_index_file_name(config.site)
-        ensure_parent_dirs_for_file(out_path)
-        @fs.write_string_to_file(out_path, search_json)
+        output.ensure_parent_dirs(out_path)
+        output.write_text(out_path, search_json)
         messages.push("[lattice] wrote " + out_path)
         true
       } catch {
@@ -6023,8 +6056,8 @@ pub fn build(
           let content_write_ok = try {
             let content_json = @search.render_content_index(content_entries)
             let out_path = config.output_dir + "/" + fname
-            ensure_parent_dirs_for_file(out_path)
-            @fs.write_string_to_file(out_path, content_json)
+            output.ensure_parent_dirs(out_path)
+            output.write_text(out_path, content_json)
             messages.push("[lattice] wrote " + out_path)
             true
           } catch {
@@ -6051,7 +6084,7 @@ pub fn build(
       let graph_write_ok = try {
         let graph_json = @graph.render_graph_json(graph_pages)
         let out_path = config.output_dir + "/graph.json"
-        @fs.write_string_to_file(out_path, graph_json)
+        output.write_text(out_path, graph_json)
         messages.push("[lattice] wrote " + out_path)
         true
       } catch {
@@ -6072,12 +6105,7 @@ pub fn build(
       }
     }
     if error_count == 0 {
-      match
-        @assets.copy_static(
-          config.content_dir,
-          config.output_dir,
-          static_dir_name(config.site),
-        ) {
+      match plan_static_assets(config, output) {
         Ok(copied) =>
           if copied > 0 {
             messages.push(
@@ -6109,7 +6137,7 @@ pub fn build(
         Some(html) =>
           try {
             let out_path = config.output_dir + "/404.html"
-            @fs.write_string_to_file(out_path, html)
+            output.write_text(out_path, html)
             let source_type = if has_custom_404 { "custom" } else { "default" }
             messages.push("[lattice] wrote 404.html (" + source_type + ")")
             ()
@@ -6130,12 +6158,12 @@ pub fn build(
       }
     }
     if error_count == 0 {
-      match write_manifest(config, collection_sources, collections) {
+      match write_manifest(config, collection_sources, collections, output) {
         Ok(_) => ()
         Err(msg) => {
           diagnostics.push(
             build_error(
-              Some(config.output_dir + "/manifest.json"),
+              Some(manifest_path_for_build(config)),
               None,
               None,
               "manifest: write failed: " + msg,
@@ -6146,16 +6174,13 @@ pub fn build(
       }
     }
     if error_count == 0 {
-      match @cache.save(next_cache_store) {
-        Ok(_) => ()
-        Err(err) => {
+      output.write_text(
+        @cache.cache_path(config.output_dir),
+        @cache.render_store(next_cache_store),
+      ) catch {
+        @fs.IOError(msg) => {
           diagnostics.push(
-            build_error(
-              Some(config.output_dir),
-              None,
-              None,
-              "cache: " + @cache.error_text(err),
-            ),
+            build_error(Some(config.output_dir), None, None, "cache: " + msg),
           )
           error_count = error_count + 1
         }
@@ -6173,6 +6198,36 @@ pub fn build(
   }
 
   error_count = @diagnostic.count_errors(diagnostics)
+  if error_count == 0 {
+    output.publish(diagnostics, messages) catch {
+      @fs.IOError(msg) => {
+        diagnostics.push(
+          build_error(
+            Some(config.output_dir),
+            None,
+            None,
+            "output publication failed: " + msg,
+          ),
+        )
+        error_count = error_count + 1
+      }
+    }
+  }
+  if error_count > 0 {
+    // Planned work is not published work. Do not report successful writes on failure.
+    let retained = messages.filter(fn(message) {
+      !message.has_prefix("[build]") &&
+      !message.has_prefix("[lattice] wrote ") &&
+      !message.has_prefix("[lattice] copied ")
+    })
+    messages.clear()
+    for message in retained {
+      messages.push(message)
+    }
+    messages.push("[lattice] build failed; no successful publication")
+    rebuilt = 0
+    redirect_count = 0
+  }
   {
     errors: error_count,
     diagnostics,

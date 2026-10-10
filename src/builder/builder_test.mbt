@@ -1,3 +1,5 @@
+
+
 ///|
 fn ensure_dir_test(path : String) -> Unit {
   if !@fs.path_exists(path) {
@@ -580,7 +582,7 @@ test "build with paginated index template exposes page_num and total_pages" {
   assert_true(
     write_file_test(
       templates_root + "/index.html",
-      "<html><head></head><body>page={{page_num}} of={{total_pages}} prev={{prev_page}} next={{next_page}}</body></html>\n",
+      "<html><head></head><body>page={{page_num}} of={{total_pages}} prev={{prev_page}} next={{next_page}} first={{is_first_page}} last={{is_last_page}} url={{page_url}} defaults={{date}}{{tag_name}}{{tag_count}}{{reading_time}}{{word_count}}{{table_of_contents}}{{author}}{{excerpt}}</body></html>\n",
     ),
   )
 
@@ -644,6 +646,23 @@ test "build with paginated index template exposes page_num and total_pages" {
   assert_true(page2.contains("prev=/posts/"))
   assert_true(page2.contains("\"@type\": \"BreadcrumbList\""))
   assert_true(page2.contains("\"item\": \"/posts/page/2/\""))
+  // Archive fallback shares the index template but is always a single page.
+  let archive = @fs.read_file_to_string(
+    output_root + "/posts/archive/index.html",
+  )
+  assert_true(
+    archive.contains(
+      "page=1 of=1 prev= next= first=true last=true url=/posts/archive/",
+    ),
+  )
+  let month_archive = @fs.read_file_to_string(
+    output_root + "/posts/2026/01/index.html",
+  )
+  assert_true(
+    month_archive.contains(
+      "page=1 of=1 prev= next= first=true last=true url=/posts/2026/01/",
+    ),
+  )
 }
 
 ///|
@@ -5049,8 +5068,8 @@ test "build with broken wikilink renders page as warning not error" {
 }
 
 ///|
-test "failed build writes valid pages and retains stale invalid page output" {
-  // Synthetic content records the current per-document output contract.
+test "failed build preserves valid and invalid page output" {
+  // Synthetic content verifies the site-wide publication gate.
   let root = "./_tmp_builder_partial_failure"
   let content_root = root + "/content"
   let posts_root = content_root + "/posts"
@@ -5111,7 +5130,9 @@ test "failed build writes valid pages and retains stale invalid page output" {
   ensure_dir_test(output_root + "/posts")
   ensure_dir_test(output_root + "/posts/invalid")
   ensure_dir_test(output_root + "/posts/hello")
-  assert_true(write_file_test(output_root + "/posts/hello/index.html", "OLD_VALID"))
+  assert_true(
+    write_file_test(output_root + "/posts/hello/index.html", "OLD_VALID"),
+  )
   assert_true(
     write_file_test(output_root + "/posts/invalid/index.html", "LAST_GOOD"),
   )
@@ -5133,14 +5154,13 @@ test "failed build writes valid pages and retains stale invalid page output" {
     },
     @cache.empty(output_root),
   )
-  // A failing site build is not transactional: the valid page is emitted,
-  // while the invalid page's previous output survives unchanged.
+  // No prepared page may replace the last successful output on failure.
   assert_true(result.errors > 0)
   let valid = @fs.read_file_to_string(output_root + "/posts/hello/index.html") catch {
     @fs.IOError(_) => abort("missing valid page output")
   }
-  assert_true(valid.contains("Valid synthetic body."))
-  assert_false(valid.contains("OLD_VALID"))
+  assert_eq(valid, "OLD_VALID")
+  assert_eq(result.rebuilt_pages, 0)
   let stale = @fs.read_file_to_string(output_root + "/posts/invalid/index.html") catch {
     @fs.IOError(_) => abort("missing seeded last-good page")
   }

@@ -306,9 +306,15 @@ pub fn load(output_dir : String) -> Result[CacheStore, CacheError] {
 }
 
 ///|
+/// Render a store using the same versioned payload as `save`, without writing.
+pub fn render_store(store : CacheStore) -> String {
+  render({ version: CACHE_VERSION, entries: store.entries })
+}
+
+///|
 pub fn save(store : CacheStore) -> Result[Unit, CacheError] {
   let path = cache_path(store.output_dir)
-  let payload = render({ version: CACHE_VERSION, entries: store.entries })
+  let payload = render_store(store)
   try {
     @fs.write_string_to_file(path, payload)
     Ok(())

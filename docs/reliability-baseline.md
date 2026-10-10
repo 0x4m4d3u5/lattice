@@ -102,7 +102,7 @@ mainly deprecated APIs, implicit imports and unqualified package references.
 - Exercise signed/unsigned numeric boundaries and retain `InvalidArgumentValue`
   wrapping for overflow/negative unsigned input in the vendored parser.
 
-## Validation behavior protected by regressions
+## Validation behavior recorded by the original baseline
 
 - Broken wikilinks produce violations in `check`, which emits no page and leaves
   seeded output intact.
@@ -111,12 +111,13 @@ mainly deprecated APIs, implicit imports and unqualified package references.
   replaced with new output and the invalid page's seeded previous output remains.
 
 These use synthetic content under repository-local `_tmp_*` directories. They
-record current behavior so a future gate redesign can change it deliberately.
+recorded the pre-gate behavior. The 2026-10-10 [publication gate](build-safety.md)
+replaces the partial-output regression with last-successful-output preservation.
 The vault exclusion helper is not called by the builder; it is not a publication policy.
 
-## Next bounded milestone
+## Original next-milestone proposal
 
-After the draft PR baseline is green, give `check` and `build`
+The original proposal was: after the draft PR baseline is green, give `check` and `build`
 one shared validation result with an explicit broken-link severity policy. Validate
 the entire site before rendering; render into a sibling staging directory and promote
 only after all writes succeed. Preserve last-good output and cache on validation or
@@ -124,3 +125,9 @@ I/O failure, with synthetic two-page and write-failure regressions first.
 
 No pipeline redesign, real vault processing, storage migration, or publishing feature
 was added. No pipeline promotion, release or deployment is part of this milestone.
+
+The implemented 2026-10-10 milestone uses a portable in-memory output plan.
+It protects validation/generation failures and preflights destination types,
+but does not claim atomic directory promotion or recovery from publication I/O
+failures. The pinned filesystem API lacks rename; [build safety](build-safety.md)
+documents that narrower, tested contract.

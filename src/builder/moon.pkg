@@ -26,4 +26,5 @@ import {
   "kurisu/lattice/src/watch" @watch,
   "kurisu/lattice/src/strutil" @strutil,
   "moonbitlang/x/fs" @fs,
+  "moonbitlang/x/path" @path,
 }
