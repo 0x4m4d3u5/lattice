@@ -173,3 +173,91 @@ test "check_static returns no errors for a readable static directory" {
   let v = check_static(site, "static")
   assert_eq(v.errors.length(), 0)
 }
+
+///|
+test "read_static preserves binary bytes in an independent snapshot" {
+  let site = "_tmp_assets_read_binary"
+  let src = @strutil.join_path(site, "static")
+  let file = @strutil.join_path(src, "image.bin")
+  setup_dir(site)
+  setup_dir(src)
+  let bytes = Bytes::from_array([0, 127, 128, 255, 10])
+  @fs.write_bytes_to_file(file, bytes) catch {
+    @fs.IOError(_) => assert_true(false)
+  }
+  let result = read_static(site, "static")
+  write_file(file, "changed after snapshot")
+  match result {
+    Ok(assets) => {
+      assert_eq(assets.length(), 1)
+      assert_eq(assets[0].relative_path, "image.bin")
+      assert_eq(assets[0].bytes, bytes)
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "read_static keeps nested paths relative to the configured static root" {
+  let site = "_tmp_assets_read_tree"
+  let src = @strutil.join_path(site, "public")
+  let images = @strutil.join_path(src, "images")
+  let icons = @strutil.join_path(images, "icons")
+  setup_dir(site)
+  setup_dir(src)
+  setup_dir(images)
+  setup_dir(icons)
+  write_file(@strutil.join_path(src, "main.css"), "a")
+  write_file(@strutil.join_path(icons, "logo.svg"), "b")
+  match read_static(site, "public") {
+    Ok(assets) => {
+      assert_eq(assets.length(), 2)
+      let paths = assets.map(fn(asset) { asset.relative_path })
+      assert_true(paths.contains("main.css"))
+      assert_true(paths.contains("images/icons/logo.svg"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "read_static leaves missing source paths absent" {
+  let site = "_tmp_assets_read_missing_9x7z"
+  let directories : Array[String] = []
+  assert_true(!@fs.path_exists(site))
+  match read_static(site, "static", directories~) {
+    Ok(assets) => assert_eq(assets.length(), 0)
+    Err(_) => assert_true(false)
+  }
+  assert_eq(directories.length(), 0)
+  assert_true(!@fs.path_exists(site))
+}
+
+///|
+test "read_static returns SourceNotDirectory for a regular file" {
+  let site = "_tmp_assets_read_notdir"
+  let path = @strutil.join_path(site, "static")
+  setup_dir(site)
+  write_file(path, "not a directory")
+  match read_static(site, "static") {
+    Err(SourceNotDirectory(actual)) => assert_eq(actual, path)
+    _ => assert_true(false)
+  }
+}
+
+///|
+test "read_static records the static root and empty nested directories" {
+  let site = "_tmp_assets_read_empty"
+  let src = @strutil.join_path(site, "static")
+  let empty_dir = @strutil.join_path(src, "empty")
+  setup_dir(site)
+  setup_dir(src)
+  setup_dir(empty_dir)
+  setup_dir(@strutil.join_path(empty_dir, "nested"))
+  let directories : Array[String] = []
+  match read_static(site, "static", directories~) {
+    Ok(assets) => assert_eq(assets.length(), 0)
+    Err(_) => assert_true(false)
+  }
+  assert_eq(directories, ["", "empty", "empty/nested"])
+}

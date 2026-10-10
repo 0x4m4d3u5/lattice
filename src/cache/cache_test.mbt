@@ -20,6 +20,32 @@ test "cache render and parse roundtrip" {
 }
 
 ///|
+test "render_store includes the cache version without writing output" {
+  let output_dir = "_tmp_cache_render_missing_9x7z"
+  assert_true(!@fs.path_exists(output_dir))
+  assert_eq(render_store(empty(output_dir)), "{\"version\":1,\"entries\":[]}")
+  assert_true(!@fs.path_exists(output_dir))
+}
+
+///|
+test "render_store serializes current entries with normal cache escaping" {
+  let store = empty("./dist")
+  remember(store, "posts/with\"quotes", "old")
+  remember(store, "posts/with\"quotes", "new\\fingerprint")
+  remember(store, "about", "456")
+  assert_eq(
+    render_store(store),
+    render({
+      version: 1,
+      entries: [
+        { slug: "posts/with\"quotes", fingerprint: "new\\fingerprint" },
+        { slug: "about", fingerprint: "456" },
+      ],
+    }),
+  )
+}
+
+///|
 test "fingerprint changes with source content" {
   let same_a = fingerprint_for_source(
     "content/a.md", "---\ntitle: A\n---\nBody",

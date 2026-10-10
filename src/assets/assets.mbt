@@ -19,6 +19,46 @@ pub struct AssetValidation {
 } derive(Eq, Show)
 
 ///|
+/// A static file captured in memory, with its path relative to the static root.
+pub(all) struct StaticAsset {
+  relative_path : String
+  bytes : Bytes
+} derive(Eq, Show)
+
+///|
+fn read_tree(
+  source_root : String,
+  relative_dir : String,
+  assets : Array[StaticAsset],
+  directories : Array[String],
+) -> Result[Unit, AssetCopyError] {
+  let src_dir = @strutil.join_path(source_root, relative_dir)
+  let entries = @fs.read_dir(src_dir) catch {
+    @fs.IOError(msg) => return Err(SourceReadError(src_dir, msg))
+  }
+  directories.push(relative_dir)
+  for name in entries {
+    let relative_path = @strutil.join_path(relative_dir, name)
+    let src_path = @strutil.join_path(source_root, relative_path)
+    let is_dir = @fs.is_dir(src_path) catch {
+      @fs.IOError(msg) => return Err(SourceReadError(src_path, msg))
+    }
+    if is_dir {
+      match read_tree(source_root, relative_path, assets, directories) {
+        Ok(_) => ()
+        Err(e) => return Err(e)
+      }
+    } else {
+      let bytes = @fs.read_file_to_bytes(src_path) catch {
+        @fs.IOError(msg) => return Err(FileReadError(src_path, msg))
+      }
+      assets.push({ relative_path, bytes })
+    }
+  }
+  Ok(())
+}
+
+///|
 fn ensure_dir(path : String) -> Result[Unit, AssetCopyError] {
   if @fs.path_exists(path) {
     let exists_as_dir = @fs.is_dir(path) catch {
@@ -178,6 +218,38 @@ pub fn check_static(site_root : String, static_dir : String) -> AssetValidation 
 
   validate_tree(source_root, errors)
   { errors, }
+}
+
+///|
+/// Snapshot `site_root/static_dir` without writing any files or directories.
+///
+/// Paths are relative to the static root. Missing source is an empty snapshot.
+/// On success, append all source directories to `directories`, including ""
+/// for the static root, so callers can preserve empty directories on publish.
+pub fn read_static(
+  site_root : String,
+  static_dir : String,
+  directories? : Array[String] = [],
+) -> Result[Array[StaticAsset], AssetCopyError] {
+  let source_root = @strutil.join_path(site_root, static_dir)
+  if !@fs.path_exists(source_root) {
+    return Ok([])
+  }
+  let source_is_dir = @fs.is_dir(source_root) catch {
+    @fs.IOError(msg) => return Err(SourceReadError(source_root, msg))
+  }
+  if !source_is_dir {
+    return Err(SourceNotDirectory(source_root))
+  }
+  let assets : Array[StaticAsset] = []
+  let snapshot_directories : Array[String] = []
+  match read_tree(source_root, "", assets, snapshot_directories) {
+    Ok(_) => {
+      directories.append(snapshot_directories)
+      Ok(assets)
+    }
+    Err(e) => Err(e)
+  }
 }
 
 ///|

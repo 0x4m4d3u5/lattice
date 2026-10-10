@@ -24,9 +24,9 @@ Every static site generator discovers content errors too late. Hugo renders page
 lattice uses a **two-pass build**:
 
 1. **Pass 1 — Collect & Index.** Walk markdown sources, compute slugs, and build a page index.
-2. **Pass 2 — Validate & Render.** Resolve wikilinks against the full index, render markdown, apply templates, and emit HTML.
+2. **Pass 2 — Prepare & Publish.** Validate sources, resolve wikilinks, render pages and indexes, and snapshot static assets in memory. Publish only after preparation succeeds.
 
-The page index supports forward references. Unresolved wikilinks are errors in `check`, but warnings in `build`, which still emits the page. Schema failures prevent that document from rendering; other valid documents can already have been written when the build fails. Output is not transactional, and stale files can remain.
+The page index supports forward references. Unresolved wikilinks are errors in `check`, but warnings in `build`, which still emits the page. Validation or generation errors leave existing output, cache, and manifest unchanged; a failed first build creates no output. Predictable destination conflicts are checked before writing. Publication itself is not atomic: disk-write failures or interruption can leave partial output, and stale files can remain. See [build safety](docs/build-safety.md) for the exact boundary.
 
 ### Structural Guarantees
 
@@ -34,8 +34,8 @@ These are content-validation diagnostics in lattice:
 
 | Violation | What happens |
 |-----------|-------------|
-| Missing required frontmatter field | `ValidationError` — that document is not rendered |
-| Frontmatter type mismatch (e.g., string where int expected) | `SchemaError` — that document is not rendered |
+| Missing required frontmatter field | `ValidationError` — no prepared output is published |
+| Frontmatter type mismatch (e.g., string where int expected) | `SchemaError` — no prepared output is published |
 | Broken wikilink `[[target]]` to non-existent page | `BrokenWikilink` violation in `check`; warning in `build` |
 | Collection schema constraint violated (bounds, enum, URL format) | Precise diagnostic with constraint and rejected value |
 | Duplicate slug between collections/standalone/root | `DuplicateSlug` — only one page claims the URL |
@@ -182,10 +182,10 @@ Defaults: `content-dir` → `./content`, config → `<content-dir>/lattice.conf`
 
 - **~25k lines** of MoonBit in `src/` (43k total including tests)
 - **31 packages** with focused responsibilities
-- **1,262 test declarations**; see [Reliability baseline](docs/reliability-baseline.md) for actual check results
+- **1,280 test declarations**; see [Reliability baseline](docs/reliability-baseline.md) for actual check results
 - **249 commits** across 47 days of development
 - **2 dependencies**: [`moonbitlang/x`](https://github.com/moonbitlang/x) (filesystem, system) and [`TheWaWaR/clap`](https://github.com/TheWaWaR/clap) (CLI parsing; vendored with a compatibility patch)
-- `scripts/check-baseline.sh` passes on the pinned toolchain with the JavaScript target: 1,262 project tests; existing warnings remain
+- `scripts/check-baseline.sh` passes on the pinned toolchain with the JavaScript target: 1,280 project tests; existing warnings remain
 
 ## Example Site
 
