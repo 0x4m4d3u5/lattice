@@ -3290,3 +3290,36 @@ pass with shared parsing; all 1,335 workspace tests plus 16 dedicated vendored
 clap tests, check and build pass with `--target js --deny-warn`. The verified
 repository toolchain and cached dependencies were reused. No real site data,
 credentials, deployments or releases were used.
+
+### Independent feed and cache-navigation expectations — 2026-10-11
+
+The test-quality audit executed representative mutations rather than treating
+large test counts or green CI as evidence of independent oracles. Reusing the
+first JSON Feed item ID for every item passed all 1,330 tests, violating JSON
+Feed's unique/stable identity contract. Swapping previous and next navigation
+passed both new PR16 cache-consistency tests; an older literal navigation test
+caught it. These are different gaps: the latter had existing suite protection,
+while duplicate feed IDs survived the whole suite.
+
+Strengthen emitted-feed checks with literal IDs associated with each item title,
+an exact identity set, both item URLs and a literal authored HTML
+fragment. Use a code-span Windows path to exercise JSON backslash preservation
+without relying on Markdown's text-escape interpretation. The expected body no
+longer calls the production renderer. Fresh and cached collection/site feeds must
+retain the same literal identities, summary and complete body.
+
+Keep the incremental/full HTML comparison and cache-hit counts, adding literal
+neighbor URL/title expectations for all five authored navigation changes and all
+surviving pages. Apply those expectations to incremental output before the full
+build, then to the full output too. The reference rows do not call production
+sorting or adjacency helpers. This is a test-only follow-up, with no production,
+dependency, CI or publication-policy change. AI-assisted audit and implementation
+are recorded explicitly; mutation failures must occur at behavioral assertions,
+not compiler rejection or zero-test filters.
+
+Verification: duplicate-ID mutation fails the strengthened feed identity assertion
+(0/1 pass); swapped-navigation mutation fails both new literal-output checks
+(0/2 pass). Both mutations previously passed their targeted tests, and duplicate
+IDs previously passed the full 1,330-test suite. All four warning-free JavaScript
+gates pass on this test-only branch: 1,335 workspace tests and 16 dedicated clap
+tests, check and build, with the existing verified toolchain and cached dependencies.
