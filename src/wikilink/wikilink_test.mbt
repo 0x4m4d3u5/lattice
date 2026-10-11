@@ -225,8 +225,33 @@ test "wikilink extract requires the opening fence character to close" {
 ///|
 test "wikilink extract ignores an unclosed tilde fence" {
   let links = @wikilink.extract(
-    "[[real-page]]\n  ~~~text\n[[code-example]]\n", "content/guide.md",
+    "[[real-page]]\n~~~text\n[[code-example]]\n", "content/guide.md",
   )
   assert_eq(links.length(), 1)
   assert_eq(links[0].target, "real-page")
+}
+
+///|
+test "wikilink extract validates links after indented fence-like text" {
+  for prefix in ["  ", "\t"] {
+    for delimiter in ["~~~", "```"] {
+      let body = prefix + delimiter + "\n[[missing]]\n" + prefix + delimiter
+      let links = @wikilink.extract(body, "content/guide.md")
+      assert_eq(links.length(), 1)
+      assert_eq(links[0].target, "missing")
+    }
+  }
+}
+
+///|
+test "wikilink extract keeps code fenced until a column-zero closing delimiter" {
+  for prefix in ["  ", "\t"] {
+    for delimiter in ["~~~", "```"] {
+      let body = delimiter + "\n" + prefix + delimiter +
+        "\n[[code-example]]\n" + delimiter + "\n[[real-page]]"
+      let links = @wikilink.extract(body, "content/guide.md")
+      assert_eq(links.length(), 1)
+      assert_eq(links[0].target, "real-page")
+    }
+  }
 }
