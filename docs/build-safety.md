@@ -81,3 +81,34 @@ Existing compiler warnings remain. `git diff --check` and shell syntax checks
 pass. The optional builder formatter check reports existing differences outside
 the edited function; the edited function and regression file match formatter
 output. No Mac run, output cleanup, or atomic disk-failure guarantee is added.
+
+## Dedicated 404 template selection — 2026-10-11
+
+The 404 renderer documented `404.html` → `page.html` → built-in HTML priority,
+but selected only the generic page template. AI-assisted inspection noticed the
+disagreement, and synthetic builds confirmed that a dedicated error template was
+ignored, including malformed templates that should have failed the build.
+
+Load `templates/404.html` through the existing template loader during 404
+preparation. This preserves include/layout resolution and the configured template
+directory. Only a missing dedicated file falls back to the generic template;
+read, parse, and render errors participate in the existing publication gate.
+No template subsystem redesign or cleanup policy is introduced.
+
+Repository review identified that `check` also needs to validate this selected
+template. When a dedicated 404 template exists, lint now invokes the same loader
+and renderer, reporting template violations at that file without publishing any
+output. Regression assertions reject parse errors and missing data in both
+commands and verify that valid authored/default templates pass read-only checks.
+The check regression fails before this validation is added and passes afterward.
+
+Regressions cover dedicated-template priority with authored and default error
+content, include resolution, unchanged ordinary page rendering, both missing-file
+fallbacks, and full output/cache/manifest preservation after selected-template
+parse or render errors. Before the fix, two regressions fail and the fallback
+regression passes; after the fix all three pass.
+
+The pinned Linux JavaScript baseline passes check, all 1,286 project tests, build,
+and all 15 vendored parser tests. Shell syntax and `git diff --check` pass. The
+edited function and regression file match the pinned formatter output; unrelated
+existing builder formatting differences and compiler warnings remain.

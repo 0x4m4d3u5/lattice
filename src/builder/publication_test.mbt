@@ -537,3 +537,107 @@ test "incremental deleted draft referrer invalidates targets with either draft p
     assert_eq(next.rebuilt_pages, 2)
   }
 }
+
+///|
+test "dedicated 404 template wins for authored and default error content and resolves includes" {
+  for authored in [true, false] {
+    let config = publication_fixture("dedicated_404_template")
+    let templates_dir = match config.site.templates_dir {
+      Some(path) => path
+      None => abort("publication fixture must have templates")
+    }
+    if !authored {
+      @fs.remove_file(config.content_dir + "/404.md")
+    }
+    @fs.write_string_to_file(
+      templates_dir + "/page.html",
+      "<html><body>Generic Page Template {{content}}</body></html>\n",
+    )
+    @fs.write_string_to_file(
+      templates_dir + "/error-header.html",
+      "<header>Dedicated Error Template {{title}} {{url}}</header>\n",
+    )
+    @fs.write_string_to_file(
+      templates_dir + "/404.html",
+      "<html><body>{{include: error-header.html}}{{content}}</body></html>\n",
+    )
+    publication_seed_success(config)
+    let html = @fs.read_file_to_string(config.output_dir + "/404.html")
+    assert_true(html.contains("Dedicated Error Template"))
+    assert_true(html.contains("/404.html"))
+    assert_false(html.contains("Generic Page Template"))
+    assert_true(
+      html.contains(
+        if authored {
+          "Original not found."
+        } else {
+          "The page you are looking for does not exist."
+        },
+      ),
+    )
+    let home = @fs.read_file_to_string(config.output_dir + "/index.html")
+    assert_true(home.contains("Generic Page Template"))
+    assert_false(home.contains("Dedicated Error Template"))
+    let before_check = publication_snapshot(config.output_dir)
+    assert_eq(@builder.check(config).violations.length(), 0)
+    assert_eq(publication_snapshot(config.output_dir), before_check)
+  }
+}
+
+///|
+test "absent dedicated 404 template retains generic template and default HTML fallbacks" {
+  let config = publication_fixture("404_template_fallback")
+  let templates_dir = match config.site.templates_dir {
+    Some(path) => path
+    None => abort("publication fixture must have templates")
+  }
+  @fs.write_string_to_file(
+    templates_dir + "/page.html",
+    "<html><body>Generic Error Fallback {{content}}</body></html>\n",
+  )
+  publication_seed_success(config)
+  let out = config.output_dir + "/404.html"
+  assert_true(@fs.read_file_to_string(out).contains("Generic Error Fallback"))
+  @fs.remove_file(templates_dir + "/page.html")
+  let result = @builder.build(config, publication_load_cache(config))
+  assert_eq(result.errors, 0)
+  let html = @fs.read_file_to_string(out)
+  assert_false(html.contains("Generic Error Fallback"))
+  assert_true(html.contains("Original not found."))
+}
+
+///|
+test "selected 404 template parse and render failures preserve all prior output and cache" {
+  for invalid_template in ["{{unknown_slot}}", "{{data.missing.value}}"] {
+    let config = publication_fixture("404_template_failure")
+    publication_seed_success(config)
+    let before = publication_snapshot(config.output_dir)
+    let cache = publication_load_cache(config)
+    let cache_before = @cache.render_store(cache)
+    publication_change_valid_inputs(config)
+    let templates_dir = match config.site.templates_dir {
+      Some(path) => path
+      None => abort("publication fixture must have templates")
+    }
+    @fs.write_string_to_file(templates_dir + "/404.html", invalid_template)
+    let checked = @builder.check(config)
+    assert_true(
+      checked.violations
+      .iter()
+      .any(fn(v) {
+        v.path == templates_dir + "/404.html" &&
+        v.kind == @lint.TemplateSlotError
+      }),
+    )
+    assert_eq(publication_snapshot(config.output_dir), before)
+    let result = @builder.build(config, cache)
+    publication_assert_failed(result)
+    assert_true(
+      result.diagnostics
+      .iter()
+      .any(fn(d) { d.message.contains("404") && d.message.contains("template") }),
+    )
+    assert_eq(publication_snapshot(config.output_dir), before)
+    assert_eq(@cache.render_store(cache), cache_before)
+  }
+}
