@@ -232,9 +232,9 @@ test "wikilink extract ignores an unclosed tilde fence" {
 }
 
 ///|
-test "wikilink extract validates links after indented fence-like text" {
+test "wikilink extract validates links after indented tilde paragraphs" {
   for prefix in ["  ", "\t"] {
-    for delimiter in ["~~~", "```"] {
+    for delimiter in ["~~~"] {
       let body = prefix + delimiter + "\n[[missing]]\n" + prefix + delimiter
       let links = @wikilink.extract(body, "content/guide.md")
       assert_eq(links.length(), 1)
@@ -247,11 +247,52 @@ test "wikilink extract validates links after indented fence-like text" {
 test "wikilink extract keeps code fenced until a column-zero closing delimiter" {
   for prefix in ["  ", "\t"] {
     for delimiter in ["~~~", "```"] {
-      let body = delimiter + "\n" + prefix + delimiter +
-        "\n[[code-example]]\n" + delimiter + "\n[[real-page]]"
+      let body = delimiter +
+        "\n" +
+        prefix +
+        delimiter +
+        "\n[[code-example]]\n" +
+        delimiter +
+        "\n[[real-page]]"
       let links = @wikilink.extract(body, "content/guide.md")
       assert_eq(links.length(), 1)
       assert_eq(links[0].target, "real-page")
     }
+  }
+}
+
+///|
+test "wikilink extract excludes paired inline code in indented backtick paragraphs" {
+  for prefix in ["  ", "\t"] {
+    let body = prefix + "```\n[[code-example]]\n" + prefix + "```"
+    assert_eq(@wikilink.extract(body, "guide.md").length(), 0)
+  }
+}
+
+///|
+test "wikilink extract follows nested inline and block syntax" {
+  for
+    body in [
+      "**[[guide|Guide]]**", "> See [[guide|Guide]].", "- Outer\n  - [[guide|Guide]]",
+      "Term\n: [[guide|Guide]]", "Note[^1]\n\n[^1]: [[guide|Guide]]",
+    ] {
+    let links = @wikilink.extract(body, "guide.md")
+    assert_eq(links.length(), 1)
+    assert_eq(links[0].target, "guide")
+    assert_eq(links[0].display, Some("Guide"))
+    assert_eq(links[0].source_file, "guide.md")
+  }
+  let table_links = @wikilink.extract(
+    "| Name | Other |\n| --- | --- |\n| [[guide]] | text |", "guide.md",
+  )
+  assert_eq(table_links.length(), 1)
+  assert_eq(table_links[0].target, "guide")
+  assert_eq(table_links[0].display, None)
+  for
+    body in [
+      "\\[[code-example]]", "`[[code-example]]`", "> ~~~\n> [[code-example]]\n> ~~~",
+      "$$\n[[code-example]]\n$$",
+    ] {
+    assert_eq(@wikilink.extract(body, "guide.md").length(), 0)
   }
 }

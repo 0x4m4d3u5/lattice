@@ -2067,6 +2067,84 @@ pub fn extract_table_of_contents(
 }
 
 ///|
+fn collect_inline_wikilinks(
+  inlines : Array[Inline],
+  targets : Array[(String, String?)],
+) -> Unit {
+  for inline in inlines {
+    match inline {
+      WikiRef(target, display) =>
+        if target != "" {
+          targets.push((target, display))
+        }
+      Bold(inner)
+      | Italic(inner)
+      | BoldItalic(inner)
+      | Strikethrough(inner)
+      | Link(inner, _) => collect_inline_wikilinks(inner, targets)
+      Text(_) | InlineCode(_) | Image(_, _) | FootnoteRef(_) |
+      Shortcode(_) | Math(_) | InlineHtml(_) | HardBreak => ()
+    }
+  }
+}
+
+///|
+fn collect_block_wikilinks(
+  blocks : Array[Block],
+  targets : Array[(String, String?)],
+) -> Unit {
+  for block in blocks {
+    match block {
+      Heading(_, inlines) | Paragraph(inlines) =>
+        collect_inline_wikilinks(inlines, targets)
+      BlockQuote(children) => collect_block_wikilinks(children, targets)
+      UnorderedList(items) | OrderedList(items) =>
+        for item in items {
+          collect_inline_wikilinks(item.inlines, targets)
+          collect_block_wikilinks(item.children, targets)
+        }
+      Table(_, headers, rows) => {
+        for cell in headers {
+          collect_inline_wikilinks(cell, targets)
+        }
+        for row in rows {
+          for cell in row {
+            collect_inline_wikilinks(cell, targets)
+          }
+        }
+      }
+      DefinitionList(items) =>
+        for (term, definitions) in items {
+          collect_inline_wikilinks(term, targets)
+          for definition in definitions {
+            collect_inline_wikilinks(definition, targets)
+          }
+        }
+      FencedCode(_, _) | HRule | MathBlock(_) | HtmlBlock(_) => ()
+    }
+  }
+}
+
+///|
+/// Collect only references parsed as rendered wikilinks. Reuse rendering's
+/// preprocessing, block/inline parsing and footnote parsing so code, escapes,
+/// unmatched delimiters and nested blocks cannot acquire different semantics.
+pub fn extract_wikilink_targets(body : String) -> Array[(String, String?)] {
+  let (blocks, footnotes) = parse_blocks_with_footnotes(
+    lines_of(preprocess_callout_next_line(body)),
+  )
+  let targets : Array[(String, String?)] = []
+  collect_block_wikilinks(blocks, targets)
+  for footnote in footnotes {
+    collect_inline_wikilinks(
+      parse_inlines(footnote.text, 0, footnote.text.length()),
+      targets,
+    )
+  }
+  targets
+}
+
+///|
 pub fn render_with_diagnostics(
   body : String,
   wikilinks : Map[String, String],

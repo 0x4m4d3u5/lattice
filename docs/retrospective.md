@@ -3258,3 +3258,35 @@ before publication, so this adds hashing without additional rendering or I/O.
 Tests compare incremental output with forced full builds after insertion,
 deletion, title edits, date reordering and source renaming. They also check
 unaffected page cache hits and cache reuse immediately after the changed build.
+
+### Wikilink extraction follows rendered syntax — 2026-10-11
+
+An independent test-quality audit found two remaining extractor/render mismatches:
+an unmatched inline backtick hid a rendered broken wikilink from strict `check`,
+and a fenced blockquote produced a false broken-link violation for literal code.
+Both new filesystem build/check regressions fail on unchanged main. The audit also
+found PR15's paired indented backtick expectation was wrong: unchanged Markdown
+renders those markers as inline code spans, not references. A third end-to-end
+regression records that independently verified output rather than preserving the
+extractor's previous assumption.
+
+Use the existing Markdown preprocessing and block/inline parser to collect
+`WikiRef` nodes, including nested blocks and rendered footnotes. The wikilink
+package attaches source context and retains its resolution API. This replaces
+the second fence/backtick scanner, without changing Markdown grammar or rendering.
+The new dependency is acyclic: Markdown does not import wikilink. Unit assertions
+also cover source context, display text, nesting, tables, definitions, footnotes,
+escaped opening brackets and code/math exclusions with literal expected targets.
+
+AI-assisted diagnosis and implementation are recorded honestly: green CI and
+original-bug failures did not establish general parser parity. The earlier test
+oracle itself encoded an extractor assumption. No external model service was
+called during local development; hosted advisory Moongate retains its existing
+configuration. Publication and strict-check behavior are verified using synthetic
+content and before/after filesystem snapshots.
+
+Verification: the three new build/check regressions fail on unchanged main and
+pass with shared parsing; all 1,335 workspace tests plus 16 dedicated vendored
+clap tests, check and build pass with `--target js --deny-warn`. The verified
+repository toolchain and cached dependencies were reused. No real site data,
+credentials, deployments or releases were used.
