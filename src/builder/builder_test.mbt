@@ -5846,3 +5846,74 @@ test "build content-index body_text populated on cache-hit rebuild" {
   // The body field must contain the distinctive text from the post
   assert_true(content_index.contains("Hello world this is a test post"))
 }
+
+///|
+test "build emits collection and tag indexes with maximum positive page size" {
+  let root = "./_tmp_builder_pagination_max_size"
+  let content_root = root + "/content"
+  let posts_root = content_root + "/posts"
+  let output_root = root + "/dist"
+  ensure_dir_test(root)
+  ensure_dir_test(content_root)
+  ensure_dir_test(posts_root)
+  ensure_dir_test(content_root + "/data")
+  // Seed stale indexes so repeated test runs must still prove publication.
+  for
+    directory in [
+      output_root,
+      output_root + "/posts",
+      output_root + "/tags",
+      output_root + "/tags/news",
+    ] {
+    ensure_dir_test(directory)
+    assert_true(write_file_test(directory + "/index.html", "stale index"))
+  }
+  for n in [1, 2, 3] {
+    assert_true(
+      write_file_test(
+        posts_root + "/post" + n.to_string() + ".md",
+        "---\ntitle: Post " + n.to_string() + "\ntags: [news]\n---\nBody\n",
+      ),
+    )
+  }
+  let collections_path = root + "/collections.cfg"
+  assert_true(
+    write_file_test(
+      collections_path,
+      "[posts]\nschema = title:String,tags:Array[String]\ndir = " +
+      posts_root +
+      "\n",
+    ),
+  )
+  let config_path = root + "/site.cfg"
+  let site_cfg = "title = LargePagination\nbase_url = /\npage_size = 2147483647\ndata_dir = " +
+    content_root +
+    "/data\n"
+  assert_true(write_file_test(config_path, site_cfg))
+  let site = match @config.parse(site_cfg) {
+    Ok(parsed) => parsed
+    Err(_) => abort("site config parse failed")
+  }
+  assert_eq(site.page_size, Some(2147483647))
+  let result = @builder.build(
+    {
+      content_dir: content_root,
+      output_dir: output_root,
+      config_path,
+      site,
+      collections_path: Some(collections_path),
+      force_rebuild: true,
+      include_drafts: false,
+    },
+    @cache.empty(output_root),
+  )
+  assert_eq(result.errors, 0)
+  for path in ["/posts/index.html", "/tags/news/index.html"] {
+    let html = @fs.read_file_to_string(output_root + path)
+    for n in [1, 2, 3] {
+      assert_true(html.contains("Post " + n.to_string()))
+    }
+  }
+  let tags = @fs.read_file_to_string(output_root + "/tags/index.html")
+  assert_true(tags.contains("news"))
+}

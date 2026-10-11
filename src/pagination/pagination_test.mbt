@@ -134,3 +134,15 @@ test "pagination metadata fields are consistent across all pages" {
     Some(_) => assert_true(false)
   }
 }
+
+///|
+test "pagination preserves documents with maximum positive page size" {
+  let pages = paginate(["a", "b", "c"], 2147483647, page_url)
+  assert_eq(pages.length(), 1)
+  assert_eq(pages[0].page_size, 2147483647)
+  assert_eq(pages[0].total_pages, 1)
+  assert_eq(pages[0].total_items, 3)
+  assert_eq(pages[0].documents, ["a", "b", "c"])
+  assert_eq(pages[0].prev_url, None)
+  assert_eq(pages[0].next_url, None)
+}
