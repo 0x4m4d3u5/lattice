@@ -387,3 +387,153 @@ test "nested static destination file conflict preserves the successful output tr
   )
   assert_eq(publication_snapshot(config.output_dir), before)
 }
+
+///|
+test "incremental deletion rebuilds former backlink targets and keeps unrelated cache hits" {
+  let config = publication_fixture("deleted_backlink")
+  let templates_dir = match config.site.templates_dir {
+    Some(path) => path
+    None => abort("publication fixture must have templates")
+  }
+  // Use the default renderer, which includes the backlinks section.
+  @fs.remove_file(templates_dir + "/page.html")
+  @fs.write_string_to_file(
+    config.content_dir + "/posts/alpha.md",
+    "---\ntitle: Alpha\ndate: 2026-01-02\n---\nSee [[beta]].\n",
+  )
+  @fs.write_string_to_file(
+    config.content_dir + "/posts/gamma.md",
+    "---\ntitle: Gamma\ndate: 2026-03-04\n---\nUnrelated page.\n",
+  )
+  publication_seed_success(config)
+  let beta_output = config.output_dir + "/posts/beta/index.html"
+  assert_true(@fs.read_file_to_string(beta_output).contains("/posts/alpha/"))
+  let incremental = publication_incremental(config)
+  let unchanged = @builder.build(incremental, publication_load_cache(config))
+  assert_eq(unchanged.errors, 0)
+  assert_eq(unchanged.unchanged_pages, 3)
+  @fs.remove_file(config.content_dir + "/posts/alpha.md")
+  let deleted = @builder.build(incremental, publication_load_cache(config))
+  assert_eq(deleted.errors, 0)
+  assert_false(@fs.read_file_to_string(beta_output).contains("/posts/alpha/"))
+  assert_false(@fs.read_file_to_string(beta_output).contains("Backlinks"))
+  // Root and standalone pages are always rebuilt, plus the backlink target.
+  assert_eq(deleted.rebuilt_pages, 3)
+  assert_eq(deleted.unchanged_pages, 1)
+  let manifest = @manifest.parse(
+    @fs.read_file_to_string(config.output_dir + "/.lattice-manifest.json"),
+  )
+  assert_false(
+    manifest.entries
+    .iter()
+    .any(fn(entry) { entry.src == config.content_dir + "/posts/alpha.md" }),
+  )
+  // The next manifest must forget the removed source, restoring ordinary skips.
+  let next = @builder.build(incremental, publication_load_cache(config))
+  assert_eq(next.errors, 0)
+  assert_eq(next.unchanged_pages, 2)
+  assert_eq(next.rebuilt_pages, 2)
+}
+
+///|
+test "incremental renamed referrer invalidates old and new targets and forgets old manifest entry" {
+  let config = publication_fixture("renamed_backlink")
+  let templates_dir = match config.site.templates_dir {
+    Some(path) => path
+    None => abort("publication fixture must have templates")
+  }
+  @fs.remove_file(templates_dir + "/page.html")
+  let old_source = config.content_dir + "/posts/alpha.md"
+  let new_source = config.content_dir + "/posts/omega.md"
+  @fs.write_string_to_file(
+    old_source, "---\ntitle: Alpha\ndate: 2026-01-02\n---\nSee [[beta]].\n",
+  )
+  for slug in ["gamma", "delta"] {
+    @fs.write_string_to_file(
+      config.content_dir + "/posts/" + slug + ".md",
+      "---\ntitle: " + slug + "\ndate: 2026-03-04\n---\nUnrelated page.\n",
+    )
+  }
+  publication_seed_success(config)
+  let beta_output = config.output_dir + "/posts/beta/index.html"
+  assert_true(@fs.read_file_to_string(beta_output).contains("/posts/alpha/"))
+  @fs.remove_file(old_source)
+  @fs.write_string_to_file(
+    new_source, "---\ntitle: Omega\ndate: 2026-01-02\n---\nSee [[gamma]].\n",
+  )
+  let incremental = publication_incremental(config)
+  let renamed = @builder.build(incremental, publication_load_cache(config))
+  assert_eq(renamed.errors, 0)
+  assert_false(@fs.read_file_to_string(beta_output).contains("/posts/alpha/"))
+  assert_true(
+    @fs.read_file_to_string(config.output_dir + "/posts/gamma/index.html").contains(
+      "/posts/omega/",
+    ),
+  )
+  assert_eq(renamed.unchanged_pages, 1)
+  assert_eq(
+    count_messages_with_prefix(renamed.messages, "[skip] posts/delta"),
+    1,
+  )
+  let manifest = @manifest.parse(
+    @fs.read_file_to_string(config.output_dir + "/.lattice-manifest.json"),
+  )
+  assert_false(
+    manifest.entries.iter().any(fn(entry) { entry.src == old_source }),
+  )
+  assert_true(
+    manifest.entries.iter().any(fn(entry) { entry.src == new_source }),
+  )
+  let next = @builder.build(incremental, publication_load_cache(config))
+  assert_eq(next.errors, 0)
+  assert_eq(next.unchanged_pages, 4)
+  assert_eq(next.rebuilt_pages, 2)
+}
+
+///|
+test "incremental deleted draft referrer invalidates targets with either draft publication flag" {
+  for include_drafts in [false, true] {
+    let fixture = publication_fixture("draft_backlink")
+    let config : @builder.BuildConfig = { ..fixture, include_drafts, }
+    let templates_dir = match config.site.templates_dir {
+      Some(path) => path
+      None => abort("publication fixture must have templates")
+    }
+    @fs.remove_file(templates_dir + "/page.html")
+    let source = config.content_dir + "/posts/alpha.md"
+    @fs.write_string_to_file(
+      source, "---\ntitle: Alpha\ndate: 2026-01-02\ndraft: true\n---\nSee [[beta]].\n",
+    )
+    @fs.write_string_to_file(
+      config.content_dir + "/posts/gamma.md",
+      "---\ntitle: Gamma\ndate: 2026-03-04\n---\nUnrelated page.\n",
+    )
+    let seed = @builder.build(config, @cache.empty(config.output_dir))
+    assert_eq(seed.errors, 0)
+    assert_eq(
+      @fs.path_exists(config.output_dir + "/posts/alpha/index.html"),
+      include_drafts,
+    )
+    // Existing backlink indexing includes drafts, even when publication skips them.
+    let beta_output = config.output_dir + "/posts/beta/index.html"
+    assert_true(@fs.read_file_to_string(beta_output).contains("/posts/alpha/"))
+    @fs.remove_file(source)
+    let incremental = publication_incremental(config)
+    let deleted = @builder.build(incremental, publication_load_cache(config))
+    assert_eq(deleted.errors, 0)
+    assert_false(@fs.read_file_to_string(beta_output).contains("/posts/alpha/"))
+    assert_eq(deleted.unchanged_pages, 1)
+    assert_eq(
+      count_messages_with_prefix(deleted.messages, "[skip] posts/gamma"),
+      1,
+    )
+    let manifest = @manifest.parse(
+      @fs.read_file_to_string(config.output_dir + "/.lattice-manifest.json"),
+    )
+    assert_false(manifest.entries.iter().any(fn(entry) { entry.src == source }))
+    let next = @builder.build(incremental, publication_load_cache(config))
+    assert_eq(next.errors, 0)
+    assert_eq(next.unchanged_pages, 2)
+    assert_eq(next.rebuilt_pages, 2)
+  }
+}

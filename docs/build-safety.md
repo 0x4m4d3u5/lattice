@@ -53,3 +53,31 @@ cache, and manifest; cover initial failure, late generation failure, destination
 conflicts, and recovery; and retain warning-only and incremental-build coverage.
 See [the pinned baseline instructions](reliability-baseline.md#reproduce) to run
 check, all tests, build, and the vendored parser tests.
+
+## Incremental backlink removal — 2026-10-10
+
+An unchanged collection page must be rebuilt when a referring collection source
+disappears. Previously, backlink invalidation only visited current sources, so a
+deleted page's old backlink remained in its target's cached HTML. Compare the
+previous manifest with the current source set and invalidate the removed source's
+recorded link targets. Dependency entries have no output path and are excluded.
+This also handles a source renamed away from its original path. It does not remove
+the old generated page or change the stale-output policy above.
+
+AI-assisted inspection identified this missing invalidation case. A synthetic
+regression verifies an initial backlink, cache hits before deletion, removal of
+the backlink after deletion, an unrelated page's cache hit, and restored cache
+hits on the following build. Review regressions also cover a renamed referrer
+with different old/new targets and deletion of a draft with either draft
+publication flag. They directly verify removal of the old manifest source entry
+and subsequent cache reuse. Existing backlink indexing includes drafts even when
+their pages are skipped; this change preserves that separate policy.
+
+Linux validation with the pinned WASM compiler `0.10.14+7d59c7ec9`, Moon
+`760759ca`, and the JavaScript target: the new regression fails before the fix
+because the old backlink remains, then passes after it. `check-baseline.sh`
+passes check, all 1,283 project tests, build, and all 15 vendored parser tests.
+Existing compiler warnings remain. `git diff --check` and shell syntax checks
+pass. The optional builder formatter check reports existing differences outside
+the edited function; the edited function and regression file match formatter
+output. No Mac run, output cleanup, or atomic disk-failure guarantee is added.
