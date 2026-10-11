@@ -8,6 +8,81 @@ fn raw_link(target : String) -> @wikilink.ResolvedWikilink {
 }
 
 ///|
+test "render_graph_json preserves normalized resolved targets and deduplicates spellings" {
+  let links = @wikilink.extract(
+    "[[Typed Content Tour]] [[TYPED-CONTENT-TOUR.MD|Tour]] [[typed-content-tour.md]] [[Draft Page]]",
+    "hub.md",
+  )
+  let (resolved, errors) = @wikilink.resolve(
+    links,
+    Map([
+      ("typed-content-tour", "/posts/typed-content-tour/"),
+      ("draft-page", "/posts/draft-page/"),
+    ]),
+  )
+  assert_eq(errors.length(), 0)
+  assert_eq(resolved.length(), 4)
+  let pages : Array[@graph.GraphPage] = [
+    {
+      slug: "hub",
+      title: "Hub",
+      url: "/hub/",
+      description: None,
+      date: None,
+      weight: None,
+      outgoing: resolved,
+    },
+    {
+      slug: "typed-content-tour",
+      title: "Typed Content Tour",
+      url: "/posts/typed-content-tour/",
+      description: None,
+      date: None,
+      weight: None,
+      outgoing: [],
+    },
+  ]
+  let json = @graph.render_graph_json(pages)
+  let edge = "{\"source\": \"hub\", \"target\": \"typed-content-tour\"}"
+  assert_true(json.contains("  \"edges\": [\n    " + edge + "\n  ]"))
+  assert_true(!json.contains("draft-page"))
+}
+
+///|
+test "render_graph_json retains a resolved filename target without a literal slug link" {
+  let (resolved, errors) = @wikilink.resolve(
+    @wikilink.extract("[[Guide.MD|Read the guide]]", "home.md"),
+    Map([("guide", "/guide/")]),
+  )
+  assert_eq(errors.length(), 0)
+  let pages : Array[@graph.GraphPage] = [
+    {
+      slug: "home",
+      title: "Home",
+      url: "/",
+      description: None,
+      date: None,
+      weight: None,
+      outgoing: resolved,
+    },
+    {
+      slug: "guide",
+      title: "Guide",
+      url: "/guide/",
+      description: None,
+      date: None,
+      weight: None,
+      outgoing: [],
+    },
+  ]
+  assert_true(
+    @graph.render_graph_json(pages).contains(
+      "\"source\": \"home\", \"target\": \"guide\"",
+    ),
+  )
+}
+
+///|
 test "render_graph_json empty pages produces valid JSON shell" {
   let json = @graph.render_graph_json([])
   assert_eq(json.contains("\"nodes\""), true)
