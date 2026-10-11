@@ -260,6 +260,23 @@ test "to_ascii_lower lowercases ASCII, preserves non-ASCII" {
 // ── parse_int ─────────────────────────────────────────────────────────────────
 
 ///|
+test "parse_int rejects signed overflow and preserves Int boundaries" {
+  for
+    raw in [
+      "2147483648", "-2147483649", "4294967297", "-4294967297", "999999999999999999999999",
+    ] {
+    assert_eq(@strutil.parse_int(raw), None)
+  }
+  assert_eq(@strutil.parse_int("2147483647"), Some(2147483647))
+  assert_eq(@strutil.parse_int("-2147483648"), Some(-2147483648))
+  assert_eq(@strutil.parse_int("0002147483647"), Some(2147483647))
+  assert_eq(@strutil.parse_int("-0002147483648"), Some(-2147483648))
+  for raw in ["+1", " 1", "1 ", "0x10", "1_000"] {
+    assert_eq(@strutil.parse_int(raw), None)
+  }
+}
+
+///|
 test "parse_int handles positive, negative, and zero" {
   assert_true(@strutil.parse_int("42") == Some(42))
   assert_true(@strutil.parse_int("-17") == Some(-17))

@@ -1,4 +1,29 @@
 ///|
+test "integer schema rejects overflowing frontmatter with typed diagnostic" {
+  let schema : @schema.Schema = {
+    name: "posts",
+    fields: [{ name: "count", field_type: TInt(None, None), required: true, }],
+  }
+  for raw in ["2147483648", "-2147483649", "4294967297"] {
+    for
+      src in [
+        "+++\ncount = " + raw + "\n+++\n",
+        "---\ncount: " + raw + "\n---\n",
+      ] {
+      let fm = parse_frontmatter_or_fail(src)
+      let errors = @schema.validate(fm, schema)
+      assert_eq(errors.length(), 1)
+      assert_eq(errors[0].field, "count")
+      assert_true(errors[0].message.contains("expected Int"))
+    }
+  }
+  for raw in ["2147483647", "-2147483648", "0001", "-0"] {
+    let fm = parse_frontmatter_or_fail("+++\ncount = " + raw + "\n+++\n")
+    assert_eq(@schema.validate(fm, schema).length(), 0)
+  }
+}
+
+///|
 fn sample_schema() -> @schema.Schema {
   {
     name: "posts",
