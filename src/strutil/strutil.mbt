@@ -517,7 +517,12 @@ pub fn parse_positive_int(value : String) -> Int? {
     if !is_digit(c) {
       return None
     }
-    parsed = parsed * 10 + (c.to_int() - '0'.to_int())
+    let digit = c.to_int() - '0'.to_int()
+    // Reject overflow before multiplying; wrapped positives are invalid too.
+    if parsed > (2147483647 - digit) / 10 {
+      return None
+    }
+    parsed = parsed * 10 + digit
     i = i + 1
   }
   if parsed <= 0 {
