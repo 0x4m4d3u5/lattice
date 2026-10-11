@@ -28,3 +28,6 @@ import {
   "moonbitlang/x/fs" @fs,
   "moonbitlang/x/path" @path,
 }
+import {
+  "moonbitlang/core/json" @json,
+} for "test"

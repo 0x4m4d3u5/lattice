@@ -526,6 +526,7 @@ priv struct ProcessedDocument {
   date : String?
   weight : Int?
   excerpt : String
+  content_html : String
   body_text : String
   resolved_links : Array[@wikilink.ResolvedWikilink]
   tags : Array[@tags.TagRef]
@@ -3398,10 +3399,10 @@ fn process_document(
     return { document: None, diagnostics }
   }
   if !render_page_html {
-    // Even on cache hit we need body_text for content-index.json.
-    // Render markdown with an empty wikilink map (wikilinks render as their
-    // target text, which is fine for plain-text extraction).
-    let cache_markdown = @markdown.render_with_diagnostics(fm.body, Map([]))
+    // Body artifacts are needed even when page HTML is not requested.
+    let cache_markdown = @markdown.render_with_diagnostics(
+      fm.body, build_wikilink_map(resolved),
+    )
     let cache_body_text = @strutil.strip_html_tags(cache_markdown.html)
     return {
       document: Some({
@@ -3413,6 +3414,7 @@ fn process_document(
         date: date_value,
         weight: weight_value,
         excerpt,
+        content_html: cache_markdown.html,
         body_text: cache_body_text,
         resolved_links: resolved,
         tags: page_tags,
@@ -3635,6 +3637,7 @@ fn process_document(
       date: date_value,
       weight: weight_value,
       excerpt,
+      content_html: markdown_result.html,
       body_text: @strutil.strip_html_tags(body_html),
       resolved_links: resolved,
       tags: page_tags,
@@ -3701,6 +3704,7 @@ fn build_sorted_collection_pages(
         description: None,
         date: prev_date,
         weight: prev_weight,
+        content_html: "",
         outgoing: [],
       }
       let page_b : @graph.GraphPage = {
@@ -3710,6 +3714,7 @@ fn build_sorted_collection_pages(
         description: None,
         date: curr_date,
         weight: curr_weight,
+        content_html: "",
         outgoing: [],
       }
 
@@ -4140,6 +4145,7 @@ fn process_document_for_lint(
       date: date_value,
       weight: weight_value,
       excerpt,
+      content_html: markdown_result.html,
       body_text: @strutil.strip_html_tags(body_html),
       resolved_links: resolved,
       tags: page_tags,
@@ -5083,6 +5089,7 @@ pub fn build(
                   description: doc.description,
                   date: doc.date,
                   weight: doc.weight,
+                  content_html: doc.content_html,
                   outgoing: doc.resolved_links,
                 }
                 coll_pages.push(page)
@@ -5258,6 +5265,7 @@ pub fn build(
               description: doc.description,
               date: doc.date,
               weight: doc.weight,
+              content_html: doc.content_html,
               outgoing: doc.resolved_links,
             }
             graph_pages.push(page)
@@ -5407,6 +5415,7 @@ pub fn build(
               description: doc.description,
               date: doc.date,
               weight: doc.weight,
+              content_html: doc.content_html,
               outgoing: doc.resolved_links,
             }
             graph_pages.push(page)
@@ -6611,6 +6620,7 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
             description: doc.description,
             date: doc.date,
             weight: doc.weight,
+            content_html: doc.content_html,
             outgoing: doc.resolved_links,
           }
           coll_pages.push(page)
@@ -6692,6 +6702,7 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
             description: doc.description,
             date: doc.date,
             weight: doc.weight,
+            content_html: doc.content_html,
             outgoing: doc.resolved_links,
           })
         None => ()
@@ -6748,6 +6759,7 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
             description: doc.description,
             date: doc.date,
             weight: doc.weight,
+            content_html: doc.content_html,
             outgoing: doc.resolved_links,
           })
         None => ()

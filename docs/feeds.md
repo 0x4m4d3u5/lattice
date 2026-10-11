@@ -83,6 +83,8 @@ This allows feed readers and browsers to auto-discover your site's feeds.
 
 Lattice also generates a [JSON Feed 1.1](https://www.jsonfeed.org/version/1.1/) for each collection, written to `<collection>/feed.json`:
 
+Every item includes `content_html`: the full rendered Markdown body, including resolved wikilinks and shortcodes, without page templates, navigation, table of contents, tag lists, or backlinks. The frontmatter description remains the optional plain-text `summary`. An authored empty body produces an empty `content_html` string. Collection and site-wide feeds use the same bodies on fresh and cached builds, with the existing draft filtering and feed limit.
+
 ```json
 {
   "version": "https://jsonfeed.org/version/1.1",

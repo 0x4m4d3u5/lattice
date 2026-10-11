@@ -14,6 +14,7 @@ pub(all) struct FeedItem {
   title : String
   id : String
   link : String
+  content_html : String
   summary : String?
   updated : String?
   published : String?
@@ -144,6 +145,7 @@ fn to_feed_item(base_url : String, page : @graph.GraphPage) -> FeedItem {
     title: page.title,
     id: link,
     link,
+    content_html: page.content_html,
     summary: page.description,
     updated: normalized_date,
     published: normalized_date,
@@ -327,6 +329,8 @@ pub fn render_json_feed(channel : FeedChannel, feed_url : String) -> String {
     buf.write_string(",\n")
     buf.write_string("      \"title\": ")
     @strutil.write_json_string(buf, item.title)
+    buf.write_string(",\n      \"content_html\": ")
+    @strutil.write_json_string(buf, item.content_html)
     match item.summary {
       Some(summary) => {
         buf.write_string(",\n      \"summary\": ")

@@ -10,6 +10,7 @@ pub(all) struct GraphPage {
   description : String?
   date : String?
   weight : Int?
+  content_html : String // Full rendered Markdown body, without page chrome.
   outgoing : Array[@wikilink.ResolvedWikilink]
 }
 

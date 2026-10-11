@@ -2,3 +2,6 @@ import {
   "kurisu/lattice/src/strutil" @strutil,
   "kurisu/lattice/src/graph" @graph,
 }
+import {
+  "moonbitlang/core/json" @json,
+} for "test"
