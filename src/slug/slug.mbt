@@ -122,7 +122,7 @@ fn transliterate_latin(c : Char) -> String {
     "oe"
   } else {
     // Not a recognized Latin accented char — return as-is
-    let buf = StringBuilder::new()
+    let buf = StringBuilder()
     buf.write_char(c)
     buf.to_string()
   }
@@ -130,7 +130,7 @@ fn transliterate_latin(c : Char) -> String {
 
 ///|
 fn slugify_n(s : String, end : Int) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   let mut i = 0
   while i < end {
     let c = @strutil.char_at(s, i)

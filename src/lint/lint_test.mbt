@@ -1,7 +1,7 @@
 ///|
 test "lint summarize empty result" {
-  let result = empty_result()
-  let summary = summarize(result)
+  let result = @lint.empty_result()
+  let summary = @lint.summarize(result)
   assert_eq(summary.total, 0)
   assert_eq(summary.by_type.length(), 0)
   assert_eq(summary.by_file.length(), 0)
@@ -9,7 +9,7 @@ test "lint summarize empty result" {
 
 ///|
 test "lint summarize groups by violation type" {
-  let violations : Array[LintViolation] = [
+  let violations : Array[@lint.LintViolation] = [
     {
       path: "a.md",
       line: None,
@@ -32,8 +32,8 @@ test "lint summarize groups by violation type" {
       message: "broken link",
     },
   ]
-  let result : LintResult = { violations, messages: [] }
-  let summary = summarize(result)
+  let result : @lint.LintResult = { violations, messages: [], }
+  let summary = @lint.summarize(result)
   assert_eq(summary.total, 3)
   // SchemaError should be first (count 2) then BrokenWikilink (count 1)
   assert_eq(summary.by_type.length(), 2)
@@ -45,7 +45,7 @@ test "lint summarize groups by violation type" {
 
 ///|
 test "lint summarize groups by file" {
-  let violations : Array[LintViolation] = [
+  let violations : Array[@lint.LintViolation] = [
     {
       path: "a.md",
       line: Some(1),
@@ -68,8 +68,8 @@ test "lint summarize groups by file" {
       message: "err3",
     },
   ]
-  let result : LintResult = { violations, messages: [] }
-  let summary = summarize(result)
+  let result : @lint.LintResult = { violations, messages: [], }
+  let summary = @lint.summarize(result)
   assert_eq(summary.total, 3)
   assert_eq(summary.by_file.length(), 2)
   // a.md has 2 violations, b.md has 1
@@ -81,9 +81,9 @@ test "lint summarize groups by file" {
 
 ///|
 test "lint format_summary empty" {
-  let result = empty_result()
-  let summary = summarize(result)
-  let text = format_summary(summary)
+  let result = @lint.empty_result()
+  let summary = @lint.summarize(result)
+  let text = @lint.format_summary(summary)
   assert_true(text.contains("Summary: 0 violation(s)"))
   assert_true(!text.contains("By type:"))
   assert_true(!text.contains("By file:"))
@@ -91,7 +91,7 @@ test "lint format_summary empty" {
 
 ///|
 test "lint format_summary with violations" {
-  let violations : Array[LintViolation] = [
+  let violations : Array[@lint.LintViolation] = [
     {
       path: "posts/hello.md",
       line: None,
@@ -107,9 +107,9 @@ test "lint format_summary with violations" {
       message: "link",
     },
   ]
-  let result : LintResult = { violations, messages: [] }
-  let summary = summarize(result)
-  let text = format_summary(summary)
+  let result : @lint.LintResult = { violations, messages: [], }
+  let summary = @lint.summarize(result)
+  let text = @lint.format_summary(summary)
   assert_true(text.contains("Summary: 2 violation(s)"))
   assert_true(text.contains("By type:"))
   assert_true(text.contains("schema: 1"))
@@ -121,8 +121,8 @@ test "lint format_summary with violations" {
 
 ///|
 test "lint format_violations_json empty" {
-  let result = empty_result()
-  let json = format_violations_json(result)
+  let result = @lint.empty_result()
+  let json = @lint.format_violations_json(result)
   assert_true(json.contains("\"violations\": []"))
   assert_true(json.contains("\"total\": 0"))
   assert_true(json.contains("\"by_type\": []"))
@@ -131,7 +131,7 @@ test "lint format_violations_json empty" {
 
 ///|
 test "lint format_violations_json with line and column" {
-  let violations : Array[LintViolation] = [
+  let violations : Array[@lint.LintViolation] = [
     {
       path: "content/posts/foo.md",
       line: Some(12),
@@ -140,8 +140,8 @@ test "lint format_violations_json with line and column" {
       message: "unknown slug 'bar'",
     },
   ]
-  let result : LintResult = { violations, messages: [] }
-  let json = format_violations_json(result)
+  let result : @lint.LintResult = { violations, messages: [], }
+  let json = @lint.format_violations_json(result)
   assert_true(json.contains("\"path\": \"content/posts/foo.md\""))
   assert_true(json.contains("\"line\": 12"))
   assert_true(json.contains("\"column\": 5"))
@@ -152,7 +152,7 @@ test "lint format_violations_json with line and column" {
 
 ///|
 test "lint format_violations_json null line and column" {
-  let violations : Array[LintViolation] = [
+  let violations : Array[@lint.LintViolation] = [
     {
       path: "content/posts/bar.md",
       line: None,
@@ -161,8 +161,8 @@ test "lint format_violations_json null line and column" {
       message: "field error",
     },
   ]
-  let result : LintResult = { violations, messages: [] }
-  let json = format_violations_json(result)
+  let result : @lint.LintResult = { violations, messages: [], }
+  let json = @lint.format_violations_json(result)
   assert_true(json.contains("\"line\": null"))
   assert_true(json.contains("\"column\": null"))
   assert_true(json.contains("\"kind\": \"schema\""))
@@ -170,7 +170,7 @@ test "lint format_violations_json null line and column" {
 
 ///|
 test "lint format_violations_json escapes special chars in message" {
-  let violations : Array[LintViolation] = [
+  let violations : Array[@lint.LintViolation] = [
     {
       path: "a.md",
       line: None,
@@ -179,8 +179,8 @@ test "lint format_violations_json escapes special chars in message" {
       message: "field \"x\" contains \\backslash",
     },
   ]
-  let result : LintResult = { violations, messages: [] }
-  let json = format_violations_json(result)
+  let result : @lint.LintResult = { violations, messages: [], }
+  let json = @lint.format_violations_json(result)
   // backslash and quote must be escaped in JSON
   assert_true(json.contains("\\\"x\\\""))
   assert_true(json.contains("\\\\backslash"))
@@ -188,7 +188,7 @@ test "lint format_violations_json escapes special chars in message" {
 
 ///|
 test "lint summarize single violation" {
-  let violations : Array[LintViolation] = [
+  let violations : Array[@lint.LintViolation] = [
     {
       path: "x.md",
       line: Some(3),
@@ -197,8 +197,8 @@ test "lint summarize single violation" {
       message: "dup",
     },
   ]
-  let result : LintResult = { violations, messages: [] }
-  let summary = summarize(result)
+  let result : @lint.LintResult = { violations, messages: [], }
+  let summary = @lint.summarize(result)
   assert_eq(summary.total, 1)
   assert_eq(summary.by_type.length(), 1)
   assert_eq(summary.by_type[0].kind, DuplicateSlug)
@@ -210,13 +210,13 @@ test "lint summarize single violation" {
 
 ///|
 test "lint has_violations returns false for empty result" {
-  let result = empty_result()
-  assert_true(!has_violations(result))
+  let result = @lint.empty_result()
+  assert_true(!@lint.has_violations(result))
 }
 
 ///|
 test "lint has_violations returns true when violations present" {
-  let violations : Array[LintViolation] = [
+  let violations : Array[@lint.LintViolation] = [
     {
       path: "a.md",
       line: None,
@@ -225,70 +225,70 @@ test "lint has_violations returns true when violations present" {
       message: "bad",
     },
   ]
-  let result : LintResult = { violations, messages: [] }
-  assert_true(has_violations(result))
+  let result : @lint.LintResult = { violations, messages: [], }
+  assert_true(@lint.has_violations(result))
 }
 
 ///|
 test "lint violation_type_name maps all variants" {
-  assert_eq(violation_type_name(SchemaError), "schema")
+  assert_eq(@lint.violation_type_name(SchemaError), "schema")
   assert_eq(
-    violation_type_name(MissingRequiredFrontmatter),
+    @lint.violation_type_name(MissingRequiredFrontmatter),
     "missing_required_field",
   )
-  assert_eq(violation_type_name(BrokenWikilink), "broken_wikilink")
-  assert_eq(violation_type_name(DanglingTagReference), "dangling_tag")
-  assert_eq(violation_type_name(TemplateSlotError), "template_slot")
-  assert_eq(violation_type_name(DataError), "data")
-  assert_eq(violation_type_name(ShortcodeError), "shortcode")
-  assert_eq(violation_type_name(FrontmatterError), "frontmatter")
-  assert_eq(violation_type_name(CollectionsError), "collections")
-  assert_eq(violation_type_name(DuplicateSlug), "duplicate_slug")
-  assert_eq(violation_type_name(IOError), "io")
+  assert_eq(@lint.violation_type_name(BrokenWikilink), "broken_wikilink")
+  assert_eq(@lint.violation_type_name(DanglingTagReference), "dangling_tag")
+  assert_eq(@lint.violation_type_name(TemplateSlotError), "template_slot")
+  assert_eq(@lint.violation_type_name(DataError), "data")
+  assert_eq(@lint.violation_type_name(ShortcodeError), "shortcode")
+  assert_eq(@lint.violation_type_name(FrontmatterError), "frontmatter")
+  assert_eq(@lint.violation_type_name(CollectionsError), "collections")
+  assert_eq(@lint.violation_type_name(DuplicateSlug), "duplicate_slug")
+  assert_eq(@lint.violation_type_name(IOError), "io")
 }
 
 ///|
 test "lint format_violation with line and column" {
-  let v : LintViolation = {
+  let v : @lint.LintViolation = {
     path: "path/file.md",
     line: Some(5),
     column: Some(12),
     kind: BrokenWikilink,
     message: "target not found",
   }
-  let s = format_violation(v)
+  let s = @lint.format_violation(v)
   assert_eq(s, "path/file.md:5:12: broken_wikilink: target not found")
 }
 
 ///|
 test "lint format_violation with line only" {
-  let v : LintViolation = {
+  let v : @lint.LintViolation = {
     path: "path/file.md",
     line: Some(5),
     column: None,
     kind: SchemaError,
     message: "bad value",
   }
-  let s = format_violation(v)
+  let s = @lint.format_violation(v)
   assert_eq(s, "path/file.md:5: schema: bad value")
 }
 
 ///|
 test "lint format_violation with no position" {
-  let v : LintViolation = {
+  let v : @lint.LintViolation = {
     path: "path/file.md",
     line: None,
     column: None,
     kind: MissingRequiredFrontmatter,
     message: "required",
   }
-  let s = format_violation(v)
+  let s = @lint.format_violation(v)
   assert_eq(s, "path/file.md: missing_required_field: required")
 }
 
 ///|
 test "lint summarize sorts by_type by count descending with three types" {
-  let violations : Array[LintViolation] = [
+  let violations : Array[@lint.LintViolation] = [
     {
       path: "a.md",
       line: None,
@@ -332,8 +332,8 @@ test "lint summarize sorts by_type by count descending with three types" {
       message: "dup2",
     },
   ]
-  let result : LintResult = { violations, messages: [] }
-  let summary = summarize(result)
+  let result : @lint.LintResult = { violations, messages: [], }
+  let summary = @lint.summarize(result)
   assert_eq(summary.total, 6)
   assert_eq(summary.by_type.length(), 3)
   // SchemaError=3, DuplicateSlug=2, BrokenWikilink=1 — sorted descending
@@ -347,7 +347,7 @@ test "lint summarize sorts by_type by count descending with three types" {
 
 ///|
 test "lint summarize sorts by_file by count descending with three files" {
-  let violations : Array[LintViolation] = [
+  let violations : Array[@lint.LintViolation] = [
     {
       path: "alpha.md",
       line: None,
@@ -391,8 +391,8 @@ test "lint summarize sorts by_file by count descending with three files" {
       message: "de1",
     },
   ]
-  let result : LintResult = { violations, messages: [] }
-  let summary = summarize(result)
+  let result : @lint.LintResult = { violations, messages: [], }
+  let summary = @lint.summarize(result)
   assert_eq(summary.by_file.length(), 3)
   // alpha.md=3, beta.md=2, gamma.md=1 — sorted descending
   assert_eq(summary.by_file[0].path, "alpha.md")
@@ -405,7 +405,7 @@ test "lint summarize sorts by_file by count descending with three files" {
 
 ///|
 test "lint format_summary non-empty includes lattice explain hint" {
-  let violations : Array[LintViolation] = [
+  let violations : Array[@lint.LintViolation] = [
     {
       path: "a.md",
       line: None,
@@ -414,9 +414,9 @@ test "lint format_summary non-empty includes lattice explain hint" {
       message: "err",
     },
   ]
-  let result : LintResult = { violations, messages: [] }
-  let summary = summarize(result)
-  let text = format_summary(summary)
+  let result : @lint.LintResult = { violations, messages: [], }
+  let summary = @lint.summarize(result)
+  let text = @lint.format_summary(summary)
   assert_true(text.contains("Summary: 1 violation(s)"))
   assert_true(text.contains("By type:"))
   assert_true(text.contains("By file:"))
@@ -425,9 +425,9 @@ test "lint format_summary non-empty includes lattice explain hint" {
 
 ///|
 test "lint format_summary empty has no hint line" {
-  let result = empty_result()
-  let summary = summarize(result)
-  let text = format_summary(summary)
+  let result = @lint.empty_result()
+  let summary = @lint.summarize(result)
+  let text = @lint.format_summary(summary)
   assert_true(text.contains("Summary: 0 violation(s)"))
   assert_true(!text.contains("By type:"))
   assert_true(!text.contains("By file:"))
@@ -436,21 +436,21 @@ test "lint format_summary empty has no hint line" {
 
 ///|
 test "lint empty_result has empty messages array" {
-  let result = empty_result()
+  let result = @lint.empty_result()
   assert_eq(result.messages.length(), 0)
   assert_eq(result.violations.length(), 0)
 }
 
 ///|
 test "lint format_violation with line and no column produces path:line format" {
-  let v : LintViolation = {
+  let v : @lint.LintViolation = {
     path: "deep/nested/file.md",
     line: Some(99),
     column: None,
     kind: CollectionsError,
     message: "collection cfg parse error",
   }
-  let s = format_violation(v)
+  let s = @lint.format_violation(v)
   assert_eq(
     s, "deep/nested/file.md:99: collections: collection cfg parse error",
   )
@@ -458,7 +458,7 @@ test "lint format_violation with line and no column produces path:line format" {
 
 ///|
 test "lint format_violations_json with one violation contains all fields" {
-  let violations : Array[LintViolation] = [
+  let violations : Array[@lint.LintViolation] = [
     {
       path: "posts/test.md",
       line: Some(10),
@@ -467,8 +467,8 @@ test "lint format_violations_json with one violation contains all fields" {
       message: "unknown shortcode",
     },
   ]
-  let result : LintResult = { violations, messages: [] }
-  let json = format_violations_json(result)
+  let result : @lint.LintResult = { violations, messages: [], }
+  let json = @lint.format_violations_json(result)
   assert_true(json.contains("\"path\": \"posts/test.md\""))
   assert_true(json.contains("\"line\": 10"))
   assert_true(json.contains("\"column\": 3"))
@@ -481,11 +481,11 @@ test "lint format_violations_json with one violation contains all fields" {
 test "lint violation_type_name for all remaining variants not yet individually tested" {
   // These variants are tested in bulk above, but verify them explicitly here
   // for exhaustive documentation of the mapping contract
-  assert_eq(violation_type_name(FrontmatterError), "frontmatter")
-  assert_eq(violation_type_name(CollectionsError), "collections")
-  assert_eq(violation_type_name(IOError), "io")
-  assert_eq(violation_type_name(DanglingTagReference), "dangling_tag")
-  assert_eq(violation_type_name(TemplateSlotError), "template_slot")
-  assert_eq(violation_type_name(DataError), "data")
-  assert_eq(violation_type_name(ShortcodeError), "shortcode")
+  assert_eq(@lint.violation_type_name(FrontmatterError), "frontmatter")
+  assert_eq(@lint.violation_type_name(CollectionsError), "collections")
+  assert_eq(@lint.violation_type_name(IOError), "io")
+  assert_eq(@lint.violation_type_name(DanglingTagReference), "dangling_tag")
+  assert_eq(@lint.violation_type_name(TemplateSlotError), "template_slot")
+  assert_eq(@lint.violation_type_name(DataError), "data")
+  assert_eq(@lint.violation_type_name(ShortcodeError), "shortcode")
 }

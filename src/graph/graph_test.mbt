@@ -9,7 +9,7 @@ fn raw_link(target : String) -> @wikilink.ResolvedWikilink {
 
 ///|
 test "render_graph_json empty pages produces valid JSON shell" {
-  let json = render_graph_json([])
+  let json = @graph.render_graph_json([])
   assert_eq(json.contains("\"nodes\""), true)
   assert_eq(json.contains("\"edges\""), true)
   assert_eq(json.contains("  \"nodes\": [\n  ]"), true)
@@ -18,7 +18,7 @@ test "render_graph_json empty pages produces valid JSON shell" {
 
 ///|
 test "render_graph_json single page with no outgoing links" {
-  let pages : Array[GraphPage] = [
+  let pages : Array[@graph.GraphPage] = [
     {
       slug: "hello",
       title: "Hello World",
@@ -29,7 +29,7 @@ test "render_graph_json single page with no outgoing links" {
       outgoing: [],
     },
   ]
-  let json = render_graph_json(pages)
+  let json = @graph.render_graph_json(pages)
   assert_eq(json.contains("\"slug\": \"hello\""), true)
   assert_eq(json.contains("\"title\": \"Hello World\""), true)
   assert_eq(json.contains("\"url\": \"/hello\""), true)
@@ -37,7 +37,7 @@ test "render_graph_json single page with no outgoing links" {
 
 ///|
 test "render_graph_json emits edges for outgoing wikilinks" {
-  let pages : Array[GraphPage] = [
+  let pages : Array[@graph.GraphPage] = [
     {
       slug: "post-a",
       title: "Post A",
@@ -57,14 +57,14 @@ test "render_graph_json emits edges for outgoing wikilinks" {
       outgoing: [],
     },
   ]
-  let json = render_graph_json(pages)
+  let json = @graph.render_graph_json(pages)
   assert_eq(json.contains("\"source\": \"post-a\""), true)
   assert_eq(json.contains("\"target\": \"post-b\""), true)
 }
 
 ///|
 test "render_graph_json escapes double quotes in title" {
-  let pages : Array[GraphPage] = [
+  let pages : Array[@graph.GraphPage] = [
     {
       slug: "notes",
       title: "Notes & \"Tips\"",
@@ -75,7 +75,7 @@ test "render_graph_json escapes double quotes in title" {
       outgoing: [],
     },
   ]
-  let json = render_graph_json(pages)
+  let json = @graph.render_graph_json(pages)
   // Standard JSON: quotes are escaped, ampersand is literal
   assert_eq(json.contains("\\\"Tips\\\""), true)
   assert_eq(json.contains("Notes & "), true)
@@ -83,7 +83,7 @@ test "render_graph_json escapes double quotes in title" {
 
 ///|
 test "render_graph_json multiple pages produce comma-separated node entries" {
-  let pages : Array[GraphPage] = [
+  let pages : Array[@graph.GraphPage] = [
     {
       slug: "a",
       title: "A",
@@ -103,7 +103,7 @@ test "render_graph_json multiple pages produce comma-separated node entries" {
       outgoing: [],
     },
   ]
-  let json = render_graph_json(pages)
+  let json = @graph.render_graph_json(pages)
   assert_eq(json.contains("\"slug\": \"a\""), true)
   assert_eq(json.contains("\"slug\": \"b\""), true)
 }
@@ -111,7 +111,7 @@ test "render_graph_json multiple pages produce comma-separated node entries" {
 ///|
 /// A page with multiple outgoing edges — verify both edges appear comma-separated
 test "render_graph_json multiple outgoing edges from single page" {
-  let pages : Array[GraphPage] = [
+  let pages : Array[@graph.GraphPage] = [
     {
       slug: "hub",
       title: "Hub Page",
@@ -149,7 +149,7 @@ test "render_graph_json multiple outgoing edges from single page" {
       outgoing: [],
     },
   ]
-  let json = render_graph_json(pages)
+  let json = @graph.render_graph_json(pages)
   // All three edges should appear (targets exist as nodes)
   assert_eq(json.contains("\"source\": \"hub\", \"target\": \"alpha\""), true)
   assert_eq(json.contains("\"source\": \"hub\", \"target\": \"beta\""), true)
@@ -161,7 +161,7 @@ test "render_graph_json multiple outgoing edges from single page" {
 ///|
 /// Edges targeting slugs absent from the nodes array are filtered out
 test "render_graph_json filters dangling edges to excluded pages" {
-  let pages : Array[GraphPage] = [
+  let pages : Array[@graph.GraphPage] = [
     {
       slug: "home",
       title: "Home",
@@ -186,7 +186,7 @@ test "render_graph_json filters dangling edges to excluded pages" {
     },
     // draft-page and another-draft are NOT in the nodes array
   ]
-  let json = render_graph_json(pages)
+  let json = @graph.render_graph_json(pages)
   // Only the valid edge (home → guide) should appear
   assert_eq(json.contains("\"source\": \"home\", \"target\": \"guide\""), true)
   // Dangling edges should NOT appear
@@ -197,7 +197,7 @@ test "render_graph_json filters dangling edges to excluded pages" {
 ///|
 /// Title with < > & chars — these should NOT be JSON-escaped (only " and \ need escaping)
 test "render_graph_json does not html-escape angle brackets and ampersand in title" {
-  let pages : Array[GraphPage] = [
+  let pages : Array[@graph.GraphPage] = [
     {
       slug: "math",
       title: "x < y > z & w",
@@ -208,7 +208,7 @@ test "render_graph_json does not html-escape angle brackets and ampersand in tit
       outgoing: [],
     },
   ]
-  let json = render_graph_json(pages)
+  let json = @graph.render_graph_json(pages)
   // < > & should appear literally, not as &lt; &gt; &amp;
   assert_eq(json.contains("x < y > z & w"), true)
   // Double-quote escaping still works correctly
@@ -220,7 +220,7 @@ test "render_graph_json does not html-escape angle brackets and ampersand in tit
 ///|
 /// A page with a self-loop wikilink (same slug as source)
 test "render_graph_json self-loop edge source equals target" {
-  let pages : Array[GraphPage] = [
+  let pages : Array[@graph.GraphPage] = [
     {
       slug: "recursive",
       title: "Self-Reference",
@@ -231,7 +231,7 @@ test "render_graph_json self-loop edge source equals target" {
       outgoing: [raw_link("recursive")],
     },
   ]
-  let json = render_graph_json(pages)
+  let json = @graph.render_graph_json(pages)
   // The edge should have source == target
   assert_eq(
     json.contains("\"source\": \"recursive\", \"target\": \"recursive\""),
@@ -242,7 +242,7 @@ test "render_graph_json self-loop edge source equals target" {
 ///|
 /// Multiple pages with cross-edges produce correctly comma-separated edge list
 test "render_graph_json cross-edges between multiple pages" {
-  let pages : Array[GraphPage] = [
+  let pages : Array[@graph.GraphPage] = [
     {
       slug: "a",
       title: "A",
@@ -271,7 +271,7 @@ test "render_graph_json cross-edges between multiple pages" {
       outgoing: [],
     },
   ]
-  let json = render_graph_json(pages)
+  let json = @graph.render_graph_json(pages)
   // Three edges total: a→b, a→c, b→a
   assert_eq(json.contains("\"source\": \"a\", \"target\": \"b\""), true)
   assert_eq(json.contains("\"source\": \"a\", \"target\": \"c\""), true)
@@ -284,7 +284,7 @@ test "render_graph_json cross-edges between multiple pages" {
 /// Duplicate wikilinks to the same target must produce exactly one edge.
 /// This is a regression test for parallel-edge deduplication in render_graph_json.
 test "render_graph_json deduplicates parallel edges from same source" {
-  let pages : Array[GraphPage] = [
+  let pages : Array[@graph.GraphPage] = [
     {
       slug: "typed-content-tour",
       title: "Typed Content Tour",
@@ -308,7 +308,7 @@ test "render_graph_json deduplicates parallel edges from same source" {
       outgoing: [],
     },
   ]
-  let json = render_graph_json(pages)
+  let json = @graph.render_graph_json(pages)
   let edge_str = "\"source\": \"typed-content-tour\", \"target\": \"template-composition\""
   // Count occurrences of the edge string — must be exactly 1
   let mut count = 0

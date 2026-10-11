@@ -3,7 +3,7 @@ test "config parse root_page quoted string" {
   let src = "title = Example\n" +
     "base_url = https://example.test\n" +
     "root_page = \"home\"\n"
-  match parse(src) {
+  match @config.parse(src) {
     Ok(cfg) =>
       match cfg.root_page {
         Some(value) => assert_eq(value, "home")
@@ -23,7 +23,7 @@ test "config parse single [[collections]] block" {
     "schema = title:String,date:Date\n" +
     "template = post.html\n" +
     "page_size = 7\n"
-  match parse(src) {
+  match @config.parse(src) {
     Ok(cfg) => {
       assert_eq(cfg.collections.length(), 1)
       let coll = cfg.collections[0]
@@ -52,7 +52,7 @@ test "config parse multiple [[collections]] blocks" {
     "[[collections]]\n" +
     "name = docs\n" +
     "dir = ./content/docs\n"
-  match parse(src) {
+  match @config.parse(src) {
     Ok(cfg) => {
       assert_eq(cfg.collections.length(), 3)
       assert_eq(cfg.collections[0].name, "posts")
@@ -76,7 +76,7 @@ test "config parse [[collections]] invalid page_size" {
     "name = posts\n" +
     "dir = ./content/posts\n" +
     "page_size = 0\n"
-  match parse(src) {
+  match @config.parse(src) {
     Ok(_) => assert_true(false)
     Err(err) =>
       match err {
@@ -92,7 +92,7 @@ test "config parse [[collections]] missing name field" {
     "base_url = https://example.test\n" +
     "[[collections]]\n" +
     "dir = ./content/posts\n"
-  match parse(src) {
+  match @config.parse(src) {
     Ok(_) => assert_true(false)
     Err(err) =>
       match err {
@@ -108,7 +108,7 @@ test "config parse [[collections]] missing dir field" {
     "base_url = https://example.test\n" +
     "[[collections]]\n" +
     "name = posts\n"
-  match parse(src) {
+  match @config.parse(src) {
     Ok(_) => assert_true(false)
     Err(err) =>
       match err {
@@ -123,7 +123,7 @@ test "config parse backward compatibility with collections_file" {
   let src = "title = Example\n" +
     "base_url = https://example.test\n" +
     "collections_file = ./vault.collections.cfg\n"
-  match parse(src) {
+  match @config.parse(src) {
     Ok(cfg) => {
       assert_eq(cfg.collections.length(), 0)
       assert_true(cfg.collections_file == Some("./vault.collections.cfg"))
@@ -145,7 +145,7 @@ test "config parse [[collections]] with description" {
     "name = pages\n" +
     "dir = ./content/pages\n" +
     "schema = title:String\n"
-  match parse(src) {
+  match @config.parse(src) {
     Ok(cfg) => {
       assert_eq(cfg.collections.length(), 2)
       assert_true(
@@ -163,7 +163,7 @@ test "config parse standalone_dir" {
   let src = "title = Example\n" +
     "base_url = https://example.test\n" +
     "standalone_dir = content/standalone\n"
-  match parse(src) {
+  match @config.parse(src) {
     Ok(cfg) =>
       match cfg.standalone_dir {
         Some(value) => assert_eq(value, "content/standalone")
@@ -176,7 +176,7 @@ test "config parse standalone_dir" {
 ///|
 test "config standalone_dir defaults to None when omitted" {
   let src = "title = Example\n" + "base_url = https://example.test\n"
-  match parse(src) {
+  match @config.parse(src) {
     Ok(cfg) => assert_true(cfg.standalone_dir == None)
     Err(_) => assert_true(false)
   }
@@ -191,7 +191,7 @@ test "config parse [[collections]] with sort_order" {
     "dir = ./content/posts\n" +
     "schema = title:String\n" +
     "sort = title:asc\n"
-  match parse(src) {
+  match @config.parse(src) {
     Ok(cfg) => {
       assert_eq(cfg.collections.length(), 1)
       assert_true(cfg.collections[0].sort_order == Some("title:asc"))
@@ -214,7 +214,7 @@ test "config parse [[collections]] with description and sort_order" {
     "name = pages\n" +
     "dir = ./content/pages\n" +
     "schema = title:String\n"
-  match parse(src) {
+  match @config.parse(src) {
     Ok(cfg) => {
       assert_eq(cfg.collections.length(), 2)
       assert_true(cfg.collections[0].description == Some("My posts"))
@@ -234,7 +234,7 @@ test "config sort_order defaults to None when not specified" {
     "name = posts\n" +
     "dir = ./content/posts\n" +
     "schema = title:String\n"
-  match parse(src) {
+  match @config.parse(src) {
     Ok(cfg) => assert_true(cfg.collections[0].sort_order == None)
     Err(_) => assert_true(false)
   }
@@ -250,7 +250,7 @@ test "config [[data]] block parsed into data_entries" {
     "[[data]]\n" +
     "name = authors\n" +
     "required = team_lead\n"
-  match parse(src) {
+  match @config.parse(src) {
     Ok(cfg) => {
       assert_eq(cfg.data_entries.length(), 2)
       assert_eq(cfg.data_entries[0].name, "nav")
@@ -268,7 +268,7 @@ test "config [[data]] with empty required is valid" {
     "base_url = https://example.test\n" +
     "[[data]]\n" +
     "name = settings\n"
-  match parse(src) {
+  match @config.parse(src) {
     Ok(cfg) => {
       assert_eq(cfg.data_entries.length(), 1)
       assert_eq(cfg.data_entries[0].name, "settings")
@@ -288,7 +288,7 @@ test "config [[data]] and [[collections]] can coexist" {
     "[[data]]\n" +
     "name = nav\n" +
     "required = links\n"
-  match parse(src) {
+  match @config.parse(src) {
     Ok(cfg) => {
       assert_eq(cfg.collections.length(), 1)
       assert_eq(cfg.collections[0].name, "posts")
@@ -302,7 +302,7 @@ test "config [[data]] and [[collections]] can coexist" {
 ///|
 test "config data_entries is empty when no [[data]] blocks present" {
   let src = "title = Example\n" + "base_url = https://example.test\n"
-  match parse(src) {
+  match @config.parse(src) {
     Ok(cfg) => assert_eq(cfg.data_entries.length(), 0)
     Err(_) => assert_true(false)
   }
@@ -311,7 +311,7 @@ test "config data_entries is empty when no [[data]] blocks present" {
 ///|
 test "config MissingRequiredField when title absent" {
   let src = "base_url = https://example.test\n"
-  match parse(src) {
+  match @config.parse(src) {
     Ok(_) => assert_true(false)
     Err(err) =>
       match err {
@@ -324,7 +324,7 @@ test "config MissingRequiredField when title absent" {
 ///|
 test "config MissingRequiredField when base_url absent" {
   let src = "title = Example\n"
-  match parse(src) {
+  match @config.parse(src) {
     Ok(_) => assert_true(false)
     Err(err) =>
       match err {
@@ -337,7 +337,7 @@ test "config MissingRequiredField when base_url absent" {
 ///|
 test "config InvalidValue for empty title" {
   let src = "title = \nbase_url = https://example.test\n"
-  match parse(src) {
+  match @config.parse(src) {
     Ok(_) => assert_true(false)
     Err(err) =>
       match err {
@@ -350,7 +350,7 @@ test "config InvalidValue for empty title" {
 ///|
 test "config InvalidValue for empty base_url" {
   let src = "title = Example\nbase_url = \n"
-  match parse(src) {
+  match @config.parse(src) {
     Ok(_) => assert_true(false)
     Err(err) =>
       match err {
@@ -363,7 +363,7 @@ test "config InvalidValue for empty base_url" {
 ///|
 test "config InvalidLine for line without equals sign" {
   let src = "title = Example\nbase_url = https://example.test\nnoequals\n"
-  match parse(src) {
+  match @config.parse(src) {
     Ok(_) => assert_true(false)
     Err(err) =>
       match err {
@@ -376,7 +376,7 @@ test "config InvalidLine for line without equals sign" {
 ///|
 test "config parses output_dir" {
   let src = "title = Example\nbase_url = https://example.test\noutput_dir = dist\n"
-  match parse(src) {
+  match @config.parse(src) {
     Ok(cfg) => assert_true(cfg.output_dir == Some("dist"))
     Err(_) => assert_true(false)
   }
@@ -388,7 +388,7 @@ test "config parses description and og_image" {
     "base_url = https://example.test\n" +
     "description = A test site\n" +
     "og_image = https://example.test/card.png\n"
-  match parse(src) {
+  match @config.parse(src) {
     Ok(cfg) => {
       assert_true(cfg.description == Some("A test site"))
       assert_true(cfg.og_image == Some("https://example.test/card.png"))
@@ -403,7 +403,7 @@ test "config parses templates_dir and static_dir" {
     "base_url = https://example.test\n" +
     "templates_dir = templates\n" +
     "static_dir = public\n"
-  match parse(src) {
+  match @config.parse(src) {
     Ok(cfg) => {
       assert_true(cfg.templates_dir == Some("templates"))
       assert_true(cfg.static_dir == Some("public"))
@@ -418,7 +418,7 @@ test "config parses page_size and feed_limit" {
     "base_url = https://example.test\n" +
     "page_size = 10\n" +
     "feed_limit = 20\n"
-  match parse(src) {
+  match @config.parse(src) {
     Ok(cfg) => {
       assert_true(cfg.page_size == Some(10))
       assert_true(cfg.feed_limit == Some(20))
@@ -433,7 +433,7 @@ test "config parses robots_txt and archive_pages booleans" {
     "base_url = https://example.test\n" +
     "robots_txt = true\n" +
     "archive_pages = false\n"
-  match parse(src) {
+  match @config.parse(src) {
     Ok(cfg) => {
       assert_true(cfg.robots_txt == Some(true))
       assert_true(cfg.archive_pages == Some(false))
@@ -447,7 +447,7 @@ test "config parses site_feed_enabled boolean" {
   let src = "title = Example\n" +
     "base_url = https://example.test\n" +
     "site_feed_enabled = yes\n"
-  match parse(src) {
+  match @config.parse(src) {
     Ok(cfg) => assert_true(cfg.site_feed_enabled == Some(true))
     Err(_) => assert_true(false)
   }
@@ -458,7 +458,7 @@ test "config InvalidValue for bad robots_txt value" {
   let src = "title = Example\n" +
     "base_url = https://example.test\n" +
     "robots_txt = maybe\n"
-  match parse(src) {
+  match @config.parse(src) {
     Ok(_) => assert_true(false)
     Err(err) =>
       match err {
@@ -473,7 +473,7 @@ test "config InvalidValue for bad feed_limit value" {
   let src = "title = Example\n" +
     "base_url = https://example.test\n" +
     "feed_limit = abc\n"
-  match parse(src) {
+  match @config.parse(src) {
     Ok(_) => assert_true(false)
     Err(err) =>
       match err {
@@ -489,7 +489,7 @@ test "config unknown top-level keys are ignored" {
     "base_url = https://example.test\n" +
     "unknown_key = some_value\n" +
     "another_unknown = 42\n"
-  match parse(src) {
+  match @config.parse(src) {
     Ok(cfg) => {
       assert_eq(cfg.title, "Example")
       assert_eq(cfg.base_url, "https://example.test")
@@ -504,7 +504,7 @@ test "config comment lines are ignored" {
     "title = Example\n" +
     "# Another comment\n" +
     "base_url = https://example.test\n"
-  match parse(src) {
+  match @config.parse(src) {
     Ok(cfg) => {
       assert_eq(cfg.title, "Example")
       assert_eq(cfg.base_url, "https://example.test")
@@ -519,7 +519,7 @@ test "config parses search_index_file and content_index_file" {
     "base_url = https://example.test\n" +
     "search_index_file = search.json\n" +
     "content_index_file = content.json\n"
-  match parse(src) {
+  match @config.parse(src) {
     Ok(cfg) => {
       assert_true(cfg.search_index_file == Some("search.json"))
       assert_true(cfg.content_index_file == Some("content.json"))
@@ -534,7 +534,7 @@ test "config parses data_dir and tags_field" {
     "base_url = https://example.test\n" +
     "data_dir = _data\n" +
     "tags_field = categories\n"
-  match parse(src) {
+  match @config.parse(src) {
     Ok(cfg) => {
       assert_true(cfg.data_dir == Some("_data"))
       assert_true(cfg.tags_field == Some("categories"))

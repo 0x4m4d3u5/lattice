@@ -46,7 +46,7 @@ pub fn Arg::flag(
 pub fn Arg::named(
   short? : Char = null_short,
   nargs? : Nargs = Any,
-  choices? : @hashset.HashSet[String] = @hashset.new(),
+  choices? : @hashset.HashSet[String] = @hashset.HashSet([]),
   defaults? : ArrayView[String] = [],
   global? : Bool = false,
   value_delimiter? : String = ",",
@@ -61,7 +61,7 @@ pub fn Arg::named(
 /// Create a positional argument
 pub fn Arg::positional(
   nargs? : Nargs = Any,
-  choices? : @hashset.HashSet[String] = @hashset.new(),
+  choices? : @hashset.HashSet[String] = @hashset.HashSet([]),
   defaults? : ArrayView[String] = [],
   value_delimiter? : String = ",",
   env_var? : String = "",
@@ -147,7 +147,37 @@ pub(all) enum Nargs {
   AtMost(UInt)
   /// X <= n < Y
   Range(UInt, UInt)
-} derive(Show, Eq)
+} derive(Eq)
+
+///|
+pub impl Show for Nargs with fn output(self, logger) {
+  match self {
+    Any => logger.write_string("Any")
+    One => logger.write_string("One")
+    Fixed(v0) => {
+      logger.write_string("Fixed(")
+      logger.write_object(v0)
+      logger.write_string(")")
+    }
+    AtLeast(v0) => {
+      logger.write_string("AtLeast(")
+      logger.write_object(v0)
+      logger.write_string(")")
+    }
+    AtMost(v0) => {
+      logger.write_string("AtMost(")
+      logger.write_object(v0)
+      logger.write_string(")")
+    }
+    Range(v0, v1) => {
+      logger.write_string("Range(")
+      logger.write_object(v0)
+      logger.write_string(", ")
+      logger.write_object(v1)
+      logger.write_string(")")
+    }
+  }
+}
 
 ///|
 /// Check if the length is constrained by Nargs
@@ -174,3 +204,9 @@ pub fn Nargs::is_exceeded(self : Nargs, length : UInt) -> Bool {
     Range(_, high) => length >= high
   }
 }
+
+///|
+pub extend Nargs with Eq::{not_equal, equal}
+
+///|
+pub extend Nargs with Show::{to_string, output}

@@ -703,21 +703,21 @@ test "data bulk store from string file" {
     ("k700", "value-700"),
   ]
 
-  let store = new_store([new_string_file("bulk", fields)])
+  let store = @data.new_store([@data.new_string_file("bulk", fields)])
 
-  match resolve_string(store, "bulk", ["k1"]) {
+  match @data.resolve_string(store, "bulk", ["k1"]) {
     Ok(v) => assert_eq(v, "value-1")
     Err(_) => assert_true(false)
   }
-  match resolve_string(store, "bulk", ["k128"]) {
+  match @data.resolve_string(store, "bulk", ["k128"]) {
     Ok(v) => assert_eq(v, "value-128")
     Err(_) => assert_true(false)
   }
-  match resolve_string(store, "bulk", ["k512"]) {
+  match @data.resolve_string(store, "bulk", ["k512"]) {
     Ok(v) => assert_eq(v, "value-512")
     Err(_) => assert_true(false)
   }
-  match resolve_string(store, "bulk", ["k700"]) {
+  match @data.resolve_string(store, "bulk", ["k700"]) {
     Ok(v) => assert_eq(v, "value-700")
     Err(_) => assert_true(false)
   }

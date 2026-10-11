@@ -40,7 +40,7 @@ fn parse_json_string_manifest(
     raise ParseError("expected string")
   }
   i = i + 1
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   while i < source.length() {
     let c = @strutil.char_at(source, i)
     if c == '"' {
@@ -283,7 +283,7 @@ pub fn parse(source : String) -> ManifestFile raise ManifestError {
 
 ///|
 pub fn render(file : ManifestFile) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   buf.write_string("{\"version\":")
   buf.write_string(file.version.to_string())
   buf.write_string(",\"entries\":[")

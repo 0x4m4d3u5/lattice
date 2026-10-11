@@ -22,7 +22,7 @@ pub(all) struct GraphPage {
 ///
 /// This is suitable for external graph visualisation tools (e.g. D3, Cytoscape).
 pub fn render_graph_json(pages : Array[GraphPage]) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   buf.write_string("{\n")
   buf.write_string("  \"nodes\": [\n")
   let mut i = 0
@@ -46,7 +46,7 @@ pub fn render_graph_json(pages : Array[GraphPage]) -> String {
   buf.write_string("  ],\n")
   // Build a set of all node slugs so we can skip edges that point to
   // draft/excluded pages not present in the nodes array.
-  let slug_set : Map[String, Bool] = Map::new()
+  let slug_set : Map[String, Bool] = Map([])
   i = 0
   while i < pages.length() {
     slug_set[pages[i].slug] = true
@@ -57,7 +57,7 @@ pub fn render_graph_json(pages : Array[GraphPage]) -> String {
   // Track seen (source, target) pairs to deduplicate parallel edges.
   // A page may contain multiple wikilinks to the same target; the graph
   // should emit each unique edge exactly once.
-  let seen_edges : Map[String, Bool] = Map::new()
+  let seen_edges : Map[String, Bool] = Map([])
   i = 0
   while i < pages.length() {
     let page = pages[i]

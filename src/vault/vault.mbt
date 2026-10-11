@@ -170,7 +170,7 @@ fn normalize_type(raw_type : String) -> String {
 ///
 /// Safe to use in HTML output - only returns lowercase letters and hyphens.
 pub fn category_class(category : String) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   let mut i = 0
   while i < category.length() {
     let c = @strutil.char_at(category, i)
@@ -210,7 +210,7 @@ pub fn render_metadata_badge(meta : VaultMetadata?) -> String {
       if parts.length() == 0 {
         return ""
       }
-      let buf = StringBuilder::new()
+      let buf = StringBuilder()
       let mut i = 0
       while i < parts.length() {
         let (kind, value) = parts[i]
@@ -276,7 +276,7 @@ pub fn category_label(category : String) -> String {
     "inbox" => "Inbox"
     "template" => "Templates"
     _ => {
-      let buf = StringBuilder::new()
+      let buf = StringBuilder()
       if category.length() == 0 {
         return "Uncategorized"
       }
@@ -295,3 +295,9 @@ pub fn category_label(category : String) -> String {
     }
   }
 }
+
+///|
+pub extend VaultMetadata with @debug.Debug::{to_repr}
+
+///|
+pub extend VaultMetadata with Eq::{not_equal, equal}

@@ -32,7 +32,43 @@ pub(all) enum DataError {
   ParseError(String, Int, String) // file path, line, message
   ValidationError(String, String, String) // file name, key, message
   IOError(String, String) // path, message
-} derive(Eq, Show)
+} derive(Eq)
+
+///|
+pub impl Show for DataError with fn output(self, logger) {
+  match self {
+    FileNotFound(v0) => {
+      logger.write_string("FileNotFound(")
+      logger.write_object(v0)
+      logger.write_string(")")
+    }
+    ParseError(v0, v1, v2) => {
+      logger.write_string("ParseError(")
+      logger.write_object(v0)
+      logger.write_string(", ")
+      logger.write_object(v1)
+      logger.write_string(", ")
+      logger.write_object(v2)
+      logger.write_string(")")
+    }
+    ValidationError(v0, v1, v2) => {
+      logger.write_string("ValidationError(")
+      logger.write_object(v0)
+      logger.write_string(", ")
+      logger.write_object(v1)
+      logger.write_string(", ")
+      logger.write_object(v2)
+      logger.write_string(")")
+    }
+    IOError(v0, v1) => {
+      logger.write_string("IOError(")
+      logger.write_object(v0)
+      logger.write_string(", ")
+      logger.write_object(v1)
+      logger.write_string(")")
+    }
+  }
+}
 
 ///|
 fn starts_with_data(s : String, prefix : String) -> Bool {
@@ -241,7 +277,7 @@ fn insert_key_path_at(
     Some(@frontmatter.FMap(existing)) => existing
     Some(_) => return Err("key path collision at '" + key + "'")
     None => {
-      let created : Map[String, @frontmatter.FrontmatterValue] = Map::new()
+      let created : Map[String, @frontmatter.FrontmatterValue] = Map([])
       cursor.set(key, @frontmatter.FMap(created))
       created
     }
@@ -264,7 +300,7 @@ fn parse_data_file(
   content : String,
   name : String,
 ) -> Result[DataFile, DataError] {
-  let fields : Map[String, @frontmatter.FrontmatterValue] = Map::new()
+  let fields : Map[String, @frontmatter.FrontmatterValue] = Map([])
   let lines = split_lines_data(content)
   let mut i = 0
   while i < lines.length() {
@@ -338,7 +374,7 @@ fn resolve_in_file(
 ///|
 /// Create an empty data store with no files.
 pub fn empty_store() -> DataStore {
-  { files: Map::new() }
+  { files: Map([]), }
 }
 
 ///|
@@ -357,7 +393,7 @@ pub fn new_file(
 ///|
 /// Create a data store from an array of data files.
 pub fn new_store(files : Array[DataFile]) -> DataStore {
-  let map : Map[String, DataFile] = Map::new()
+  let map : Map[String, DataFile] = Map([])
   let mut i = 0
   while i < files.length() {
     let file = files[i]
@@ -377,7 +413,7 @@ pub fn new_string_file(
   name : String,
   fields : Array[(String, String)],
 ) -> DataFile {
-  let map : Map[String, @frontmatter.FrontmatterValue] = Map::new()
+  let map : Map[String, @frontmatter.FrontmatterValue] = Map([])
   let mut i = 0
   while i < fields.length() {
     let (key, value) = fields[i]
@@ -408,7 +444,7 @@ pub fn load_from_dir(
     @fs.IOError(msg) => return Err(IOError(data_dir, msg))
   }
 
-  let files : Map[String, DataFile] = Map::new()
+  let files : Map[String, DataFile] = Map([])
   let mut i = 0
   while i < entries.length() {
     let filename = entries[i]
@@ -455,7 +491,7 @@ pub fn resolve(
   match resolve_in_file(file, key_path) {
     Some(v) => Ok(v)
     None => {
-      let path = StringBuilder::new()
+      let path = StringBuilder()
       let mut i = 0
       while i < key_path.length() {
         if i > 0 {
@@ -478,7 +514,7 @@ fn value_to_string_inner(v : @frontmatter.FrontmatterValue) -> String {
     @frontmatter.FFloat(f) => f.to_string()
     @frontmatter.FBool(b) => if b { "true" } else { "false" }
     @frontmatter.FArray(items) => {
-      let out = StringBuilder::new()
+      let out = StringBuilder()
       let mut i = 0
       while i < items.length() {
         if i > 0 {
@@ -527,3 +563,9 @@ pub fn format_error(err : DataError) -> String {
     IOError(path, msg) => "data I/O error " + path + ": " + msg
   }
 }
+
+///|
+pub extend DataError with Eq::{not_equal, equal}
+
+///|
+pub extend DataError with Show::{to_string, output}

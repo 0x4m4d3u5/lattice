@@ -11,19 +11,58 @@ pub(all) enum AssetCopyError {
   DestCreateError(String, String)
   FileReadError(String, String)
   FileWriteError(String, String)
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
+
+///|
+pub impl Show for AssetCopyError with fn output(self, logger) {
+  match self {
+    SourceReadError(v0, v1) => {
+      logger.write_string("SourceReadError(")
+      logger.write_object(v0)
+      logger.write_string(", ")
+      logger.write_object(v1)
+      logger.write_string(")")
+    }
+    SourceNotDirectory(v0) => {
+      logger.write_string("SourceNotDirectory(")
+      logger.write_object(v0)
+      logger.write_string(")")
+    }
+    DestCreateError(v0, v1) => {
+      logger.write_string("DestCreateError(")
+      logger.write_object(v0)
+      logger.write_string(", ")
+      logger.write_object(v1)
+      logger.write_string(")")
+    }
+    FileReadError(v0, v1) => {
+      logger.write_string("FileReadError(")
+      logger.write_object(v0)
+      logger.write_string(", ")
+      logger.write_object(v1)
+      logger.write_string(")")
+    }
+    FileWriteError(v0, v1) => {
+      logger.write_string("FileWriteError(")
+      logger.write_object(v0)
+      logger.write_string(", ")
+      logger.write_object(v1)
+      logger.write_string(")")
+    }
+  }
+}
 
 ///|
 pub struct AssetValidation {
   errors : Array[AssetCopyError]
-} derive(Eq, Show)
+} derive(Eq)
 
 ///|
 /// A static file captured in memory, with its path relative to the static root.
 pub(all) struct StaticAsset {
   relative_path : String
   bytes : Bytes
-} derive(Eq, Show)
+} derive(Eq)
 
 ///|
 fn read_tree(
@@ -276,3 +315,40 @@ pub fn copy_static(
   let dest_root = @strutil.join_path(output_dir, static_dir)
   copy_tree(source_root, dest_root)
 }
+
+///|
+pub impl Show for AssetValidation with fn output(self, logger) {
+  logger.write_string("{errors: ")
+  logger.write_iter(self.errors.iter())
+  logger.write_string("}")
+}
+
+///|
+pub impl Show for StaticAsset with fn output(self, logger) {
+  logger.write_string("{relative_path: ")
+  logger.write_object(self.relative_path)
+  logger.write_string(", bytes: ")
+  logger.write_object(self.bytes)
+  logger.write_string("}")
+}
+
+///|
+pub extend AssetCopyError with @debug.Debug::{to_repr}
+
+///|
+pub extend AssetCopyError with Eq::{not_equal, equal}
+
+///|
+pub extend AssetCopyError with Show::{to_string, output}
+
+///|
+pub extend AssetValidation with Eq::{not_equal, equal}
+
+///|
+pub extend AssetValidation with Show::{to_string, output}
+
+///|
+pub extend StaticAsset with Eq::{not_equal, equal}
+
+///|
+pub extend StaticAsset with Show::{to_string, output}

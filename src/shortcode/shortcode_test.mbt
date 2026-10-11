@@ -1,6 +1,6 @@
 ///|
 test "shortcode parse image params" {
-  match parse("image src=\"/img.png\" alt=\"hero\" width=640") {
+  match @shortcode.parse("image src=\"/img.png\" alt=\"hero\" width=640") {
     Ok(call) => {
       assert_eq(call.name, "image")
       match call.params.get("src") {
@@ -22,13 +22,13 @@ test "shortcode parse image params" {
 
 ///|
 test "shortcode render image" {
-  let params : Map[String, ShortcodeParam] = Map::new()
+  let params : Map[String, @shortcode.ShortcodeParam] = Map([])
   params.set("src", StringParam("/img/a.png"))
   params.set("alt", StringParam("alpha"))
   params.set("caption", StringParam("Caption text"))
   params.set("width", IntParam(320))
-  let call : ShortcodeCall = { name: "image", params }
-  match render(call) {
+  let call : @shortcode.ShortcodeCall = { name: "image", params, }
+  match @shortcode.render(call) {
     Ok(html) => {
       assert_true(html.contains("<img"))
       assert_true(html.contains("figcaption"))
@@ -40,11 +40,11 @@ test "shortcode render image" {
 
 ///|
 test "shortcode render video" {
-  let params : Map[String, ShortcodeParam] = Map::new()
+  let params : Map[String, @shortcode.ShortcodeParam] = Map([])
   params.set("src", StringParam("/vid/a.mp4"))
   params.set("poster", StringParam("/vid/a.jpg"))
-  let call : ShortcodeCall = { name: "video", params }
-  match render(call) {
+  let call : @shortcode.ShortcodeCall = { name: "video", params, }
+  match @shortcode.render(call) {
     Ok(html) => {
       assert_true(html.contains("<video"))
       assert_true(html.contains("controls"))
@@ -56,13 +56,13 @@ test "shortcode render video" {
 
 ///|
 test "shortcode render figure" {
-  let params : Map[String, ShortcodeParam] = Map::new()
+  let params : Map[String, @shortcode.ShortcodeParam] = Map([])
   params.set("src", StringParam("/img/f.png"))
   params.set("alt", StringParam("figure"))
   params.set("caption", StringParam("Figure caption"))
   params.set("link", StringParam("/detail"))
-  let call : ShortcodeCall = { name: "figure", params }
-  match render(call) {
+  let call : @shortcode.ShortcodeCall = { name: "figure", params, }
+  match @shortcode.render(call) {
     Ok(html) => {
       assert_true(html.contains("<figure"))
       assert_true(html.contains("<a href=\"/detail\""))
@@ -74,9 +74,9 @@ test "shortcode render figure" {
 
 ///|
 test "shortcode unknown name" {
-  let params : Map[String, ShortcodeParam] = Map::new()
-  let call : ShortcodeCall = { name: "fancy", params }
-  match render(call) {
+  let params : Map[String, @shortcode.ShortcodeParam] = Map([])
+  let call : @shortcode.ShortcodeCall = { name: "fancy", params, }
+  match @shortcode.render(call) {
     Ok(_) => assert_true(false)
     Err(UnknownShortcode(name)) => assert_eq(name, "fancy")
     Err(_) => assert_true(false)
@@ -85,10 +85,10 @@ test "shortcode unknown name" {
 
 ///|
 test "shortcode missing required param" {
-  let params : Map[String, ShortcodeParam] = Map::new()
+  let params : Map[String, @shortcode.ShortcodeParam] = Map([])
   params.set("alt", StringParam("missing src"))
-  let call : ShortcodeCall = { name: "image", params }
-  match render(call) {
+  let call : @shortcode.ShortcodeCall = { name: "image", params, }
+  match @shortcode.render(call) {
     Ok(_) => assert_true(false)
     Err(MissingParam(shortcode, param)) => {
       assert_eq(shortcode, "image")
@@ -100,12 +100,12 @@ test "shortcode missing required param" {
 
 ///|
 test "shortcode image InvalidParamType when width is a string" {
-  let params : Map[String, ShortcodeParam] = Map::new()
+  let params : Map[String, @shortcode.ShortcodeParam] = Map([])
   params.set("src", StringParam("/img.png"))
   params.set("alt", StringParam("a photo"))
   params.set("width", StringParam("800"))
-  let call : ShortcodeCall = { name: "image", params }
-  match render(call) {
+  let call : @shortcode.ShortcodeCall = { name: "image", params, }
+  match @shortcode.render(call) {
     Ok(_) => assert_true(false)
     Err(InvalidParamType(shortcode, param, expected)) => {
       assert_eq(shortcode, "image")
@@ -118,7 +118,7 @@ test "shortcode image InvalidParamType when width is a string" {
 
 ///|
 test "shortcode parse bool params" {
-  match parse("callout type=\"note\" collapse=true") {
+  match @shortcode.parse("callout type=\"note\" collapse=true") {
     Ok(call) =>
       match call.params.get("collapse") {
         Some(BoolParam(v)) => assert_eq(v, true)
@@ -130,12 +130,12 @@ test "shortcode parse bool params" {
 
 ///|
 test "shortcode render callout note" {
-  let params : Map[String, ShortcodeParam] = Map::new()
+  let params : Map[String, @shortcode.ShortcodeParam] = Map([])
   params.set("type", StringParam("note"))
   params.set("title", StringParam("Note Title"))
   params.set("body", StringParam("Body text"))
-  let call : ShortcodeCall = { name: "callout", params }
-  match render(call) {
+  let call : @shortcode.ShortcodeCall = { name: "callout", params, }
+  match @shortcode.render(call) {
     Ok(html) => {
       assert_true(html.contains("callout-note"))
       assert_true(html.contains("Note Title"))
@@ -147,10 +147,10 @@ test "shortcode render callout note" {
 
 ///|
 test "shortcode callout invalid type produces InvalidParamType" {
-  let params : Map[String, ShortcodeParam] = Map::new()
+  let params : Map[String, @shortcode.ShortcodeParam] = Map([])
   params.set("type", StringParam("invalid"))
-  let call : ShortcodeCall = { name: "callout", params }
-  match render(call) {
+  let call : @shortcode.ShortcodeCall = { name: "callout", params, }
+  match @shortcode.render(call) {
     Ok(_) => assert_true(false)
     Err(InvalidParamType(shortcode, param, expected)) => {
       assert_eq(shortcode, "callout")
@@ -163,17 +163,20 @@ test "shortcode callout invalid type produces InvalidParamType" {
 
 ///|
 test "shortcode error_text formats all 4 variants" {
-  assert_eq(error_text(UnknownShortcode("fancy")), "unknown shortcode 'fancy'")
   assert_eq(
-    error_text(MissingParam("image", "src")),
+    @shortcode.error_text(UnknownShortcode("fancy")),
+    "unknown shortcode 'fancy'",
+  )
+  assert_eq(
+    @shortcode.error_text(MissingParam("image", "src")),
     "shortcode 'image' missing param 'src'",
   )
   assert_eq(
-    error_text(InvalidParamType("image", "width", "Int")),
+    @shortcode.error_text(InvalidParamType("image", "width", "Int")),
     "shortcode 'image' param 'width' expected Int",
   )
   assert_eq(
-    error_text(InvalidSyntax("unexpected EOF")),
+    @shortcode.error_text(InvalidSyntax("unexpected EOF")),
     "shortcode syntax: unexpected EOF",
   )
 }
@@ -184,28 +187,28 @@ test "shortcode error_text formats all 4 variants" {
 
 ///|
 test "shortcode parse_open_close_tag empty string" {
-  let (name, is_close) = parse_open_close_tag("")
+  let (name, is_close) = @shortcode.parse_open_close_tag("")
   assert_true(name == None)
   assert_eq(is_close, false)
 }
 
 ///|
 test "shortcode parse_open_close_tag whitespace only" {
-  let (name, is_close) = parse_open_close_tag("   ")
+  let (name, is_close) = @shortcode.parse_open_close_tag("   ")
   assert_true(name == None)
   assert_eq(is_close, false)
 }
 
 ///|
 test "shortcode parse_open_close_tag valid name" {
-  let (name, is_close) = parse_open_close_tag("image")
+  let (name, is_close) = @shortcode.parse_open_close_tag("image")
   assert_true(name == Some("image"))
   assert_eq(is_close, false)
 }
 
 ///|
 test "shortcode parse_open_close_tag name with leading whitespace" {
-  let (name, is_close) = parse_open_close_tag("  video  ")
+  let (name, is_close) = @shortcode.parse_open_close_tag("  video  ")
   assert_true(name == Some("video"))
   assert_eq(is_close, false)
 }
@@ -214,14 +217,14 @@ test "shortcode parse_open_close_tag name with leading whitespace" {
 test "shortcode parse_open_close_tag slash prefix non-ident yields None" {
   // parse_name_shortcode stops at '/' (not an ident char), so name is ""
   // and the function returns (None, false) before reaching the slash check.
-  let (name, is_close) = parse_open_close_tag("/foo")
+  let (name, is_close) = @shortcode.parse_open_close_tag("/foo")
   assert_true(name == None)
   assert_eq(is_close, false)
 }
 
 ///|
 test "shortcode parse_open_close_tag bare slash yields None" {
-  let (name, is_close) = parse_open_close_tag("/")
+  let (name, is_close) = @shortcode.parse_open_close_tag("/")
   assert_true(name == None)
   assert_eq(is_close, false)
 }
@@ -229,7 +232,7 @@ test "shortcode parse_open_close_tag bare slash yields None" {
 ///|
 test "shortcode parse_open_close_tag non-ident start yields None" {
   // '+' is not an ident char (not alpha, digit, or underscore)
-  let (name, is_close) = parse_open_close_tag("+bad")
+  let (name, is_close) = @shortcode.parse_open_close_tag("+bad")
   assert_true(name == None)
   assert_eq(is_close, false)
 }
@@ -237,7 +240,7 @@ test "shortcode parse_open_close_tag non-ident start yields None" {
 ///|
 test "shortcode parse_open_close_tag digits are valid ident parts" {
   // Digits are valid ident continuations, so "123" is a valid name.
-  let (name, is_close) = parse_open_close_tag("123")
+  let (name, is_close) = @shortcode.parse_open_close_tag("123")
   assert_true(name == Some("123"))
   assert_eq(is_close, false)
 }
@@ -245,7 +248,7 @@ test "shortcode parse_open_close_tag digits are valid ident parts" {
 ///|
 test "shortcode parse_open_close_tag name with trailing content" {
   // parse_name_shortcode stops at whitespace, so only "image" is the name
-  let (name, is_close) = parse_open_close_tag("image src=\"x\"")
+  let (name, is_close) = @shortcode.parse_open_close_tag("image src=\"x\"")
   assert_true(name == Some("image"))
   assert_eq(is_close, false)
 }
@@ -256,7 +259,7 @@ test "shortcode parse_open_close_tag name with trailing content" {
 
 ///|
 test "shortcode parse escape newline" {
-  match parse("image src=\"line1\\nline2\" alt=\"test\"") {
+  match @shortcode.parse("image src=\"line1\\nline2\" alt=\"test\"") {
     Ok(call) =>
       match call.params.get("src") {
         Some(StringParam(v)) => assert_eq(v, "line1\nline2")
@@ -268,7 +271,7 @@ test "shortcode parse escape newline" {
 
 ///|
 test "shortcode parse escape tab" {
-  match parse("image src=\"col1\\tcol2\" alt=\"test\"") {
+  match @shortcode.parse("image src=\"col1\\tcol2\" alt=\"test\"") {
     Ok(call) =>
       match call.params.get("src") {
         Some(StringParam(v)) => assert_eq(v, "col1\tcol2")
@@ -280,7 +283,7 @@ test "shortcode parse escape tab" {
 
 ///|
 test "shortcode parse escape quote" {
-  match parse("image src=\"say \\\"hello\\\"\" alt=\"test\"") {
+  match @shortcode.parse("image src=\"say \\\"hello\\\"\" alt=\"test\"") {
     Ok(call) =>
       match call.params.get("src") {
         Some(StringParam(v)) => assert_eq(v, "say \"hello\"")
@@ -292,7 +295,7 @@ test "shortcode parse escape quote" {
 
 ///|
 test "shortcode parse escape backslash" {
-  match parse("image src=\"path\\\\file\" alt=\"test\"") {
+  match @shortcode.parse("image src=\"path\\\\file\" alt=\"test\"") {
     Ok(call) =>
       match call.params.get("src") {
         Some(StringParam(v)) => assert_eq(v, "path\\file")
@@ -305,7 +308,7 @@ test "shortcode parse escape backslash" {
 ///|
 test "shortcode parse escape fallthrough passes char through" {
   // \x is not a recognized escape, so 'x' is passed through literally
-  match parse("image src=\"hello\\xworld\" alt=\"test\"") {
+  match @shortcode.parse("image src=\"hello\\xworld\" alt=\"test\"") {
     Ok(call) =>
       match call.params.get("src") {
         Some(StringParam(v)) => assert_eq(v, "helloxworld")
@@ -322,7 +325,7 @@ test "shortcode parse escape fallthrough passes char through" {
 ///|
 test "shortcode parse unterminated escape" {
   // Real unterminated escape: backslash at end of input inside an open quote
-  match parse("image src=\"\\") {
+  match @shortcode.parse("image src=\"\\") {
     Err(InvalidSyntax(msg)) => assert_true(msg.contains("unterminated escape"))
     _ => assert_true(false)
   }
@@ -331,7 +334,7 @@ test "shortcode parse unterminated escape" {
 ///|
 test "shortcode parse unterminated quoted value" {
   // Opening quote with no closing quote before end of input
-  match parse("image src=\"no_end") {
+  match @shortcode.parse("image src=\"no_end") {
     Err(InvalidSyntax(msg)) =>
       assert_true(msg.contains("unterminated quoted value"))
     _ => assert_true(false)
@@ -341,7 +344,7 @@ test "shortcode parse unterminated quoted value" {
 ///|
 test "shortcode parse expected value at end of input" {
   // key= at the very end of input with no value
-  match parse("image src=") {
+  match @shortcode.parse("image src=") {
     Err(InvalidSyntax(msg)) => assert_true(msg.contains("expected value"))
     _ => assert_true(false)
   }
@@ -353,7 +356,7 @@ test "shortcode parse expected value at end of input" {
 
 ///|
 test "shortcode parse empty string" {
-  match parse("") {
+  match @shortcode.parse("") {
     Err(InvalidSyntax(msg)) => assert_eq(msg, "empty shortcode")
     _ => assert_true(false)
   }
@@ -365,7 +368,7 @@ test "shortcode parse missing shortcode name" {
   // The "closing shortcode is not a call" branch is dead code because
   // parse_name_shortcode never produces a name starting with '/'.
   // Instead, "/foo" produces name="" → "missing shortcode name".
-  match parse("/foo") {
+  match @shortcode.parse("/foo") {
     Err(InvalidSyntax(msg)) => assert_eq(msg, "missing shortcode name")
     _ => assert_true(false)
   }
@@ -373,7 +376,7 @@ test "shortcode parse missing shortcode name" {
 
 ///|
 test "shortcode parse missing equals after key" {
-  match parse("image src") {
+  match @shortcode.parse("image src") {
     Err(InvalidSyntax(msg)) =>
       assert_true(msg.contains("expected '=' after parameter 'src'"))
     _ => assert_true(false)
@@ -382,7 +385,7 @@ test "shortcode parse missing equals after key" {
 
 ///|
 test "shortcode parse all-whitespace input" {
-  match parse("   ") {
+  match @shortcode.parse("   ") {
     Err(InvalidSyntax(msg)) => assert_eq(msg, "empty shortcode")
     _ => assert_true(false)
   }
@@ -392,7 +395,7 @@ test "shortcode parse all-whitespace input" {
 test "shortcode parse invalid parameter key" {
   // After parsing the name, if the next non-ws char is not an ident start
   // (e.g. '='), parse_name_shortcode returns "", triggering invalid key
-  match parse("image =bad") {
+  match @shortcode.parse("image =bad") {
     Err(InvalidSyntax(msg)) => assert_eq(msg, "invalid parameter key")
     _ => assert_true(false)
   }
@@ -404,12 +407,12 @@ test "shortcode parse invalid parameter key" {
 
 ///|
 test "shortcode render callout warning" {
-  let params : Map[String, ShortcodeParam] = Map::new()
+  let params : Map[String, @shortcode.ShortcodeParam] = Map([])
   params.set("type", StringParam("warning"))
   params.set("title", StringParam("Warning Title"))
   params.set("body", StringParam("Warning body"))
-  let call : ShortcodeCall = { name: "callout", params }
-  match render(call) {
+  let call : @shortcode.ShortcodeCall = { name: "callout", params, }
+  match @shortcode.render(call) {
     Ok(html) => {
       assert_true(html.contains("callout-warning"))
       assert_true(html.contains("Warning Title"))
@@ -421,12 +424,12 @@ test "shortcode render callout warning" {
 
 ///|
 test "shortcode render callout tip" {
-  let params : Map[String, ShortcodeParam] = Map::new()
+  let params : Map[String, @shortcode.ShortcodeParam] = Map([])
   params.set("type", StringParam("tip"))
   params.set("title", StringParam("Tip Title"))
   params.set("body", StringParam("Tip body"))
-  let call : ShortcodeCall = { name: "callout", params }
-  match render(call) {
+  let call : @shortcode.ShortcodeCall = { name: "callout", params, }
+  match @shortcode.render(call) {
     Ok(html) => {
       assert_true(html.contains("callout-tip"))
       assert_true(html.contains("Tip Title"))
@@ -438,12 +441,12 @@ test "shortcode render callout tip" {
 
 ///|
 test "shortcode render callout danger" {
-  let params : Map[String, ShortcodeParam] = Map::new()
+  let params : Map[String, @shortcode.ShortcodeParam] = Map([])
   params.set("type", StringParam("danger"))
   params.set("title", StringParam("Danger Title"))
   params.set("body", StringParam("Danger body"))
-  let call : ShortcodeCall = { name: "callout", params }
-  match render(call) {
+  let call : @shortcode.ShortcodeCall = { name: "callout", params, }
+  match @shortcode.render(call) {
     Ok(html) => {
       assert_true(html.contains("callout-danger"))
       assert_true(html.contains("Danger Title"))
@@ -459,10 +462,10 @@ test "shortcode render callout danger" {
 
 ///|
 test "shortcode render video without poster" {
-  let params : Map[String, ShortcodeParam] = Map::new()
+  let params : Map[String, @shortcode.ShortcodeParam] = Map([])
   params.set("src", StringParam("/vid/a.mp4"))
-  let call : ShortcodeCall = { name: "video", params }
-  match render(call) {
+  let call : @shortcode.ShortcodeCall = { name: "video", params, }
+  match @shortcode.render(call) {
     Ok(html) => {
       assert_true(html.contains("<video"))
       assert_true(html.contains("controls"))
@@ -474,12 +477,12 @@ test "shortcode render video without poster" {
 
 ///|
 test "shortcode render figure without link" {
-  let params : Map[String, ShortcodeParam] = Map::new()
+  let params : Map[String, @shortcode.ShortcodeParam] = Map([])
   params.set("src", StringParam("/img/f.png"))
   params.set("alt", StringParam("figure"))
   params.set("caption", StringParam("A caption"))
-  let call : ShortcodeCall = { name: "figure", params }
-  match render(call) {
+  let call : @shortcode.ShortcodeCall = { name: "figure", params, }
+  match @shortcode.render(call) {
     Ok(html) => {
       assert_true(html.contains("<figure"))
       assert_true(!html.contains("<a href="))
@@ -491,12 +494,12 @@ test "shortcode render figure without link" {
 
 ///|
 test "shortcode render figure without caption" {
-  let params : Map[String, ShortcodeParam] = Map::new()
+  let params : Map[String, @shortcode.ShortcodeParam] = Map([])
   params.set("src", StringParam("/img/f.png"))
   params.set("alt", StringParam("figure"))
   params.set("link", StringParam("/detail"))
-  let call : ShortcodeCall = { name: "figure", params }
-  match render(call) {
+  let call : @shortcode.ShortcodeCall = { name: "figure", params, }
+  match @shortcode.render(call) {
     Ok(html) => {
       assert_true(html.contains("<figure"))
       assert_true(html.contains("<a href=\"/detail\""))
@@ -508,11 +511,11 @@ test "shortcode render figure without caption" {
 
 ///|
 test "shortcode render figure without link or caption" {
-  let params : Map[String, ShortcodeParam] = Map::new()
+  let params : Map[String, @shortcode.ShortcodeParam] = Map([])
   params.set("src", StringParam("/img/f.png"))
   params.set("alt", StringParam("figure"))
-  let call : ShortcodeCall = { name: "figure", params }
-  match render(call) {
+  let call : @shortcode.ShortcodeCall = { name: "figure", params, }
+  match @shortcode.render(call) {
     Ok(html) => {
       assert_true(html.contains("<figure"))
       assert_true(!html.contains("<a href="))
@@ -525,11 +528,11 @@ test "shortcode render figure without link or caption" {
 
 ///|
 test "shortcode render image without caption or width" {
-  let params : Map[String, ShortcodeParam] = Map::new()
+  let params : Map[String, @shortcode.ShortcodeParam] = Map([])
   params.set("src", StringParam("/img/a.png"))
   params.set("alt", StringParam("simple"))
-  let call : ShortcodeCall = { name: "image", params }
-  match render(call) {
+  let call : @shortcode.ShortcodeCall = { name: "image", params, }
+  match @shortcode.render(call) {
     Ok(html) => {
       assert_true(html.contains("<img"))
       assert_true(!html.contains("figcaption"))
@@ -542,12 +545,12 @@ test "shortcode render image without caption or width" {
 
 ///|
 test "shortcode render image with caption but no width" {
-  let params : Map[String, ShortcodeParam] = Map::new()
+  let params : Map[String, @shortcode.ShortcodeParam] = Map([])
   params.set("src", StringParam("/img/a.png"))
   params.set("alt", StringParam("captioned"))
   params.set("caption", StringParam("Photo caption"))
-  let call : ShortcodeCall = { name: "image", params }
-  match render(call) {
+  let call : @shortcode.ShortcodeCall = { name: "image", params, }
+  match @shortcode.render(call) {
     Ok(html) => {
       assert_true(html.contains("<figure class=\"sc-image\">"))
       assert_true(html.contains("figcaption"))
@@ -564,7 +567,7 @@ test "shortcode render image with caption but no width" {
 ///|
 test "shortcode parse negative integer value" {
   // Exercises parse_int_shortcode neg=true branch (line 37, 53)
-  match parse("image src=\"a.png\" alt=\"test\" width=-42") {
+  match @shortcode.parse("image src=\"a.png\" alt=\"test\" width=-42") {
     Ok(call) =>
       match call.params.get("width") {
         Some(IntParam(v)) => assert_eq(v, -42)
@@ -578,7 +581,7 @@ test "shortcode parse negative integer value" {
 test "shortcode parse integer with non-digit trailing char fails" {
   // Exercises parse_int_shortcode return None on non-digit (line 47)
   // "12x" won't parse as int, so it falls through to StringParam
-  match parse("image src=\"a.png\" alt=\"test\" key=12x") {
+  match @shortcode.parse("image src=\"a.png\" alt=\"test\" key=12x") {
     Ok(call) =>
       match call.params.get("key") {
         Some(StringParam(v)) => assert_eq(v, "12x")
@@ -591,7 +594,7 @@ test "shortcode parse integer with non-digit trailing char fails" {
 ///|
 test "shortcode parse bare minus is string not int" {
   // Exercises parse_int_shortcode: i >= s.length() after consuming '-' (line 41)
-  match parse("image src=\"a.png\" alt=\"test\" key=-") {
+  match @shortcode.parse("image src=\"a.png\" alt=\"test\" key=-") {
     Ok(call) =>
       match call.params.get("key") {
         Some(StringParam(v)) => assert_eq(v, "-")
@@ -608,7 +611,7 @@ test "shortcode parse bare minus is string not int" {
 ///|
 test "shortcode parse false bool param" {
   // Exercises the `raw == "false"` branch (line 131)
-  match parse("image src=\"a.png\" alt=\"test\" visible=false") {
+  match @shortcode.parse("image src=\"a.png\" alt=\"test\" visible=false") {
     Ok(call) =>
       match call.params.get("visible") {
         Some(BoolParam(v)) => assert_eq(v, false)
@@ -625,7 +628,7 @@ test "shortcode parse false bool param" {
 ///|
 test "shortcode parse unquoted string param value" {
   // Exercises the StringParam fallback when not bool or int (line 135)
-  match parse("image src=\"a.png\" alt=\"test\" klass=hero") {
+  match @shortcode.parse("image src=\"a.png\" alt=\"test\" klass=hero") {
     Ok(call) =>
       match call.params.get("klass") {
         Some(StringParam(v)) => assert_eq(v, "hero")
@@ -642,11 +645,11 @@ test "shortcode parse unquoted string param value" {
 ///|
 test "shortcode require_string_param wrong type" {
   // Pass IntParam where StringParam is required for "src"
-  let params : Map[String, ShortcodeParam] = Map::new()
+  let params : Map[String, @shortcode.ShortcodeParam] = Map([])
   params.set("src", IntParam(999))
   params.set("alt", StringParam("test"))
-  let call : ShortcodeCall = { name: "image", params }
-  match render(call) {
+  let call : @shortcode.ShortcodeCall = { name: "image", params, }
+  match @shortcode.render(call) {
     Err(InvalidParamType(shortcode, param, expected)) => {
       assert_eq(shortcode, "image")
       assert_eq(param, "src")
@@ -663,12 +666,12 @@ test "shortcode require_string_param wrong type" {
 ///|
 test "shortcode optional_string_param wrong type for caption" {
   // Pass IntParam where optional StringParam expected for "caption"
-  let params : Map[String, ShortcodeParam] = Map::new()
+  let params : Map[String, @shortcode.ShortcodeParam] = Map([])
   params.set("src", StringParam("/img.png"))
   params.set("alt", StringParam("test"))
   params.set("caption", IntParam(42))
-  let call : ShortcodeCall = { name: "image", params }
-  match render(call) {
+  let call : @shortcode.ShortcodeCall = { name: "image", params, }
+  match @shortcode.render(call) {
     Err(InvalidParamType(shortcode, param, expected)) => {
       assert_eq(shortcode, "image")
       assert_eq(param, "caption")
@@ -685,11 +688,11 @@ test "shortcode optional_string_param wrong type for caption" {
 ///|
 test "shortcode image alt wrong type" {
   // Pass IntParam for "alt" → require_string_param fails (line 243)
-  let params : Map[String, ShortcodeParam] = Map::new()
+  let params : Map[String, @shortcode.ShortcodeParam] = Map([])
   params.set("src", StringParam("/img.png"))
   params.set("alt", IntParam(123))
-  let call : ShortcodeCall = { name: "image", params }
-  match render(call) {
+  let call : @shortcode.ShortcodeCall = { name: "image", params, }
+  match @shortcode.render(call) {
     Err(InvalidParamType(shortcode, param, _)) => {
       assert_eq(shortcode, "image")
       assert_eq(param, "alt")
@@ -706,12 +709,12 @@ test "shortcode image alt wrong type" {
 test "shortcode image width wrong type is caught" {
   // Already tested above, but ensure the optional_int_param path for
   // IntParam(IntParam) type mismatch is exercised
-  let params : Map[String, ShortcodeParam] = Map::new()
+  let params : Map[String, @shortcode.ShortcodeParam] = Map([])
   params.set("src", StringParam("/img.png"))
   params.set("alt", StringParam("test"))
   params.set("width", BoolParam(true))
-  let call : ShortcodeCall = { name: "image", params }
-  match render(call) {
+  let call : @shortcode.ShortcodeCall = { name: "image", params, }
+  match @shortcode.render(call) {
     Err(InvalidParamType(shortcode, param, expected)) => {
       assert_eq(shortcode, "image")
       assert_eq(param, "width")
@@ -727,10 +730,10 @@ test "shortcode image width wrong type is caught" {
 
 ///|
 test "shortcode video src wrong type" {
-  let params : Map[String, ShortcodeParam] = Map::new()
+  let params : Map[String, @shortcode.ShortcodeParam] = Map([])
   params.set("src", IntParam(42))
-  let call : ShortcodeCall = { name: "video", params }
-  match render(call) {
+  let call : @shortcode.ShortcodeCall = { name: "video", params, }
+  match @shortcode.render(call) {
     Err(InvalidParamType(shortcode, param, _)) => {
       assert_eq(shortcode, "video")
       assert_eq(param, "src")
@@ -745,11 +748,11 @@ test "shortcode video src wrong type" {
 
 ///|
 test "shortcode video poster wrong type" {
-  let params : Map[String, ShortcodeParam] = Map::new()
+  let params : Map[String, @shortcode.ShortcodeParam] = Map([])
   params.set("src", StringParam("/vid.mp4"))
   params.set("poster", IntParam(999))
-  let call : ShortcodeCall = { name: "video", params }
-  match render(call) {
+  let call : @shortcode.ShortcodeCall = { name: "video", params, }
+  match @shortcode.render(call) {
     Err(InvalidParamType(shortcode, param, _)) => {
       assert_eq(shortcode, "video")
       assert_eq(param, "poster")
@@ -764,11 +767,11 @@ test "shortcode video poster wrong type" {
 
 ///|
 test "shortcode figure src wrong type" {
-  let params : Map[String, ShortcodeParam] = Map::new()
+  let params : Map[String, @shortcode.ShortcodeParam] = Map([])
   params.set("src", BoolParam(true))
   params.set("alt", StringParam("test"))
-  let call : ShortcodeCall = { name: "figure", params }
-  match render(call) {
+  let call : @shortcode.ShortcodeCall = { name: "figure", params, }
+  match @shortcode.render(call) {
     Err(InvalidParamType(shortcode, param, _)) => {
       assert_eq(shortcode, "figure")
       assert_eq(param, "src")
@@ -779,11 +782,11 @@ test "shortcode figure src wrong type" {
 
 ///|
 test "shortcode figure alt wrong type" {
-  let params : Map[String, ShortcodeParam] = Map::new()
+  let params : Map[String, @shortcode.ShortcodeParam] = Map([])
   params.set("src", StringParam("/img.png"))
   params.set("alt", IntParam(42))
-  let call : ShortcodeCall = { name: "figure", params }
-  match render(call) {
+  let call : @shortcode.ShortcodeCall = { name: "figure", params, }
+  match @shortcode.render(call) {
     Err(InvalidParamType(shortcode, param, _)) => {
       assert_eq(shortcode, "figure")
       assert_eq(param, "alt")
@@ -794,12 +797,12 @@ test "shortcode figure alt wrong type" {
 
 ///|
 test "shortcode figure caption wrong type" {
-  let params : Map[String, ShortcodeParam] = Map::new()
+  let params : Map[String, @shortcode.ShortcodeParam] = Map([])
   params.set("src", StringParam("/img.png"))
   params.set("alt", StringParam("test"))
   params.set("caption", BoolParam(true))
-  let call : ShortcodeCall = { name: "figure", params }
-  match render(call) {
+  let call : @shortcode.ShortcodeCall = { name: "figure", params, }
+  match @shortcode.render(call) {
     Err(InvalidParamType(shortcode, param, _)) => {
       assert_eq(shortcode, "figure")
       assert_eq(param, "caption")
@@ -810,12 +813,12 @@ test "shortcode figure caption wrong type" {
 
 ///|
 test "shortcode figure link wrong type" {
-  let params : Map[String, ShortcodeParam] = Map::new()
+  let params : Map[String, @shortcode.ShortcodeParam] = Map([])
   params.set("src", StringParam("/img.png"))
   params.set("alt", StringParam("test"))
   params.set("link", IntParam(123))
-  let call : ShortcodeCall = { name: "figure", params }
-  match render(call) {
+  let call : @shortcode.ShortcodeCall = { name: "figure", params, }
+  match @shortcode.render(call) {
     Err(InvalidParamType(shortcode, param, _)) => {
       assert_eq(shortcode, "figure")
       assert_eq(param, "link")
@@ -830,9 +833,9 @@ test "shortcode figure link wrong type" {
 
 ///|
 test "shortcode callout missing type param" {
-  let params : Map[String, ShortcodeParam] = Map::new()
-  let call : ShortcodeCall = { name: "callout", params }
-  match render(call) {
+  let params : Map[String, @shortcode.ShortcodeParam] = Map([])
+  let call : @shortcode.ShortcodeCall = { name: "callout", params, }
+  match @shortcode.render(call) {
     Err(MissingParam(shortcode, param)) => {
       assert_eq(shortcode, "callout")
       assert_eq(param, "type")
@@ -847,11 +850,11 @@ test "shortcode callout missing type param" {
 
 ///|
 test "shortcode callout title wrong type" {
-  let params : Map[String, ShortcodeParam] = Map::new()
+  let params : Map[String, @shortcode.ShortcodeParam] = Map([])
   params.set("type", StringParam("note"))
   params.set("title", IntParam(42))
-  let call : ShortcodeCall = { name: "callout", params }
-  match render(call) {
+  let call : @shortcode.ShortcodeCall = { name: "callout", params, }
+  match @shortcode.render(call) {
     Err(InvalidParamType(shortcode, param, _)) => {
       assert_eq(shortcode, "callout")
       assert_eq(param, "title")
@@ -866,11 +869,11 @@ test "shortcode callout title wrong type" {
 
 ///|
 test "shortcode callout body wrong type" {
-  let params : Map[String, ShortcodeParam] = Map::new()
+  let params : Map[String, @shortcode.ShortcodeParam] = Map([])
   params.set("type", StringParam("note"))
   params.set("body", BoolParam(false))
-  let call : ShortcodeCall = { name: "callout", params }
-  match render(call) {
+  let call : @shortcode.ShortcodeCall = { name: "callout", params, }
+  match @shortcode.render(call) {
     Err(InvalidParamType(shortcode, param, _)) => {
       assert_eq(shortcode, "callout")
       assert_eq(param, "body")
@@ -886,10 +889,10 @@ test "shortcode callout body wrong type" {
 ///|
 test "shortcode callout note without title or body" {
   // Exercises None branches for title and body match (lines 392, 400)
-  let params : Map[String, ShortcodeParam] = Map::new()
+  let params : Map[String, @shortcode.ShortcodeParam] = Map([])
   params.set("type", StringParam("note"))
-  let call : ShortcodeCall = { name: "callout", params }
-  match render(call) {
+  let call : @shortcode.ShortcodeCall = { name: "callout", params, }
+  match @shortcode.render(call) {
     Ok(html) => {
       assert_true(html.contains("callout-note"))
       assert_true(!html.contains("callout-title"))
@@ -906,7 +909,7 @@ test "shortcode callout note without title or body" {
 
 ///|
 test "shortcode parse name-only has no params" {
-  match parse("image") {
+  match @shortcode.parse("image") {
     Ok(call) => {
       assert_eq(call.name, "image")
       assert_eq(call.params.length(), 0)
@@ -929,7 +932,7 @@ test "shortcode parse name-only has no params" {
 ///|
 test "shortcode parse empty string value after equals" {
   // "image src=" — already tested, but ensure value_pos >= length path
-  match parse("image src=") {
+  match @shortcode.parse("image src=") {
     Err(InvalidSyntax(msg)) => assert_true(msg.contains("expected value"))
     _ => assert_true(false)
   }
@@ -943,7 +946,7 @@ test "shortcode parse empty string value after equals" {
 test "shortcode parse unquoted param value is empty after trim" {
   // "key= " — after = the value_pos is past end → parse_value_shortcode fails
   // with "expected value" since pos >= s.length()
-  match parse("image src=\"a.png\" alt=\"test\" key= ") {
+  match @shortcode.parse("image src=\"a.png\" alt=\"test\" key= ") {
     Err(InvalidSyntax(msg)) => assert_true(msg.contains("expected value"))
     _ => assert_true(false)
   }
@@ -955,9 +958,9 @@ test "shortcode parse unquoted param value is empty after trim" {
 
 ///|
 test "shortcode full round-trip image" {
-  match parse("image src=\"/photo.png\" alt=\"A photo\" width=100") {
+  match @shortcode.parse("image src=\"/photo.png\" alt=\"A photo\" width=100") {
     Ok(call) =>
-      match render(call) {
+      match @shortcode.render(call) {
         Ok(html) => {
           assert_true(html.contains("<img src=\"/photo.png\""))
           assert_true(html.contains("width=\"100\""))
@@ -970,9 +973,9 @@ test "shortcode full round-trip image" {
 
 ///|
 test "shortcode full round-trip callout warning minimal" {
-  match parse("callout type=\"warning\"") {
+  match @shortcode.parse("callout type=\"warning\"") {
     Ok(call) =>
-      match render(call) {
+      match @shortcode.render(call) {
         Ok(html) => {
           assert_true(html.contains("callout-warning"))
           assert_true(!html.contains("callout-title"))
@@ -986,9 +989,9 @@ test "shortcode full round-trip callout warning minimal" {
 
 ///|
 test "shortcode full round-trip video" {
-  match parse("video src=\"/vid.mp4\"") {
+  match @shortcode.parse("video src=\"/vid.mp4\"") {
     Ok(call) =>
-      match render(call) {
+      match @shortcode.render(call) {
         Ok(html) => {
           assert_true(html.contains("<video controls"))
           assert_true(html.contains("/vid.mp4"))
@@ -1003,11 +1006,11 @@ test "shortcode full round-trip video" {
 ///|
 test "shortcode full round-trip figure with link and caption" {
   match
-    parse(
+    @shortcode.parse(
       "figure src=\"/fig.png\" alt=\"diagram\" caption=\"See this\" link=\"/details\"",
     ) {
     Ok(call) =>
-      match render(call) {
+      match @shortcode.render(call) {
         Ok(html) => {
           assert_true(html.contains("<a href=\"/details\">"))
           assert_true(html.contains("<figcaption>See this</figcaption>"))
@@ -1024,11 +1027,11 @@ test "shortcode full round-trip figure with link and caption" {
 
 ///|
 test "shortcode render escapes html in attributes" {
-  let params : Map[String, ShortcodeParam] = Map::new()
+  let params : Map[String, @shortcode.ShortcodeParam] = Map([])
   params.set("src", StringParam("<script>alert(1)</script>"))
   params.set("alt", StringParam("\" onload=\"x"))
-  let call : ShortcodeCall = { name: "image", params }
-  match render(call) {
+  let call : @shortcode.ShortcodeCall = { name: "image", params, }
+  match @shortcode.render(call) {
     Ok(html) => {
       assert_true(html.contains("&lt;script&gt;"))
       assert_true(html.contains("&quot;"))

@@ -493,7 +493,7 @@ pub fn parse_yaml(content : String) -> Result[Frontmatter, String] {
     let line = trim_ws(@strutil.substr(content, i, line_end))
     if line == "---" {
       let body_start = if line_end + 1 <= n { line_end + 1 } else { n }
-      let fields : Map[String, FrontmatterValue] = Map::new()
+      let fields : Map[String, FrontmatterValue] = Map([])
       let fm_text = @strutil.substr(content, fm_start, i)
       let lines = split_lines(fm_text)
       let mut j = 0
@@ -539,7 +539,7 @@ pub fn parse_toml(content : String) -> Result[Frontmatter, String] {
     let line = trim_ws(@strutil.substr(content, i, line_end))
     if line == "+++" {
       let body_start = if line_end + 1 <= n { line_end + 1 } else { n }
-      let fields : Map[String, FrontmatterValue] = Map::new()
+      let fields : Map[String, FrontmatterValue] = Map([])
       let fm_text = @strutil.substr(content, fm_start, i)
       let lines = split_lines(fm_text)
       let mut j = 0

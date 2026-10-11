@@ -546,7 +546,7 @@ pub fn validate(
   let reserved = [
     "toc", "toc_depth", "draft", "template", "redirect_from", "og_image", "weight",
   ]
-  let valid_fields = Map::new()
+  let valid_fields = Map([])
   let mut j = 0
   while j < schema.fields.length() {
     valid_fields.set(schema.fields[j].name, true)

@@ -5,7 +5,7 @@ test "collections parse data schemas" {
     "dir = content/posts\n\n" +
     "[data.nav]\n" +
     "required = title,subtitle\n"
-  match parse(src) {
+  match @collections.parse(src) {
     Ok(cfg) => {
       assert_eq(cfg.data_schema_list.length(), 1)
       assert_eq(cfg.data_schema_list[0].name, "nav")
@@ -21,7 +21,7 @@ test "collections parse optional template override" {
     "schema = title:String\n" +
     "dir = content/posts\n" +
     "template = templates/post.html\n"
-  match parse(src) {
+  match @collections.parse(src) {
     Ok(cfg) => {
       assert_eq(cfg.definitions.length(), 1)
       match cfg.definitions[0].template {
@@ -39,7 +39,7 @@ test "collections parse sort date desc" {
     "schema = title:String\n" +
     "dir = content/posts\n" +
     "sort = date:desc\n"
-  match parse(src) {
+  match @collections.parse(src) {
     Ok(cfg) => {
       assert_eq(cfg.definitions.length(), 1)
       match cfg.definitions[0].sort_order {
@@ -57,7 +57,7 @@ test "collections parse sort date asc" {
     "schema = title:String\n" +
     "dir = content/posts\n" +
     "sort = date:asc\n"
-  match parse(src) {
+  match @collections.parse(src) {
     Ok(cfg) => {
       assert_eq(cfg.definitions.length(), 1)
       match cfg.definitions[0].sort_order {
@@ -75,7 +75,7 @@ test "collections parse sort title asc" {
     "schema = title:String\n" +
     "dir = content/posts\n" +
     "sort = title:asc\n"
-  match parse(src) {
+  match @collections.parse(src) {
     Ok(cfg) => {
       assert_eq(cfg.definitions.length(), 1)
       match cfg.definitions[0].sort_order {
@@ -93,7 +93,7 @@ test "collections parse sort title desc" {
     "schema = title:String\n" +
     "dir = content/posts\n" +
     "sort = title:desc\n"
-  match parse(src) {
+  match @collections.parse(src) {
     Ok(cfg) => {
       assert_eq(cfg.definitions.length(), 1)
       match cfg.definitions[0].sort_order {
@@ -108,7 +108,7 @@ test "collections parse sort title desc" {
 ///|
 test "collections default sort order when not specified" {
   let src = "[posts]\n" + "schema = title:String\n" + "dir = content/posts\n"
-  match parse(src) {
+  match @collections.parse(src) {
     Ok(cfg) => {
       assert_eq(cfg.definitions.length(), 1)
       match cfg.definitions[0].sort_order {
@@ -126,7 +126,7 @@ test "collections parse invalid sort value" {
     "schema = title:String\n" +
     "dir = content/posts\n" +
     "sort = invalid:order\n"
-  match parse(src) {
+  match @collections.parse(src) {
     Ok(_) => assert_true(false)
     Err(@collections.InvalidLine(line, _)) => assert_eq(line, 4)
     Err(_) => assert_true(false)
@@ -138,7 +138,7 @@ test "collections parse Enum type" {
   let src = "[posts]\n" +
     "schema = status:Enum[\"draft\",\"published\",\"archived\"]\n" +
     "dir = content/posts\n"
-  match parse(src) {
+  match @collections.parse(src) {
     Ok(cfg) => {
       assert_eq(cfg.definitions.length(), 1)
       assert_eq(cfg.definitions[0].name, "posts")
@@ -164,7 +164,7 @@ test "collections parse optional Enum" {
   let src = "[posts]\n" +
     "schema = status:Optional[Enum[\"draft\",\"published\"]]\n" +
     "dir = content/posts\n"
-  match parse(src) {
+  match @collections.parse(src) {
     Ok(cfg) => {
       assert_eq(cfg.definitions.length(), 1)
       let field = cfg.definitions[0].schema.fields[0]
@@ -192,7 +192,7 @@ test "collections parse Enum with single value" {
   let src = "[posts]\n" +
     "schema = status:Enum[\"always\"]\n" +
     "dir = content/posts\n"
-  match parse(src) {
+  match @collections.parse(src) {
     Ok(cfg) => {
       let field = cfg.definitions[0].schema.fields[0]
       match field.field_type {
@@ -210,7 +210,7 @@ test "collections parse Enum with single value" {
 ///|
 test "collections parse Enum with empty values" {
   let src = "[posts]\n" + "schema = status:Enum[]\n" + "dir = content/posts\n"
-  match parse(src) {
+  match @collections.parse(src) {
     Ok(cfg) => {
       let field = cfg.definitions[0].schema.fields[0]
       match field.field_type {
@@ -227,7 +227,7 @@ test "collections reject Enum without opening bracket" {
   let src = "[posts]\n" +
     "schema = status:Enum\"draft\",\"published\"\n" +
     "dir = content/posts\n"
-  match parse(src) {
+  match @collections.parse(src) {
     Ok(_) => assert_true(false)
     Err(_) => assert_true(true)
   }
@@ -238,7 +238,7 @@ test "collections reject Enum without closing bracket" {
   let src = "[posts]\n" +
     "schema = status:Enum[\"draft\",\"published\"\n" +
     "dir = content/posts\n"
-  match parse(src) {
+  match @collections.parse(src) {
     Ok(_) => assert_true(false)
     Err(_) => assert_true(true)
   }
@@ -249,7 +249,7 @@ test "collections reject Enum with unquoted value" {
   let src = "[posts]\n" +
     "schema = status:Enum[draft,published]\n" +
     "dir = content/posts\n"
-  match parse(src) {
+  match @collections.parse(src) {
     Ok(_) => assert_true(false)
     Err(_) => assert_true(true)
   }
@@ -257,7 +257,10 @@ test "collections reject Enum with unquoted value" {
 
 ///|
 test "collections parse SchemaString with Enum" {
-  match parse_schema_string("test", "status:Enum[\"a\",\"b\"],title:String") {
+  match
+    @collections.parse_schema_string(
+      "test", "status:Enum[\"a\",\"b\"],title:String",
+    ) {
     Ok(schema) => {
       assert_eq(schema.name, "test")
       assert_eq(schema.fields.length(), 2)
@@ -279,7 +282,7 @@ test "collections TEnum roundtrips through parser" {
   let src = "[posts]\n" +
     "schema = status:Enum[\"draft\",\"published\",\"archived\"]\n" +
     "dir = content/posts\n"
-  match parse(src) {
+  match @collections.parse(src) {
     Ok(cfg) => {
       let field = cfg.definitions[0].schema.fields[0]
       match field.field_type {
@@ -300,7 +303,7 @@ test "collections TEnum roundtrips through parser" {
 ///|
 test "collections parse Date type unbounded" {
   let src = "[posts]\n" + "schema = date:Date\n" + "dir = content/posts\n"
-  match parse(src) {
+  match @collections.parse(src) {
     Ok(cfg) => {
       let field = cfg.definitions[0].schema.fields[0]
       assert_eq(field.name, "date")
@@ -318,7 +321,7 @@ test "collections parse Date(after=2020-01-01)" {
   let src = "[posts]\n" +
     "schema = date:Date(after=2020-01-01)\n" +
     "dir = content/posts\n"
-  match parse(src) {
+  match @collections.parse(src) {
     Ok(cfg) => {
       let field = cfg.definitions[0].schema.fields[0]
       assert_eq(field.name, "date")
@@ -336,7 +339,7 @@ test "collections parse Date(before=2030-01-01)" {
   let src = "[posts]\n" +
     "schema = date:Date(before=2030-01-01)\n" +
     "dir = content/posts\n"
-  match parse(src) {
+  match @collections.parse(src) {
     Ok(cfg) => {
       let field = cfg.definitions[0].schema.fields[0]
       assert_eq(field.name, "date")
@@ -354,7 +357,7 @@ test "collections parse Date(after=2020-01-01,before=2030-01-01)" {
   let src = "[posts]\n" +
     "schema = date:Date(after=2020-01-01,before=2030-01-01)\n" +
     "dir = content/posts\n"
-  match parse(src) {
+  match @collections.parse(src) {
     Ok(cfg) => {
       let field = cfg.definitions[0].schema.fields[0]
       assert_eq(field.name, "date")
@@ -375,7 +378,7 @@ test "collections parse Date bounds order-independent" {
   let src = "[posts]\n" +
     "schema = date:Date(before=2030-01-01,after=2020-01-01)\n" +
     "dir = content/posts\n"
-  match parse(src) {
+  match @collections.parse(src) {
     Ok(cfg) => {
       let field = cfg.definitions[0].schema.fields[0]
       match field.field_type {
@@ -395,7 +398,7 @@ test "collections reject Date with unknown bound key" {
   let src = "[posts]\n" +
     "schema = date:Date(since=2020-01-01)\n" +
     "dir = content/posts\n"
-  match parse(src) {
+  match @collections.parse(src) {
     Ok(_) => assert_true(false)
     Err(_) => assert_true(true)
   }
@@ -404,7 +407,7 @@ test "collections reject Date with unknown bound key" {
 ///|
 test "collections parse Float type unbounded" {
   let src = "[posts]\n" + "schema = rating:Float\n" + "dir = content/posts\n"
-  match parse(src) {
+  match @collections.parse(src) {
     Ok(cfg) => {
       let field = cfg.definitions[0].schema.fields[0]
       assert_eq(field.name, "rating")
@@ -422,7 +425,7 @@ test "collections parse Float(min=0.0,max=5.0)" {
   let src = "[posts]\n" +
     "schema = rating:Float(min=0.0,max=5.0)\n" +
     "dir = content/posts\n"
-  match parse(src) {
+  match @collections.parse(src) {
     Ok(cfg) => {
       let field = cfg.definitions[0].schema.fields[0]
       assert_eq(field.name, "rating")
@@ -443,7 +446,7 @@ test "collections parse Float(min=-1.5)" {
   let src = "[posts]\n" +
     "schema = temp:Float(min=-1.5)\n" +
     "dir = content/posts\n"
-  match parse(src) {
+  match @collections.parse(src) {
     Ok(cfg) => {
       let field = cfg.definitions[0].schema.fields[0]
       assert_eq(field.name, "temp")
@@ -462,7 +465,7 @@ test "collections parse Float(max=10.0)" {
   let src = "[posts]\n" +
     "schema = score:Float(max=10.0)\n" +
     "dir = content/posts\n"
-  match parse(src) {
+  match @collections.parse(src) {
     Ok(cfg) => {
       let field = cfg.definitions[0].schema.fields[0]
       assert_eq(field.name, "score")
@@ -481,7 +484,7 @@ test "collections parse Float bounds order-independent" {
   let src = "[posts]\n" +
     "schema = rating:Float(max=5.0,min=0.0)\n" +
     "dir = content/posts\n"
-  match parse(src) {
+  match @collections.parse(src) {
     Ok(cfg) => {
       let field = cfg.definitions[0].schema.fields[0]
       match field.field_type {
@@ -502,7 +505,7 @@ test "collections parse sort weight" {
     "schema = title:String\n" +
     "dir = content/posts\n" +
     "sort = weight\n"
-  match parse(src) {
+  match @collections.parse(src) {
     Ok(cfg) => {
       assert_eq(cfg.definitions.length(), 1)
       match cfg.definitions[0].sort_order {
@@ -520,7 +523,7 @@ test "collections parse description field" {
     "schema = title:String\n" +
     "dir = content/posts\n" +
     "description = \"My blog posts\"\n"
-  match parse(src) {
+  match @collections.parse(src) {
     Ok(cfg) => {
       assert_eq(cfg.definitions.length(), 1)
       assert_true(cfg.definitions[0].description == Some("My blog posts"))
@@ -532,7 +535,7 @@ test "collections parse description field" {
 ///|
 test "collections description defaults to None when not specified" {
   let src = "[posts]\n" + "schema = title:String\n" + "dir = content/posts\n"
-  match parse(src) {
+  match @collections.parse(src) {
     Ok(cfg) => {
       assert_eq(cfg.definitions.length(), 1)
       assert_true(cfg.definitions[0].description == None)
@@ -548,7 +551,7 @@ test "collections parse description and sort together" {
     "dir = content/posts\n" +
     "description = All my posts\n" +
     "sort = title:asc\n"
-  match parse(src) {
+  match @collections.parse(src) {
     Ok(cfg) => {
       assert_eq(cfg.definitions.length(), 1)
       assert_true(cfg.definitions[0].description == Some("All my posts"))
@@ -571,7 +574,7 @@ test "collections parse description across multiple sections" {
     "schema = title:String\n" +
     "dir = content/pages\n" +
     "description = Static pages\n"
-  match parse(src) {
+  match @collections.parse(src) {
     Ok(cfg) => {
       assert_eq(cfg.definitions.length(), 2)
       assert_true(cfg.definitions[0].description == Some("Blog"))
@@ -583,12 +586,12 @@ test "collections parse description across multiple sections" {
 
 ///|
 test "collections parse_sort_order pub function" {
-  assert_true(parse_sort_order("date:desc") is Some(DateDesc))
-  assert_true(parse_sort_order("date:asc") is Some(DateAsc))
-  assert_true(parse_sort_order("title:asc") is Some(TitleAsc))
-  assert_true(parse_sort_order("title:desc") is Some(TitleDesc))
-  assert_true(parse_sort_order("weight") is Some(Weight))
-  assert_true(parse_sort_order("nonsense") is None)
+  assert_true(@collections.parse_sort_order("date:desc") is Some(DateDesc))
+  assert_true(@collections.parse_sort_order("date:asc") is Some(DateAsc))
+  assert_true(@collections.parse_sort_order("title:asc") is Some(TitleAsc))
+  assert_true(@collections.parse_sort_order("title:desc") is Some(TitleDesc))
+  assert_true(@collections.parse_sort_order("weight") is Some(Weight))
+  assert_true(@collections.parse_sort_order("nonsense") is None)
 }
 // ── TDateTime collection parser tests ────────────────────────────────────────
 
@@ -597,7 +600,7 @@ test "collections parse DateTime type unbounded" {
   let src = "[events]\n" +
     "schema = starts_at:DateTime\n" +
     "dir = content/events\n"
-  match parse(src) {
+  match @collections.parse(src) {
     Ok(cfg) => {
       let field = cfg.definitions[0].schema.fields[0]
       assert_eq(field.name, "starts_at")
@@ -615,7 +618,7 @@ test "collections parse DateTime(after=2026-01-01T00:00:00Z)" {
   let src = "[events]\n" +
     "schema = starts_at:DateTime(after=2026-01-01T00:00:00Z)\n" +
     "dir = content/events\n"
-  match parse(src) {
+  match @collections.parse(src) {
     Ok(cfg) => {
       let field = cfg.definitions[0].schema.fields[0]
       assert_eq(field.name, "starts_at")
@@ -634,7 +637,7 @@ test "collections parse DateTime(before=2027-01-01T00:00:00Z)" {
   let src = "[events]\n" +
     "schema = starts_at:DateTime(before=2027-01-01T00:00:00Z)\n" +
     "dir = content/events\n"
-  match parse(src) {
+  match @collections.parse(src) {
     Ok(cfg) => {
       let field = cfg.definitions[0].schema.fields[0]
       assert_eq(field.name, "starts_at")
@@ -653,7 +656,7 @@ test "collections parse DateTime(after=...,before=...)" {
   let src = "[events]\n" +
     "schema = starts_at:DateTime(after=2026-01-01T00:00:00Z,before=2027-01-01T00:00:00Z)\n" +
     "dir = content/events\n"
-  match parse(src) {
+  match @collections.parse(src) {
     Ok(cfg) => {
       let field = cfg.definitions[0].schema.fields[0]
       match field.field_type {
@@ -673,7 +676,7 @@ test "collections parse DateTime bounds order-independent" {
   let src = "[events]\n" +
     "schema = starts_at:DateTime(before=2027-01-01T00:00:00Z,after=2026-01-01T00:00:00Z)\n" +
     "dir = content/events\n"
-  match parse(src) {
+  match @collections.parse(src) {
     Ok(cfg) => {
       let field = cfg.definitions[0].schema.fields[0]
       match field.field_type {
@@ -693,7 +696,7 @@ test "collections reject DateTime with unknown bound key" {
   let src = "[events]\n" +
     "schema = starts_at:DateTime(since=2026-01-01T00:00:00Z)\n" +
     "dir = content/events\n"
-  match parse(src) {
+  match @collections.parse(src) {
     Ok(_) => assert_true(false)
     Err(_) => assert_true(true)
   }
@@ -703,7 +706,7 @@ test "collections reject DateTime with unknown bound key" {
 
 ///|
 test "collections error: empty input returns EmptyConfig" {
-  match parse("") {
+  match @collections.parse("") {
     Err(@collections.EmptyConfig) => assert_true(true)
     _ => assert_true(false)
   }
@@ -711,7 +714,7 @@ test "collections error: empty input returns EmptyConfig" {
 
 ///|
 test "collections error: comment-only input returns EmptyConfig" {
-  match parse("# just a comment") {
+  match @collections.parse("# just a comment") {
     Err(@collections.EmptyConfig) => assert_true(true)
     _ => assert_true(false)
   }
@@ -719,7 +722,7 @@ test "collections error: comment-only input returns EmptyConfig" {
 
 ///|
 test "collections error: whitespace-only input returns EmptyConfig" {
-  match parse("   \n\n   ") {
+  match @collections.parse("   \n\n   ") {
     Err(@collections.EmptyConfig) => assert_true(true)
     _ => assert_true(false)
   }
@@ -728,7 +731,7 @@ test "collections error: whitespace-only input returns EmptyConfig" {
 ///|
 test "collections error: assignment outside section" {
   let src = "schema = title:String\n"
-  match parse(src) {
+  match @collections.parse(src) {
     Err(@collections.InvalidLine(line, msg)) => {
       assert_eq(line, 1)
       assert_eq(msg, "assignment outside section")
@@ -740,7 +743,7 @@ test "collections error: assignment outside section" {
 ///|
 test "collections error: key=value line before any section" {
   let src = "dir = content/posts\n[posts]\nschema = title:String\ndir = content/posts\n"
-  match parse(src) {
+  match @collections.parse(src) {
     Err(@collections.InvalidLine(line, msg)) => {
       assert_eq(line, 1)
       assert_eq(msg, "assignment outside section")
@@ -752,7 +755,7 @@ test "collections error: key=value line before any section" {
 ///|
 test "collections error: line without equals sign" {
   let src = "[posts]\nbadline\n"
-  match parse(src) {
+  match @collections.parse(src) {
     Err(@collections.InvalidLine(line, msg)) => {
       assert_eq(line, 2)
       assert_eq(msg, "expected key=value")
@@ -764,7 +767,7 @@ test "collections error: line without equals sign" {
 ///|
 test "collections error: equals at start of line" {
   let src = "[posts]\n=value\n"
-  match parse(src) {
+  match @collections.parse(src) {
     Err(@collections.InvalidLine(line, msg)) => {
       assert_eq(line, 2)
       assert_eq(msg, "expected key=value")
@@ -776,7 +779,7 @@ test "collections error: equals at start of line" {
 ///|
 test "collections error: equals at end of line" {
   let src = "[posts]\nschema=\n"
-  match parse(src) {
+  match @collections.parse(src) {
     Err(@collections.InvalidLine(line, msg)) => {
       assert_eq(line, 2)
       assert_eq(msg, "expected key=value")
@@ -788,7 +791,7 @@ test "collections error: equals at end of line" {
 ///|
 test "collections error: page_size non-numeric" {
   let src = "[posts]\nschema = title:String\ndir = content/posts\npage_size = abc\n"
-  match parse(src) {
+  match @collections.parse(src) {
     Err(@collections.InvalidLine(line, msg)) => {
       assert_eq(line, 4)
       assert_eq(msg, "page_size must be a positive integer")
@@ -800,7 +803,7 @@ test "collections error: page_size non-numeric" {
 ///|
 test "collections error: page_size negative" {
   let src = "[posts]\nschema = title:String\ndir = content/posts\npage_size = -5\n"
-  match parse(src) {
+  match @collections.parse(src) {
     Err(@collections.InvalidLine(line, msg)) => {
       assert_eq(line, 4)
       assert_eq(msg, "page_size must be a positive integer")
@@ -812,7 +815,7 @@ test "collections error: page_size negative" {
 ///|
 test "collections error: page_size zero" {
   let src = "[posts]\nschema = title:String\ndir = content/posts\npage_size = 0\n"
-  match parse(src) {
+  match @collections.parse(src) {
     Err(@collections.InvalidLine(line, msg)) => {
       assert_eq(line, 4)
       assert_eq(msg, "page_size must be a positive integer")
@@ -824,7 +827,7 @@ test "collections error: page_size zero" {
 ///|
 test "collections error: unknown key in collection section" {
   let src = "[posts]\nfoo = bar\n"
-  match parse(src) {
+  match @collections.parse(src) {
     Err(@collections.InvalidLine(line, msg)) => {
       assert_eq(line, 2)
       assert_eq(msg, "unknown key in section 'posts': foo")
@@ -836,7 +839,7 @@ test "collections error: unknown key in collection section" {
 ///|
 test "collections error: unknown key in data section" {
   let src = "[data.nav]\nfoo = bar\n"
-  match parse(src) {
+  match @collections.parse(src) {
     Err(@collections.InvalidLine(line, msg)) => {
       assert_eq(line, 2)
       assert_eq(msg, "unknown key in section 'data.nav': foo")
@@ -849,7 +852,7 @@ test "collections error: unknown key in data section" {
 test "collections error: duplicate collection name" {
   let src = "[posts]\nschema = title:String\ndir = content/posts\n\n" +
     "[posts]\nschema = title:String\ndir = content/posts2\n"
-  match parse(src) {
+  match @collections.parse(src) {
     Err(@collections.DuplicateCollection(name)) => assert_eq(name, "posts")
     _ => assert_true(false)
   }
@@ -860,7 +863,7 @@ test "collections error: duplicate data schema name" {
   let src = "[posts]\nschema = title:String\ndir = content/posts\n\n" +
     "[data.nav]\nrequired = title\n\n" +
     "[data.nav]\nrequired = subtitle\n"
-  match parse(src) {
+  match @collections.parse(src) {
     Err(@collections.DuplicateDataSchema(name)) => assert_eq(name, "nav")
     _ => assert_true(false)
   }
@@ -870,7 +873,7 @@ test "collections error: duplicate data schema name" {
 test "collections error: missing required field in data section" {
   let src = "[posts]\nschema = title:String\ndir = content/posts\n\n" +
     "[data.nav]\n"
-  match parse(src) {
+  match @collections.parse(src) {
     Err(@collections.MissingRequiredField(section, field)) => {
       assert_eq(section, "data.nav")
       assert_eq(field, "required")
@@ -882,7 +885,7 @@ test "collections error: missing required field in data section" {
 ///|
 test "collections error: missing schema in collection" {
   let src = "[posts]\ndir = content/posts\n"
-  match parse(src) {
+  match @collections.parse(src) {
     Err(@collections.MissingRequiredField(name, field)) => {
       assert_eq(name, "posts")
       assert_eq(field, "schema")
@@ -894,7 +897,7 @@ test "collections error: missing schema in collection" {
 ///|
 test "collections error: missing dir in collection" {
   let src = "[posts]\nschema = title:String\n"
-  match parse(src) {
+  match @collections.parse(src) {
     Err(@collections.MissingRequiredField(name, field)) => {
       assert_eq(name, "posts")
       assert_eq(field, "dir")
@@ -906,7 +909,7 @@ test "collections error: missing dir in collection" {
 ///|
 test "collections error: section header too short (single bracket)" {
   let src = "[\n"
-  match parse(src) {
+  match @collections.parse(src) {
     Err(@collections.InvalidLine(line, msg)) => {
       assert_eq(line, 1)
       assert_eq(msg, "invalid section header")
@@ -918,7 +921,7 @@ test "collections error: section header too short (single bracket)" {
 ///|
 test "collections error: section header missing closing bracket" {
   let src = "[posts\nschema = title:String\n"
-  match parse(src) {
+  match @collections.parse(src) {
     Err(@collections.InvalidLine(line, msg)) => {
       assert_eq(line, 1)
       assert_eq(msg, "invalid section header")
@@ -930,7 +933,7 @@ test "collections error: section header missing closing bracket" {
 ///|
 test "collections error: empty section header" {
   let src = "[  ]\nschema = title:String\n"
-  match parse(src) {
+  match @collections.parse(src) {
     Err(@collections.InvalidLine(line, msg)) => {
       assert_eq(line, 1)
       assert_eq(msg, "empty section header")
@@ -942,7 +945,7 @@ test "collections error: empty section header" {
 ///|
 test "collections error: invalid data schema name (empty after data.)" {
   let src = "[data.]\nrequired = title\n"
-  match parse(src) {
+  match @collections.parse(src) {
     Err(@collections.InvalidLine(line, msg)) => {
       assert_eq(line, 1)
       assert_eq(msg, "invalid data schema name")
@@ -954,7 +957,7 @@ test "collections error: invalid data schema name (empty after data.)" {
 ///|
 test "collections error: invalid data schema name (numeric)" {
   let src = "[data.123]\nrequired = title\n"
-  match parse(src) {
+  match @collections.parse(src) {
     Err(@collections.InvalidLine(line, msg)) => {
       assert_eq(line, 1)
       assert_eq(msg, "invalid data schema name")
@@ -966,7 +969,7 @@ test "collections error: invalid data schema name (numeric)" {
 ///|
 test "collections error: invalid collection name (starts with digit)" {
   let src = "[123]\nschema = title:String\n"
-  match parse(src) {
+  match @collections.parse(src) {
     Err(@collections.InvalidLine(line, msg)) => {
       assert_eq(line, 1)
       assert_eq(msg, "invalid collection name")
@@ -978,7 +981,7 @@ test "collections error: invalid collection name (starts with digit)" {
 ///|
 test "collections error: invalid collection name (special chars)" {
   let src = "[hello-world!]\nschema = title:String\n"
-  match parse(src) {
+  match @collections.parse(src) {
     Err(@collections.InvalidLine(line, msg)) => {
       assert_eq(line, 1)
       assert_eq(msg, "invalid collection name")
@@ -990,7 +993,7 @@ test "collections error: invalid collection name (special chars)" {
 ///|
 test "collections error: unterminated quoted string value" {
   let src = "[posts]\nschema = \"unterminated\n"
-  match parse(src) {
+  match @collections.parse(src) {
     Err(@collections.InvalidLine(line, msg)) => {
       assert_eq(line, 2)
       assert_eq(msg, "unterminated quoted string")
@@ -1002,7 +1005,7 @@ test "collections error: unterminated quoted string value" {
 ///|
 test "collections error: unterminated quoted string (just opening quote)" {
   let src = "[posts]\nschema = \"\n"
-  match parse(src) {
+  match @collections.parse(src) {
     Err(@collections.InvalidLine(line, msg)) => {
       assert_eq(line, 2)
       assert_eq(msg, "unterminated quoted string")
@@ -1014,7 +1017,7 @@ test "collections error: unterminated quoted string (just opening quote)" {
 ///|
 test "collections error: invalid sort value" {
   let src = "[posts]\nschema = title:String\ndir = content/posts\nsort = invalid:order\n"
-  match parse(src) {
+  match @collections.parse(src) {
     Err(@collections.InvalidLine(line, msg)) => {
       assert_eq(line, 4)
       assert_true(msg.contains("invalid sort value"))
@@ -1026,7 +1029,7 @@ test "collections error: invalid sort value" {
 ///|
 test "collections error: invalid schema field declaration (no colon)" {
   let src = "[posts]\nschema = titleString\ndir = content/posts\n"
-  match parse(src) {
+  match @collections.parse(src) {
     Err(@collections.InvalidSchema(name, msg)) => {
       assert_eq(name, "posts")
       assert_true(msg.contains("invalid field declaration"))
@@ -1038,7 +1041,7 @@ test "collections error: invalid schema field declaration (no colon)" {
 ///|
 test "collections error: invalid schema field name" {
   let src = "[posts]\nschema = 123:String\ndir = content/posts\n"
-  match parse(src) {
+  match @collections.parse(src) {
     Err(@collections.InvalidSchema(name, msg)) => {
       assert_eq(name, "posts")
       assert_true(msg.contains("invalid field name"))
@@ -1050,7 +1053,7 @@ test "collections error: invalid schema field name" {
 ///|
 test "collections error: empty schema (no fields)" {
   let src = "[posts]\nschema = \ndir = content/posts\n"
-  match parse(src) {
+  match @collections.parse(src) {
     Err(@collections.InvalidLine(line, msg)) => {
       // schema = with empty value triggers "expected key=value" since value after = is empty after trim
       assert_eq(line, 2)
@@ -1063,7 +1066,7 @@ test "collections error: empty schema (no fields)" {
 ///|
 test "collections error: unknown field type in schema" {
   let src = "[posts]\nschema = title:UnknownType\ndir = content/posts\n"
-  match parse(src) {
+  match @collections.parse(src) {
     Err(@collections.InvalidSchema(name, msg)) => {
       assert_eq(name, "posts")
       assert_true(msg.contains("unknown field type"))

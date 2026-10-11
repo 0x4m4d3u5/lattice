@@ -26,7 +26,7 @@ fn OutputPlan::new(root : String) -> OutputPlan {
   {
     root: output_path_key(root),
     directories: [],
-    directory_index: Map::new(),
+    directory_index: Map([]),
     files: [],
   }
 }

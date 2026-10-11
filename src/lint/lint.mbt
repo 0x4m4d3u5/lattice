@@ -11,7 +11,25 @@ pub(all) enum ViolationType {
   CollectionsError
   DuplicateSlug
   IOError
-} derive(Eq, Hash, Show, Debug)
+} derive(Eq, Hash, Debug)
+
+///|
+pub impl Show for ViolationType with fn output(self, logger) {
+  match self {
+    SchemaError => logger.write_string("SchemaError")
+    MissingRequiredFrontmatter =>
+      logger.write_string("MissingRequiredFrontmatter")
+    BrokenWikilink => logger.write_string("BrokenWikilink")
+    DanglingTagReference => logger.write_string("DanglingTagReference")
+    TemplateSlotError => logger.write_string("TemplateSlotError")
+    DataError => logger.write_string("DataError")
+    ShortcodeError => logger.write_string("ShortcodeError")
+    FrontmatterError => logger.write_string("FrontmatterError")
+    CollectionsError => logger.write_string("CollectionsError")
+    DuplicateSlug => logger.write_string("DuplicateSlug")
+    IOError => logger.write_string("IOError")
+  }
+}
 
 ///|
 pub(all) struct LintViolation {
@@ -111,7 +129,7 @@ pub fn summarize(result : LintResult) -> ViolationSummary {
   let total = violations.length()
 
   // Group by type
-  let type_counts : Map[ViolationType, Int] = Map::new()
+  let type_counts : Map[ViolationType, Int] = Map([])
   for v in violations {
     type_counts.update(v.kind, fn(prev) {
       match prev {
@@ -127,7 +145,7 @@ pub fn summarize(result : LintResult) -> ViolationSummary {
   by_type.sort_by((a, b) => b.count.compare(a.count))
 
   // Group by file
-  let file_counts : Map[String, Int] = Map::new()
+  let file_counts : Map[String, Int] = Map([])
   for v in violations {
     file_counts.update(v.path, fn(prev) {
       match prev {
@@ -165,7 +183,7 @@ pub fn summarize(result : LintResult) -> ViolationSummary {
 /// The `kind` field uses the same stable string names as `violation_type_name`.
 /// `line` and `column` are integers when present, `null` when absent.
 pub fn format_violations_json(result : LintResult) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   buf.write_string("{\n  \"violations\": [")
   let vs = result.violations
   let mut i = 0
@@ -250,7 +268,7 @@ pub fn format_violations_json(result : LintResult) -> String {
 ///     content/posts/hello.md: 2
 /// ```
 pub fn format_summary(summary : ViolationSummary) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   buf.write_string("Summary: ")
   buf.write_string(summary.total.to_string())
   buf.write_string(" violation(s)")
@@ -283,3 +301,15 @@ pub fn format_summary(summary : ViolationSummary) -> String {
 
   buf.to_string()
 }
+
+///|
+pub extend ViolationType with @debug.Debug::{to_repr}
+
+///|
+pub extend ViolationType with Eq::{not_equal, equal}
+
+///|
+pub extend ViolationType with Hash::{hash, hash_combine}
+
+///|
+pub extend ViolationType with Show::{to_string, output}

@@ -52,7 +52,7 @@ pub fn render_sitemap(
   base_url : String,
   pages : Array[@graph.GraphPage],
 ) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   buf.write_string("<?xml version=\"1.0\" encoding=\"utf-8\"?>\n")
   buf.write_string(
     "<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n",

@@ -2,7 +2,15 @@
 pub(all) enum Severity {
   Error
   Warning
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
+
+///|
+pub impl Show for Severity with fn output(self, logger) {
+  match self {
+    Error => logger.write_string("Error")
+    Warning => logger.write_string("Warning")
+  }
+}
 
 ///|
 pub(all) struct Diagnostic {
@@ -109,10 +117,10 @@ fn colored_location(location : String) -> String {
 
 ///|
 pub fn format_diagnostic(d : Diagnostic) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   match d.path {
     Some(path) => {
-      let location = StringBuilder::new()
+      let location = StringBuilder()
       location.write_string(path)
       match d.line {
         Some(line) => {
@@ -254,8 +262,8 @@ pub(all) struct DiagnosticSummary {
 pub fn summarize(diagnostics : Array[Diagnostic]) -> DiagnosticSummary {
   let mut error_count = 0
   let mut warning_count = 0
-  let code_counts : Map[String, Int] = Map::new()
-  let file_counts : Map[String, Int] = Map::new()
+  let code_counts : Map[String, Int] = Map([])
+  let file_counts : Map[String, Int] = Map([])
 
   for d in diagnostics {
     match d.severity {
@@ -312,7 +320,7 @@ pub fn summarize(diagnostics : Array[Diagnostic]) -> DiagnosticSummary {
 ///     content/posts/broken.md: 3
 /// ```
 pub fn format_summary(summary : DiagnosticSummary) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   buf.write_string("Summary: ")
   buf.write_string(summary.error_count.to_string())
   buf.write_string(" error(s), ")
@@ -347,3 +355,12 @@ pub fn format_summary(summary : DiagnosticSummary) -> String {
 
   buf.to_string()
 }
+
+///|
+pub extend Severity with @debug.Debug::{to_repr}
+
+///|
+pub extend Severity with Eq::{not_equal, equal}
+
+///|
+pub extend Severity with Show::{to_string, output}

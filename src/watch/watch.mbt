@@ -38,7 +38,7 @@ fn collect_snapshot_entries(
     @fs.IOError(msg) =>
       raise IOError("cannot read directory " + path + ": " + msg)
   }
-  let children = child_names.to_array()
+  let children = child_names.to_owned()
   children.sort()
   let mut i = 0
   while i < children.length() {
@@ -107,7 +107,7 @@ pub fn ymd_pad4(n : Int) -> String {
   if s.length() >= 4 {
     s
   } else {
-    let buf = StringBuilder::new()
+    let buf = StringBuilder()
     let mut i = s.length()
     while i < 4 {
       buf.write_char('0')

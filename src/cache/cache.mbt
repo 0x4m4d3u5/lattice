@@ -55,7 +55,7 @@ fn parse_json_string_cache(
     raise ParseFailure("expected string")
   }
   i = i + 1
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   while i < source.length() {
     let c = @strutil.char_at(source, i)
     if c == '"' {
@@ -235,7 +235,7 @@ pub fn parse(source : String) -> CacheFile raise CacheParseError {
 
 ///|
 pub fn render(file : CacheFile) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   buf.write_string("{\"version\":")
   buf.write_string(file.version.to_string())
   buf.write_string(",\"entries\":[")
@@ -263,13 +263,13 @@ pub fn cache_path(output_dir : String) -> String {
 
 ///|
 pub fn empty(output_dir : String) -> CacheStore {
-  { output_dir, entries: [], index_by_slug: Map::new() }
+  { output_dir, entries: [], index_by_slug: Map([]), }
 }
 
 ///|
 fn from_file(output_dir : String, file : CacheFile) -> CacheStore {
   let deduped : Array[CacheEntry] = []
-  let index_by_slug : Map[String, Int] = Map::new()
+  let index_by_slug : Map[String, Int] = Map([])
   let mut i = 0
   while i < file.entries.length() {
     let entry = file.entries[i]

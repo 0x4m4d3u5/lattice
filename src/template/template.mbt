@@ -35,7 +35,48 @@ pub(all) enum TemplateSlot {
   TableOfContents
   Author
   Excerpt
-} derive(Eq, Hash, Show)
+} derive(Eq, Hash)
+
+///|
+pub impl Show for TemplateSlot with fn output(self, logger) {
+  match self {
+    Title => logger.write_string("Title")
+    Content => logger.write_string("Content")
+    Date => logger.write_string("Date")
+    Description => logger.write_string("Description")
+    Url => logger.write_string("Url")
+    SiteName => logger.write_string("SiteName")
+    NavLinks => logger.write_string("NavLinks")
+    CustomCss => logger.write_string("CustomCss")
+    TagName => logger.write_string("TagName")
+    TagCount => logger.write_string("TagCount")
+    Backlinks => logger.write_string("Backlinks")
+    Tags => logger.write_string("Tags")
+    Collection => logger.write_string("Collection")
+    Year => logger.write_string("Year")
+    Month => logger.write_string("Month")
+    Day => logger.write_string("Day")
+    PrevPostUrl => logger.write_string("PrevPostUrl")
+    PrevPostTitle => logger.write_string("PrevPostTitle")
+    NextPostUrl => logger.write_string("NextPostUrl")
+    NextPostTitle => logger.write_string("NextPostTitle")
+    NextPage => logger.write_string("NextPage")
+    PrevPage => logger.write_string("PrevPage")
+    PageNum => logger.write_string("PageNum")
+    IsFirstPage => logger.write_string("IsFirstPage")
+    IsLastPage => logger.write_string("IsLastPage")
+    TotalPages => logger.write_string("TotalPages")
+    PageUrl => logger.write_string("PageUrl")
+    Body => logger.write_string("Body")
+    BodyNoH1 => logger.write_string("BodyNoH1")
+    HeadMeta => logger.write_string("HeadMeta")
+    ReadingTime => logger.write_string("ReadingTime")
+    WordCount => logger.write_string("WordCount")
+    TableOfContents => logger.write_string("TableOfContents")
+    Author => logger.write_string("Author")
+    Excerpt => logger.write_string("Excerpt")
+  }
+}
 
 ///|
 pub(all) enum TemplatePart {
@@ -78,7 +119,7 @@ enum Filter {
   Truncate(Int) // truncate to N chars, append "..." if truncated
   DatePart(String) // extract "year"|"month"|"day" from date string
   Default(String) // fallback if slot renders empty
-} derive(Eq, Show)
+} derive(Eq)
 
 ///|
 fn split_dot_template(s : String) -> Array[String] {
@@ -941,7 +982,7 @@ fn render_body_parts(
               match @data.resolve_string(store, file, key_path) {
                 Ok(value) => out.write_string(value)
                 Err(_) => {
-                  let path = StringBuilder::new()
+                  let path = StringBuilder()
                   path.write_string("data.")
                   path.write_string(file)
                   let mut j = 0
@@ -954,7 +995,7 @@ fn render_body_parts(
                 }
               }
             None => {
-              let path = StringBuilder::new()
+              let path = StringBuilder()
               path.write_string("data.")
               path.write_string(file)
               let mut j = 0
@@ -1124,7 +1165,7 @@ fn render_parts(
     i = i + 1
   }
 
-  let out = StringBuilder::new()
+  let out = StringBuilder()
   match
     render_body_parts(
       template.parts,
@@ -1158,7 +1199,7 @@ pub fn render_template(
     slots,
     @data.empty_store(),
     page_fields,
-    Map::new(),
+    Map([]),
   )
 }
 
@@ -1188,7 +1229,7 @@ pub fn render_template_with_data(
       }
 
       // Add body to slots for layout
-      let layout_slots = Map::new()
+      let layout_slots = Map([])
       for key, value in slots {
         layout_slots.set(key, value)
       }
@@ -1232,7 +1273,7 @@ pub fn parse_template_with_includes(
   }
 
   // Track visited files for cycle detection
-  let visited : Map[String, Bool] = Map::new()
+  let visited : Map[String, Bool] = Map([])
 
   // Helper function to flatten includes recursively
   fn flatten_includes(
@@ -1287,7 +1328,7 @@ pub fn parse_template_with_includes(
           }
 
           // Mark as visited
-          let new_visited = Map::new()
+          let new_visited = Map([])
           new_visited.set(filename, true)
           for key, _ in visited {
             new_visited.set(key, true)
@@ -1464,3 +1505,29 @@ fn collect_refs_from_part(part : TemplatePart, refs : Array[String]) -> Unit {
     | LoopItemSlot(_, _) => ()
   }
 }
+
+///|
+pub extend Filter with Eq::{not_equal, equal}
+
+///|
+pub extend TemplateSlot with Eq::{not_equal, equal}
+
+///|
+pub extend TemplateSlot with Hash::{hash, hash_combine}
+
+///|
+pub extend TemplateSlot with Show::{to_string, output}
+
+///|
+pub impl Show for Filter with fn to_string(self) {
+  match self {
+    Upper => "Upper"
+    Lower => "Lower"
+    Truncate(n) => "Truncate(\{n})"
+    DatePart(part) => "DatePart(\{part})"
+    Default(value) => "Default(\{value})"
+  }
+}
+
+///|
+pub extend Filter with Show::{to_string, output}

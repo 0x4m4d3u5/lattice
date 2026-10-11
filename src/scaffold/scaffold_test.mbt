@@ -1,24 +1,33 @@
 ///|
 test "stub_for_field_type - TString unbounded" {
-  let result = stub_for_field_type(@schema.TString(None, None), "2026-04-01")
+  let result = @scaffold.stub_for_field_type(
+    @schema.TString(None, None),
+    "2026-04-01",
+  )
   assert_eq(result, "placeholder")
 }
 
 ///|
 test "stub_for_field_type - TString with minlen" {
-  let result = stub_for_field_type(@schema.TString(Some(5), None), "2026-04-01")
+  let result = @scaffold.stub_for_field_type(
+    @schema.TString(Some(5), None),
+    "2026-04-01",
+  )
   assert_eq(result, "placeholder")
 }
 
 ///|
 test "stub_for_field_type - TString with maxlen shorter than placeholder" {
-  let result = stub_for_field_type(@schema.TString(None, Some(5)), "2026-04-01")
+  let result = @scaffold.stub_for_field_type(
+    @schema.TString(None, Some(5)),
+    "2026-04-01",
+  )
   assert_eq(result, "place")
 }
 
 ///|
 test "stub_for_field_type - TString with minlen requiring padding" {
-  let result = stub_for_field_type(
+  let result = @scaffold.stub_for_field_type(
     @schema.TString(Some(20), None),
     "2026-04-01",
   )
@@ -28,31 +37,43 @@ test "stub_for_field_type - TString with minlen requiring padding" {
 
 ///|
 test "stub_for_field_type - TDate" {
-  let result = stub_for_field_type(@schema.TDate(None, None), "2026-04-01")
+  let result = @scaffold.stub_for_field_type(
+    @schema.TDate(None, None),
+    "2026-04-01",
+  )
   assert_eq(result, "2026-04-01")
 }
 
 ///|
 test "stub_for_field_type - TInt unbounded" {
-  let result = stub_for_field_type(@schema.TInt(None, None), "2026-04-01")
+  let result = @scaffold.stub_for_field_type(
+    @schema.TInt(None, None),
+    "2026-04-01",
+  )
   assert_eq(result, "0")
 }
 
 ///|
 test "stub_for_field_type - TInt with min" {
-  let result = stub_for_field_type(@schema.TInt(Some(10), None), "2026-04-01")
+  let result = @scaffold.stub_for_field_type(
+    @schema.TInt(Some(10), None),
+    "2026-04-01",
+  )
   assert_eq(result, "10")
 }
 
 ///|
 test "stub_for_field_type - TFloat unbounded" {
-  let result = stub_for_field_type(@schema.TFloat(None, None), "2026-04-01")
+  let result = @scaffold.stub_for_field_type(
+    @schema.TFloat(None, None),
+    "2026-04-01",
+  )
   assert_eq(result, "0.0")
 }
 
 ///|
 test "stub_for_field_type - TFloat with min" {
-  let result = stub_for_field_type(
+  let result = @scaffold.stub_for_field_type(
     @schema.TFloat(Some(1.5), None),
     "2026-04-01",
   )
@@ -61,13 +82,13 @@ test "stub_for_field_type - TFloat with min" {
 
 ///|
 test "stub_for_field_type - TBool" {
-  let result = stub_for_field_type(@schema.TBool, "2026-04-01")
+  let result = @scaffold.stub_for_field_type(@schema.TBool, "2026-04-01")
   assert_eq(result, "false")
 }
 
 ///|
 test "stub_for_field_type - TEnum" {
-  let result = stub_for_field_type(
+  let result = @scaffold.stub_for_field_type(
     @schema.TEnum(["draft", "published"]),
     "2026-04-01",
   )
@@ -76,31 +97,34 @@ test "stub_for_field_type - TEnum" {
 
 ///|
 test "stub_for_field_type - TEnum empty" {
-  let result = stub_for_field_type(@schema.TEnum([]), "2026-04-01")
+  let result = @scaffold.stub_for_field_type(@schema.TEnum([]), "2026-04-01")
   assert_eq(result, "")
 }
 
 ///|
 test "stub_for_field_type - TUrl" {
-  let result = stub_for_field_type(@schema.TUrl, "2026-04-01")
+  let result = @scaffold.stub_for_field_type(@schema.TUrl, "2026-04-01")
   assert_eq(result, "https://example.com")
 }
 
 ///|
 test "stub_for_field_type - TSlug" {
-  let result = stub_for_field_type(@schema.TSlug, "2026-04-01")
+  let result = @scaffold.stub_for_field_type(@schema.TSlug, "2026-04-01")
   assert_eq(result, "example-slug")
 }
 
 ///|
 test "stub_for_field_type - TRef" {
-  let result = stub_for_field_type(@schema.TRef(Some("posts")), "2026-04-01")
+  let result = @scaffold.stub_for_field_type(
+    @schema.TRef(Some("posts")),
+    "2026-04-01",
+  )
   assert_eq(result, "example-slug")
 }
 
 ///|
 test "stub_for_field_type - TArray" {
-  let result = stub_for_field_type(
+  let result = @scaffold.stub_for_field_type(
     @schema.TArray(@schema.TString(None, None)),
     "2026-04-01",
   )
@@ -109,7 +133,7 @@ test "stub_for_field_type - TArray" {
 
 ///|
 test "stub_for_field_type - TOptional delegates to inner" {
-  let result = stub_for_field_type(
+  let result = @scaffold.stub_for_field_type(
     @schema.TOptional(@schema.TBool),
     "2026-04-01",
   )
@@ -137,10 +161,10 @@ test "generate_frontmatter - basic schema" {
       },
     ],
   }
-  let result = generate_frontmatter(schema, "2026-04-01")
+  let result = @scaffold.generate_frontmatter(schema, "2026-04-01")
   let lines : Array[String] = result
     .split("\n")
-    .map(fn(sv) { sv.to_string() })
+    .map(fn(sv) { sv.to_owned() })
     .collect()
   // Should start with ---
   assert_eq(lines[0], "---")
@@ -167,10 +191,10 @@ test "generate_frontmatter - array field required" {
       },
     ],
   }
-  let result = generate_frontmatter(schema, "2026-04-01")
+  let result = @scaffold.generate_frontmatter(schema, "2026-04-01")
   let lines : Array[String] = result
     .split("\n")
-    .map(fn(sv) { sv.to_string() })
+    .map(fn(sv) { sv.to_owned() })
     .collect()
   inspect(lines[1], content="items:")
   inspect(lines[2], content="  - placeholder")
@@ -188,10 +212,10 @@ test "generate_frontmatter - TInt with min" {
       },
     ],
   }
-  let result = generate_frontmatter(schema, "2026-04-01")
+  let result = @scaffold.generate_frontmatter(schema, "2026-04-01")
   let lines : Array[String] = result
     .split("\n")
-    .map(fn(sv) { sv.to_string() })
+    .map(fn(sv) { sv.to_owned() })
     .collect()
   inspect(lines[1], content="priority: 1")
 }
@@ -204,7 +228,7 @@ test "new_content_file - empty slug rejected" {
       { name: "title", field_type: @schema.TString(None, None), required: true },
     ],
   }
-  let result = new_content_file(
+  let result = @scaffold.new_content_file(
     "/tmp/lattice-test-new", schema, "", "2026-04-01",
   )
   match result {
@@ -230,7 +254,9 @@ test "new_content_file - refuses to overwrite existing file" {
   @fs.write_string_to_file(path, "existing") catch {
     _ => ()
   }
-  let result = new_content_file(test_dir, schema, "existing", "2026-04-01")
+  let result = @scaffold.new_content_file(
+    test_dir, schema, "existing", "2026-04-01",
+  )
   match result {
     Err(msg) =>
       assert_eq(@strutil.starts_with(msg, "file already exists"), true)
@@ -265,7 +291,7 @@ test "new_content_file - schema with required and optional fields includes field
   @fs.create_dir(test_dir) catch {
     _ => ()
   }
-  let file_path = new_content_file(
+  let file_path = @scaffold.new_content_file(
     test_dir, schema, "field-guide-test", "2026-04-29",
   )
   match file_path {
@@ -298,7 +324,7 @@ test "new_content_file - schema with only required fields omits optional line" {
   @fs.create_dir(test_dir) catch {
     _ => ()
   }
-  let file_path = new_content_file(
+  let file_path = @scaffold.new_content_file(
     test_dir, schema, "required-only-test", "2026-04-29",
   )
   match file_path {
@@ -330,7 +356,7 @@ test "new_content_file - happy path creates file with frontmatter and body stub"
   @fs.create_dir(test_dir) catch {
     _ => ()
   }
-  let file_path = new_content_file(
+  let file_path = @scaffold.new_content_file(
     test_dir, schema, "happy-path-test", "2026-04-29",
   )
   match file_path {

@@ -388,10 +388,10 @@ fn build_parser() -> @clap.Parser {
 
 ///|
 fn safe_get_one(sv : @clap.SimpleValue, name : String) -> String? {
-  let result : Result[String, _] = try? sv.get_one(name)
-  match result {
-    Ok(v) => Some(v)
-    Err(_) => None
+  try sv.get_one(name) catch {
+    _ => None
+  } noraise {
+    value => Some(value)
   }
 }
 
@@ -946,7 +946,7 @@ fn run_watch(options : CliOptions, initial_state : CliState) -> Unit {
 /// ViolationType enum — adding a new variant without updating this
 /// function causes a compile-time match error.
 pub fn list_error_codes() -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   buf.write_string("Lattice error codes:\n")
   buf.write_string("\n")
   buf.write_string(
@@ -1000,7 +1000,7 @@ pub fn list_error_codes() -> String {
 pub fn explain_error_code(code : String) -> String? {
   // Normalize: trim, lowercase, remove underscores so both
   // "BrokenWikilink" and "broken_wikilink" map to "brokenwikilink"
-  let normalized = code.trim().to_lower().replace(old="_", new="").to_string()
+  let normalized = code.trim().to_lower().replace(old="_", new="").to_owned()
   match normalized {
     "e001" | "missingrequiredfrontmatter" =>
       Some(
@@ -1188,31 +1188,22 @@ pub fn explain_error_code(code : String) -> String? {
 
 ///|
 fn run_main() -> Unit {
-  let args = @sys.get_cli_args()
+  let args = user_cli_args()
   let parser = build_parser()
   let sv = @clap.SimpleValue::new("lattice")
 
-  let parse_result : Result[String?, @clap.ParserError] = try? parser.parse(
-    sv,
-    args[1:].to_array(),
-  )
-
-  match parse_result {
-    Ok(help_message) =>
-      match help_message {
-        Some(msg) => {
-          println(msg)
-          return
-        }
-        None => ()
-      }
-    Err(err) => {
+  let help_message = parser.parse(sv, args) catch {
+    err => {
       println(err.to_string())
       println("")
       println(parser.gen_help_message(["lattice"], {}))
       @sys.exit(1)
       return
     }
+  }
+  if help_message is Some(msg) {
+    println(msg)
+    return
   }
 
   // Handle --version flag before subcommand dispatch
@@ -1379,7 +1370,9 @@ fn run_main() -> Unit {
             "collection '" +
             collection_name +
             "' not found — available: " +
-            available.iter().map(fn(n) { "'" + n + "'" }).collect().to_string(),
+            "[" +
+            available.iter().map(fn(n) { "'" + n + "'" }).join(", ") +
+            "]",
           ),
         )
         @sys.exit(1)
@@ -1543,4 +1536,17 @@ fn run_main() -> Unit {
 ///|
 fn main {
   run_main()
+}
+
+///|
+#cfg(target="js")
+fn user_cli_args() -> ArrayView[String] {
+  // env.args includes both Node and the script on the JavaScript backend.
+  @env.args()[2:]
+}
+
+///|
+#cfg(not(target="js"))
+fn user_cli_args() -> ArrayView[String] {
+  @env.args()[1:]
 }

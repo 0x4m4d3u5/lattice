@@ -1,101 +1,618 @@
+--- a/moon.mod.json
++++ /dev/null
+@@ -1,10 +0,0 @@
+-{
+-  "name": "TheWaWaR/clap",
+-  "version": "0.2.6",
+-  "readme": "README.md",
+-  "repository": "https://github.com/TheWaWaR/clap.mbt",
+-  "license": "MIT",
+-  "keywords": ["utils", "command line", "parser"],
+-  "description": "Command Line Argument Parser",
+-  "source": "src"
+-}
+--- /dev/null
++++ b/moon.mod
+@@ -0,0 +1,15 @@
++name = "TheWaWaR/clap"
++
++version = "0.2.6"
++
++readme = "README.md"
++
++repository = "https://github.com/TheWaWaR/clap.mbt"
++
++license = "MIT"
++
++keywords = [ "utils", "command line", "parser" ]
++
++description = "Command Line Argument Parser"
++
++source = "src"
+--- a/src/moon.pkg.json
++++ /dev/null
+@@ -1 +0,0 @@
+-{ }
+--- /dev/null
++++ b/src/moon.pkg
+@@ -0,0 +1,5 @@
++import {
++  "moonbitlang/core/hashmap",
++  "moonbitlang/core/string",
++  "moonbitlang/core/hashset",
++}
+--- a/src/arg.mbt
++++ b/src/arg.mbt
+@@ -49 +49 @@
+-  choices? : @hashset.HashSet[String] = @hashset.new(),
++  choices? : @hashset.HashSet[String] = @hashset.HashSet([]),
+@@ -64 +64 @@
+-  choices? : @hashset.HashSet[String] = @hashset.new(),
++  choices? : @hashset.HashSet[String] = @hashset.HashSet([]),
+@@ -150 +150,31 @@
+-} derive(Show, Eq)
++} derive(Eq)
++
++///|
++pub impl Show for Nargs with fn output(self, logger) {
++  match self {
++    Any => logger.write_string("Any")
++    One => logger.write_string("One")
++    Fixed(v0) => {
++      logger.write_string("Fixed(")
++      logger.write_object(v0)
++      logger.write_string(")")
++    }
++    AtLeast(v0) => {
++      logger.write_string("AtLeast(")
++      logger.write_object(v0)
++      logger.write_string(")")
++    }
++    AtMost(v0) => {
++      logger.write_string("AtMost(")
++      logger.write_object(v0)
++      logger.write_string(")")
++    }
++    Range(v0, v1) => {
++      logger.write_string("Range(")
++      logger.write_object(v0)
++      logger.write_string(", ")
++      logger.write_object(v1)
++      logger.write_string(")")
++    }
++  }
++}
+@@ -176,0 +207,6 @@
++
++///|
++pub extend Nargs with Eq::{not_equal, equal}
++
++///|
++pub extend Nargs with Show::{to_string, output}
+--- a/src/gen_help.mbt
++++ b/src/gen_help.mbt
+@@ -8 +8 @@
+-  let builder = StringBuilder::new(size_hint=32)
++  let builder = StringBuilder(size_hint=32)
+@@ -22 +22 @@
+-  if not(subcmds.is_empty()) {
++  if !subcmds.is_empty() {
+@@ -47 +47 @@
+-  if not(subcmds.is_empty()) {
++  if !subcmds.is_empty() {
+@@ -69 +69 @@
+-  if not(global_args.is_empty()) {
++  if !global_args.is_empty() {
+@@ -87,2 +87,2 @@
+-    guard not(cull_args.contains(name)) else { continue }
+-    guard not(arg is Positional(..)) else { continue }
++    guard !cull_args.contains(name) else { continue }
++    guard !(arg is Positional(..)) else { continue }
+--- a/src/parser.mbt
++++ b/src/parser.mbt
+@@ -37 +37,42 @@
+-} derive(Show)
++}
++
++///|
++pub impl Show for ParserError with fn output(self, logger) {
++  match self {
++    InvalidArgumentName(v0) => {
++      logger.write_string("InvalidArgumentName(")
++      logger.write_object(v0)
++      logger.write_string(")")
++    }
++    InvalidSubCommandName(v0) => {
++      logger.write_string("InvalidSubCommandName(")
++      logger.write_object(v0)
++      logger.write_string(")")
++    }
++    InvalidPositionalAsNamed(v0) => {
++      logger.write_string("InvalidPositionalAsNamed(")
++      logger.write_object(v0)
++      logger.write_string(")")
++    }
++    InvalidArgumentValue(v0) => {
++      logger.write_string("InvalidArgumentValue(")
++      logger.write_object(v0)
++      logger.write_string(")")
++    }
++    InvalidArgumentValueLength(v0) => {
++      logger.write_string("InvalidArgumentValueLength(")
++      logger.write_object(v0)
++      logger.write_string(")")
++    }
++    TooManyArgs(v0) => {
++      logger.write_string("TooManyArgs(")
++      logger.write_object(v0)
++      logger.write_string(")")
++    }
++    InvalidSpec(v0) => {
++      logger.write_string("InvalidSpec(")
++      logger.write_object(v0)
++      logger.write_string(")")
++    }
++  }
++}
+@@ -49 +90 @@
+-  let global_args : Map[String, Arg] = {}
++  let global_args : Map[String, Arg] = Map([])
+@@ -53 +94 @@
+-  let args_length : @hashmap.HashMap[String, UInt] = @hashmap.new()
++  let args_length : @hashmap.HashMap[String, UInt] = @hashmap.HashMap([])
+@@ -67 +108 @@
+-        let name = name.to_string()
++        let name = name.to_owned()
+@@ -72 +113 @@
+-        if new_arg.is_empty() && positional_arg is Some(arg) {
++        if new_arg is None && positional_arg is Some(arg) {
+@@ -107 +148 @@
+-          if new_arg.is_empty() && positional_arg is Some(arg) {
++          if new_arg is None && positional_arg is Some(arg) {
+@@ -119 +160 @@
+-          if choices.length() > 0 && not(choices.contains(value_string)) {
++          if choices.length() > 0 && !choices.contains(value_string) {
+@@ -121 +162 @@
+-              "Invalid argument value for \{cmd_name} => \{name}, value=\{value_string}, choices=\{choices}",
++              "Invalid argument value for \{cmd_name} => \{name}, value=\{value_string}, choices=@hashset.from_array([\{choices.iter().join(", ")}])",
+@@ -134 +175 @@
+-        if (not(positional_arg.is_empty()) || not(subcmds.is_empty())) &&
++        if (!(positional_arg is None) || !subcmds.is_empty()) &&
+@@ -190 +231 @@
+-  if not(common.env_var.is_empty()) &&
++  if !common.env_var.is_empty() &&
+@@ -248 +289 @@
+-      if not(subcmds.is_empty()) {
++      if !subcmds.is_empty() {
+@@ -267,2 +308,2 @@
+-        not(short_char.is_ascii_alphabetic()) &&
+-        not(short_char.is_ascii_digit()) {
++        !short_char.is_ascii_alphabetic() &&
++        !short_char.is_ascii_digit() {
+@@ -274 +315 @@
+-    if arg.choices() is Some(choices) && not(choices.is_empty()) {
++    if arg.choices() is Some(choices) && !choices.is_empty() {
+@@ -276 +317 @@
+-        if not(choices.contains(value.to_string())) {
++        if !choices.contains(value.to_owned()) {
+@@ -278 +319 @@
+-            "Invalid argument, name=\{name}, default value=\{value} not in choices=\{choices}",
++            "Invalid argument, name=\{name}, default value=\{value} not in choices=@hashset.from_array([\{choices.iter().join(", ")}])",
+@@ -314 +355 @@
+-      if (arg is Flag(_) || arg is Named(_)) && length > 0 && not(final_subcmd) {
++      if (arg is Flag(_) || arg is Named(_)) && length > 0 && !final_subcmd {
+@@ -322 +363 @@
+-          let value = if not(common.env_var.is_empty()) &&
++          let value = if !common.env_var.is_empty() &&
+@@ -333 +374 @@
+-            not(store)
++            !store
+@@ -347 +388 @@
+-        if length == 0 && not(positional && not(final_subcmd)) {
++        if length == 0 && !(positional && !final_subcmd) {
+@@ -349 +390 @@
+-            current_value.add_value(name, default_value.to_string(), positional)
++            current_value.add_value(name, default_value.to_owned(), positional)
+@@ -355 +396 @@
+-        if not(nargs.is_valid_length(length)) {
++        if !nargs.is_valid_length(length) {
+@@ -357 +398 @@
+-            if not(final_subcmd) {
++            if !final_subcmd {
+@@ -382,0 +424,3 @@
++
++///|
++pub extend ParserError with Show::{to_string, output}
+--- a/src/parser_test.mbt
++++ b/src/parser_test.mbt
+@@ -3,4 +3,4 @@
+-  let parser = Parser::new(args={
+-    "arg1": Arg::named(short='a', nargs=Fixed(1), help="Argument 1"),
+-  })
+-  let value = SimpleValue::new(parser.prog)
++  let parser = @clap.Parser::new(args={
++    "arg1": @clap.Arg::named(short='a', nargs=Fixed(1), help="Argument 1"),
++  })
++  let value = @clap.SimpleValue::new(parser.prog)
+@@ -14,2 +14,2 @@
+-  assert_eq(value.subcmd.is_empty(), true)
+-  let value = SimpleValue::new(parser.prog)
++  assert_eq(value.subcmd is None, true)
++  let value = @clap.SimpleValue::new(parser.prog)
+@@ -29,4 +29,4 @@
+-  let parser = Parser::new(args={
+-    "arg1": Arg::positional(nargs=Fixed(1), help="Argument 1"),
+-  })
+-  let value = SimpleValue::new(parser.prog)
++  let parser = @clap.Parser::new(args={
++    "arg1": @clap.Arg::positional(nargs=Fixed(1), help="Argument 1"),
++  })
++  let value = @clap.SimpleValue::new(parser.prog)
+@@ -39,2 +39,2 @@
+-  assert_eq(value.subcmd.is_empty(), true)
+-  let value = SimpleValue::new(parser.prog)
++  assert_eq(value.subcmd is None, true)
++  let value = @clap.SimpleValue::new(parser.prog)
+@@ -56,4 +56,4 @@
+-  let parser = Parser::new(args={
+-    "arg1": Arg::flag(short='a', help="Argument 1"),
+-  })
+-  let value = SimpleValue::new(parser.prog)
++  let parser = @clap.Parser::new(args={
++    "arg1": @clap.Arg::flag(short='a', help="Argument 1"),
++  })
++  let value = @clap.SimpleValue::new(parser.prog)
+@@ -66,2 +66,2 @@
+-  assert_eq(value.subcmd.is_empty(), true)
+-  let value = SimpleValue::new(parser.prog)
++  assert_eq(value.subcmd is None, true)
++  let value = @clap.SimpleValue::new(parser.prog)
+@@ -81,3 +81,3 @@
+-  let parser = Parser::new(subcmds={
+-    "subcmd1": SubCommand::new(
+-      args={ "arg1": Arg::flag(short='a', help="Argument 1") },
++  let parser = @clap.Parser::new(subcmds={
++    "subcmd1": @clap.SubCommand::new(
++      args={ "arg1": @clap.Arg::flag(short='a', help="Argument 1") },
+@@ -87 +87 @@
+-  let value = SimpleValue::new(parser.prog)
++  let value = @clap.SimpleValue::new(parser.prog)
+@@ -95 +95 @@
+-  let value = SimpleValue::new(parser.prog)
++  let value = @clap.SimpleValue::new(parser.prog)
+@@ -107 +107 @@
+-  let value = SimpleValue::new(parser.prog)
++  let value = @clap.SimpleValue::new(parser.prog)
+@@ -121,4 +121,4 @@
+-  let parser = Parser::new(args={
+-    "arg1": Arg::named(short='a', nargs=Fixed(1), help="Argument 1"),
+-  })
+-  let value = SimpleValue::new(parser.prog)
++  let parser = @clap.Parser::new(args={
++    "arg1": @clap.Arg::named(short='a', nargs=Fixed(1), help="Argument 1"),
++  })
++  let value = @clap.SimpleValue::new(parser.prog)
+@@ -132 +132 @@
+-  assert_eq(value.subcmd.is_empty(), true)
++  assert_eq(value.subcmd is None, true)
+@@ -137,4 +137,4 @@
+-  let parser = Parser::new(args={
+-    "arg1": Arg::flag(short='a', help="Argument 1"),
+-  })
+-  let value = SimpleValue::new(parser.prog)
++  let parser = @clap.Parser::new(args={
++    "arg1": @clap.Arg::flag(short='a', help="Argument 1"),
++  })
++  let value = @clap.SimpleValue::new(parser.prog)
+@@ -147,2 +147,2 @@
+-  assert_eq(value.subcmd.is_empty(), true)
+-  let value = SimpleValue::new(parser.prog)
++  assert_eq(value.subcmd is None, true)
++  let value = @clap.SimpleValue::new(parser.prog)
+@@ -170,4 +170,4 @@
+-} derive(Show, Eq)
+-
+-///|
+-impl Value for CustomValue with set_flag(self, name : String, value : Bool) -> Unit raise ParserError {
++} derive(Eq, Debug)
++
++///|
++impl Value for CustomValue with fn set_flag(self, name : String, value : Bool) -> Unit raise @clap.ParserError {
+@@ -177 +177,3 @@
+-        raise ParserError::InvalidArgumentName("Invalid flag \{name}=\{value}")
++        raise @clap.ParserError::InvalidArgumentName(
++          "Invalid flag \{name}=\{value}",
++        )
+@@ -183 +185 @@
+-        raise ParserError::InvalidArgumentName(
++        raise @clap.ParserError::InvalidArgumentName(
+@@ -193 +195 @@
+-impl Value for CustomValue with add_value(
++impl Value for CustomValue with fn add_value(
+@@ -198 +200 @@
+-) -> Unit raise ParserError {
++) -> Unit raise @clap.ParserError {
+@@ -204 +206 @@
+-          raise ParserError::InvalidArgumentName(
++          raise @clap.ParserError::InvalidArgumentName(
+@@ -211,5 +213,5 @@
+-          let parsed_value = try? @strconv.parse_uint(value)
+-          guard parsed_value is Ok(uint_value) else {
+-            raise ParserError::InvalidArgumentValue(
+-              "Invalid value \{value} for argument \{name}",
+-            )
++          let uint_value = @string.parse_uint(value[:]) catch {
++            _ =>
++              raise @clap.ParserError::InvalidArgumentValue(
++                "Invalid value \{value} for argument \{name}",
++              )
+@@ -220 +222 @@
+-          raise ParserError::InvalidArgumentName(
++          raise @clap.ParserError::InvalidArgumentName(
+@@ -228 +230 @@
+-impl Value for CustomValue with select_subcmd(self, name : String) -> CustomValue raise ParserError {
++impl Value for CustomValue with fn select_subcmd(self, name : String) -> CustomValue raise @clap.ParserError {
+@@ -233 +235 @@
+-      raise ParserError::InvalidSubCommandName(
++      raise @clap.ParserError::InvalidSubCommandName(
+@@ -242 +244 @@
+-  let parser = Parser::new(
++  let parser = @clap.Parser::new(
+@@ -244,2 +246,2 @@
+-      "debug": Arg::flag(short='d', help="Debug"),
+-      "arg1": Arg::named(short='a', nargs=Fixed(1), help="Argument 1"),
++      "debug": @clap.Arg::flag(short='d', help="Debug"),
++      "arg1": @clap.Arg::named(short='a', nargs=Fixed(1), help="Argument 1"),
+@@ -248 +250 @@
+-      "subcmd1": SubCommand::new(
++      "subcmd1": @clap.SubCommand::new(
+@@ -250,2 +252,2 @@
+-          "verbose": Arg::flag(short='v', help="Verbose"),
+-          "arg2": Arg::positional(nargs=Fixed(3), help="Argument 2"),
++          "verbose": @clap.Arg::flag(short='v', help="Verbose"),
++          "arg2": @clap.Arg::positional(nargs=Fixed(3), help="Argument 2"),
+@@ -262,2 +264,2 @@
+-  assert_eq(value.subcmd.is_empty(), true)
+-  let value = CustomValue::{ debug: false, arg1: "", subcmd: None }
++  assert_eq(value.subcmd is None, true)
++  let value = CustomValue::{ debug: false, arg1: "", subcmd: None, }
+@@ -305 +307 @@
+-  let parser = Parser::new(
++  let parser = @clap.Parser::new(
+@@ -307,2 +309,2 @@
+-      "debug": Arg::flag(short='d', global=true, help="Debug"),
+-      "arg1": Arg::named(
++      "debug": @clap.Arg::flag(short='d', global=true, help="Debug"),
++      "arg1": @clap.Arg::named(
+@@ -316 +318 @@
+-      "subcmd1": SubCommand::new(
++      "subcmd1": @clap.SubCommand::new(
+@@ -318,2 +320,2 @@
+-          "verbose": Arg::flag(short='v', help="Verbose"),
+-          "arg2": Arg::positional(nargs=Fixed(3), help="Argument 2"),
++          "verbose": @clap.Arg::flag(short='v', help="Verbose"),
++          "arg2": @clap.Arg::positional(nargs=Fixed(3), help="Argument 2"),
+@@ -325 +327 @@
+-  let value = SimpleValue::new(parser.prog)
++  let value = @clap.SimpleValue::new(parser.prog)
+@@ -339 +341 @@
+-  let value = SimpleValue::new(parser.prog)
++  let value = @clap.SimpleValue::new(parser.prog)
+@@ -360,2 +362,2 @@
+-  let parser = Parser::new(args={
+-    "arg1": Arg::named(
++  let parser = @clap.Parser::new(args={
++    "arg1": @clap.Arg::named(
+@@ -368 +370 @@
+-  let value = SimpleValue::new(parser.prog)
++  let value = @clap.SimpleValue::new(parser.prog)
+@@ -376,2 +378,2 @@
+-  assert_eq(value.subcmd.is_empty(), true)
+-  let value = SimpleValue::new(parser.prog)
++  assert_eq(value.subcmd is None, true)
++  let value = @clap.SimpleValue::new(parser.prog)
+@@ -391,5 +393,5 @@
+-  let parser = Parser::new(args={
+-    "arg1": Arg::positional(nargs=AtMost(3), help="Argument 1"),
+-    "arg2": Arg::named(short='A', nargs=AtMost(1), help="Argument 2"),
+-  })
+-  let value = SimpleValue::new(parser.prog)
++  let parser = @clap.Parser::new(args={
++    "arg1": @clap.Arg::positional(nargs=AtMost(3), help="Argument 1"),
++    "arg2": @clap.Arg::named(short='A', nargs=AtMost(1), help="Argument 2"),
++  })
++  let value = @clap.SimpleValue::new(parser.prog)
+@@ -403 +405 @@
+-  assert_eq(value.subcmd.is_empty(), true)
++  assert_eq(value.subcmd is None, true)
+@@ -408,3 +410,3 @@
+-  let parser = Parser::new(args={
+-    "arg1": Arg::named(help="Argument 1"),
+-    "arg2": Arg::flag(help="Argument 2"),
++  let parser = @clap.Parser::new(args={
++    "arg1": @clap.Arg::named(help="Argument 1"),
++    "arg2": @clap.Arg::flag(help="Argument 2"),
+--- a/src/parser_test_error.mbt
++++ b/src/parser_test_error.mbt
+@@ -7,2 +7,5 @@
+-  let result = try? parser.parse(value, ["--arg1", "v1", "v2", "v3"])
+-  assert_eq(result.unwrap_err().to_string().contains("TooManyArgs"), true)
++  try parser.parse(value, ["--arg1", "v1", "v2", "v3"]) catch {
++    err => assert_true(err.to_string().contains("TooManyArgs"))
++  } noraise {
++    _ => fail("expected too many arguments to raise")
++  }
+@@ -17,8 +20,8 @@
+-  let result = try? parser.parse(value, ["--arg1", "--arg1"])
+-  assert_eq(
+-    result
+-    .unwrap_err()
+-    .to_string()
+-    .contains("Invalid flag argument length: 2 > 1"),
+-    true,
+-  )
++  try parser.parse(value, ["--arg1", "--arg1"]) catch {
++    err =>
++      assert_true(
++        err.to_string().contains("Invalid flag argument length: 2 > 1"),
++      )
++  } noraise {
++    _ => fail("expected duplicate flag to raise")
++  }
 --- a/src/value.mbt
 +++ b/src/value.mbt
-@@ -1,8 +1,8 @@
- ///|
- pub(all) struct SimpleValue {
-   name : String
+@@ -4,2 +4,2 @@
 -  args : @hashmap.HashMap[String, Array[String]]
 -  flags : @hashmap.HashMap[String, Bool]
 +  args : Map[String, Array[String]]
 +  flags : Map[String, Bool]
-   positional_args : Array[String]
-   mut subcmd : SimpleValue?
- } derive(Show, Eq)
-@@ -12,8 +12,8 @@
- pub fn SimpleValue::new(name : String) -> SimpleValue {
-   SimpleValue::{
-     name,
+@@ -8 +8 @@
+-} derive(Show, Eq)
++} derive(Eq)
+@@ -15,2 +15,2 @@
 -    args: @hashmap.new(),
 -    flags: @hashmap.new(),
 +    args: Map([]),
 +    flags: Map([]),
-     positional_args: [],
-     subcmd: None,
-   }
-@@ -94,37 +94,37 @@
- 
- ///|
- pub(open) trait BasicValue {
+@@ -97,5 +97,5 @@
 -  parse(input : String) -> Self raise @strconv.StrConvError
-+  parse(input : String) -> Self raise
- }
- 
- ///|
+-}
+-
+-///|
 -pub impl BasicValue for String with parse(input : String) -> String raise @strconv.StrConvError {
-+pub impl BasicValue for String with parse(input : String) -> String raise {
-   input
- }
- 
- ///|
++  fn parse(input : String) -> Self raise
++}
++
++///|
++pub impl BasicValue for String with fn parse(input : String) -> String raise {
+@@ -106,22 +106,22 @@
 -pub impl BasicValue for Double with parse(input : String) -> Double raise @strconv.StrConvError {
 -  @strconv.parse_double(input)
-+pub impl BasicValue for Double with parse(input : String) -> Double raise {
-+  @string.parse_double(input[:])
- }
- 
- ///|
+-}
+-
+-///|
 -pub impl BasicValue for Int with parse(input : String) -> Int raise @strconv.StrConvError {
 -  @strconv.parse_int(input)
-+pub impl BasicValue for Int with parse(input : String) -> Int raise {
-+  @string.parse_int(input[:])
- }
- 
- ///|
+-}
+-
+-///|
 -pub impl BasicValue for Int64 with parse(input : String) -> Int64 raise @strconv.StrConvError {
 -  @strconv.parse_int64(input)
-+pub impl BasicValue for Int64 with parse(input : String) -> Int64 raise {
-+  @string.parse_int64(input[:])
- }
- 
- ///|
+-}
+-
+-///|
 -pub impl BasicValue for UInt with parse(input : String) -> UInt raise @strconv.StrConvError {
 -  @strconv.parse_uint(input)
-+pub impl BasicValue for UInt with parse(input : String) -> UInt raise {
-+  @string.parse_uint(input[:])
- }
- 
- ///|
+-}
+-
+-///|
 -pub impl BasicValue for UInt64 with parse(input : String) -> UInt64 raise @strconv.StrConvError {
 -  @strconv.parse_uint64(input)
-+pub impl BasicValue for UInt64 with parse(input : String) -> UInt64 raise {
-+  @string.parse_uint64(input[:])
- }
- 
- ///|
---- a/src/parser_test.mbt
-+++ b/src/parser_test.mbt
-@@ -167,7 +167,7 @@
- ///|
- enum CustomCommands {
-   SubCommand1(verbose~ : Bool, positional_args~ : Array[UInt])
--} derive(Show, Eq)
-+} derive(Show, Eq, Debug)
- 
- ///|
- impl Value for CustomValue with set_flag(self, name : String, value : Bool) -> Unit raise ParserError {
-@@ -208,7 +208,7 @@
-     Some(SubCommand1(positional_args~, ..)) =>
-       match name {
-         "arg2" => {
--          let parsed_value = try? @strconv.parse_uint(value)
-+          let parsed_value = try? @string.parse_uint(value[:])
-           guard parsed_value is Ok(uint_value) else {
-             raise ParserError::InvalidArgumentValue(
-               "Invalid value \{value} for argument \{name}",
---- a/src/moon.pkg.json
-+++ b/src/moon.pkg.json
-@@ -1 +1,3 @@
--{ }
-+{
-+  "import": ["moonbitlang/core/hashmap", "moonbitlang/core/string"]
++pub impl BasicValue for Double with fn parse(input : String) -> Double raise {
++  @string.parse_double(input[:])
 +}
++
++///|
++pub impl BasicValue for Int with fn parse(input : String) -> Int raise {
++  @string.parse_int(input[:])
++}
++
++///|
++pub impl BasicValue for Int64 with fn parse(input : String) -> Int64 raise {
++  @string.parse_int64(input[:])
++}
++
++///|
++pub impl BasicValue for UInt with fn parse(input : String) -> UInt raise {
++  @string.parse_uint(input[:])
++}
++
++///|
++pub impl BasicValue for UInt64 with fn parse(input : String) -> UInt64 raise {
++  @string.parse_uint64(input[:])
+@@ -132,7 +132,7 @@
+-  set_flag(Self, name : String, value : Bool) -> Unit raise ParserError = _
+-  add_value(Self, name : String, value : String, positional : Bool) -> Unit raise ParserError = _
+-  select_subcmd(Self, subcmd : String) -> Self raise ParserError = _
+-}
+-
+-///|
+-impl Value with set_flag(_self, name : String, _value : Bool) -> Unit raise ParserError {
++  fn set_flag(Self, name : String, value : Bool) -> Unit raise ParserError = _
++  fn add_value(Self, name : String, value : String, positional : Bool) -> Unit raise ParserError = _
++  fn select_subcmd(Self, subcmd : String) -> Self raise ParserError = _
++}
++
++///|
++impl Value with fn set_flag(_self, name : String, _value : Bool) -> Unit raise ParserError {
+@@ -145 +145 @@
+-impl Value with add_value(
++impl Value with fn add_value(
+@@ -157 +157 @@
+-impl Value with select_subcmd(_self, subcmd : String) -> Self raise ParserError {
++impl Value with fn select_subcmd(_self, subcmd : String) -> Self raise ParserError {
+@@ -164 +164,5 @@
+-pub impl Value for SimpleValue with set_flag(self, name : String, value : Bool) -> Unit raise ParserError {
++pub impl Value for SimpleValue with fn set_flag(
++  self,
++  name : String,
++  value : Bool,
++) -> Unit raise ParserError {
+@@ -169 +173 @@
+-pub impl Value for SimpleValue with add_value(
++pub impl Value for SimpleValue with fn add_value(
+@@ -185 +189 @@
+-pub impl Value for SimpleValue with select_subcmd(self, subcmd : String) -> SimpleValue raise ParserError {
++pub impl Value for SimpleValue with fn select_subcmd(self, subcmd : String) -> SimpleValue raise ParserError {
+@@ -194,0 +199,51 @@
++
++///|
++pub impl Show for SimpleValue with fn output(self, logger) {
++  logger.write_string("{name: ")
++  logger.write_object(self.name)
++  logger.write_string(", args: ")
++  logger.write_iter(
++    self.args
++    .iter2()
++    .iter()
++    .map(fn(pair) {
++      let (name, values) = pair
++      name + ": [" + values.join(", ") + "]"
++    }),
++    prefix="{",
++    suffix="}",
++  )
++  logger.write_string(", flags: ")
++  logger.write_iter(
++    self.flags
++    .iter2()
++    .iter()
++    .map(fn(pair) {
++      let (name, value) = pair
++      name + ": " + value.to_string()
++    }),
++    prefix="{",
++    suffix="}",
++  )
++  logger.write_string(", positional_args: ")
++  logger.write_iter(self.positional_args.iter())
++  logger.write_string(", subcmd: ")
++  match self.subcmd {
++    None => logger.write_string("None")
++    Some(value) => {
++      logger.write_string("Some(")
++      logger.write_object(value)
++      logger.write_string(")")
++    }
++  }
++  logger.write_string("}")
++}
++
++///|
++pub extend SimpleValue with Eq::{not_equal, equal}
++
++///|
++pub extend SimpleValue with Show::{to_string, output}
++
++///|
++pub extend SimpleValue with Value::{select_subcmd, set_flag, add_value}
