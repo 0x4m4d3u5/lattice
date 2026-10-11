@@ -4958,17 +4958,6 @@ pub fn build(
       let page_context = coll.definition.name + "/" + src.slug
       let out_path = page_output_path(config, coll.definition.name, src.slug)
       let root_out_path = root_page_output_path(config)
-      let cache_hit = @cache.should_skip(
-        cache_store,
-        src.slug,
-        src.fingerprint,
-        out_path,
-        config.force_rebuild,
-      )
-      let should_rebuild = incremental.force_full_rebuild ||
-        incremental.changed_sources.contains(src.path) ||
-        backlink_affected.contains(src.slug) ||
-        !cache_hit
       let page_backlinks_html = match backlink_index.get(src.slug) {
         Some(refs) => render_backlinks_html(refs)
         None => ""
@@ -5009,6 +4998,22 @@ pub fn build(
       match doc_outcome.document {
         None => error_count = error_count + 1
         Some(doc) => {
+          // Rendering already runs before cache reuse. Include its result so
+          // neighbor navigation changes cannot leave unchanged sources stale.
+          let page_fingerprint = @cache.fingerprint_for_source(
+            src.fingerprint, doc.html,
+          )
+          let cache_hit = @cache.should_skip(
+            cache_store,
+            src.slug,
+            page_fingerprint,
+            out_path,
+            config.force_rebuild,
+          )
+          let should_rebuild = incremental.force_full_rebuild ||
+            incremental.changed_sources.contains(src.path) ||
+            backlink_affected.contains(src.slug) ||
+            !cache_hit
           // Check if this is a draft post
           // We already parsed frontmatter in process_document, so we can check the result there
           // Instead of re-parsing, we'll check if document was validated and extract draft status
@@ -5066,7 +5071,7 @@ pub fn build(
               }
               // Unchanged pages already have [skip] message and unchanged
               // counter incremented in the write_result assignment above.
-              @cache.remember(next_cache_store, src.slug, src.fingerprint)
+              @cache.remember(next_cache_store, src.slug, page_fingerprint)
 
               // Generate redirect pages if redirect_from is specified
               let redirects_generated = emit_redirects_for_page(

@@ -3238,3 +3238,23 @@ integration regression establishes paragraph rendering, a real broken-link
 violation, and unchanged output. This is an AI-assisted correction of a review
 finding; review threads and the full timeline are checked before the follow-up
 merge in addition to CI.
+
+## 2026-10-11 — Cache collection pages with their rendered navigation
+
+AI-assisted source inspection found that previous/next template slots were
+rendered with current collection metadata on every build, but publication reused
+cached HTML based only on the page's own source. Inserting a post left an old
+neighbor URL; retitling a post left old link text in an unchanged neighbor. Two
+synthetic build regressions failed on unchanged main.
+
+Include the already prepared HTML alongside the source fingerprint in collection
+page cache entries. This uses the existing fingerprint function, avoids a second
+navigation dependency representation, and keeps pages with unchanged output
+cached. Existing source, configuration and backlink invalidation still apply.
+The cache file format stays the same; old source-only entries cause a one-time
+rebuild, then ordinary reuse resumes. Rendering and validation already occurred
+before publication, so this adds hashing without additional rendering or I/O.
+
+Tests compare incremental output with forced full builds after insertion,
+deletion, title edits, date reordering and source renaming. They also check
+unaffected page cache hits and cache reuse immediately after the changed build.
