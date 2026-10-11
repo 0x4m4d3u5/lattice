@@ -1,0 +1,36 @@
+name: Moongate
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+permissions:
+  contents: read
+jobs:
+  evaluate:
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.actor != 'dependabot[bot]'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - id: policy
+        name: Check for policy at base
+        shell: bash
+        run: |
+          if [ -f .moongate.json ]; then
+            echo "installed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Moongate policy is not installed at base; evaluation starts after this installation merges."
+            echo "installed=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Evaluate advisory rules
+        if: steps.policy.outputs.installed == 'true'
+        uses: brickfrog/moongate@f5366d9a422ae1fca1fbb45cfa9d2fd247383006 # v0.1.2
+        with:
+          base: ${{ github.event.pull_request.base.sha }}
+          head: ${{ github.event.pull_request.head.sha }}
+          api-key: ${{ secrets.TYPESAFE_API_KEY }}
