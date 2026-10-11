@@ -3,16 +3,12 @@
 set -u
 cd "$(dirname "$0")/.."
 status=0
-toolchain_version=$(moon version --all) || exit $?
-printf '%s\n' "$toolchain_version"
-if [[ "$toolchain_version" != *"moonc v0.10.14+7d59c7ec9"* || ( "$toolchain_version" != *"(760759c"* && "$toolchain_version" != *"(914d7da"* ) ]]; then
-  echo "Expected moonc 0.10.14+7d59c7ec9 and pinned Moon 914d7da (prebuilt) or 760759ca (source); see docs/reliability-baseline.md" >&2
-  exit 1
-fi
+bash scripts/verify-ci-toolchain.sh || exit $?
+export PATH="$MOON_HOME/bin:$PATH"
 for gate in check test build; do
-  echo "Running moon $gate --target js"
-  moon "$gate" --target js || status=1
+  echo "Running moon $gate --target js --deny-warn"
+  moon "$gate" --target js --deny-warn || status=1
 done
-echo "Running vendored clap tests --target js"
-moon -C vendor/clap test --target js || status=1
+echo "Running vendored clap tests --target js --deny-warn"
+moon -C vendor/clap test --target js --deny-warn -p TheWaWaR/clap || status=1
 exit "$status"

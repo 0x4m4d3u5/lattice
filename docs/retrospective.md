@@ -3170,3 +3170,35 @@ identified the archive diagnostic-count bug and the need to suppress planned
 success messages when publication is aborted. Synthetic regressions exercise
 last-successful output preservation, late failures, and cache recovery. The exact
 supported guarantee and memory tradeoff are documented in [build safety](build-safety.md).
+
+
+## 2026-10-11 — Warning-free baseline and repository-owned toolchain setup
+
+AI assistance inventoried compiler JSON diagnostics and applied exact suggested
+package qualifications, constructor migrations and explicit trait-method extensions.
+The existing `-27` warning suppression was removed. Public display traits were
+implemented explicitly rather than replaced with debug formatting: 89 golden
+strings captured from the prior implementation verify variant text, raw string
+fields, collection order and nested values. Two parser-choice diagnostics preserve pre-migration choice-list text.
+Asset-validation display tests cover
+empty and populated error arrays. Raising operations now use direct catch/noraise
+handling rather than temporary Result wrappers. CLI argument migration accounts
+for Node's extra argv entry; seven previous stdout/stderr/exit-code contracts were
+compared. Repository manifests now use `moon.mod`/`moon.work`, with the local parser
+explicitly selected. The baseline treats every compiler warning as an error.
+
+Hosted logs showed the old installer spent 278 seconds compiling Moon and the
+V8-based moonrun runtime. Neither Rust nor moonrun is needed to run our JavaScript
+baseline. The earlier native-compiler workaround was removed: the original setup
+script now installs the durable tagged WASM compiler, extracts only the verified
+open-source Moon CLI from the official Linux archive, and bundles JS core. The
+native compiler's expiration is therefore irrelevant to the installed profile.
+All artifact pins and verification live in repository scripts; CI calls those
+scripts and caches their verified outputs. Fresh local setup measured 12.6 seconds,
+with verified reuse at 0.37 seconds. Download failures and invalid existing tools
+fail visibly, without source-build fallback, silent upgrades or overwritten tools.
+
+Migration references: [MoonBit 0.10.14 release notes](https://www.moonbitlang.com/updates/2026/09/21/index),
+[workspace manifests](https://docs.moonbitlang.com/en/stable/toolchain/moon/workspace.html),
+[Show and Debug guidance](https://github.com/moonbitlang/core/blob/main/debug/README.mbt.md),
+and the [official compiler installer](https://github.com/moonbitlang/moonbit-compiler/blob/d4ada10/install.ts).
