@@ -2763,7 +2763,13 @@ fn render_404_page(
   let full_title = page_title_builder(title, config.site.title)
 
   // Template priority: 404.html → page.html → default
-  match templates.page {
+  let error_template = match
+    load_template_file(templates_dir_for_build(config) + "/404.html") {
+    Ok(Some(tpl)) => Some(tpl)
+    Ok(None) => templates.page
+    Err(msg) => return Err(msg)
+  }
+  match error_template {
     Some(tpl) => {
       let slots = build_template_slots(
         full_title,
