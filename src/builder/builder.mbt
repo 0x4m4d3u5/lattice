@@ -6939,6 +6939,19 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
     )
   }
 
+  // Validate the selected dedicated 404 template through the same loader and
+  // renderer as build, including includes and data slots, without publication.
+  let error_template_path = templates_dir_for_build(config) + "/404.html"
+  if @fs.path_exists(error_template_path) {
+    match
+      render_404_page(config, templates, nav_links_html, custom_css, data_store) {
+      Ok(_) => ()
+      Err(msg) =>
+        violations.push(
+          template_violation(error_template_path, "404 page: " + msg),
+        )
+    }
+  }
   let _sitemap_xml = @sitemap.render_sitemap(config.site.base_url, graph_pages)
   let static_validation = @assets.check_static(
     config.content_dir,

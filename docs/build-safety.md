@@ -95,6 +95,13 @@ directory. Only a missing dedicated file falls back to the generic template;
 read, parse, and render errors participate in the existing publication gate.
 No template subsystem redesign or cleanup policy is introduced.
 
+Repository review identified that `check` also needs to validate this selected
+template. When a dedicated 404 template exists, lint now invokes the same loader
+and renderer, reporting template violations at that file without publishing any
+output. Regression assertions reject parse errors and missing data in both
+commands and verify that valid authored/default templates pass read-only checks.
+The check regression fails before this validation is added and passes afterward.
+
 Regressions cover dedicated-template priority with authored and default error
 content, include resolution, unchanged ordinary page rendering, both missing-file
 fallbacks, and full output/cache/manifest preservation after selected-template

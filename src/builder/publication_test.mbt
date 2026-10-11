@@ -578,6 +578,9 @@ test "dedicated 404 template wins for authored and default error content and res
     let home = @fs.read_file_to_string(config.output_dir + "/index.html")
     assert_true(home.contains("Generic Page Template"))
     assert_false(home.contains("Dedicated Error Template"))
+    let before_check = publication_snapshot(config.output_dir)
+    assert_eq(@builder.check(config).violations.length(), 0)
+    assert_eq(publication_snapshot(config.output_dir), before_check)
   }
 }
 
@@ -617,6 +620,16 @@ test "selected 404 template parse and render failures preserve all prior output 
       None => abort("publication fixture must have templates")
     }
     @fs.write_string_to_file(templates_dir + "/404.html", invalid_template)
+    let checked = @builder.check(config)
+    assert_true(
+      checked.violations
+      .iter()
+      .any(fn(v) {
+        v.path == templates_dir + "/404.html" &&
+        v.kind == @lint.TemplateSlotError
+      }),
+    )
+    assert_eq(publication_snapshot(config.output_dir), before)
     let result = @builder.build(config, cache)
     publication_assert_failed(result)
     assert_true(
