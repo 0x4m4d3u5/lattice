@@ -11,7 +11,9 @@
         "src/frontmatter/**/*.mbt",
         "src/collections/**/*.mbt",
         "src/data/**/*.mbt",
-        "src/lint/**/*.mbt"
+        "src/lint/**/*.mbt",
+        "src/builder/builder.mbt",
+        "cmd/main/main.mbt"
       ],
       "exclude": [
         "src/**/*_test.mbt",
