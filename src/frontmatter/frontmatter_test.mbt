@@ -1,4 +1,24 @@
 ///|
+test "frontmatter oversized signed integers retain source instead of wrapping" {
+  for raw in ["2147483648", "-2147483649", "4294967297", "-4294967297"] {
+    for
+      src in [
+        "+++\ncount = " + raw + "\n+++\n",
+        "---\ncount: " + raw + "\n---\n",
+      ] {
+      match @frontmatter.parse(src) {
+        Ok(fm) =>
+          match fm.fields.get("count") {
+            Some(FStr(value)) => assert_eq(value, raw)
+            _ => assert_true(false)
+          }
+        Err(_) => assert_true(false)
+      }
+    }
+  }
+}
+
+///|
 test "frontmatter parses typed values and preserves body (TOML format)" {
   let src = "+++\n" +
     "# comment\n" +

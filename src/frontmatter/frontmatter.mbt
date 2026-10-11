@@ -204,19 +204,16 @@ fn parse_int_str(s : String) -> Result[Int, String] {
   if i >= n {
     return Err("expected digits after '-'")
   }
-  let mut value = 0
   while i < n {
     let c = @strutil.char_at(s, i)
     if !@strutil.is_digit(c) {
       return Err("invalid digit in integer")
     }
-    value = value * 10 + (c.to_int() - '0'.to_int())
     i = i + 1
   }
-  if neg {
-    Ok(-value)
-  } else {
-    Ok(value)
+  match @strutil.parse_int(s) {
+    Some(value) => Ok(value)
+    None => Err("integer out of range")
   }
 }
 

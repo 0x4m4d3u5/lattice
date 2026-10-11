@@ -433,19 +433,16 @@ pub fn parse_int(s : String) -> Int? {
   if i >= n {
     return None
   }
-  let mut value = 0
   while i < n {
     let c = char_at(s, i)
     if !is_digit(c) {
       return None
     }
-    value = value * 10 + (c.to_int() - '0'.to_int())
     i = i + 1
   }
-  if neg {
-    Some(-value)
-  } else {
-    Some(value)
+  // Keep our decimal-only grammar; core handles both signed bounds safely.
+  Some(@string.parse_int(s[:], base=10)) catch {
+    _ => None
   }
 }
 
