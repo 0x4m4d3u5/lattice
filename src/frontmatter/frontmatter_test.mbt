@@ -189,6 +189,49 @@ fn parse_frontmatter_or_fail(src : String) -> @frontmatter.Frontmatter {
 }
 
 ///|
+test "frontmatter preserves nonexistent leap days as strings" {
+  for raw in ["2025-02-29", "1900-02-29", "2100-02-29"] {
+    for
+      src in [
+        "+++\ndate = " + raw + "\n+++\n",
+        "+++\ndate = \"" + raw + "\"\n+++\n",
+        "---\ndate: " + raw + "\n---\n",
+        "---\ndate: '" + raw + "'\n---\n",
+        "---\ndate: \"" + raw + "\"\n---\n",
+      ] {
+      let fm = parse_frontmatter_or_fail(src)
+      match fm.fields.get("date") {
+        Some(FStr(value)) => assert_eq(value, raw)
+        _ => abort("nonexistent leap day must remain a string: " + src)
+      }
+    }
+  }
+}
+
+///|
+test "frontmatter accepts Gregorian leap days and February boundaries" {
+  for
+    raw in [
+      "2024-02-29", "2000-02-29", "2400-02-29", "1900-02-28", "2025-03-01",
+    ] {
+    for
+      src in [
+        "+++\ndate = " + raw + "\n+++\n",
+        "+++\ndate = \"" + raw + "\"\n+++\n",
+        "---\ndate: " + raw + "\n---\n",
+        "---\ndate: '" + raw + "'\n---\n",
+        "---\ndate: \"" + raw + "\"\n---\n",
+      ] {
+      let fm = parse_frontmatter_or_fail(src)
+      match fm.fields.get("date") {
+        Some(FDate(value)) => assert_eq(value, raw)
+        _ => abort("valid calendar date must remain a date: " + src)
+      }
+    }
+  }
+}
+
+///|
 test "frontmatter accepts valid date in various positions" {
   // Date in quoted string (TOML)
   let fm1 = parse_frontmatter_or_fail(
