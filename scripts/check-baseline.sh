@@ -5,8 +5,8 @@ cd "$(dirname "$0")/.."
 status=0
 toolchain_version=$(moon version --all) || exit $?
 printf '%s\n' "$toolchain_version"
-if [[ "$toolchain_version" != *"moonc v0.10.14+7d59c7ec9"* || "$toolchain_version" != *"(760759c"* ]]; then
-  echo "Expected moonc 0.10.14+7d59c7ec9 and Moon commit 760759ca; see docs/reliability-baseline.md" >&2
+if [[ "$toolchain_version" != *"moonc v0.10.14+7d59c7ec9"* || ( "$toolchain_version" != *"(760759c"* && "$toolchain_version" != *"(914d7da"* ) ]]; then
+  echo "Expected moonc 0.10.14+7d59c7ec9 and pinned Moon 914d7da (prebuilt) or 760759ca (source); see docs/reliability-baseline.md" >&2
   exit 1
 fi
 for gate in check test build; do

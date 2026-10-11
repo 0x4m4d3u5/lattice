@@ -6,9 +6,25 @@ previous `_build`, `.mooncakes`, or synthetic test outputs. No real vault was pr
 
 ## Tested toolchain and dependencies
 
-CI uses the official tagged WASM compiler distribution with the matching Moon
-source commit, and explicitly tests the JavaScript backend. It does not depend on
-the native binary service's 60-day retention window.
+CI uses the official pinned Linux prebuilt distribution and explicitly tests the
+JavaScript backend. The toolchain and core archives are SHA-256 verified before
+extraction. An exact cache key includes OS, architecture, Node version and the
+installer hash; restored tools still undergo version checks. No Rust installation
+or toolchain compilation runs in the normal CI path. The check, test, build and
+vendored parser gates below remain unchanged.
+
+The prebuilt distribution includes Moon commit `914d7da` and compiler
+`0.10.14+7d59c7ec9`. Its archive hash is
+`9226694de9ff978db1ecf820b7710c4224e84ec7a76b19a222d96f0cd4e31b6a`;
+core is `6f18b8fdea18f85e628a75e4a1bd3977c5a5c9c6a836fd8824192b0e6bd91b14`.
+Official native snapshots expire on November 20, 2026. A cache miss after removal
+fails visibly; CI does not silently upgrade or start a source build. Refresh the
+tested prebuilt pin before then. The original durable source installer remains
+available for explicit reproduction with Moon commit `760759ca` as described below.
+
+For the fast Linux profile, set a fresh `MOON_HOME`, use Node `26.10.0`, and run
+`bash scripts/install-ci-prebuilt.sh`, then the same baseline commands below.
+The source profile and its recorded results remain documented here separately.
 
 - Compiler: `v0.10.14+7d59c7ec9`
 - Moon source: `760759ca67539dd6b6ea59b1eba57731b3ef674a`, as recorded in the compiler archive
@@ -32,8 +48,9 @@ than requiring a fixed build date. The compiler version is checked exactly.
 The dependency hashes record the locally tested registry inputs; the installer
 actively verifies the compiler archive hash. Dependency versions are pinned and
 clap source is included. The installer requires a fresh `MOON_HOME`, uses task-local
-Cargo directories by default, and does not edit shell startup files. CI installs
-Rust in its disposable runner and uses pinned checkout/setup-node action commits.
+Cargo directories by default, and does not edit shell startup files. Rust is needed
+only for the explicit source profile; normal CI uses the verified prebuilt
+cache and pinned checkout/setup-node/cache action commits.
 
 ## Reproduce
 
@@ -69,7 +86,9 @@ The native compiler snapshot of the same compiler version independently passed
 all 1,262 project tests and 15 clap tests with default WebAssembly targeting.
 Fresh native check reported 2,244 warnings and build reported 288; counts vary with
 rebuilt packages. The official native archives advertise expiration on November
-20, 2026, so they are not the CI installation source.
+20, 2026. The initial baseline therefore chose source installation; the fast CI
+profile now uses those pinned snapshots plus an exact cache, with the expiration
+limit stated above.
 
 **The tagged WASM compiler distribution does not pass the WebAssembly baseline.**
 Its wasm/wasm-gc output generated an interpolation StringBuilder size hint of

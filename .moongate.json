@@ -1,0 +1,88 @@
+{
+  "version": 1,
+  "model": "jev-1.13.0",
+  "rules": [
+    {
+      "id": "preserve_typed_content_validation",
+      "source": "AGENTS.md: Core thesis; README.md: Structural Guarantees",
+      "severity": "advisory",
+      "globs": [
+        "src/schema/**/*.mbt",
+        "src/frontmatter/**/*.mbt",
+        "src/collections/**/*.mbt",
+        "src/data/**/*.mbt",
+        "src/lint/**/*.mbt",
+        "src/builder/builder.mbt",
+        "cmd/main/main.mbt"
+      ],
+      "exclude": [
+        "src/**/*_test.mbt",
+        "src/**/*_wbtest.mbt",
+        "src/**/*_msg_test.mbt"
+      ],
+      "context": [
+        "AGENTS.md"
+      ],
+      "question": {
+        "type": "choice",
+        "instructions": "Does this change silently accept invalid content by bypassing existing typed schema or frontmatter validation or discarding its error diagnostics? Judge only demonstrated behavior in the supplied code; runtime validation is valid and must not be confused with compile-time proof.",
+        "criteria": {
+          "violation": "Changed production code bypasses an existing required-field, type, constraint or reference validation, or converts its error into accepted content without a diagnostic.",
+          "compliant": "Changed code preserves the applicable validation and diagnostics, or adds typed validation without such a bypass.",
+          "insufficient_evidence": "The diff does not establish how the modified validation result is propagated or whether the apparent fallback intentionally implements optional-field policy."
+        }
+      },
+      "message": "Preserve schema/frontmatter validation and actionable diagnostics instead of accepting invalid content silently."
+    },
+    {
+      "id": "check_is_read_only",
+      "source": "README.md: lattice check is strict validation without output writes",
+      "severity": "advisory",
+      "globs": [
+        "src/builder/**/*.mbt",
+        "src/lint/**/*.mbt",
+        "cmd/main/**/*.mbt"
+      ],
+      "exclude": [
+        "src/**/*_test.mbt",
+        "src/**/*_wbtest.mbt",
+        "src/**/*_msg_test.mbt"
+      ],
+      "context": [],
+      "question": {
+        "type": "choice",
+        "instructions": "Does this change cause lattice check to publish generated site files or mutate the output cache or manifest? Distinguish build/serve/init/new paths from the check command; ordinary console diagnostics are allowed.",
+        "criteria": {
+          "violation": "The changed check-command execution path creates or writes generated site output, cache or manifest files.",
+          "compliant": "The changed check path remains read-only with respect to generated output/cache/manifest, or writes are visibly limited to build/serve/init/new paths.",
+          "insufficient_evidence": "The supplied diff does not show whether a new filesystem write is reachable from check."
+        }
+      },
+      "message": "Keep lattice check read-only: return diagnostics without publishing output, cache or manifest."
+    },
+    {
+      "id": "prepare_before_publish",
+      "source": "docs/build-safety.md: Preparation and publication, steps 1-5",
+      "severity": "advisory",
+      "globs": [
+        "src/builder/**/*.mbt"
+      ],
+      "exclude": [
+        "src/**/*_test.mbt",
+        "src/**/*_wbtest.mbt",
+        "src/**/*_msg_test.mbt"
+      ],
+      "context": [],
+      "question": {
+        "type": "choice",
+        "instructions": "Does this change mutate generated output, cache or manifest before build preparation and destination preflight have succeeded? Preserve the existing preparation gate; do not demand atomic rollback after publication begins. Warning-only policies may remain unchanged.",
+        "criteria": {
+          "violation": "Changed code writes or creates generated output/cache/manifest before preparation errors and destination conflicts have been rejected, or publishes despite those errors.",
+          "compliant": "Changed code keeps preparation in memory, rejects error diagnostics and predictable destination conflicts before writes, and writes cache/manifest after prepared files.",
+          "insufficient_evidence": "The diff lacks enough call-path or error-handling evidence to determine whether writes occur before or after successful preparation/preflight."
+        }
+      },
+      "message": "Preserve the preparation/preflight gate and publish cache/manifest last; do not write output on validation or generation failure."
+    }
+  ]
+}
