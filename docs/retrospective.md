@@ -3203,3 +3203,20 @@ Migration references: [MoonBit 0.10.14 release notes](https://www.moonbitlang.co
 [workspace manifests](https://docs.moonbitlang.com/en/stable/toolchain/moon/workspace.html),
 [Show and Debug guidance](https://github.com/moonbitlang/core/blob/main/debug/README.mbt.md),
 and the [official compiler installer](https://github.com/moonbitlang/moonbit-compiler/blob/d4ada10/install.ts).
+
+## 2026-10-11 — Keep code examples out of wikilink validation
+
+AI-assisted source inspection found that Markdown already renders tilde fences as
+code, while wikilink extraction recognized only backticks. A literal
+`[[code-example]]` inside `~~~` could therefore become a false broken-link
+diagnostic. A backtick fence inside that example could also hide a real link
+afterward. Three extractor regressions and a check-mode integration regression
+failed before the fix.
+
+The extractor now records the opening fence character and closes only on the
+same character, matching the renderer's existing backtick/tilde policy. This
+keeps validation focused on actual page references; the integration test retains
+a real missing-link violation and verifies that check leaves output untouched.
+The change uses existing character access and Option matching, introduces no
+new utility or dependency, and preserves the current three-character fence
+policy rather than broadening Markdown syntax in this pass.

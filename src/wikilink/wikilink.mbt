@@ -69,7 +69,7 @@ pub fn extract(content : String, source_file : String) -> Array[RawWikilink] {
   let links : Array[RawWikilink] = []
   let n = content.length()
   let mut i = 0
-  let mut in_fence = false
+  let mut fence_char : Char? = None
   let mut in_inline = false
   let mut line_start = true
   while i + 1 < n {
@@ -82,24 +82,32 @@ pub fn extract(content : String, source_file : String) -> Array[RawWikilink] {
             ) {
         probe = probe + 1
       }
-      if probe + 2 < n &&
-        @strutil.char_at(content, probe) == '`' &&
-        @strutil.char_at(content, probe + 1) == '`' &&
-        @strutil.char_at(content, probe + 2) == '`' {
-        in_fence = !in_fence
+      if probe + 2 < n {
+        let c = @strutil.char_at(content, probe)
+        if (c == '`' || c == '~') &&
+          @strutil.char_at(content, probe + 1) == c &&
+          @strutil.char_at(content, probe + 2) == c {
+          match fence_char {
+            None => {
+              fence_char = Some(c)
+              in_inline = false
+            }
+            Some(opening) => if c == opening { fence_char = None }
+          }
+        }
       }
       line_start = false
     }
     if @strutil.char_at(content, i) == '\n' {
       line_start = true
-      if !in_fence {
+      if fence_char is None {
         in_inline = false
       }
       i = i + 1
-    } else if !in_fence && @strutil.char_at(content, i) == '`' {
+    } else if fence_char is None && @strutil.char_at(content, i) == '`' {
       in_inline = !in_inline
       i = i + 1
-    } else if !in_fence &&
+    } else if fence_char is None &&
       !in_inline &&
       @strutil.char_at(content, i) == '[' &&
       @strutil.char_at(content, i + 1) == '[' {
