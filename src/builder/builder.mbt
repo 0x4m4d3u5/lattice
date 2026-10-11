@@ -4453,12 +4453,14 @@ fn mark_backlink_targets_changed(
   collection_sources : Array[CollectionSources],
 ) -> Map[String, Bool] {
   let affected : Map[String, Bool] = Map::new()
+  let current_sources : Map[String, Bool] = Map::new()
   let mut i = 0
   while i < collection_sources.length() {
     let coll = collection_sources[i]
     let mut j = 0
     while j < coll.sources.length() {
       let src = coll.sources[j]
+      current_sources.set(src.path, true)
       if incremental.changed_sources.contains(src.path) {
         affected.set(src.slug, true)
         let mut k = 0
@@ -4480,6 +4482,16 @@ fn mark_backlink_targets_changed(
       j = j + 1
     }
     i = i + 1
+  }
+  // Removed sources are absent from the loop above, but their old targets
+  // still need rebuilding to remove backlinks from cached HTML. Manifest
+  // dependency entries have no output path and are not referring pages.
+  for (path, previous) in incremental.previous_entries {
+    if previous.out != "" && !current_sources.contains(path) {
+      for target in previous.targets {
+        affected.set(target, true)
+      }
+    }
   }
   affected
 }
