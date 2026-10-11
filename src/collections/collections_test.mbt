@@ -1074,3 +1074,33 @@ test "collections error: unknown field type in schema" {
     _ => assert_true(false)
   }
 }
+
+///|
+test "collections rejects overflowing page_size" {
+  for value in ["2147483648", "4294967297", "999999999999999999999999999999"] {
+    match
+      @collections.parse(
+        "[posts]\nschema = title:String\ndir = content/posts\npage_size = " +
+        value +
+        "\n",
+      ) {
+      Err(@collections.InvalidLine(line, message)) => {
+        assert_eq(line, 4)
+        assert_eq(message, "page_size must be a positive integer")
+      }
+      _ => assert_true(false)
+    }
+  }
+}
+
+///|
+test "collections preserves maximum positive page_size" {
+  match
+    @collections.parse(
+      "[posts]\nschema = title:String\ndir = content/posts\npage_size = 0002147483647\n",
+    ) {
+    Ok(collections) =>
+      assert_eq(collections.definitions[0].page_size, Some(2147483647))
+    Err(_) => assert_true(false)
+  }
+}

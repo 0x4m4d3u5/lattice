@@ -542,3 +542,46 @@ test "config parses data_dir and tags_field" {
     Err(_) => assert_true(false)
   }
 }
+
+///|
+test "config rejects overflowing positive integer settings" {
+  for value in ["2147483648", "4294967297", "999999999999999999999999999999"] {
+    for field in ["page_size", "feed_limit"] {
+      match
+        @config.parse(
+          "title = Test\nbase_url = https://example.test\n" +
+          field +
+          " = " +
+          value +
+          "\n",
+        ) {
+        Err(InvalidValue(name, _)) => assert_eq(name, field)
+        _ => assert_true(false)
+      }
+    }
+    match
+      @config.parse(
+        "[[collections]]\nname = posts\ndir = content/posts\npage_size = " +
+        value +
+        "\n",
+      ) {
+      Err(InvalidValue(name, _)) => assert_eq(name, "collections.page_size")
+      _ => assert_true(false)
+    }
+  }
+}
+
+///|
+test "config preserves maximum positive integer settings" {
+  match
+    @config.parse(
+      "title = Test\nbase_url = https://example.test\npage_size = 0002147483647\nfeed_limit = 2147483647\n[[collections]]\nname = posts\ndir = content/posts\npage_size = 2147483647\n",
+    ) {
+    Ok(config) => {
+      assert_eq(config.page_size, Some(2147483647))
+      assert_eq(config.feed_limit, Some(2147483647))
+      assert_eq(config.collections[0].page_size, Some(2147483647))
+    }
+    Err(_) => assert_true(false)
+  }
+}

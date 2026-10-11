@@ -781,3 +781,17 @@ test "is_rfc3339_datetime rejects Feb 29 in non-leap year" {
 test "is_rfc3339_datetime rejects wrong length with offset" {
   assert_true(!@strutil.is_rfc3339_datetime("2026-03-17T14:30:00+5:30"))
 }
+
+///|
+test "parse_positive_int checks the Int boundary before arithmetic" {
+  assert_eq(@strutil.parse_positive_int("2147483647"), Some(2147483647))
+  assert_eq(@strutil.parse_positive_int("0002147483647"), Some(2147483647))
+  assert_eq(@strutil.parse_positive_int("0001"), Some(1))
+  for
+    value in [
+      "2147483648", "4294967297", "999999999999999999999999999999", "0", "-1", "+1",
+      "1.0", "1x", "",
+    ] {
+    assert_eq(@strutil.parse_positive_int(value), None)
+  }
+}

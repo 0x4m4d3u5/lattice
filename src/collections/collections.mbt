@@ -835,23 +835,7 @@ fn parse_required_keys_data(s : String) -> Array[String] {
 
 ///|
 fn parse_positive_int_collections(value : String) -> Int? {
-  if value.length() == 0 {
-    return None
-  }
-  let mut parsed = 0
-  let mut i = 0
-  while i < value.length() {
-    let c = @strutil.char_at(value, i)
-    if c < '0' || c > '9' {
-      return None
-    }
-    parsed = parsed * 10 + (c.to_int() - '0'.to_int())
-    i = i + 1
-  }
-  if parsed <= 0 {
-    return None
-  }
-  Some(parsed)
+  @strutil.parse_positive_int(value)
 }
 
 ///|
