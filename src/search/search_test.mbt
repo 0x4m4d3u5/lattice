@@ -3,14 +3,14 @@
 
 ///|
 test "render_search_index empty array produces empty JSON array" {
-  let entries : Array[SearchEntry] = []
-  let result = render_search_index(entries)
+  let entries : Array[@search.SearchEntry] = []
+  let result = @search.render_search_index(entries)
   inspect(result, content="[\n]\n")
 }
 
 ///|
 test "render_search_index single entry contains required fields" {
-  let entry = new_entry(
+  let entry = @search.new_entry(
     "Hello World",
     "hello-world",
     "/posts/hello-world/",
@@ -18,7 +18,7 @@ test "render_search_index single entry contains required fields" {
     "posts",
     "This is a short excerpt.",
   )
-  let result = render_search_index([entry])
+  let result = @search.render_search_index([entry])
   inspect(result.contains("\"title\""), content="true")
   inspect(result.contains("\"slug\""), content="true")
   inspect(result.contains("\"url\""), content="true")
@@ -29,7 +29,7 @@ test "render_search_index single entry contains required fields" {
 
 ///|
 test "render_search_index single entry field values" {
-  let entry = new_entry(
+  let entry = @search.new_entry(
     "Hello World",
     "hello-world",
     "/posts/hello-world/",
@@ -37,7 +37,7 @@ test "render_search_index single entry field values" {
     "posts",
     "This is a short excerpt.",
   )
-  let result = render_search_index([entry])
+  let result = @search.render_search_index([entry])
   inspect(result.contains("\"Hello World\""), content="true")
   inspect(result.contains("\"hello-world\""), content="true")
   inspect(result.contains("\"/posts/hello-world/\""), content="true")
@@ -49,7 +49,7 @@ test "render_search_index single entry field values" {
 
 ///|
 test "render_search_index empty tags array" {
-  let entry = new_entry(
+  let entry = @search.new_entry(
     "Untagged Page",
     "untagged",
     "/untagged/",
@@ -57,13 +57,13 @@ test "render_search_index empty tags array" {
     "default",
     "No tags here.",
   )
-  let result = render_search_index([entry])
+  let result = @search.render_search_index([entry])
   inspect(result.contains("\"tags\": []"), content="true")
 }
 
 ///|
 test "render_search_index empty excerpt" {
-  let entry = new_entry(
+  let entry = @search.new_entry(
     "Empty Excerpt Page",
     "empty-excerpt",
     "/empty/",
@@ -71,13 +71,13 @@ test "render_search_index empty excerpt" {
     "default",
     "",
   )
-  let result = render_search_index([entry])
+  let result = @search.render_search_index([entry])
   inspect(result.contains("\"excerpt\": \"\""), content="true")
 }
 
 ///|
 test "render_search_index multiple entries separated by commas" {
-  let e1 = new_entry(
+  let e1 = @search.new_entry(
     "First",
     "first",
     "/first/",
@@ -85,7 +85,7 @@ test "render_search_index multiple entries separated by commas" {
     "posts",
     "Excerpt one.",
   )
-  let e2 = new_entry(
+  let e2 = @search.new_entry(
     "Second",
     "second",
     "/second/",
@@ -93,7 +93,7 @@ test "render_search_index multiple entries separated by commas" {
     "posts",
     "Excerpt two.",
   )
-  let e3 = new_entry(
+  let e3 = @search.new_entry(
     "Third",
     "third",
     "/third/",
@@ -101,7 +101,7 @@ test "render_search_index multiple entries separated by commas" {
     "posts",
     "Excerpt three.",
   )
-  let result = render_search_index([e1, e2, e3])
+  let result = @search.render_search_index([e1, e2, e3])
   inspect(result.contains("\"First\""), content="true")
   inspect(result.contains("\"Second\""), content="true")
   inspect(result.contains("\"Third\""), content="true")
@@ -125,7 +125,7 @@ test "render_search_index multiple entries separated by commas" {
 
 ///|
 test "render_search_index JSON string escaping double quote" {
-  let entry = new_entry(
+  let entry = @search.new_entry(
     "Title with \"quotes\"",
     "quotes",
     "/quotes/",
@@ -133,13 +133,13 @@ test "render_search_index JSON string escaping double quote" {
     "default",
     "excerpt",
   )
-  let result = render_search_index([entry])
+  let result = @search.render_search_index([entry])
   inspect(result.contains("\\\"quotes\\\""), content="true")
 }
 
 ///|
 test "render_search_index JSON string escaping backslash" {
-  let entry = new_entry(
+  let entry = @search.new_entry(
     "Path C:\\Users\\foo",
     "backslash",
     "/backslash/",
@@ -147,13 +147,13 @@ test "render_search_index JSON string escaping backslash" {
     "default",
     "excerpt",
   )
-  let result = render_search_index([entry])
+  let result = @search.render_search_index([entry])
   inspect(result.contains("C:\\\\Users\\\\foo"), content="true")
 }
 
 ///|
 test "render_search_index JSON string escaping newline in excerpt" {
-  let entry = new_entry(
+  let entry = @search.new_entry(
     "Multiline",
     "multiline",
     "/multi/",
@@ -161,14 +161,14 @@ test "render_search_index JSON string escaping newline in excerpt" {
     "default",
     "line one\nline two",
   )
-  let result = render_search_index([entry])
+  let result = @search.render_search_index([entry])
   inspect(result.contains("\\n"), content="true")
 }
 
 ///|
 test "render_search_index result is valid JSON array brackets" {
-  let entry = new_entry("A", "a", "/a/", [], "x", "e")
-  let result = render_search_index([entry])
+  let entry = @search.new_entry("A", "a", "/a/", [], "x", "e")
+  let result = @search.render_search_index([entry])
   // Must start with [ and end with ]\n
   inspect(result[0].to_int().unsafe_to_char() == '[', content="true")
   let last_nl = result.length() - 1
@@ -179,16 +179,16 @@ test "render_search_index result is valid JSON array brackets" {
 
 ///|
 test "render_search_index two entries no trailing comma after last" {
-  let e1 = new_entry("One", "one", "/one/", [], "default", "")
-  let e2 = new_entry("Two", "two", "/two/", [], "default", "")
-  let result = render_search_index([e1, e2])
+  let e1 = @search.new_entry("One", "one", "/one/", [], "default", "")
+  let e2 = @search.new_entry("Two", "two", "/two/", [], "default", "")
+  let result = @search.render_search_index([e1, e2])
   // The block for e2 ends with "  }" immediately before "\n]"
   inspect(result.contains("  }\n]"), content="true")
 }
 
 ///|
 test "render_search_index multiple tags rendered as JSON array" {
-  let entry = new_entry(
+  let entry = @search.new_entry(
     "Tagged",
     "tagged",
     "/tagged/",
@@ -196,7 +196,7 @@ test "render_search_index multiple tags rendered as JSON array" {
     "posts",
     "excerpt",
   )
-  let result = render_search_index([entry])
+  let result = @search.render_search_index([entry])
   inspect(result.contains("\"alpha\""), content="true")
   inspect(result.contains("\"beta\""), content="true")
   inspect(result.contains("\"gamma\""), content="true")
@@ -206,15 +206,22 @@ test "render_search_index multiple tags rendered as JSON array" {
 
 ///|
 test "render_search_index collection field present and correct" {
-  let entry = new_entry("Page", "page", "/page/", [], "mycollection", "e")
-  let result = render_search_index([entry])
+  let entry = @search.new_entry(
+    "Page",
+    "page",
+    "/page/",
+    [],
+    "mycollection",
+    "e",
+  )
+  let result = @search.render_search_index([entry])
   inspect(result.contains("\"mycollection\""), content="true")
 }
 
 ///|
 test "render_search_index empty collection string" {
-  let entry = new_entry("Page", "page", "/page/", [], "", "e")
-  let result = render_search_index([entry])
+  let entry = @search.new_entry("Page", "page", "/page/", [], "", "e")
+  let result = @search.render_search_index([entry])
   inspect(result.contains("\"collection\": \"\""), content="true")
 }
 
@@ -222,14 +229,14 @@ test "render_search_index empty collection string" {
 
 ///|
 test "render_content_index empty array produces empty JSON array" {
-  let entries : Array[ContentEntry] = []
-  let result = render_content_index(entries)
+  let entries : Array[@search.ContentEntry] = []
+  let result = @search.render_content_index(entries)
   inspect(result, content="[\n]\n")
 }
 
 ///|
 test "render_content_index single entry contains required fields" {
-  let entry = new_content_entry(
+  let entry = @search.new_content_entry(
     "Hello",
     "hello",
     "/posts/hello/",
@@ -241,7 +248,7 @@ test "render_content_index single entry contains required fields" {
     Some(3),
     "This is the full body text.",
   )
-  let result = render_content_index([entry])
+  let result = @search.render_content_index([entry])
   inspect(result.contains("\"title\""), content="true")
   inspect(result.contains("\"slug\""), content="true")
   inspect(result.contains("\"url\""), content="true")
@@ -256,7 +263,7 @@ test "render_content_index single entry contains required fields" {
 
 ///|
 test "render_content_index body field stores full text" {
-  let entry = new_content_entry(
+  let entry = @search.new_content_entry(
     "Full Text",
     "full-text",
     "/full-text/",
@@ -268,7 +275,7 @@ test "render_content_index body field stores full text" {
     None,
     "This is a long body with multiple sentences. It covers the entire article.",
   )
-  let result = render_content_index([entry])
+  let result = @search.render_content_index([entry])
   inspect(
     result.contains("\"This is a long body with multiple sentences."),
     content="true",
@@ -277,7 +284,7 @@ test "render_content_index body field stores full text" {
 
 ///|
 test "render_content_index two entries no trailing comma after last" {
-  let e1 = new_content_entry(
+  let e1 = @search.new_content_entry(
     "A",
     "a",
     "/a/",
@@ -289,7 +296,7 @@ test "render_content_index two entries no trailing comma after last" {
     None,
     "body a",
   )
-  let e2 = new_content_entry(
+  let e2 = @search.new_content_entry(
     "B",
     "b",
     "/b/",
@@ -301,13 +308,13 @@ test "render_content_index two entries no trailing comma after last" {
     None,
     "body b",
   )
-  let result = render_content_index([e1, e2])
+  let result = @search.render_content_index([e1, e2])
   inspect(result.contains("  }\n]"), content="true")
 }
 
 ///|
 test "render_content_index kind field rendered as JSON string" {
-  let entry = new_content_entry(
+  let entry = @search.new_content_entry(
     "Standalone",
     "standalone",
     "/standalone/",
@@ -319,13 +326,13 @@ test "render_content_index kind field rendered as JSON string" {
     None,
     "body text",
   )
-  let result = render_content_index([entry])
+  let result = @search.render_content_index([entry])
   inspect(result.contains("\"kind\": \"standalone\""), content="true")
 }
 
 ///|
 test "render_content_index reading_time null rendered as JSON null" {
-  let entry = new_content_entry(
+  let entry = @search.new_content_entry(
     "No RT",
     "no-rt",
     "/no-rt/",
@@ -337,13 +344,13 @@ test "render_content_index reading_time null rendered as JSON null" {
     None,
     "body",
   )
-  let result = render_content_index([entry])
+  let result = @search.render_content_index([entry])
   inspect(result.contains("\"reading_time\": null"), content="true")
 }
 
 ///|
 test "render_content_index reading_time integer rendered as JSON number" {
-  let entry = new_content_entry(
+  let entry = @search.new_content_entry(
     "With RT",
     "with-rt",
     "/with-rt/",
@@ -355,13 +362,13 @@ test "render_content_index reading_time integer rendered as JSON number" {
     Some(5),
     "body",
   )
-  let result = render_content_index([entry])
+  let result = @search.render_content_index([entry])
   inspect(result.contains("\"reading_time\": 5"), content="true")
 }
 
 ///|
 test "render_content_index deterministic field ordering" {
-  let entry = new_content_entry(
+  let entry = @search.new_content_entry(
     "Order",
     "order",
     "/order/",
@@ -373,7 +380,7 @@ test "render_content_index deterministic field ordering" {
     Some(1),
     "body",
   )
-  let result = render_content_index([entry])
+  let result = @search.render_content_index([entry])
   // Verify all expected fields are present
   inspect(result.contains("\"title\": \"Order\""), content="true")
   inspect(result.contains("\"kind\": \"post\""), content="true")

@@ -146,7 +146,7 @@ pub fn render_head_meta(
   url : String,
   og_type? : String = "article",
 ) -> String {
-  let tags = StringBuilder::new()
+  let tags = StringBuilder()
   tags.write_string("  <meta property=\"og:title\" content=\"")
   tags.write_string(@strutil.escape_html_attr(title))
   tags.write_string("\" />\n")
@@ -283,7 +283,7 @@ fn write_json_int_field_html(
 
 ///|
 fn render_blog_posting_json_ld(data : BlogPostingData) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   buf.write_string("{")
   let mut wrote_field = false
   wrote_field = write_json_field_html(
@@ -362,7 +362,7 @@ fn render_blog_posting_json_ld(data : BlogPostingData) -> String {
 
 ///|
 fn render_breadcrumb_list_json_ld(data : BreadcrumbListData) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   buf.write_string("{")
   let mut wrote_field = false
   wrote_field = write_json_field_html(
@@ -427,7 +427,7 @@ fn render_breadcrumb_list_json_ld(data : BreadcrumbListData) -> String {
 
 ///|
 fn render_website_json_ld(data : WebSiteData) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   buf.write_string("{")
   let mut wrote_field = false
   wrote_field = write_json_field_html(
@@ -466,7 +466,7 @@ pub fn render_structured_data_script(items : Array[StructuredData]) -> String {
   if items.length() == 0 {
     return ""
   }
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   buf.write_string("  <script type=\"application/ld+json\">\n")
   if items.length() == 1 {
     buf.write_string(render_structured_data_json(items[0]))
@@ -669,7 +669,7 @@ pub fn nav_links(links : Array[(String, String)]) -> String {
   if links.length() == 0 {
     return ""
   }
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   buf.write_string("<nav>\n<ul>\n")
   let mut i = 0
   while i < links.length() {

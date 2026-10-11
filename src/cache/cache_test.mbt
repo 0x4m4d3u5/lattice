@@ -1,13 +1,13 @@
 ///|
 test "cache render and parse roundtrip" {
-  let source = render({
+  let source = @cache.render({
     version: 1,
     entries: [
       { slug: "posts/hello", fingerprint: "123" },
       { slug: "about", fingerprint: "456" },
     ],
   })
-  let parsed = parse(source) catch {
+  let parsed = @cache.parse(source) catch {
     ParseFailure(_) => {
       assert_true(false)
       { version: 0, entries: [] }
@@ -23,19 +23,22 @@ test "cache render and parse roundtrip" {
 test "render_store includes the cache version without writing output" {
   let output_dir = "_tmp_cache_render_missing_9x7z"
   assert_true(!@fs.path_exists(output_dir))
-  assert_eq(render_store(empty(output_dir)), "{\"version\":1,\"entries\":[]}")
+  assert_eq(
+    @cache.render_store(@cache.empty(output_dir)),
+    "{\"version\":1,\"entries\":[]}",
+  )
   assert_true(!@fs.path_exists(output_dir))
 }
 
 ///|
 test "render_store serializes current entries with normal cache escaping" {
-  let store = empty("./dist")
-  remember(store, "posts/with\"quotes", "old")
-  remember(store, "posts/with\"quotes", "new\\fingerprint")
-  remember(store, "about", "456")
+  let store = @cache.empty("./dist")
+  @cache.remember(store, "posts/with\"quotes", "old")
+  @cache.remember(store, "posts/with\"quotes", "new\\fingerprint")
+  @cache.remember(store, "about", "456")
   assert_eq(
-    render_store(store),
-    render({
+    @cache.render_store(store),
+    @cache.render({
       version: 1,
       entries: [
         { slug: "posts/with\"quotes", fingerprint: "new\\fingerprint" },
@@ -47,13 +50,13 @@ test "render_store serializes current entries with normal cache escaping" {
 
 ///|
 test "fingerprint changes with source content" {
-  let same_a = fingerprint_for_source(
+  let same_a = @cache.fingerprint_for_source(
     "content/a.md", "---\ntitle: A\n---\nBody",
   )
-  let same_b = fingerprint_for_source(
+  let same_b = @cache.fingerprint_for_source(
     "content/a.md", "---\ntitle: A\n---\nBody",
   )
-  let changed = fingerprint_for_source(
+  let changed = @cache.fingerprint_for_source(
     "content/a.md", "---\ntitle: A\n---\nBody!",
   )
   assert_eq(same_a, same_b)
@@ -62,15 +65,15 @@ test "fingerprint changes with source content" {
 
 ///|
 test "cache remember and lookup by slug" {
-  let store = empty("./dist")
-  remember(store, "hello", "one")
-  remember(store, "hello", "two")
-  remember(store, "about", "three")
-  match lookup(store, "hello") {
+  let store = @cache.empty("./dist")
+  @cache.remember(store, "hello", "one")
+  @cache.remember(store, "hello", "two")
+  @cache.remember(store, "about", "three")
+  match @cache.lookup(store, "hello") {
     Some(fp) => assert_eq(fp, "two")
     None => assert_true(false)
   }
-  match lookup(store, "about") {
+  match @cache.lookup(store, "about") {
     Some(fp) => assert_eq(fp, "three")
     None => assert_true(false)
   }
@@ -78,49 +81,49 @@ test "cache remember and lookup by slug" {
 
 ///|
 test "should_skip force_rebuild bypasses a matching cache hit" {
-  let store = empty("./dist")
-  remember(store, "post-a", "fp123")
+  let store = @cache.empty("./dist")
+  @cache.remember(store, "post-a", "fp123")
   // force_rebuild must return false (do not skip) even when the fingerprint matches
-  assert_true(!should_skip(store, "post-a", "fp123", ".", true))
+  assert_true(!@cache.should_skip(store, "post-a", "fp123", ".", true))
 }
 
 ///|
 test "should_skip returns false when output file does not exist on disk" {
-  let store = empty("./dist")
-  remember(store, "post-a", "fp123")
+  let store = @cache.empty("./dist")
+  @cache.remember(store, "post-a", "fp123")
   let missing = "./_cache_test_nonexistent_output_dir/index.html"
   // No file on disk means the output is gone — must rebuild regardless of cache
-  assert_true(!should_skip(store, "post-a", "fp123", missing, false))
+  assert_true(!@cache.should_skip(store, "post-a", "fp123", missing, false))
 }
 
 ///|
 test "should_skip returns false for a slug not yet in the cache" {
-  let store = empty("./dist")
+  let store = @cache.empty("./dist")
   // No prior build record — cannot confirm output is fresh
-  assert_true(!should_skip(store, "brand-new-slug", "fp123", ".", false))
+  assert_true(!@cache.should_skip(store, "brand-new-slug", "fp123", ".", false))
 }
 
 ///|
 test "should_skip returns true when fingerprint matches and output exists" {
-  let store = empty("./dist")
-  remember(store, "post-a", "fp-abc")
+  let store = @cache.empty("./dist")
+  @cache.remember(store, "post-a", "fp-abc")
   // Fingerprint matches and "." exists on disk — safe to skip
-  assert_true(should_skip(store, "post-a", "fp-abc", ".", false))
+  assert_true(@cache.should_skip(store, "post-a", "fp-abc", ".", false))
 }
 
 ///|
 test "should_skip returns false when fingerprint changed since last build" {
-  let store = empty("./dist")
-  remember(store, "post-a", "fp-old")
+  let store = @cache.empty("./dist")
+  @cache.remember(store, "post-a", "fp-old")
   // Source was modified — fingerprint differs from cached value
-  assert_true(!should_skip(store, "post-a", "fp-new", ".", false))
+  assert_true(!@cache.should_skip(store, "post-a", "fp-new", ".", false))
 }
 
 ///|
 test "fingerprint_for_source is sensitive to path as well as content" {
   let content = "---\ntitle: Same\n---\nSame body"
-  let fp_a = fingerprint_for_source("content/a.md", content)
-  let fp_b = fingerprint_for_source("content/b.md", content)
+  let fp_a = @cache.fingerprint_for_source("content/a.md", content)
+  let fp_b = @cache.fingerprint_for_source("content/b.md", content)
   // Renaming a file with identical content must produce a distinct fingerprint
   assert_true(fp_a != fp_b)
 }
@@ -128,7 +131,7 @@ test "fingerprint_for_source is sensitive to path as well as content" {
 ///|
 test "cache parse rejects completely malformed input" {
   let raised = try {
-    let _ = parse("not json at all")
+    let _ = @cache.parse("not json at all")
     false
   } catch {
     ParseFailure(_) => true
@@ -139,7 +142,7 @@ test "cache parse rejects completely malformed input" {
 ///|
 test "cache parse rejects input missing entries field" {
   let raised = try {
-    let _ = parse("{\"version\":1}")
+    let _ = @cache.parse("{\"version\":1}")
     false
   } catch {
     ParseFailure(_) => true
@@ -149,32 +152,40 @@ test "cache parse rejects input missing entries field" {
 
 ///|
 test "cache error_text formats all three error variants with context" {
-  assert_true(error_text(ReadError("disk I/O failure")).contains("read failed"))
   assert_true(
-    error_text(ReadError("disk I/O failure")).contains("disk I/O failure"),
+    @cache.error_text(ReadError("disk I/O failure")).contains("read failed"),
   )
   assert_true(
-    error_text(ParseError("unexpected token")).contains("parse failed"),
+    @cache.error_text(ReadError("disk I/O failure")).contains(
+      "disk I/O failure",
+    ),
   )
   assert_true(
-    error_text(ParseError("unexpected token")).contains("unexpected token"),
+    @cache.error_text(ParseError("unexpected token")).contains("parse failed"),
   )
   assert_true(
-    error_text(WriteError("permission denied")).contains("write failed"),
+    @cache.error_text(ParseError("unexpected token")).contains(
+      "unexpected token",
+    ),
   )
   assert_true(
-    error_text(WriteError("permission denied")).contains("permission denied"),
+    @cache.error_text(WriteError("permission denied")).contains("write failed"),
+  )
+  assert_true(
+    @cache.error_text(WriteError("permission denied")).contains(
+      "permission denied",
+    ),
   )
 }
 
 ///|
 test "cache render and parse preserves special characters in slug" {
-  let file : CacheFile = {
+  let file : @cache.CacheFile = {
     version: 1,
     entries: [{ slug: "path/with\"quotes", fingerprint: "fp-val" }],
   }
-  let rendered = render(file)
-  let parsed = parse(rendered) catch {
+  let rendered = @cache.render(file)
+  let parsed = @cache.parse(rendered) catch {
     ParseFailure(_) => {
       assert_true(false)
       { version: 0, entries: [] }
@@ -191,7 +202,7 @@ test "cache render and parse preserves special characters in slug" {
 /// expect_char_cache: wrong character — parser expects '{' but gets something else
 test "cache parse reject non-brace first char" {
   let raised = try {
-    let _ = parse("  x")
+    let _ = @cache.parse("  x")
     false
   } catch {
     ParseFailure(msg) => {
@@ -206,7 +217,7 @@ test "cache parse reject non-brace first char" {
 /// expect_char_cache: end-of-input where a character is expected
 test "cache parse reject empty input" {
   let raised = try {
-    let _ = parse("")
+    let _ = @cache.parse("")
     false
   } catch {
     ParseFailure(_) => true
@@ -218,7 +229,7 @@ test "cache parse reject empty input" {
 /// parse_json_string_cache: input is not a string (starts with a digit, not a quote)
 test "cache parse reject version value as non-string key" {
   let raised = try {
-    let _ = parse("{123}")
+    let _ = @cache.parse("{123}")
     false
   } catch {
     ParseFailure(msg) => {
@@ -233,7 +244,7 @@ test "cache parse reject version value as non-string key" {
 /// parse_json_string_cache: \\u escape is rejected
 test "cache parse reject unicode escape in string" {
   let raised = try {
-    let _ = parse(
+    let _ = @cache.parse(
       "{\"version\":1,\"entries\":[{\"slug\":\"hello\\u0041\",\"fingerprint\":\"fp\"}]}",
     )
     false
@@ -250,7 +261,7 @@ test "cache parse reject unicode escape in string" {
 /// parse_json_string_cache: invalid escape character (\\x)
 test "cache parse reject invalid escape in string" {
   let raised = try {
-    let _ = parse(
+    let _ = @cache.parse(
       "{\"version\":1,\"entries\":[{\"slug\":\"\\x\",\"fingerprint\":\"fp\"}]}",
     )
     false
@@ -267,7 +278,7 @@ test "cache parse reject invalid escape in string" {
 /// parse_json_string_cache: unterminated escape (backslash at end of input)
 test "cache parse reject unterminated escape" {
   let raised = try {
-    let _ = parse("{\"version\":1,\"entries\":[{\"slug\":\"abc\\")
+    let _ = @cache.parse("{\"version\":1,\"entries\":[{\"slug\":\"abc\\")
     false
   } catch {
     ParseFailure(msg) => {
@@ -282,7 +293,7 @@ test "cache parse reject unterminated escape" {
 /// parse_json_string_cache: unterminated string (no closing quote)
 test "cache parse reject unterminated string" {
   let raised = try {
-    let _ = parse("{\"version\":1,\"entries\":[{\"slug\":\"no-end")
+    let _ = @cache.parse("{\"version\":1,\"entries\":[{\"slug\":\"no-end")
     false
   } catch {
     ParseFailure(msg) => {
@@ -297,7 +308,7 @@ test "cache parse reject unterminated string" {
 /// parse_int_cache: not an integer (first char is not a digit)
 test "cache parse reject non-integer version value" {
   let raised = try {
-    let _ = parse("{\"version\":\"not-a-number\"")
+    let _ = @cache.parse("{\"version\":\"not-a-number\"")
     false
   } catch {
     ParseFailure(msg) => {
@@ -312,7 +323,7 @@ test "cache parse reject non-integer version value" {
 /// parse_entry_cache: unterminated object (entry object never closes)
 test "cache parse reject unterminated entry object" {
   let raised = try {
-    let _ = parse(
+    let _ = @cache.parse(
       "{\"version\":1,\"entries\":[{\"slug\":\"a\",\"fingerprint\":\"b\"",
     )
     false
@@ -329,7 +340,7 @@ test "cache parse reject unterminated entry object" {
 /// parse_entry_cache: missing required field when '}' seen (only slug, no fingerprint)
 test "cache parse reject entry missing fingerprint field" {
   let raised = try {
-    let _ = parse("{\"version\":1,\"entries\":[{\"slug\":\"a\"}]}")
+    let _ = @cache.parse("{\"version\":1,\"entries\":[{\"slug\":\"a\"}]}")
     false
   } catch {
     ParseFailure(msg) => {
@@ -344,7 +355,9 @@ test "cache parse reject entry missing fingerprint field" {
 /// parse_entry_cache: missing required field when '}' seen (only fingerprint, no slug)
 test "cache parse reject entry missing slug field" {
   let raised = try {
-    let _ = parse("{\"version\":1,\"entries\":[{\"fingerprint\":\"fp\"}]}")
+    let _ = @cache.parse(
+      "{\"version\":1,\"entries\":[{\"fingerprint\":\"fp\"}]}",
+    )
     false
   } catch {
     ParseFailure(msg) => {
@@ -359,7 +372,7 @@ test "cache parse reject entry missing slug field" {
 /// parse_entry_cache: unknown entry field
 test "cache parse reject unknown entry field" {
   let raised = try {
-    let _ = parse(
+    let _ = @cache.parse(
       "{\"version\":1,\"entries\":[{\"slug\":\"a\",\"fingerprint\":\"b\",\"bogus\":1}]}",
     )
     false
@@ -376,7 +389,7 @@ test "cache parse reject unknown entry field" {
 /// parse_entry_cache: missing comma or '}' between fields
 test "cache parse reject missing comma in entry" {
   let raised = try {
-    let _ = parse(
+    let _ = @cache.parse(
       "{\"version\":1,\"entries\":[{\"slug\":\"a\" \"fingerprint\":\"b\"}]}",
     )
     false
@@ -390,7 +403,7 @@ test "cache parse reject missing comma in entry" {
 /// parse: wrong first field (not "version")
 test "cache parse reject wrong first field" {
   let raised = try {
-    let _ = parse("{\"entries\":[],\"version\":1}")
+    let _ = @cache.parse("{\"entries\":[],\"version\":1}")
     false
   } catch {
     ParseFailure(msg) => {
@@ -405,7 +418,7 @@ test "cache parse reject wrong first field" {
 /// parse: no comma after version field
 test "cache parse reject missing comma after version" {
   let raised = try {
-    let _ = parse("{\"version\":1\"entries\":[]}")
+    let _ = @cache.parse("{\"version\":1\"entries\":[]}")
     false
   } catch {
     ParseFailure(msg) => {
@@ -420,7 +433,7 @@ test "cache parse reject missing comma after version" {
 /// parse: wrong second field (not "entries")
 test "cache parse reject wrong second field" {
   let raised = try {
-    let _ = parse("{\"version\":1,\"data\":[]}")
+    let _ = @cache.parse("{\"version\":1,\"data\":[]}")
     false
   } catch {
     ParseFailure(msg) => {
@@ -435,7 +448,7 @@ test "cache parse reject wrong second field" {
 /// parse: no closing '}' at end of cache file
 test "cache parse reject missing closing brace" {
   let raised = try {
-    let _ = parse("{\"version\":1,\"entries\":[]")
+    let _ = @cache.parse("{\"version\":1,\"entries\":[]")
     false
   } catch {
     ParseFailure(msg) => {
@@ -450,7 +463,7 @@ test "cache parse reject missing closing brace" {
 /// parse: trailing characters after the closing '}'
 test "cache parse reject trailing characters after close" {
   let raised = try {
-    let _ = parse("{\"version\":1,\"entries\":[]}  extra")
+    let _ = @cache.parse("{\"version\":1,\"entries\":[]}  extra")
     false
   } catch {
     ParseFailure(msg) => {
@@ -465,7 +478,7 @@ test "cache parse reject trailing characters after close" {
 /// parse_entries_cache: missing ']' at end of entries array
 test "cache parse reject unterminated entries array" {
   let raised = try {
-    let _ = parse(
+    let _ = @cache.parse(
       "{\"version\":1,\"entries\":[{\"slug\":\"a\",\"fingerprint\":\"b\"}",
     )
     false
@@ -487,7 +500,7 @@ test "cache parse reject unterminated entries array" {
 /// parse_entries_cache: wrong separator between entries (semicolon instead of comma)
 test "cache parse reject wrong separator between entries" {
   let raised = try {
-    let _ = parse(
+    let _ = @cache.parse(
       "{\"version\":1,\"entries\":[{\"slug\":\"a\",\"fingerprint\":\"b\"};{\"slug\":\"c\",\"fingerprint\":\"d\"}]}",
     )
     false

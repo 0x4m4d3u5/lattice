@@ -325,7 +325,7 @@ test "shortcode bulk parse matrix" {
   let mut i = 0
   while i < cases.length() {
     let (raw, expected) = cases[i]
-    match parse(raw) {
+    match @shortcode.parse(raw) {
       Ok(call) => assert_eq(call.name, expected)
       Err(_) => assert_true(false)
     }
@@ -337,12 +337,12 @@ test "shortcode bulk parse matrix" {
 test "shortcode bulk render matrix" {
   let mut i = 1
   while i <= 120 {
-    let params : Map[String, ShortcodeParam] = Map::new()
+    let params : Map[String, @shortcode.ShortcodeParam] = Map([])
     params.set("src", StringParam("/bulk/" + i.to_string() + ".png"))
     params.set("alt", StringParam("bulk-alt-" + i.to_string()))
     params.set("width", IntParam(200 + i))
-    let call : ShortcodeCall = { name: "image", params }
-    match render(call) {
+    let call : @shortcode.ShortcodeCall = { name: "image", params, }
+    match @shortcode.render(call) {
       Ok(html) => {
         assert_true(html.contains("<img"))
         assert_true(html.contains("bulk-alt-" + i.to_string()))

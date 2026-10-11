@@ -247,7 +247,7 @@ fn render_atom(channel : FeedChannel) -> String {
     None => "1970-01-01T00:00:00Z"
   }
 
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   buf.write_string("<?xml version=\"1.0\" encoding=\"utf-8\"?>\n")
   buf.write_string("<feed xmlns=\"http://www.w3.org/2005/Atom\">\n")
 
@@ -299,7 +299,7 @@ pub fn render_feed(
 /// Uses the same typed intermediate struct as the Atom renderer — new formats
 /// attach at the right end of the pipeline without a new data stage.
 pub fn render_json_feed(channel : FeedChannel, feed_url : String) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   buf.write_string("{\n")
   buf.write_string("  \"version\": \"https://jsonfeed.org/version/1.1\",\n")
   buf.write_string("  \"title\": ")

@@ -1,5 +1,3 @@
-
-
 ///|
 fn ensure_dir_test(path : String) -> Unit {
   if !@fs.path_exists(path) {
@@ -535,10 +533,10 @@ test "template total_pages slot parses and renders" {
       abort("template parse failed")
     }
   }
-  let slots : Map[@template.TemplateSlot, String] = Map::new()
+  let slots : Map[@template.TemplateSlot, String] = Map([])
   slots.set(@template.PageNum, "2")
   slots.set(@template.TotalPages, "5")
-  match @template.render_template(tpl, slots, Map::new()) {
+  match @template.render_template(tpl, slots, Map([])) {
     Ok(html) => assert_eq(html, "Page 2 of 5")
     Err(_) => assert_true(false)
   }
@@ -5916,4 +5914,6 @@ test "build emits collection and tag indexes with maximum positive page size" {
   }
   let tags = @fs.read_file_to_string(output_root + "/tags/index.html")
   assert_true(tags.contains("news"))
+
+
 }

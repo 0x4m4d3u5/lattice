@@ -23,10 +23,18 @@ test "invalid numeric arguments remain InvalidArgumentValue errors" {
   let value = @clap.SimpleValue::new("synthetic")
   value.args["overflow"] = ["2147483648"]
   value.args["negative"] = ["-1"]
-  let signed : Result[Int, @clap.ParserError] = try? value.get_one("overflow")
-  let unsigned : Result[UInt, @clap.ParserError] = try? value.get_one("negative")
-  assert_true(signed.is_err())
-  assert_true(unsigned.is_err())
-  assert_true(signed.unwrap_err().to_string().contains("InvalidArgumentValue"))
-  assert_true(unsigned.unwrap_err().to_string().contains("InvalidArgumentValue"))
+  try {
+    let _ : Int = value.get_one("overflow")
+  } catch {
+    err => assert_true(err.to_string().contains("InvalidArgumentValue"))
+  } noraise {
+    _ => fail("expected signed overflow to raise")
+  }
+  try {
+    let _ : UInt = value.get_one("negative")
+  } catch {
+    err => assert_true(err.to_string().contains("InvalidArgumentValue"))
+  } noraise {
+    _ => fail("expected negative unsigned argument to raise")
+  }
 }

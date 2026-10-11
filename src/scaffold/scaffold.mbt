@@ -1470,7 +1470,7 @@ pub fn stub_for_field_type(ft : @schema.FieldType, today : String) -> String {
       }
       // Pad to meet minlen if needed
       if truncated.length() < min {
-        let buf = StringBuilder::new()
+        let buf = StringBuilder()
         buf.write_string(truncated)
         let mut i = truncated.length()
         while i < min {
@@ -1510,7 +1510,7 @@ pub fn stub_for_field_type(ft : @schema.FieldType, today : String) -> String {
 /// Produces a YAML frontmatter block with stub values for all required fields.
 /// Optional fields are included as comments so the author knows they exist.
 pub fn generate_frontmatter(schema : @schema.Schema, today : String) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   buf.write_string("---\n")
   let mut i = 0
   while i < schema.fields.length() {
@@ -1567,7 +1567,7 @@ fn generate_field_comment(schema : @schema.Schema) -> String {
   }
 
   fn join_names(names : Array[String]) -> String {
-    let buf = StringBuilder::new()
+    let buf = StringBuilder()
     let mut j = 0
     while j < names.length() {
       if j > 0 {
@@ -1579,7 +1579,7 @@ fn generate_field_comment(schema : @schema.Schema) -> String {
     buf.to_string()
   }
 
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   buf.write_string("<!--\n")
   if required_fields.length() > 0 {
     buf.write_string("Required fields: ")

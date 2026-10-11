@@ -24,7 +24,39 @@ pub(all) enum ShortcodeError {
   MissingParam(String, String)
   InvalidParamType(String, String, String)
   InvalidSyntax(String)
-} derive(Eq, Show)
+} derive(Eq)
+
+///|
+pub impl Show for ShortcodeError with fn output(self, logger) {
+  match self {
+    UnknownShortcode(v0) => {
+      logger.write_string("UnknownShortcode(")
+      logger.write_object(v0)
+      logger.write_string(")")
+    }
+    MissingParam(v0, v1) => {
+      logger.write_string("MissingParam(")
+      logger.write_object(v0)
+      logger.write_string(", ")
+      logger.write_object(v1)
+      logger.write_string(")")
+    }
+    InvalidParamType(v0, v1, v2) => {
+      logger.write_string("InvalidParamType(")
+      logger.write_object(v0)
+      logger.write_string(", ")
+      logger.write_object(v1)
+      logger.write_string(", ")
+      logger.write_object(v2)
+      logger.write_string(")")
+    }
+    InvalidSyntax(v0) => {
+      logger.write_string("InvalidSyntax(")
+      logger.write_object(v0)
+      logger.write_string(")")
+    }
+  }
+}
 
 ///|
 fn parse_int_shortcode(s : String) -> Int? {
@@ -73,7 +105,7 @@ fn parse_quoted_shortcode(
   if pos >= s.length() || @strutil.char_at(s, pos) != '"' {
     return Err("expected quote")
   }
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   let mut i = pos + 1
   while i < s.length() {
     let c = @strutil.char_at(s, i)
@@ -152,7 +184,7 @@ pub fn parse(raw : String) -> Result[ShortcodeCall, ShortcodeError] {
     return Err(InvalidSyntax("closing shortcode is not a call"))
   }
 
-  let params : Map[String, ShortcodeParam] = Map::new()
+  let params : Map[String, ShortcodeParam] = Map([])
   let mut i = @strutil.skip_ws(s, next_name)
   while i < s.length() {
     let (key, key_end) = parse_name_shortcode(s, i)
@@ -251,7 +283,7 @@ fn render_image(call : ShortcodeCall) -> Result[String, ShortcodeError] {
     Err(e) => return Err(e)
   }
 
-  let out = StringBuilder::new()
+  let out = StringBuilder()
   if caption != None {
     out.write_string("<figure class=\"sc-image\">")
   }
@@ -290,7 +322,7 @@ fn render_video(call : ShortcodeCall) -> Result[String, ShortcodeError] {
     Ok(v) => v
     Err(e) => return Err(e)
   }
-  let out = StringBuilder::new()
+  let out = StringBuilder()
   out.write_string("<video controls src=\"")
   out.write_string(@strutil.escape_html_attr(src))
   out.write_string("\"")
@@ -325,7 +357,7 @@ fn render_figure(call : ShortcodeCall) -> Result[String, ShortcodeError] {
     Err(e) => return Err(e)
   }
 
-  let out = StringBuilder::new()
+  let out = StringBuilder()
   out.write_string("<figure class=\"sc-figure\">")
   match link {
     Some(href) => {
@@ -379,7 +411,7 @@ fn render_callout(call : ShortcodeCall) -> Result[String, ShortcodeError] {
     Ok(v) => v
     Err(e) => return Err(e)
   }
-  let out = StringBuilder::new()
+  let out = StringBuilder()
   out.write_string("<aside class=\"callout callout-")
   out.write_string(@strutil.escape_html_attr(callout_type))
   out.write_string("\">")
@@ -431,3 +463,9 @@ pub fn error_text(err : ShortcodeError) -> String {
     InvalidSyntax(msg) => "shortcode syntax: " + msg
   }
 }
+
+///|
+pub extend ShortcodeError with Eq::{not_equal, equal}
+
+///|
+pub extend ShortcodeError with Show::{to_string, output}

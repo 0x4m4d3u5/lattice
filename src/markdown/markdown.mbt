@@ -152,7 +152,7 @@ fn slugify_heading_text(text : String) -> String {
   if trimmed.length() == 0 {
     return "section"
   }
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   let mut wrote_dash = false
   let mut wrote_any = false
   let mut i = 0
@@ -205,7 +205,7 @@ pub fn plain_text_inline(inline : Inline) -> String {
 
 ///|
 pub fn plain_text_inlines(inlines : Array[Inline]) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   let mut i = 0
   while i < inlines.length() {
     buf.write_string(plain_text_inline(inlines[i]))
@@ -605,7 +605,7 @@ pub fn parse_inlines(s : String, from : Int, to : Int) -> Array[Inline] {
                 s, body_start, closing_tag, to,
               )
               if end_callout >= 0 {
-                let copied : Map[String, @shortcode.ShortcodeParam] = Map::new()
+                let copied : Map[String, @shortcode.ShortcodeParam] = Map([])
                 let param_keys = [
                   "type", "title", "src", "alt", "caption", "width", "poster", "link",
                   "body",
@@ -1419,7 +1419,7 @@ fn collect_toc_entries(
   blocks : Array[Block],
   max_depth : Int,
 ) -> Array[TocEntry] {
-  let counts : Map[String, Int] = Map::new()
+  let counts : Map[String, Int] = Map([])
   let entries : Array[TocEntry] = []
   collect_toc_entries_into(blocks, max_depth, counts, entries)
   entries
@@ -1431,7 +1431,7 @@ fn render_inlines_with_issues(
   wl : Map[String, String],
   fn_map : Map[String, Int],
 ) -> RenderResult {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   let issues : Array[ShortcodeIssue] = []
   let mut i = 0
   while i < inlines.length() {
@@ -1458,7 +1458,7 @@ fn render_blocks_with_issues(
   heading_counts : Map[String, Int],
   fn_map : Map[String, Int],
 ) -> RenderResult {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   let issues : Array[ShortcodeIssue] = []
   let mut i = 0
   while i < blocks.length() {
@@ -1539,7 +1539,7 @@ fn render_footnotes_section(
   wl : Map[String, String],
   fn_map : Map[String, Int],
 ) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   buf.write_string("\n<section class=\"footnotes\">\n<ol>\n")
   let mut i = 0
   while i < footnotes.length() {
@@ -1569,7 +1569,7 @@ fn render_footnotes_section(
 /// defensive path; the build pipeline should have already aborted on missing
 /// targets.
 pub fn render_inline(inline : Inline, wl : Map[String, String]) -> String {
-  let fn_map : Map[String, Int] = Map::new()
+  let fn_map : Map[String, Int] = Map([])
   render_inline_with_issues(inline, wl, fn_map).html
 }
 
@@ -1736,8 +1736,8 @@ fn render_inline_with_issues(
 ///|
 /// Render a single block element to an HTML string.
 pub fn render_block(block : Block, wl : Map[String, String]) -> String {
-  let counts : Map[String, Int] = Map::new()
-  let fn_map : Map[String, Int] = Map::new()
+  let counts : Map[String, Int] = Map([])
+  let fn_map : Map[String, Int] = Map([])
   render_block_with_issues(block, wl, counts, fn_map).html
 }
 
@@ -1818,7 +1818,7 @@ fn render_block_with_issues(
       }
     }
     UnorderedList(items) => {
-      let buf = StringBuilder::new()
+      let buf = StringBuilder()
       let issues : Array[ShortcodeIssue] = []
       buf.write_string("<ul>\n")
       let mut i = 0
@@ -1833,7 +1833,7 @@ fn render_block_with_issues(
             Text(t) =>
               if t.has_prefix("[ ] ") {
                 task_checked = false
-                let stripped = t[4:].to_string()
+                let stripped = t[4:].to_owned()
                 // Build new array with stripped text and remaining inlines
                 let new_inlines : Array[Inline] = [Text(stripped)]
                 let mut j = 1
@@ -1844,7 +1844,7 @@ fn render_block_with_issues(
                 task_prefix_stripped = new_inlines
               } else if t.has_prefix("[x] ") || t.has_prefix("[X] ") {
                 task_checked = true
-                let stripped = t[4:].to_string()
+                let stripped = t[4:].to_owned()
                 // Build new array with stripped text and remaining inlines
                 let new_inlines : Array[Inline] = [Text(stripped)]
                 let mut j = 1
@@ -1895,7 +1895,7 @@ fn render_block_with_issues(
       }
     }
     OrderedList(items) => {
-      let buf = StringBuilder::new()
+      let buf = StringBuilder()
       let issues : Array[ShortcodeIssue] = []
       buf.write_string("<ol>\n")
       let mut i = 0
@@ -1929,7 +1929,7 @@ fn render_block_with_issues(
     }
     HRule => { html: "<hr />\n", shortcode_errors: [], toc: [], footnotes: [] }
     Table(aligns, headers, rows) => {
-      let buf = StringBuilder::new()
+      let buf = StringBuilder()
       let issues : Array[ShortcodeIssue] = []
       buf.write_string("<table>\n<thead>\n<tr>\n")
       let mut c = 0
@@ -1986,7 +1986,7 @@ fn render_block_with_issues(
       }
     }
     DefinitionList(items) => {
-      let buf = StringBuilder::new()
+      let buf = StringBuilder()
       let issues : Array[ShortcodeIssue] = []
       buf.write_string("<dl>\n")
       let mut j = 0
@@ -2037,7 +2037,7 @@ pub fn render_table_of_contents(entries : Array[TocEntry]) -> String {
   if entries.length() == 0 {
     return ""
   }
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   buf.write_string("<nav class=\"table-of-contents\">\n<ul>\n")
   let mut i = 0
   while i < entries.length() {
@@ -2074,10 +2074,10 @@ pub fn render_with_diagnostics(
   let preprocessed = preprocess_callout_next_line(body)
   let ls = lines_of(preprocessed)
   let (blocks, footnotes) = parse_blocks_with_footnotes(ls)
-  let heading_counts : Map[String, Int] = Map::new()
+  let heading_counts : Map[String, Int] = Map([])
 
   // Build footnote label -> ordinal map
-  let fn_map : Map[String, Int] = Map::new()
+  let fn_map : Map[String, Int] = Map([])
   let mut i = 0
   while i < footnotes.length() {
     fn_map.set(footnotes[i].label, i + 1)

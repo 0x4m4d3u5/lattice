@@ -13,13 +13,31 @@ pub(all) enum TokenKind {
   Builtin
   Whitespace
   Unknown
-} derive(Show, Eq, Debug, ToJson)
+} derive(Eq, Debug, ToJson)
+
+///|
+pub impl Show for TokenKind with fn output(self, logger) {
+  match self {
+    Keyword => logger.write_string("Keyword")
+    Type => logger.write_string("Type")
+    StringLit => logger.write_string("StringLit")
+    CharLit => logger.write_string("CharLit")
+    Number => logger.write_string("Number")
+    Comment => logger.write_string("Comment")
+    Operator => logger.write_string("Operator")
+    Punct => logger.write_string("Punct")
+    Identifier => logger.write_string("Identifier")
+    Builtin => logger.write_string("Builtin")
+    Whitespace => logger.write_string("Whitespace")
+    Unknown => logger.write_string("Unknown")
+  }
+}
 
 ///|
 pub(all) struct Token {
   kind : TokenKind
   text : String
-} derive(Show, Eq, Debug, ToJson)
+} derive(Eq, Debug, ToJson)
 
 ///|
 fn is_pascal_case_ident(s : String) -> Bool {
@@ -91,7 +109,7 @@ fn token_kind_class(kind : TokenKind) -> String {
 
 ///|
 pub fn render_highlighted(tokens : Array[Token]) -> String {
-  let out = StringBuilder::new()
+  let out = StringBuilder()
   let mut i = 0
   while i < tokens.length() {
     let t = tokens[i]
@@ -151,14 +169,14 @@ fn tokenize_with_rules(
     let c = @strutil.char_at(source, i)
 
     if @strutil.is_whitespace(c) {
-      let buf = StringBuilder::new()
+      let buf = StringBuilder()
       i = read_while(source, i, fn(ch) { @strutil.is_whitespace(ch) }, buf)
       push_token(tokens, TokenKind::Whitespace, buf)
       continue
     }
 
     if allow_hash_comment && c == '#' {
-      let buf = StringBuilder::new()
+      let buf = StringBuilder()
       while i < n && @strutil.char_at(source, i) != '\n' {
         buf.write_char(@strutil.char_at(source, i))
         i = i + 1
@@ -170,7 +188,7 @@ fn tokenize_with_rules(
     match line_comment_1 {
       Some(prefix) =>
         if @strutil.starts_with_at(source, i, prefix) {
-          let buf = StringBuilder::new()
+          let buf = StringBuilder()
           while i < n && @strutil.char_at(source, i) != '\n' {
             buf.write_char(@strutil.char_at(source, i))
             i = i + 1
@@ -186,7 +204,7 @@ fn tokenize_with_rules(
         match block_comment_end {
           Some(close) =>
             if @strutil.starts_with_at(source, i, open) {
-              let buf = StringBuilder::new()
+              let buf = StringBuilder()
               let mut done = false
               while i < n {
                 if @strutil.starts_with_at(source, i, close) {
@@ -214,7 +232,7 @@ fn tokenize_with_rules(
     }
 
     if allow_dollar_var && c == '$' {
-      let buf = StringBuilder::new()
+      let buf = StringBuilder()
       buf.write_char(c)
       i = i + 1
       if i < n && @strutil.char_at(source, i) == '{' {
@@ -236,7 +254,7 @@ fn tokenize_with_rules(
     }
 
     if allow_decorator && c == '@' {
-      let buf = StringBuilder::new()
+      let buf = StringBuilder()
       buf.write_char(c)
       i = i + 1
       i = read_while(source, i, fn(ch) { @strutil.is_ident_part(ch) }, buf)
@@ -248,7 +266,7 @@ fn tokenize_with_rules(
       if @strutil.starts_with_at(source, i, "\"\"\"") ||
         @strutil.starts_with_at(source, i, "'''") {
         let quote = @strutil.char_at(source, i)
-        let buf = StringBuilder::new()
+        let buf = StringBuilder()
         buf.write_char(quote)
         buf.write_char(quote)
         buf.write_char(quote)
@@ -281,7 +299,7 @@ fn tokenize_with_rules(
       (allow_double_quote_string && c == '"') ||
       (allow_backtick_string && c == '`') {
       let quote = c
-      let buf = StringBuilder::new()
+      let buf = StringBuilder()
       buf.write_char(quote)
       i = i + 1
       while i < n {
@@ -305,7 +323,7 @@ fn tokenize_with_rules(
     }
 
     if @strutil.is_digit(c) {
-      let buf = StringBuilder::new()
+      let buf = StringBuilder()
       if c == '0' &&
         i + 1 < n &&
         (
@@ -344,7 +362,7 @@ fn tokenize_with_rules(
     }
 
     if @strutil.is_ident_start(c) {
-      let buf = StringBuilder::new()
+      let buf = StringBuilder()
       i = read_while(source, i, fn(ch) { @strutil.is_ident_part(ch) }, buf)
       let word = buf.to_string()
       if is_member(word, keywords) {
@@ -360,21 +378,21 @@ fn tokenize_with_rules(
     }
 
     if @strutil.is_operator_char(c) {
-      let buf = StringBuilder::new()
+      let buf = StringBuilder()
       i = read_while(source, i, fn(ch) { @strutil.is_operator_char(ch) }, buf)
       push_token(tokens, TokenKind::Operator, buf)
       continue
     }
 
     if @strutil.is_punct_char(c) {
-      let buf = StringBuilder::new()
+      let buf = StringBuilder()
       buf.write_char(c)
       i = i + 1
       push_token(tokens, TokenKind::Punct, buf)
       continue
     }
 
-    let buf = StringBuilder::new()
+    let buf = StringBuilder()
     buf.write_char(c)
     i = i + 1
     push_token(tokens, TokenKind::Unknown, buf)
@@ -390,7 +408,7 @@ fn tokenize_number_general(
   allow_exponent : Bool,
   allow_unit_suffix : Bool,
 ) -> (Token, Int) {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   let n = source.length()
   let mut i = start
   if @strutil.char_at(source, i) == '-' {
@@ -620,13 +638,13 @@ pub fn tokenize_c(source : String) -> Array[Token] {
   while i < n {
     let c = @strutil.char_at(source, i)
     if @strutil.is_whitespace(c) {
-      let buf = StringBuilder::new()
+      let buf = StringBuilder()
       i = read_while(source, i, fn(ch) { @strutil.is_whitespace(ch) }, buf)
       push_token(tokens, TokenKind::Whitespace, buf)
       continue
     }
     if c == '#' {
-      let buf = StringBuilder::new()
+      let buf = StringBuilder()
       while i < n && @strutil.char_at(source, i) != '\n' {
         buf.write_char(@strutil.char_at(source, i))
         i = i + 1
@@ -635,7 +653,7 @@ pub fn tokenize_c(source : String) -> Array[Token] {
       continue
     }
     if @strutil.starts_with_at(source, i, "//") {
-      let buf = StringBuilder::new()
+      let buf = StringBuilder()
       while i < n && @strutil.char_at(source, i) != '\n' {
         buf.write_char(@strutil.char_at(source, i))
         i = i + 1
@@ -644,7 +662,7 @@ pub fn tokenize_c(source : String) -> Array[Token] {
       continue
     }
     if @strutil.starts_with_at(source, i, "/*") {
-      let buf = StringBuilder::new()
+      let buf = StringBuilder()
       while i < n {
         if @strutil.starts_with_at(source, i, "*/") {
           buf.write_string("*/")
@@ -659,7 +677,7 @@ pub fn tokenize_c(source : String) -> Array[Token] {
     }
     if c == '"' || c == '\'' {
       let quote = c
-      let buf = StringBuilder::new()
+      let buf = StringBuilder()
       buf.write_char(quote)
       i = i + 1
       while i < n {
@@ -690,7 +708,7 @@ pub fn tokenize_c(source : String) -> Array[Token] {
       continue
     }
     if @strutil.is_ident_start(c) {
-      let buf = StringBuilder::new()
+      let buf = StringBuilder()
       i = read_while(source, i, fn(ch) { @strutil.is_ident_part(ch) }, buf)
       let word = buf.to_string()
       if is_member(word, keywords) {
@@ -701,19 +719,19 @@ pub fn tokenize_c(source : String) -> Array[Token] {
       continue
     }
     if @strutil.is_operator_char(c) {
-      let buf = StringBuilder::new()
+      let buf = StringBuilder()
       i = read_while(source, i, fn(ch) { @strutil.is_operator_char(ch) }, buf)
       push_token(tokens, TokenKind::Operator, buf)
       continue
     }
     if @strutil.is_punct_char(c) {
-      let buf = StringBuilder::new()
+      let buf = StringBuilder()
       buf.write_char(c)
       i = i + 1
       push_token(tokens, TokenKind::Punct, buf)
       continue
     }
-    let buf = StringBuilder::new()
+    let buf = StringBuilder()
     buf.write_char(c)
     i = i + 1
     push_token(tokens, TokenKind::Unknown, buf)
@@ -728,7 +746,7 @@ pub fn tokenize_html(source : String) -> Array[Token] {
   let mut i = 0
   while i < n {
     if @strutil.starts_with_at(source, i, "<!--") {
-      let buf = StringBuilder::new()
+      let buf = StringBuilder()
       while i < n {
         if @strutil.starts_with_at(source, i, "-->") {
           buf.write_string("-->")
@@ -743,7 +761,7 @@ pub fn tokenize_html(source : String) -> Array[Token] {
     }
     if @strutil.starts_with_at(source, i, "<!DOCTYPE") ||
       @strutil.starts_with_at(source, i, "<!doctype") {
-      let buf = StringBuilder::new()
+      let buf = StringBuilder()
       while i < n {
         let ch = @strutil.char_at(source, i)
         buf.write_char(ch)
@@ -757,18 +775,18 @@ pub fn tokenize_html(source : String) -> Array[Token] {
     }
     let c = @strutil.char_at(source, i)
     if c == '<' {
-      let open = StringBuilder::new()
+      let open = StringBuilder()
       open.write_char('<')
       i = i + 1
       push_token(tokens, TokenKind::Punct, open)
       if i < n && @strutil.char_at(source, i) == '/' {
-        let slash = StringBuilder::new()
+        let slash = StringBuilder()
         slash.write_char('/')
         i = i + 1
         push_token(tokens, TokenKind::Punct, slash)
       }
       if i < n && @strutil.is_ident_start(@strutil.char_at(source, i)) {
-        let name = StringBuilder::new()
+        let name = StringBuilder()
         i = read_while(
           source,
           i,
@@ -780,7 +798,7 @@ pub fn tokenize_html(source : String) -> Array[Token] {
       while i < n {
         let ch = @strutil.char_at(source, i)
         if @strutil.is_whitespace(ch) {
-          let buf = StringBuilder::new()
+          let buf = StringBuilder()
           i = read_while(
             source,
             i,
@@ -791,21 +809,21 @@ pub fn tokenize_html(source : String) -> Array[Token] {
           continue
         }
         if @strutil.starts_with_at(source, i, "/>") {
-          let buf = StringBuilder::new()
+          let buf = StringBuilder()
           buf.write_string("/>")
           i = i + 2
           push_token(tokens, TokenKind::Punct, buf)
           break
         }
         if ch == '>' {
-          let buf = StringBuilder::new()
+          let buf = StringBuilder()
           buf.write_char('>')
           i = i + 1
           push_token(tokens, TokenKind::Punct, buf)
           break
         }
         if @strutil.is_ident_start(ch) {
-          let name = StringBuilder::new()
+          let name = StringBuilder()
           i = read_while(
             source,
             i,
@@ -816,14 +834,14 @@ pub fn tokenize_html(source : String) -> Array[Token] {
           continue
         }
         if ch == '=' {
-          let buf = StringBuilder::new()
+          let buf = StringBuilder()
           buf.write_char('=')
           i = i + 1
           push_token(tokens, TokenKind::Operator, buf)
           continue
         }
         if ch == '"' {
-          let buf = StringBuilder::new()
+          let buf = StringBuilder()
           buf.write_char('"')
           i = i + 1
           while i < n {
@@ -837,14 +855,14 @@ pub fn tokenize_html(source : String) -> Array[Token] {
           push_token(tokens, TokenKind::StringLit, buf)
           continue
         }
-        let buf = StringBuilder::new()
+        let buf = StringBuilder()
         buf.write_char(ch)
         i = i + 1
         push_token(tokens, TokenKind::Unknown, buf)
       }
       continue
     }
-    let buf = StringBuilder::new()
+    let buf = StringBuilder()
     while i < n && @strutil.char_at(source, i) != '<' {
       buf.write_char(@strutil.char_at(source, i))
       i = i + 1
@@ -863,7 +881,7 @@ pub fn tokenize_css(source : String) -> Array[Token] {
   let mut expect_value = false
   while i < n {
     if @strutil.starts_with_at(source, i, "/*") {
-      let buf = StringBuilder::new()
+      let buf = StringBuilder()
       while i < n {
         if @strutil.starts_with_at(source, i, "*/") {
           buf.write_string("*/")
@@ -878,13 +896,13 @@ pub fn tokenize_css(source : String) -> Array[Token] {
     }
     let c = @strutil.char_at(source, i)
     if @strutil.is_whitespace(c) {
-      let buf = StringBuilder::new()
+      let buf = StringBuilder()
       i = read_while(source, i, fn(ch) { @strutil.is_whitespace(ch) }, buf)
       push_token(tokens, TokenKind::Whitespace, buf)
       continue
     }
     if c == '@' {
-      let buf = StringBuilder::new()
+      let buf = StringBuilder()
       buf.write_char('@')
       i = i + 1
       i = read_while(
@@ -897,7 +915,7 @@ pub fn tokenize_css(source : String) -> Array[Token] {
       continue
     }
     if c == '{' || c == '}' || c == ':' || c == ';' {
-      let buf = StringBuilder::new()
+      let buf = StringBuilder()
       buf.write_char(c)
       i = i + 1
       push_token(tokens, TokenKind::Punct, buf)
@@ -915,7 +933,7 @@ pub fn tokenize_css(source : String) -> Array[Token] {
       continue
     }
     if c == '#' {
-      let buf = StringBuilder::new()
+      let buf = StringBuilder()
       buf.write_char('#')
       i = i + 1
       i = read_while(source, i, fn(ch) { @strutil.is_hex_digit(ch) }, buf)
@@ -924,7 +942,7 @@ pub fn tokenize_css(source : String) -> Array[Token] {
     }
     if c == '"' || c == '\'' {
       let quote = c
-      let buf = StringBuilder::new()
+      let buf = StringBuilder()
       buf.write_char(quote)
       i = i + 1
       while i < n {
@@ -954,7 +972,7 @@ pub fn tokenize_css(source : String) -> Array[Token] {
       i = next_i
       continue
     }
-    let buf = StringBuilder::new()
+    let buf = StringBuilder()
     while i < n {
       let inner = @strutil.char_at(source, i)
       if inner == '{' ||
@@ -981,7 +999,7 @@ pub fn tokenize_css(source : String) -> Array[Token] {
       }
       continue
     }
-    let unknown = StringBuilder::new()
+    let unknown = StringBuilder()
     unknown.write_char(c)
     i = i + 1
     push_token(tokens, TokenKind::Unknown, unknown)
@@ -997,13 +1015,13 @@ pub fn tokenize_json(source : String) -> Array[Token] {
   while i < n {
     let c = @strutil.char_at(source, i)
     if @strutil.is_whitespace(c) {
-      let buf = StringBuilder::new()
+      let buf = StringBuilder()
       i = read_while(source, i, fn(ch) { @strutil.is_whitespace(ch) }, buf)
       push_token(tokens, TokenKind::Whitespace, buf)
       continue
     }
     if c == '"' {
-      let buf = StringBuilder::new()
+      let buf = StringBuilder()
       buf.write_char('"')
       i = i + 1
       while i < n {
@@ -1021,7 +1039,7 @@ pub fn tokenize_json(source : String) -> Array[Token] {
       continue
     }
     if c == '{' || c == '}' || c == '[' || c == ']' || c == ',' || c == ':' {
-      let buf = StringBuilder::new()
+      let buf = StringBuilder()
       buf.write_char(c)
       i = i + 1
       push_token(tokens, TokenKind::Punct, buf)
@@ -1041,7 +1059,7 @@ pub fn tokenize_json(source : String) -> Array[Token] {
       continue
     }
     if @strutil.is_ident_start(c) {
-      let buf = StringBuilder::new()
+      let buf = StringBuilder()
       i = read_while(source, i, fn(ch) { @strutil.is_ident_part(ch) }, buf)
       let word = buf.to_string()
       if word == "true" || word == "false" || word == "null" {
@@ -1051,7 +1069,7 @@ pub fn tokenize_json(source : String) -> Array[Token] {
       }
       continue
     }
-    let buf = StringBuilder::new()
+    let buf = StringBuilder()
     buf.write_char(c)
     i = i + 1
     push_token(tokens, TokenKind::Unknown, buf)
@@ -1073,13 +1091,13 @@ pub fn tokenize_rust(source : String) -> Array[Token] {
   while i < n {
     let c = @strutil.char_at(source, i)
     if @strutil.is_whitespace(c) {
-      let buf = StringBuilder::new()
+      let buf = StringBuilder()
       i = read_while(source, i, fn(ch) { @strutil.is_whitespace(ch) }, buf)
       push_token(tokens, TokenKind::Whitespace, buf)
       continue
     }
     if @strutil.starts_with_at(source, i, "//") {
-      let buf = StringBuilder::new()
+      let buf = StringBuilder()
       while i < n && @strutil.char_at(source, i) != '\n' {
         buf.write_char(@strutil.char_at(source, i))
         i = i + 1
@@ -1088,7 +1106,7 @@ pub fn tokenize_rust(source : String) -> Array[Token] {
       continue
     }
     if @strutil.starts_with_at(source, i, "/*") {
-      let buf = StringBuilder::new()
+      let buf = StringBuilder()
       while i < n {
         if @strutil.starts_with_at(source, i, "*/") {
           buf.write_string("*/")
@@ -1102,7 +1120,7 @@ pub fn tokenize_rust(source : String) -> Array[Token] {
       continue
     }
     if @strutil.starts_with_at(source, i, "#[") {
-      let buf = StringBuilder::new()
+      let buf = StringBuilder()
       while i < n {
         buf.write_char(@strutil.char_at(source, i))
         i = i + 1
@@ -1114,7 +1132,7 @@ pub fn tokenize_rust(source : String) -> Array[Token] {
       continue
     }
     if @strutil.starts_with_at(source, i, "r#") {
-      let buf = StringBuilder::new()
+      let buf = StringBuilder()
       let mut hash_count = 0
       buf.write_char('r')
       buf.write_char('#')
@@ -1157,7 +1175,7 @@ pub fn tokenize_rust(source : String) -> Array[Token] {
       }
     }
     if c == '"' {
-      let buf = StringBuilder::new()
+      let buf = StringBuilder()
       buf.write_char('"')
       i = i + 1
       while i < n {
@@ -1183,7 +1201,7 @@ pub fn tokenize_rust(source : String) -> Array[Token] {
         j = j + 1
       }
       if j >= n || @strutil.char_at(source, j) != '\'' {
-        let buf = StringBuilder::new()
+        let buf = StringBuilder()
         buf.write_char('\'')
         i = read_while(
           source,
@@ -1196,7 +1214,7 @@ pub fn tokenize_rust(source : String) -> Array[Token] {
       }
     }
     if c == '\'' {
-      let buf = StringBuilder::new()
+      let buf = StringBuilder()
       buf.write_char('\'')
       i = i + 1
       if i < n && @strutil.char_at(source, i) != '\'' {
@@ -1222,7 +1240,7 @@ pub fn tokenize_rust(source : String) -> Array[Token] {
       continue
     }
     if @strutil.is_ident_start(c) {
-      let buf = StringBuilder::new()
+      let buf = StringBuilder()
       i = read_while(source, i, fn(ch) { @strutil.is_ident_part(ch) }, buf)
       let word = buf.to_string()
       if is_member(word, keywords) {
@@ -1235,19 +1253,19 @@ pub fn tokenize_rust(source : String) -> Array[Token] {
       continue
     }
     if @strutil.is_operator_char(c) {
-      let buf = StringBuilder::new()
+      let buf = StringBuilder()
       i = read_while(source, i, fn(ch) { @strutil.is_operator_char(ch) }, buf)
       push_token(tokens, TokenKind::Operator, buf)
       continue
     }
     if @strutil.is_punct_char(c) {
-      let buf = StringBuilder::new()
+      let buf = StringBuilder()
       buf.write_char(c)
       i = i + 1
       push_token(tokens, TokenKind::Punct, buf)
       continue
     }
-    let buf = StringBuilder::new()
+    let buf = StringBuilder()
     buf.write_char(c)
     i = i + 1
     push_token(tokens, TokenKind::Unknown, buf)
@@ -1272,13 +1290,13 @@ pub fn tokenize_sql(source : String) -> Array[Token] {
   while i < n {
     let c = @strutil.char_at(source, i)
     if @strutil.is_whitespace(c) {
-      let buf = StringBuilder::new()
+      let buf = StringBuilder()
       i = read_while(source, i, fn(ch) { @strutil.is_whitespace(ch) }, buf)
       push_token(tokens, TokenKind::Whitespace, buf)
       continue
     }
     if @strutil.starts_with_at(source, i, "--") {
-      let buf = StringBuilder::new()
+      let buf = StringBuilder()
       while i < n && @strutil.char_at(source, i) != '\n' {
         buf.write_char(@strutil.char_at(source, i))
         i = i + 1
@@ -1287,7 +1305,7 @@ pub fn tokenize_sql(source : String) -> Array[Token] {
       continue
     }
     if @strutil.starts_with_at(source, i, "/*") {
-      let buf = StringBuilder::new()
+      let buf = StringBuilder()
       while i < n {
         if @strutil.starts_with_at(source, i, "*/") {
           buf.write_string("*/")
@@ -1301,7 +1319,7 @@ pub fn tokenize_sql(source : String) -> Array[Token] {
       continue
     }
     if c == '\'' {
-      let buf = StringBuilder::new()
+      let buf = StringBuilder()
       buf.write_char('\'')
       i = i + 1
       while i < n {
@@ -1320,7 +1338,7 @@ pub fn tokenize_sql(source : String) -> Array[Token] {
     }
     if c == '`' || c == '"' {
       let quote = c
-      let buf = StringBuilder::new()
+      let buf = StringBuilder()
       buf.write_char(quote)
       i = i + 1
       while i < n {
@@ -1338,7 +1356,7 @@ pub fn tokenize_sql(source : String) -> Array[Token] {
       continue
     }
     if @strutil.is_digit(c) {
-      let buf = StringBuilder::new()
+      let buf = StringBuilder()
       i = read_while(source, i, fn(ch) { @strutil.is_digit(ch) }, buf)
       if i < n && @strutil.char_at(source, i) == '.' {
         buf.write_char('.')
@@ -1349,7 +1367,7 @@ pub fn tokenize_sql(source : String) -> Array[Token] {
       continue
     }
     if @strutil.is_ident_start(c) {
-      let buf = StringBuilder::new()
+      let buf = StringBuilder()
       i = read_while(source, i, fn(ch) { @strutil.is_ident_part(ch) }, buf)
       let word = buf.to_string()
       let mut found_keyword = false
@@ -1369,19 +1387,19 @@ pub fn tokenize_sql(source : String) -> Array[Token] {
       continue
     }
     if @strutil.is_operator_char(c) {
-      let buf = StringBuilder::new()
+      let buf = StringBuilder()
       i = read_while(source, i, fn(ch) { @strutil.is_operator_char(ch) }, buf)
       push_token(tokens, TokenKind::Operator, buf)
       continue
     }
     if @strutil.is_punct_char(c) {
-      let buf = StringBuilder::new()
+      let buf = StringBuilder()
       buf.write_char(c)
       i = i + 1
       push_token(tokens, TokenKind::Punct, buf)
       continue
     }
-    let buf = StringBuilder::new()
+    let buf = StringBuilder()
     buf.write_char(c)
     i = i + 1
     push_token(tokens, TokenKind::Unknown, buf)
@@ -1398,13 +1416,13 @@ pub fn tokenize_toml(source : String) -> Array[Token] {
   while i < n {
     let c = @strutil.char_at(source, i)
     if @strutil.is_whitespace(c) {
-      let buf = StringBuilder::new()
+      let buf = StringBuilder()
       i = read_while(source, i, fn(ch) { @strutil.is_whitespace(ch) }, buf)
       push_token(tokens, TokenKind::Whitespace, buf)
       continue
     }
     if c == '#' {
-      let buf = StringBuilder::new()
+      let buf = StringBuilder()
       while i < n && @strutil.char_at(source, i) != '\n' {
         buf.write_char(@strutil.char_at(source, i))
         i = i + 1
@@ -1414,7 +1432,7 @@ pub fn tokenize_toml(source : String) -> Array[Token] {
     }
     if c == '\'' || c == '"' {
       let quote = c
-      let buf = StringBuilder::new()
+      let buf = StringBuilder()
       buf.write_char(quote)
       i = i + 1
       while i < n {
@@ -1437,7 +1455,7 @@ pub fn tokenize_toml(source : String) -> Array[Token] {
         i + 1 < n &&
         @strutil.is_digit(@strutil.char_at(source, i + 1))
       ) {
-      let buf = StringBuilder::new()
+      let buf = StringBuilder()
       i = read_while(
         source,
         i,
@@ -1491,7 +1509,7 @@ pub fn tokenize_toml(source : String) -> Array[Token] {
       continue
     }
     if c == '[' {
-      let buf = StringBuilder::new()
+      let buf = StringBuilder()
       buf.write_char('[')
       i = i + 1
       if i < n && @strutil.char_at(source, i) == '[' {
@@ -1523,7 +1541,7 @@ pub fn tokenize_toml(source : String) -> Array[Token] {
       continue
     }
     if @strutil.is_ident_start(c) {
-      let buf = StringBuilder::new()
+      let buf = StringBuilder()
       i = read_while(
         source,
         i,
@@ -1539,20 +1557,20 @@ pub fn tokenize_toml(source : String) -> Array[Token] {
       continue
     }
     if c == '=' || c == '.' {
-      let buf = StringBuilder::new()
+      let buf = StringBuilder()
       buf.write_char(c)
       i = i + 1
       push_token(tokens, TokenKind::Operator, buf)
       continue
     }
     if c == '{' || c == '}' || c == ',' {
-      let buf = StringBuilder::new()
+      let buf = StringBuilder()
       buf.write_char(c)
       i = i + 1
       push_token(tokens, TokenKind::Punct, buf)
       continue
     }
-    let buf = StringBuilder::new()
+    let buf = StringBuilder()
     buf.write_char(c)
     i = i + 1
     push_token(tokens, TokenKind::Unknown, buf)
@@ -1569,13 +1587,13 @@ pub fn tokenize_yaml(source : String) -> Array[Token] {
   while i < n {
     let c = @strutil.char_at(source, i)
     if @strutil.is_whitespace(c) {
-      let buf = StringBuilder::new()
+      let buf = StringBuilder()
       i = read_while(source, i, fn(ch) { @strutil.is_whitespace(ch) }, buf)
       push_token(tokens, TokenKind::Whitespace, buf)
       continue
     }
     if c == '#' {
-      let buf = StringBuilder::new()
+      let buf = StringBuilder()
       while i < n && @strutil.char_at(source, i) != '\n' {
         buf.write_char(@strutil.char_at(source, i))
         i = i + 1
@@ -1584,14 +1602,14 @@ pub fn tokenize_yaml(source : String) -> Array[Token] {
       continue
     }
     if @strutil.starts_with_at(source, i, "---") {
-      let buf = StringBuilder::new()
+      let buf = StringBuilder()
       buf.write_string("---")
       i = i + 3
       push_token(tokens, TokenKind::Keyword, buf)
       continue
     }
     if @strutil.starts_with_at(source, i, "...") {
-      let buf = StringBuilder::new()
+      let buf = StringBuilder()
       buf.write_string("...")
       i = i + 3
       push_token(tokens, TokenKind::Keyword, buf)
@@ -1599,7 +1617,7 @@ pub fn tokenize_yaml(source : String) -> Array[Token] {
     }
     if c == '\'' || c == '"' {
       let quote = c
-      let buf = StringBuilder::new()
+      let buf = StringBuilder()
       buf.write_char(quote)
       i = i + 1
       while i < n {
@@ -1619,21 +1637,21 @@ pub fn tokenize_yaml(source : String) -> Array[Token] {
     if c == '-' &&
       i + 1 < n &&
       @strutil.is_whitespace(@strutil.char_at(source, i + 1)) {
-      let buf = StringBuilder::new()
+      let buf = StringBuilder()
       buf.write_char('-')
       i = i + 1
       push_token(tokens, TokenKind::Punct, buf)
       continue
     }
     if c == '|' || c == '>' {
-      let buf = StringBuilder::new()
+      let buf = StringBuilder()
       buf.write_char(c)
       i = i + 1
       push_token(tokens, TokenKind::Punct, buf)
       continue
     }
     if c == '&' || c == '*' {
-      let buf = StringBuilder::new()
+      let buf = StringBuilder()
       buf.write_char(c)
       i = i + 1
       i = read_while(source, i, fn(ch) { @strutil.is_ident_part(ch) }, buf)
@@ -1646,7 +1664,7 @@ pub fn tokenize_yaml(source : String) -> Array[Token] {
         i + 1 < n &&
         @strutil.is_digit(@strutil.char_at(source, i + 1))
       ) {
-      let buf = StringBuilder::new()
+      let buf = StringBuilder()
       if c == '-' {
         buf.write_char('-')
         i = i + 1
@@ -1693,7 +1711,7 @@ pub fn tokenize_yaml(source : String) -> Array[Token] {
       continue
     }
     if @strutil.is_ident_start(c) {
-      let buf = StringBuilder::new()
+      let buf = StringBuilder()
       i = read_while(
         source,
         i,
@@ -1709,13 +1727,13 @@ pub fn tokenize_yaml(source : String) -> Array[Token] {
       continue
     }
     if c == ':' {
-      let buf = StringBuilder::new()
+      let buf = StringBuilder()
       buf.write_char(':')
       i = i + 1
       push_token(tokens, TokenKind::Punct, buf)
       continue
     }
-    let buf = StringBuilder::new()
+    let buf = StringBuilder()
     buf.write_char(c)
     i = i + 1
     push_token(tokens, TokenKind::Unknown, buf)
@@ -1729,7 +1747,7 @@ pub fn tokenize_plain(source : String) -> Array[Token] {
   let mut i = 0
   while i < source.length() {
     let c = @strutil.char_at(source, i)
-    let text = StringBuilder::new()
+    let text = StringBuilder()
     text.write_char(c)
     tokens.push({ kind: TokenKind::Unknown, text: text.to_string() })
     i = i + 1
@@ -1801,3 +1819,36 @@ pub fn language_supported(lang : String) -> Bool {
     _ => false
   }
 }
+
+///|
+pub impl Show for Token with fn output(self, logger) {
+  logger.write_string("{kind: ")
+  logger.write_object(self.kind)
+  logger.write_string(", text: ")
+  logger.write_object(self.text)
+  logger.write_string("}")
+}
+
+///|
+pub extend Token with @debug.Debug::{to_repr}
+
+///|
+pub extend Token with Eq::{not_equal, equal}
+
+///|
+pub extend Token with Show::{to_string, output}
+
+///|
+pub extend Token with ToJson::{to_json}
+
+///|
+pub extend TokenKind with @debug.Debug::{to_repr}
+
+///|
+pub extend TokenKind with Eq::{not_equal, equal}
+
+///|
+pub extend TokenKind with Show::{to_string, output}
+
+///|
+pub extend TokenKind with ToJson::{to_json}

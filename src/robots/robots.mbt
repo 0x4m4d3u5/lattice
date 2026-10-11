@@ -31,7 +31,7 @@ pub fn render_robots_txt(
     return ""
   }
 
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
 
   // Standard robots.txt header - allow all crawlers
   buf.write_string("User-agent: *\n")

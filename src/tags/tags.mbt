@@ -53,7 +53,7 @@ pub fn extract(
     Some(value) =>
       match value {
         @frontmatter.FArray(items) => {
-          let seen : Map[String, Bool] = Map::new()
+          let seen : Map[String, Bool] = Map([])
           let tags : Array[TagRef] = []
           let mut i = 0
           while i < items.length() {
@@ -85,7 +85,7 @@ pub fn render_page_tags(tags : Array[TagRef]) -> String {
   if tags.length() == 0 {
     return ""
   }
-  let out = StringBuilder::new()
+  let out = StringBuilder()
   out.write_string("<section>\n<h2>Tags</h2>\n<ul>\n")
   let mut i = 0
   while i < tags.length() {
@@ -101,7 +101,7 @@ pub fn render_page_tags(tags : Array[TagRef]) -> String {
 
 ///|
 pub fn render_tag_page(page : TagPage) -> String {
-  let out = StringBuilder::new()
+  let out = StringBuilder()
   out.write_string("<main>\n")
   out.write_string("<h1>Tag: ")
   out.write_string(@strutil.escape_html_body(page.tag))
@@ -126,7 +126,7 @@ pub fn render_tag_page(page : TagPage) -> String {
 
 ///|
 pub fn render_tag_index(index : TagIndex) -> String {
-  let out = StringBuilder::new()
+  let out = StringBuilder()
   out.write_string("<main>\n")
   out.write_string("<h1>Tags</h1>\n")
   if index.tags.length() == 0 {

@@ -197,7 +197,7 @@ fn is_draft(fm : @frontmatter.Frontmatter) -> Bool {
 pub fn frontmatter_to_strings(
   fm : @frontmatter.Frontmatter,
 ) -> Map[String, String] {
-  let result : Map[String, String] = Map::new()
+  let result : Map[String, String] = Map([])
   fn convert_value(val : @frontmatter.FrontmatterValue) -> String {
     match val {
       @frontmatter.FStr(s) => s
@@ -214,7 +214,7 @@ pub fn frontmatter_to_strings(
           i = i + 1
         }
         // Join with comma and space
-        let buf = StringBuilder::new()
+        let buf = StringBuilder()
         let mut j = 0
         while j < parts.length() {
           buf.write_string(parts[j])
@@ -241,7 +241,7 @@ pub fn frontmatter_to_strings(
 pub fn frontmatter_to_arrays(
   fm : @frontmatter.Frontmatter,
 ) -> Map[String, Array[String]] {
-  let result : Map[String, Array[String]] = Map::new()
+  let result : Map[String, Array[String]] = Map([])
   let convert_scalar_to_string = fn(
     val : @frontmatter.FrontmatterValue,
   ) -> String {
@@ -402,7 +402,7 @@ pub fn sort_collection_pages(
 fn build_wikilink_map(
   resolved : Array[@wikilink.ResolvedWikilink],
 ) -> Map[String, String] {
-  let m : Map[String, String] = Map::new()
+  let m : Map[String, String] = Map([])
   let mut i = 0
   while i < resolved.length() {
     m.set(resolved[i].raw.target, resolved[i].url)
@@ -413,7 +413,7 @@ fn build_wikilink_map(
 
 ///|
 fn extract_link_targets(source : String, slug : String) -> Array[String] {
-  let unique : Map[String, Bool] = Map::new()
+  let unique : Map[String, Bool] = Map([])
   let targets : Array[String] = []
   let body = match @frontmatter.parse(source) {
     Ok(fm) => fm.body
@@ -442,7 +442,7 @@ fn build_backlink_index(
   collection_sources : Array[CollectionSources],
   page_index : Map[String, String],
 ) -> Map[String, Array[BacklinkRef]] {
-  let index : Map[String, Array[BacklinkRef]] = Map::new()
+  let index : Map[String, Array[BacklinkRef]] = Map([])
   let mut i = 0
   while i < collection_sources.length() {
     let coll = collection_sources[i]
@@ -484,7 +484,7 @@ fn render_backlinks_html(backlinks : Array[BacklinkRef]) -> String {
   if backlinks.length() == 0 {
     return ""
   }
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   buf.write_string("<section class=\"backlinks\">\n<h2>Backlinks</h2>\n<ul>\n")
   let mut i = 0
   while i < backlinks.length() {
@@ -574,7 +574,7 @@ pub fn extract_year_month(date : String) -> (String, String)? {
 pub fn group_pages_by_year_month(
   pages : Array[@graph.GraphPage],
 ) -> Array[ArchiveGroup] {
-  let groups_map : Map[String, Array[@graph.GraphPage]] = Map::new()
+  let groups_map : Map[String, Array[@graph.GraphPage]] = Map([])
   let mut i = 0
   while i < pages.length() {
     let page = pages[i]
@@ -657,7 +657,7 @@ pub fn group_pages_by_year_month(
 pub fn aggregate_pages_by_year(
   groups : Array[ArchiveGroup],
 ) -> Map[String, Array[@graph.GraphPage]] {
-  let year_map : Map[String, Array[@graph.GraphPage]] = Map::new()
+  let year_map : Map[String, Array[@graph.GraphPage]] = Map([])
   let mut i = 0
   while i < groups.length() {
     let g = groups[i]
@@ -687,7 +687,7 @@ pub fn aggregate_pages_by_year(
 ///|
 /// Render HTML content for an archive page - list of page links.
 pub fn render_archive_page_content(pages : Array[@graph.GraphPage]) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   buf.write_string("<ul>\n")
   let mut i = 0
   while i < pages.length() {
@@ -795,8 +795,8 @@ fn render_archive_page(
           tpl,
           slots,
           data_store,
-          Map::new(),
-          Map::new(),
+          Map([]),
+          Map([]),
         ) {
         Ok(html) => Ok(html)
         Err(e) => Err(template_error_text(e))
@@ -809,8 +809,8 @@ fn render_archive_page(
               tpl,
               slots,
               data_store,
-              Map::new(),
-              Map::new(),
+              Map([]),
+              Map([]),
             ) {
             Ok(html) => Ok(html)
             Err(e) => Err(template_error_text(e))
@@ -835,7 +835,7 @@ pub fn render_archive_index(
   // `groups` is expected to be sorted newest-first by year/month by the builder
   // (see `group_pages_by_year_month`). We rely on that invariant here.
 
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   // Group groups by year for the h2 headings
   let mut i = 0
   let mut current_year = ""
@@ -933,8 +933,8 @@ pub fn render_archive_index(
           tpl,
           slots,
           data_store,
-          Map::new(),
-          Map::new(),
+          Map([]),
+          Map([]),
         ) {
         Ok(html) => Ok(html)
         Err(e) => Err(template_error_text(e))
@@ -947,8 +947,8 @@ pub fn render_archive_index(
               tpl,
               slots,
               data_store,
-              Map::new(),
-              Map::new(),
+              Map([]),
+              Map([]),
             ) {
             Ok(html) => Ok(html)
             Err(e) => Err(template_error_text(e))
@@ -1002,7 +1002,7 @@ fn build_archive_pages(
   // Aggregate all pages per year so the year archive includes every month.
   let year_pages_map = aggregate_pages_by_year(groups)
 
-  let written_years : Map[String, Bool] = Map::new()
+  let written_years : Map[String, Bool] = Map([])
 
   let mut i = 0
   while i < groups.length() {
@@ -1369,7 +1369,7 @@ fn warn_duplicate_redirects(
     return
   }
   // Group redirect paths by first occurrence, detect collisions
-  let seen : Map[String, String] = Map::new()
+  let seen : Map[String, String] = Map([])
   let mut i = 0
   while i < redirect_sources.length() {
     let src = redirect_sources[i]
@@ -1694,7 +1694,7 @@ fn frontmatter_line_from_error(msg : String) -> Int? {
   if end == i {
     return None
   }
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   while i < end {
     buf.write_char(@strutil.char_at(msg, i))
     i = i + 1
@@ -1752,7 +1752,7 @@ fn missing_required_fields_note(schema : @schema.Schema) -> String? {
   if required.length() == 0 {
     return None
   }
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   i = 0
   while i < required.length() {
     if i > 0 {
@@ -1858,7 +1858,7 @@ fn build_template_slots(
   base_url : String,
   og_type? : String = "article",
 ) -> Map[@template.TemplateSlot, String] {
-  let slots : Map[@template.TemplateSlot, String] = Map::new()
+  let slots : Map[@template.TemplateSlot, String] = Map([])
   slots.set(@template.Title, title)
   slots.set(@template.Content, content)
   slots.set(@template.BodyNoH1, @html.strip_leading_h1(content))
@@ -2270,7 +2270,7 @@ fn render_pagination_nav(
   if total_pages <= 1 {
     return ""
   }
-  let nav = StringBuilder::new()
+  let nav = StringBuilder()
   nav.write_string("<nav class=\"pagination\" aria-label=\"Pagination\">\n")
   nav.write_string("<p>Page ")
   nav.write_string(page_number.to_string())
@@ -2320,7 +2320,7 @@ fn is_block_starter_builder(line : String) -> Bool {
 
 ///|
 fn collapse_whitespace_builder(s : String) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   let mut wrote_non_space = false
   let mut prev_space = false
   let mut i = 0
@@ -2494,7 +2494,7 @@ fn collect_tag_catalog(
   tags_field : String,
 ) -> TagCatalog {
   let ordered_slugs : Array[String] = []
-  let name_by_slug : Map[String, String] = Map::new()
+  let name_by_slug : Map[String, String] = Map([])
   let mut i = 0
   while i < collection_sources.length() {
     let coll = collection_sources[i]
@@ -2595,8 +2595,8 @@ fn render_tag_page_html(
           tpl,
           slots,
           data_store,
-          Map::new(),
-          Map::new(),
+          Map([]),
+          Map([]),
         ) {
         Ok(html) => Ok(html)
         Err(e) => Err("tag page template: " + template_error_text(e))
@@ -2681,8 +2681,8 @@ fn render_tags_index_html(
           tpl,
           slots,
           data_store,
-          Map::new(),
-          Map::new(),
+          Map([]),
+          Map([]),
         ) {
         Ok(html) => Ok(html)
         Err(e) => Err("tags index template: " + template_error_text(e))
@@ -2800,8 +2800,8 @@ fn render_404_page(
           tpl,
           slots,
           data_store,
-          Map::new(),
-          Map::new(),
+          Map([]),
+          Map([]),
         ) {
         Ok(html) => Ok(html)
         Err(e) => Err("404 page template: " + template_error_text(e))
@@ -2840,7 +2840,7 @@ fn render_collection_index(
   collection_description : String?,
 ) -> Result[String, String] {
   let pages = pagination.documents
-  let title_by_slug : Map[String, String] = Map::new()
+  let title_by_slug : Map[String, String] = Map([])
   let mut i = 0
   while i < pages.length() {
     let p = pages[i]
@@ -2848,7 +2848,7 @@ fn render_collection_index(
     i = i + 1
   }
 
-  let body = StringBuilder::new()
+  let body = StringBuilder()
   body.write_string("<main>\n")
   body.write_string("<h1>")
   body.write_string(@strutil.escape_html_attr(collection_name))
@@ -2974,8 +2974,8 @@ fn render_collection_index(
           tpl,
           slots,
           data_store,
-          Map::new(),
-          Map::new(),
+          Map([]),
+          Map([]),
         ) {
         Ok(html) => {
           let structured_data_markup = @html.render_structured_data_script(
@@ -3032,7 +3032,7 @@ fn render_collection_index(
 fn build_data_schema_map(
   schema_defs : Array[@collections.DataSchemaDef],
 ) -> Map[String, @data.DataSchema] {
-  let data_schemas : Map[String, @data.DataSchema] = Map::new()
+  let data_schemas : Map[String, @data.DataSchema] = Map([])
   let mut i = 0
   while i < schema_defs.length() {
     let schema = schema_defs[i]
@@ -3067,7 +3067,7 @@ fn parse_required_keys_builder(s : String) -> Array[String] {
 fn build_data_schema_map_from_site_config(
   entries : Array[@config.DataEntry],
 ) -> Map[String, @data.DataSchema] {
-  let data_schemas : Map[String, @data.DataSchema] = Map::new()
+  let data_schemas : Map[String, @data.DataSchema] = Map([])
   let mut i = 0
   while i < entries.length() {
     let entry = entries[i]
@@ -3135,7 +3135,7 @@ fn load_project_layout(config : BuildConfig) -> Result[ProjectLayout, String] {
     None =>
       Ok({
         collections: [@collections.default_posts_collection(config.content_dir)],
-        data_schemas: Map::new(),
+        data_schemas: Map([]),
       })
     Some(path) => {
       let source = @fs.read_file_to_string(path) catch {
@@ -3401,7 +3401,7 @@ fn process_document(
     // Even on cache hit we need body_text for content-index.json.
     // Render markdown with an empty wikilink map (wikilinks render as their
     // target text, which is fine for plain-text extraction).
-    let cache_markdown = @markdown.render_with_diagnostics(fm.body, Map::new())
+    let cache_markdown = @markdown.render_with_diagnostics(fm.body, Map([]))
     let cache_body_text = @strutil.strip_html_tags(cache_markdown.html)
     return {
       document: Some({
@@ -3501,7 +3501,7 @@ fn process_document(
         )
         slots.set(@template.Excerpt, excerpt)
         // Populate Tags slot with space-separated tag links
-        let tags_html = StringBuilder::new()
+        let tags_html = StringBuilder()
         let mut tag_idx = 0
         while tag_idx < page_tags.length() {
           let tag = page_tags[tag_idx]
@@ -3522,7 +3522,7 @@ fn process_document(
         if date_text.length() > 0 {
           let date_parts : Array[String] = date_text
             .split("-")
-            .map(fn(sv) { sv.to_string() })
+            .map(fn(sv) { sv.to_owned() })
             .collect()
           if date_parts.length() == 3 {
             year_val = date_parts[0]
@@ -3663,8 +3663,8 @@ fn build_sorted_collection_pages(
 ) -> SortedCollectionPages {
   // Parse each source to get title, date, and weight for sorting
   let pages : Array[(String, String, String?, Int?)] = [] // (slug, title, date, weight)
-  let slug_to_title : Map[String, String] = Map::new()
-  let slug_to_url : Map[String, String] = Map::new()
+  let slug_to_title : Map[String, String] = Map([])
+  let slug_to_url : Map[String, String] = Map([])
   let mut i = 0
   while i < sources.length() {
     let src = sources[i]
@@ -4048,7 +4048,7 @@ fn process_document_for_lint(
       )
       slots.set(@template.Excerpt, excerpt)
       // Populate Tags slot with space-separated tag links
-      let tags_html = StringBuilder::new()
+      let tags_html = StringBuilder()
       let mut tag_idx = 0
       while tag_idx < page_tags.length() {
         let tag = page_tags[tag_idx]
@@ -4069,7 +4069,7 @@ fn process_document_for_lint(
       if date_text.length() > 0 {
         let date_parts : Array[String] = date_text
           .split("-")
-          .map(fn(sv) { sv.to_string() })
+          .map(fn(sv) { sv.to_owned() })
           .collect()
         if date_parts.length() == 3 {
           year_val = date_parts[0]
@@ -4304,8 +4304,8 @@ fn build_incremental_state(
   collections : Array[@collections.CollectionDef],
   messages : Array[String],
 ) -> IncrementalState {
-  let previous_entries : Map[String, @manifest.ManifestEntry] = Map::new()
-  let changed_sources : Map[String, Bool] = Map::new()
+  let previous_entries : Map[String, @manifest.ManifestEntry] = Map([])
+  let changed_sources : Map[String, Bool] = Map([])
   if config.force_rebuild {
     return { force_full_rebuild: true, previous_entries, changed_sources }
   }
@@ -4331,7 +4331,7 @@ fn build_incremental_state(
     }
   }
 
-  let current_dependencies : Map[String, Bool] = Map::new()
+  let current_dependencies : Map[String, Bool] = Map([])
   i = 0
   while i < dependency_entries.length() {
     let entry = dependency_entries[i]
@@ -4458,8 +4458,8 @@ fn mark_backlink_targets_changed(
   incremental : IncrementalState,
   collection_sources : Array[CollectionSources],
 ) -> Map[String, Bool] {
-  let affected : Map[String, Bool] = Map::new()
-  let current_sources : Map[String, Bool] = Map::new()
+  let affected : Map[String, Bool] = Map([])
+  let current_sources : Map[String, Bool] = Map([])
   let mut i = 0
   while i < collection_sources.length() {
     let coll = collection_sources[i]
@@ -4621,8 +4621,8 @@ pub fn build(
   messages.push("[lattice] found " + source_count.to_string() + " source files")
 
   // Build complete page index before any rendering begins.
-  let page_index : Map[String, String] = Map::new()
-  let slug_owner : Map[String, String] = Map::new()
+  let page_index : Map[String, String] = Map([])
+  let slug_owner : Map[String, String] = Map([])
   i = 0
   while i < collection_sources.length() {
     let coll = collection_sources[i]
@@ -4872,7 +4872,7 @@ pub fn build(
   let graph_pages : Array[@graph.GraphPage] = []
   let search_entries : Array[@search.SearchEntry] = []
   let content_entries : Array[@search.ContentEntry] = []
-  let tag_pages_by_slug : Map[String, Array[@tags.TaggedPage]] = Map::new()
+  let tag_pages_by_slug : Map[String, Array[@tags.TaggedPage]] = Map([])
   let rendered_collections : Array[CollectionRenderResult] = []
   i = 0
   while i < collection_sources.length() {
@@ -6337,8 +6337,8 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
   }
   messages.push("[lattice] found " + source_count.to_string() + " source files")
 
-  let page_index : Map[String, String] = Map::new()
-  let slug_owner : Map[String, String] = Map::new()
+  let page_index : Map[String, String] = Map([])
+  let slug_owner : Map[String, String] = Map([])
   i = 0
   while i < collection_sources.length() {
     let coll = collection_sources[i]
@@ -6502,7 +6502,7 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
   )
 
   let graph_pages : Array[@graph.GraphPage] = []
-  let tag_pages_by_slug : Map[String, Array[@tags.TaggedPage]] = Map::new()
+  let tag_pages_by_slug : Map[String, Array[@tags.TaggedPage]] = Map([])
   let rendered_collections : Array[CollectionRenderResult] = []
   i = 0
   while i < collection_sources.length() {
@@ -6523,7 +6523,7 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
           None => templates_dir_for_build(config) + "/page.html"
         }
         let schema = coll.definition.schema
-        let valid_fields : Map[String, Bool] = Map::new()
+        let valid_fields : Map[String, Bool] = Map([])
         let mut fi = 0
         while fi < schema.fields.length() {
           valid_fields.set(schema.fields[fi].name, true)
@@ -7128,7 +7128,7 @@ pub fn stats(config : BuildConfig) -> StatsResult {
   }
 
   // Collect root pages
-  let slug_owner : Map[String, String] = Map::new()
+  let slug_owner : Map[String, String] = Map([])
   // Register all collection slugs so root pages don't double-count
   i = 0
   while i < collection_sources.length() {

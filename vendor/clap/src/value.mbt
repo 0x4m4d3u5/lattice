@@ -5,7 +5,7 @@ pub(all) struct SimpleValue {
   flags : Map[String, Bool]
   positional_args : Array[String]
   mut subcmd : SimpleValue?
-} derive(Show, Eq)
+} derive(Eq)
 
 ///|
 /// Create a simple value to hold the parsed result
@@ -94,55 +94,55 @@ pub fn[T : BasicValue] SimpleValue::get_array(
 
 ///|
 pub(open) trait BasicValue {
-  parse(input : String) -> Self raise
+  fn parse(input : String) -> Self raise
 }
 
 ///|
-pub impl BasicValue for String with parse(input : String) -> String raise {
+pub impl BasicValue for String with fn parse(input : String) -> String raise {
   input
 }
 
 ///|
-pub impl BasicValue for Double with parse(input : String) -> Double raise {
+pub impl BasicValue for Double with fn parse(input : String) -> Double raise {
   @string.parse_double(input[:])
 }
 
 ///|
-pub impl BasicValue for Int with parse(input : String) -> Int raise {
+pub impl BasicValue for Int with fn parse(input : String) -> Int raise {
   @string.parse_int(input[:])
 }
 
 ///|
-pub impl BasicValue for Int64 with parse(input : String) -> Int64 raise {
+pub impl BasicValue for Int64 with fn parse(input : String) -> Int64 raise {
   @string.parse_int64(input[:])
 }
 
 ///|
-pub impl BasicValue for UInt with parse(input : String) -> UInt raise {
+pub impl BasicValue for UInt with fn parse(input : String) -> UInt raise {
   @string.parse_uint(input[:])
 }
 
 ///|
-pub impl BasicValue for UInt64 with parse(input : String) -> UInt64 raise {
+pub impl BasicValue for UInt64 with fn parse(input : String) -> UInt64 raise {
   @string.parse_uint64(input[:])
 }
 
 ///|
 pub(open) trait Value {
-  set_flag(Self, name : String, value : Bool) -> Unit raise ParserError = _
-  add_value(Self, name : String, value : String, positional : Bool) -> Unit raise ParserError = _
-  select_subcmd(Self, subcmd : String) -> Self raise ParserError = _
+  fn set_flag(Self, name : String, value : Bool) -> Unit raise ParserError = _
+  fn add_value(Self, name : String, value : String, positional : Bool) -> Unit raise ParserError = _
+  fn select_subcmd(Self, subcmd : String) -> Self raise ParserError = _
 }
 
 ///|
-impl Value with set_flag(_self, name : String, _value : Bool) -> Unit raise ParserError {
+impl Value with fn set_flag(_self, name : String, _value : Bool) -> Unit raise ParserError {
   raise ParserError::InvalidArgumentName(
     "Invalid argument name \{name}, unimplemented",
   )
 }
 
 ///|
-impl Value with add_value(
+impl Value with fn add_value(
   _self,
   name : String,
   value : String,
@@ -154,19 +154,23 @@ impl Value with add_value(
 }
 
 ///|
-impl Value with select_subcmd(_self, subcmd : String) -> Self raise ParserError {
+impl Value with fn select_subcmd(_self, subcmd : String) -> Self raise ParserError {
   raise ParserError::InvalidSubCommandName(
     "Invalid sub-command \{subcmd}, unimplemented",
   )
 }
 
 ///|
-pub impl Value for SimpleValue with set_flag(self, name : String, value : Bool) -> Unit raise ParserError {
+pub impl Value for SimpleValue with fn set_flag(
+  self,
+  name : String,
+  value : Bool,
+) -> Unit raise ParserError {
   self.flags.set(name, value)
 }
 
 ///|
-pub impl Value for SimpleValue with add_value(
+pub impl Value for SimpleValue with fn add_value(
   self,
   name : String,
   value : String,
@@ -182,7 +186,7 @@ pub impl Value for SimpleValue with add_value(
 }
 
 ///|
-pub impl Value for SimpleValue with select_subcmd(self, subcmd : String) -> SimpleValue raise ParserError {
+pub impl Value for SimpleValue with fn select_subcmd(self, subcmd : String) -> SimpleValue raise ParserError {
   match self.subcmd {
     Some(subcmd_value) => subcmd_value
     None => {
@@ -192,3 +196,54 @@ pub impl Value for SimpleValue with select_subcmd(self, subcmd : String) -> Simp
     }
   }
 }
+
+///|
+pub impl Show for SimpleValue with fn output(self, logger) {
+  logger.write_string("{name: ")
+  logger.write_object(self.name)
+  logger.write_string(", args: ")
+  logger.write_iter(
+    self.args
+    .iter2()
+    .iter()
+    .map(fn(pair) {
+      let (name, values) = pair
+      name + ": [" + values.join(", ") + "]"
+    }),
+    prefix="{",
+    suffix="}",
+  )
+  logger.write_string(", flags: ")
+  logger.write_iter(
+    self.flags
+    .iter2()
+    .iter()
+    .map(fn(pair) {
+      let (name, value) = pair
+      name + ": " + value.to_string()
+    }),
+    prefix="{",
+    suffix="}",
+  )
+  logger.write_string(", positional_args: ")
+  logger.write_iter(self.positional_args.iter())
+  logger.write_string(", subcmd: ")
+  match self.subcmd {
+    None => logger.write_string("None")
+    Some(value) => {
+      logger.write_string("Some(")
+      logger.write_object(value)
+      logger.write_string(")")
+    }
+  }
+  logger.write_string("}")
+}
+
+///|
+pub extend SimpleValue with Eq::{not_equal, equal}
+
+///|
+pub extend SimpleValue with Show::{to_string, output}
+
+///|
+pub extend SimpleValue with Value::{select_subcmd, set_flag, add_value}

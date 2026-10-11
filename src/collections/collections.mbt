@@ -923,10 +923,10 @@ fn finalize_data_schema(
 pub fn parse(input : String) -> Result[CollectionsConfig, CollectionsError] {
   let lines = split_lines_collections(input)
   let defs : Array[CollectionDef] = []
-  let seen_collections : Map[String, Bool] = Map::new()
-  let data_schemas : Map[String, DataSchemaDef] = Map::new()
+  let seen_collections : Map[String, Bool] = Map([])
+  let data_schemas : Map[String, DataSchemaDef] = Map([])
   let data_schema_list : Array[DataSchemaDef] = []
-  let seen_data : Map[String, Bool] = Map::new()
+  let seen_data : Map[String, Bool] = Map([])
 
   let mut current_section : SectionKind? = None
   let mut current_schema : String? = None

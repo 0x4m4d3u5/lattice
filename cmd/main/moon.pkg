@@ -10,6 +10,7 @@ import {
   "kurisu/lattice/src/watch" @watch,
   "moonbitlang/x/fs" @fs,
   "moonbitlang/x/sys" @sys,
+  "moonbitlang/core/env" @env,
   "moonbitlang/x/time" @time,
   "TheWaWaR/clap" @clap,
   "kurisu/lattice/src/strutil" @strutil,

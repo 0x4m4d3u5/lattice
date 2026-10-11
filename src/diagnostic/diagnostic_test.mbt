@@ -1,6 +1,6 @@
 ///|
 test "diagnostic formats file line severity and message on one line" {
-  let rendered = format_diagnostic({
+  let rendered = @diagnostic.format_diagnostic({
     severity: Error,
     code: None,
     path: Some("content/posts/hello.md"),
@@ -22,7 +22,7 @@ test "diagnostic formats file line severity and message on one line" {
 
 ///|
 test "diagnostic formats warning code and hint" {
-  let rendered = format_diagnostic({
+  let rendered = @diagnostic.format_diagnostic({
     severity: Warning,
     code: Some("W001"),
     path: Some("content/site.conf"),
@@ -41,8 +41,8 @@ test "diagnostic formats warning code and hint" {
 
 ///|
 test "diagnostic summarize empty" {
-  let diagnostics : Array[Diagnostic] = []
-  let summary = summarize(diagnostics)
+  let diagnostics : Array[@diagnostic.Diagnostic] = []
+  let summary = @diagnostic.summarize(diagnostics)
   assert_eq(summary.error_count, 0)
   assert_eq(summary.warning_count, 0)
   assert_eq(summary.by_code.length(), 0)
@@ -51,7 +51,7 @@ test "diagnostic summarize empty" {
 
 ///|
 test "diagnostic summarize counts errors and warnings" {
-  let diagnostics : Array[Diagnostic] = [
+  let diagnostics : Array[@diagnostic.Diagnostic] = [
     {
       severity: Error,
       code: Some("E002"),
@@ -80,7 +80,7 @@ test "diagnostic summarize counts errors and warnings" {
       note: None,
     },
   ]
-  let summary = summarize(diagnostics)
+  let summary = @diagnostic.summarize(diagnostics)
   assert_eq(summary.error_count, 2)
   assert_eq(summary.warning_count, 1)
   assert_eq(summary.by_code.length(), 1)
@@ -90,7 +90,7 @@ test "diagnostic summarize counts errors and warnings" {
 
 ///|
 test "diagnostic summarize groups by file" {
-  let diagnostics : Array[Diagnostic] = [
+  let diagnostics : Array[@diagnostic.Diagnostic] = [
     {
       severity: Error,
       code: Some("E001"),
@@ -119,7 +119,7 @@ test "diagnostic summarize groups by file" {
       note: None,
     },
   ]
-  let summary = summarize(diagnostics)
+  let summary = @diagnostic.summarize(diagnostics)
   assert_eq(summary.by_file.length(), 2)
   // posts/a.md has 2 diagnostics, posts/b.md has 1
   assert_eq(summary.by_file[0].path, "posts/a.md")
@@ -130,7 +130,7 @@ test "diagnostic summarize groups by file" {
 
 ///|
 test "diagnostic format_summary with errors" {
-  let diagnostics : Array[Diagnostic] = [
+  let diagnostics : Array[@diagnostic.Diagnostic] = [
     {
       severity: Error,
       code: Some("E002"),
@@ -150,8 +150,8 @@ test "diagnostic format_summary with errors" {
       note: None,
     },
   ]
-  let summary = summarize(diagnostics)
-  let text = format_summary(summary)
+  let summary = @diagnostic.summarize(diagnostics)
+  let text = @diagnostic.format_summary(summary)
   assert_true(text.contains("Summary: 2 error(s), 0 warning(s)"))
   assert_true(text.contains("By code:"))
   assert_true(text.contains("By file:"))
@@ -161,7 +161,7 @@ test "diagnostic format_summary with errors" {
 
 ///|
 test "diagnostic summarize without code or path" {
-  let diagnostics : Array[Diagnostic] = [
+  let diagnostics : Array[@diagnostic.Diagnostic] = [
     {
       severity: Warning,
       code: None,
@@ -172,7 +172,7 @@ test "diagnostic summarize without code or path" {
       note: None,
     },
   ]
-  let summary = summarize(diagnostics)
+  let summary = @diagnostic.summarize(diagnostics)
   assert_eq(summary.error_count, 0)
   assert_eq(summary.warning_count, 1)
   // No code grouping when code is None
@@ -183,12 +183,12 @@ test "diagnostic summarize without code or path" {
 
 ///|
 test "count_errors returns zero for empty array" {
-  assert_eq(count_errors([]), 0)
+  assert_eq(@diagnostic.count_errors([]), 0)
 }
 
 ///|
 test "count_errors ignores warnings" {
-  let items : Array[Diagnostic] = [
+  let items : Array[@diagnostic.Diagnostic] = [
     {
       severity: Warning,
       code: None,
@@ -208,12 +208,12 @@ test "count_errors ignores warnings" {
       note: None,
     },
   ]
-  assert_eq(count_errors(items), 0)
+  assert_eq(@diagnostic.count_errors(items), 0)
 }
 
 ///|
 test "count_errors counts only errors in mixed array" {
-  let items : Array[Diagnostic] = [
+  let items : Array[@diagnostic.Diagnostic] = [
     {
       severity: Error,
       code: Some("E001"),
@@ -242,7 +242,7 @@ test "count_errors counts only errors in mixed array" {
       note: None,
     },
   ]
-  assert_eq(count_errors(items), 2)
+  assert_eq(@diagnostic.count_errors(items), 2)
 }
 
 ///|
@@ -254,7 +254,7 @@ test "of_lint_violation assigns correct E-code for BrokenWikilink" {
     kind: @lint.BrokenWikilink,
     message: "broken wikilink: [[missing]]",
   }
-  let d = of_lint_violation(v)
+  let d = @diagnostic.of_lint_violation(v)
   assert_eq(d.severity, Error)
   assert_true(d.code == Some("E004"))
   assert_true(d.path == Some("content/posts/hello.md"))
@@ -273,7 +273,7 @@ test "of_lint_violation assigns correct E-code for DuplicateSlug" {
     kind: @lint.DuplicateSlug,
     message: "duplicate slug: 'hello'",
   }
-  let d = of_lint_violation(v)
+  let d = @diagnostic.of_lint_violation(v)
   assert_eq(d.severity, Error)
   assert_true(d.code == Some("E010"))
   assert_true(d.path == Some("content/posts/dup.md"))
@@ -299,13 +299,13 @@ test "of_lint_violation is always Error severity" {
       kind,
       message: "msg",
     }
-    assert_eq(of_lint_violation(v).severity, Error)
+    assert_eq(@diagnostic.of_lint_violation(v).severity, Error)
   }
 }
 
 ///|
 test "error() constructor sets severity=Error and all optional fields=None" {
-  let d = error("something went wrong")
+  let d = @diagnostic.error("something went wrong")
   assert_eq(d.severity, Error)
   assert_true(d.code == None)
   assert_true(d.path == None)
@@ -317,7 +317,7 @@ test "error() constructor sets severity=Error and all optional fields=None" {
 
 ///|
 test "warning() constructor sets severity=Warning and all optional fields=None" {
-  let d = warning("minor issue")
+  let d = @diagnostic.warning("minor issue")
   assert_eq(d.severity, Warning)
   assert_true(d.code == None)
   assert_true(d.path == None)
@@ -329,7 +329,7 @@ test "warning() constructor sets severity=Warning and all optional fields=None" 
 
 ///|
 test "format_diagnostic with no path no code no note" {
-  let rendered = format_diagnostic({
+  let rendered = @diagnostic.format_diagnostic({
     severity: Error,
     code: None,
     path: None,
@@ -348,7 +348,7 @@ test "format_diagnostic with no path no code no note" {
 
 ///|
 test "format_diagnostic with path but no line" {
-  let rendered = format_diagnostic({
+  let rendered = @diagnostic.format_diagnostic({
     severity: Error,
     code: None,
     path: Some("config.toml"),
@@ -366,7 +366,7 @@ test "format_diagnostic with path but no line" {
 
 ///|
 test "format_diagnostic with path + line + column" {
-  let rendered = format_diagnostic({
+  let rendered = @diagnostic.format_diagnostic({
     severity: Warning,
     code: None,
     path: Some("src/main.mbt"),
@@ -390,7 +390,7 @@ test "of_lint_violation MissingRequiredFrontmatter maps to E001" {
     kind: @lint.MissingRequiredFrontmatter,
     message: "missing title",
   }
-  let d = of_lint_violation(v)
+  let d = @diagnostic.of_lint_violation(v)
   assert_true(d.code == Some("E001"))
   assert_eq(d.severity, Error)
   assert_true(!(d.note is None))
@@ -405,7 +405,7 @@ test "of_lint_violation SchemaError maps to E002" {
     kind: @lint.SchemaError,
     message: "bad schema",
   }
-  let d = of_lint_violation(v)
+  let d = @diagnostic.of_lint_violation(v)
   assert_true(d.code == Some("E002"))
   assert_true(!(d.note is None))
 }
@@ -419,7 +419,7 @@ test "of_lint_violation FrontmatterError maps to E003" {
     kind: @lint.FrontmatterError,
     message: "bad frontmatter",
   }
-  let d = of_lint_violation(v)
+  let d = @diagnostic.of_lint_violation(v)
   assert_true(d.code == Some("E003"))
   assert_true(!(d.note is None))
 }
@@ -433,7 +433,7 @@ test "of_lint_violation DanglingTagReference maps to E005" {
     kind: @lint.DanglingTagReference,
     message: "dangling tag",
   }
-  let d = of_lint_violation(v)
+  let d = @diagnostic.of_lint_violation(v)
   assert_true(d.code == Some("E005"))
   assert_true(!(d.note is None))
 }
@@ -447,7 +447,7 @@ test "of_lint_violation TemplateSlotError maps to E006" {
     kind: @lint.TemplateSlotError,
     message: "bad slot",
   }
-  let d = of_lint_violation(v)
+  let d = @diagnostic.of_lint_violation(v)
   assert_true(d.code == Some("E006"))
   assert_true(!(d.note is None))
 }
@@ -461,7 +461,7 @@ test "of_lint_violation DataError maps to E007" {
     kind: @lint.DataError,
     message: "data error",
   }
-  let d = of_lint_violation(v)
+  let d = @diagnostic.of_lint_violation(v)
   assert_true(d.code == Some("E007"))
   assert_true(!(d.note is None))
 }
@@ -475,7 +475,7 @@ test "of_lint_violation ShortcodeError maps to E008" {
     kind: @lint.ShortcodeError,
     message: "shortcode error",
   }
-  let d = of_lint_violation(v)
+  let d = @diagnostic.of_lint_violation(v)
   assert_true(d.code == Some("E008"))
   assert_true(!(d.note is None))
 }
@@ -489,7 +489,7 @@ test "of_lint_violation CollectionsError maps to E009" {
     kind: @lint.CollectionsError,
     message: "collections error",
   }
-  let d = of_lint_violation(v)
+  let d = @diagnostic.of_lint_violation(v)
   assert_true(d.code == Some("E009"))
   assert_true(!(d.note is None))
 }
@@ -503,16 +503,16 @@ test "of_lint_violation IOError maps to E011" {
     kind: @lint.IOError,
     message: "file not found",
   }
-  let d = of_lint_violation(v)
+  let d = @diagnostic.of_lint_violation(v)
   assert_true(d.code == Some("E011"))
   assert_true(!(d.note is None))
 }
 
 ///|
 test "format_summary with zero violations shows no hint" {
-  let diagnostics : Array[Diagnostic] = []
-  let summary = summarize(diagnostics)
-  let text = format_summary(summary)
+  let diagnostics : Array[@diagnostic.Diagnostic] = []
+  let summary = @diagnostic.summarize(diagnostics)
+  let text = @diagnostic.format_summary(summary)
   assert_true(text.contains("Summary: 0 error(s), 0 warning(s)"))
   assert_true(!text.contains("By code:"))
   assert_true(!text.contains("By file:"))
@@ -521,7 +521,7 @@ test "format_summary with zero violations shows no hint" {
 
 ///|
 test "format_summary with warnings only no hint when no codes" {
-  let diagnostics : Array[Diagnostic] = [
+  let diagnostics : Array[@diagnostic.Diagnostic] = [
     {
       severity: Warning,
       code: None,
@@ -532,8 +532,8 @@ test "format_summary with warnings only no hint when no codes" {
       note: None,
     },
   ]
-  let summary = summarize(diagnostics)
-  let text = format_summary(summary)
+  let summary = @diagnostic.summarize(diagnostics)
+  let text = @diagnostic.format_summary(summary)
   assert_true(text.contains("Summary: 0 error(s), 1 warning(s)"))
   // No codes → no by_code section → no hint line
   assert_true(!text.contains("By code:"))
@@ -542,7 +542,7 @@ test "format_summary with warnings only no hint when no codes" {
 
 ///|
 test "summarize with multiple distinct codes sorted by count descending" {
-  let diagnostics : Array[Diagnostic] = [
+  let diagnostics : Array[@diagnostic.Diagnostic] = [
     {
       severity: Error,
       code: Some("E004"),
@@ -598,7 +598,7 @@ test "summarize with multiple distinct codes sorted by count descending" {
       note: None,
     },
   ]
-  let summary = summarize(diagnostics)
+  let summary = @diagnostic.summarize(diagnostics)
   assert_eq(summary.by_code.length(), 3)
   // E002 has 3, E004 has 2, E001 has 1 — sorted descending
   assert_eq(summary.by_code[0].code, "E002")

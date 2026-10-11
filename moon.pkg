@@ -1,1 +1,10 @@
-
+import {
+  "kurisu/lattice/src/assets" @assets,
+  "kurisu/lattice/src/data" @data,
+  "kurisu/lattice/src/diagnostic" @diagnostic,
+  "kurisu/lattice/src/highlight" @highlight,
+  "kurisu/lattice/src/shortcode" @shortcode,
+  "kurisu/lattice/src/template" @template,
+  "kurisu/lattice/src/lint" @lint,
+  "TheWaWaR/clap" @clap,
+} for "test"

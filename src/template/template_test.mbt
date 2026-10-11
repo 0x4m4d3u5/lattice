@@ -4,15 +4,16 @@ test "template render with data" {
     @data.new_string_file("nav", [("title", "Demo")]),
   ])
 
-  let tpl = match parse_template("<h1>{{data.nav.title}}</h1>") {
+  let tpl = match @template.parse_template("<h1>{{data.nav.title}}</h1>") {
     Ok(v) => v
     Err(_) => {
       assert_true(false)
       { parts: [], required_slots: [], layout: None }
     }
   }
-  let slots : Map[TemplateSlot, String] = Map::new()
-  match render_template_with_data(tpl, slots, store, Map::new(), Map::new()) {
+  let slots : Map[@template.TemplateSlot, String] = Map([])
+  match
+    @template.render_template_with_data(tpl, slots, store, Map([]), Map([])) {
     Ok(html) => assert_true(html.contains("<h1>Demo</h1>"))
     Err(_) => assert_true(false)
   }
@@ -20,7 +21,7 @@ test "template render with data" {
 
 ///|
 test "template empty slot name error" {
-  match parse_template("{{}}") {
+  match @template.parse_template("{{}}") {
     Ok(_) => assert_true(false)
     Err(ParseError(msg)) => assert_eq(msg, "empty template slot")
     Err(_) => assert_true(false)
@@ -29,7 +30,7 @@ test "template empty slot name error" {
 
 ///|
 test "template unterminated slot error" {
-  match parse_template("{{title") {
+  match @template.parse_template("{{title") {
     Ok(_) => assert_true(false)
     Err(ParseError(msg)) => assert_eq(msg, "unterminated template slot")
     Err(_) => assert_true(false)
@@ -38,7 +39,7 @@ test "template unterminated slot error" {
 
 ///|
 test "template unexpected closing delimiter error" {
-  match parse_template("text}}") {
+  match @template.parse_template("text}}") {
     Ok(_) => assert_true(false)
     Err(ParseError(msg)) => assert_eq(msg, "unexpected '}}'")
     Err(_) => assert_true(false)
@@ -47,15 +48,15 @@ test "template unexpected closing delimiter error" {
 
 ///|
 test "template missing required slot at render" {
-  let tpl = match parse_template("{{title}}") {
+  let tpl = match @template.parse_template("{{title}}") {
     Ok(v) => v
     Err(_) => {
       assert_true(false)
       { parts: [], required_slots: [], layout: None }
     }
   }
-  let slots : Map[TemplateSlot, String] = Map::new()
-  match render_template(tpl, slots, Map::new()) {
+  let slots : Map[@template.TemplateSlot, String] = Map([])
+  match @template.render_template(tpl, slots, Map([])) {
     Ok(_) => assert_true(false)
     Err(MissingRequiredSlot(Title)) => ()
     Err(_) => assert_true(false)
@@ -73,7 +74,7 @@ test "template multiple data slots" {
   ])
 
   let tpl = match
-    parse_template(
+    @template.parse_template(
       "<h1>{{data.site.name}}</h1><p>{{data.author.name}}</p><a href=\"{{data.site.url}}\">Link</a>",
     ) {
     Ok(v) => v
@@ -82,8 +83,9 @@ test "template multiple data slots" {
       { parts: [], required_slots: [], layout: None }
     }
   }
-  let slots : Map[TemplateSlot, String] = Map::new()
-  match render_template_with_data(tpl, slots, store, Map::new(), Map::new()) {
+  let slots : Map[@template.TemplateSlot, String] = Map([])
+  match
+    @template.render_template_with_data(tpl, slots, store, Map([]), Map([])) {
     Ok(html) => {
       assert_true(html.contains("<h1>My Blog</h1>"))
       assert_true(html.contains("<p>John Doe</p>"))
@@ -99,15 +101,16 @@ test "template nested data path" {
     @data.new_string_file("config", [("theme", "dark")]),
   ])
 
-  let tpl = match parse_template("Theme: {{data.config.theme}}") {
+  let tpl = match @template.parse_template("Theme: {{data.config.theme}}") {
     Ok(v) => v
     Err(_) => {
       assert_true(false)
       { parts: [], required_slots: [], layout: None }
     }
   }
-  let slots : Map[TemplateSlot, String] = Map::new()
-  match render_template_with_data(tpl, slots, store, Map::new(), Map::new()) {
+  let slots : Map[@template.TemplateSlot, String] = Map([])
+  match
+    @template.render_template_with_data(tpl, slots, store, Map([]), Map([])) {
     Ok(html) => assert_eq(html, "Theme: dark")
     Err(_) => assert_true(false)
   }
@@ -120,7 +123,7 @@ test "template mixed data and standard slots" {
   ])
 
   let tpl = match
-    parse_template(
+    @template.parse_template(
       "<title>{{title}} - {{data.site.tagline}}</title><h1>{{title}}</h1>",
     ) {
     Ok(v) => v
@@ -129,9 +132,10 @@ test "template mixed data and standard slots" {
       { parts: [], required_slots: [], layout: None }
     }
   }
-  let slots : Map[TemplateSlot, String] = Map::new()
+  let slots : Map[@template.TemplateSlot, String] = Map([])
   slots.set(Title, "My Site")
-  match render_template_with_data(tpl, slots, store, Map::new(), Map::new()) {
+  match
+    @template.render_template_with_data(tpl, slots, store, Map([]), Map([])) {
     Ok(html) => {
       assert_true(html.contains("<title>My Site - Build fast</title>"))
       assert_true(html.contains("<h1>My Site</h1>"))
@@ -143,14 +147,14 @@ test "template mixed data and standard slots" {
 ///|
 test "template invalid data slot format error" {
   // Missing 'data.' prefix
-  match parse_template("{{site.title}}") {
+  match @template.parse_template("{{site.title}}") {
     Ok(_) => assert_true(false)
     Err(ParseError(msg)) => assert_true(msg.contains("invalid data slot"))
     Err(_) => assert_true(false)
   }
 
   // Only 'data.' prefix without file name
-  match parse_template("{{data.}}") {
+  match @template.parse_template("{{data.}}") {
     Ok(_) => assert_true(false)
     Err(ParseError(msg)) => assert_true(msg.contains("invalid data slot"))
     Err(_) => assert_true(false)
@@ -160,7 +164,7 @@ test "template invalid data slot format error" {
 ///|
 test "template parse new pagination slots" {
   // Next/Prev page links
-  let tpl_next = match parse_template("{{next_page}}") {
+  let tpl_next = match @template.parse_template("{{next_page}}") {
     Ok(v) => v
     Err(_) => {
       assert_true(false)
@@ -172,7 +176,7 @@ test "template parse new pagination slots" {
     _ => assert_true(false)
   }
 
-  let tpl_prev = match parse_template("{{prev_page}}") {
+  let tpl_prev = match @template.parse_template("{{prev_page}}") {
     Ok(v) => v
     Err(_) => {
       assert_true(false)
@@ -185,7 +189,7 @@ test "template parse new pagination slots" {
   }
 
   // Page number and flags
-  let tpl_page = match parse_template("Page {{page_num}} of 5") {
+  let tpl_page = match @template.parse_template("Page {{page_num}} of 5") {
     Ok(v) => v
     Err(_) => {
       assert_true(false)
@@ -197,7 +201,7 @@ test "template parse new pagination slots" {
     _ => assert_true(false)
   }
 
-  let tpl_first = match parse_template("{{is_first_page}}") {
+  let tpl_first = match @template.parse_template("{{is_first_page}}") {
     Ok(v) => v
     Err(_) => {
       assert_true(false)
@@ -209,7 +213,7 @@ test "template parse new pagination slots" {
     _ => assert_true(false)
   }
 
-  let tpl_last = match parse_template("{{is_last_page}}") {
+  let tpl_last = match @template.parse_template("{{is_last_page}}") {
     Ok(v) => v
     Err(_) => {
       assert_true(false)
@@ -221,7 +225,7 @@ test "template parse new pagination slots" {
     _ => assert_true(false)
   }
 
-  let tpl_page_url = match parse_template("{{page_url}}") {
+  let tpl_page_url = match @template.parse_template("{{page_url}}") {
     Ok(v) => v
     Err(_) => {
       assert_true(false)
@@ -236,7 +240,7 @@ test "template parse new pagination slots" {
 
 ///|
 test "template parse date component slots" {
-  let tpl = match parse_template("{{year}}-{{month}}-{{day}}") {
+  let tpl = match @template.parse_template("{{year}}-{{month}}-{{day}}") {
     Ok(v) => v
     Err(_) => {
       assert_true(false)
@@ -252,7 +256,7 @@ test "template parse date component slots" {
 ///|
 test "template parse content metadata slots" {
   let tpl = match
-    parse_template(
+    @template.parse_template(
       "<h1>{{title}}</h1><p>{{collection}}</p><div>{{body}}</div><ul>{{tags}}</ul>",
     ) {
     Ok(v) => v
@@ -284,15 +288,15 @@ test "template parse content metadata slots" {
 
 ///|
 test "template render missing new slot" {
-  let tpl = match parse_template("{{tags}}") {
+  let tpl = match @template.parse_template("{{tags}}") {
     Ok(v) => v
     Err(_) => {
       assert_true(false)
       { parts: [], required_slots: [], layout: None }
     }
   }
-  let slots : Map[TemplateSlot, String] = Map::new()
-  match render_template(tpl, slots, Map::new()) {
+  let slots : Map[@template.TemplateSlot, String] = Map([])
+  match @template.render_template(tpl, slots, Map([])) {
     Ok(_) => assert_true(false)
     Err(MissingRequiredSlot(Tags)) => ()
     Err(_) => assert_true(false)
@@ -315,7 +319,7 @@ test "template include cycle detection" {
   }
 
   let source = "{{include: a.html}}"
-  match parse_template_with_includes(source, resolver) {
+  match @template.parse_template_with_includes(source, resolver) {
     Ok(_) => assert_true(false)
     Err(CycleError(msg)) => assert_true(msg.contains("cycle detected"))
     Err(_) => assert_true(false)
@@ -334,7 +338,7 @@ test "template layout extension" {
   }
 
   let source = "{{layout: base.html}}\n<article>{{content}}</article>"
-  match parse_template_with_includes(source, resolver) {
+  match @template.parse_template_with_includes(source, resolver) {
     Ok(tpl) => {
       // Verify layout is resolved and stored
       match tpl.layout {
@@ -373,13 +377,13 @@ test "template render with layout" {
   }
 
   let source = "{{layout: base.html}}\n<h1>{{title}}</h1><p>{{content}}</p>"
-  match parse_template_with_includes(source, resolver) {
+  match @template.parse_template_with_includes(source, resolver) {
     Ok(tpl) => {
-      let slots : Map[TemplateSlot, String] = Map::new()
+      let slots : Map[@template.TemplateSlot, String] = Map([])
       slots.set(Title, "My Page")
       slots.set(Content, "Page content")
 
-      match render_template(tpl, slots, Map::new()) {
+      match @template.render_template(tpl, slots, Map([])) {
         Ok(html) => {
           // Verify child is rendered and injected into layout's body slot
           assert_true(html.contains("<html>"))
@@ -415,7 +419,7 @@ test "template nested includes" {
   }
 
   let source = "{{include: parent.html}}"
-  match parse_template_with_includes(source, resolver) {
+  match @template.parse_template_with_includes(source, resolver) {
     Ok(tpl) => {
       // Verify all nested includes are flattened and contain expected content
       let mut has_grandchild = false
@@ -453,7 +457,7 @@ test "template include in layout file" {
   }
 
   let source = "{{layout: layout.html}}\n<main>{{content}}</main>"
-  match parse_template_with_includes(source, resolver) {
+  match @template.parse_template_with_includes(source, resolver) {
     Ok(tpl) =>
       // Verify layout has includes flattened
       match tpl.layout {
@@ -489,7 +493,7 @@ test "template include in layout file" {
 ///|
 test "template parse reading_time and word_count slots" {
   let tpl = match
-    parse_template("{{reading_time}} read · {{word_count}} words") {
+    @template.parse_template("{{reading_time}} read · {{word_count}} words") {
     Ok(v) => v
     Err(_) => {
       assert_true(false)
@@ -511,7 +515,8 @@ test "template parse reading_time and word_count slots" {
 
 ///|
 test "template parse table_of_contents slot" {
-  let tpl = match parse_template("<aside>{{table_of_contents}}</aside>") {
+  let tpl = match
+    @template.parse_template("<aside>{{table_of_contents}}</aside>") {
     Ok(v) => v
     Err(_) => {
       assert_true(false)
@@ -530,7 +535,7 @@ test "template parse table_of_contents slot" {
 
 ///|
 test "template parse author and excerpt slots" {
-  let tpl = match parse_template("By {{author}}<p>{{excerpt}}</p>") {
+  let tpl = match @template.parse_template("By {{author}}<p>{{excerpt}}</p>") {
     Ok(v) => v
     Err(_) => {
       assert_true(false)
@@ -552,17 +557,18 @@ test "template parse author and excerpt slots" {
 
 ///|
 test "template render reading_time and word_count slots" {
-  let tpl = match parse_template("{{reading_time}} · {{word_count}} words") {
+  let tpl = match
+    @template.parse_template("{{reading_time}} · {{word_count}} words") {
     Ok(v) => v
     Err(_) => {
       assert_true(false)
       { parts: [], required_slots: [], layout: None }
     }
   }
-  let slots : Map[TemplateSlot, String] = Map::new()
+  let slots : Map[@template.TemplateSlot, String] = Map([])
   slots.set(ReadingTime, "3 min")
   slots.set(WordCount, "612")
-  match render_template(tpl, slots, Map::new()) {
+  match @template.render_template(tpl, slots, Map([])) {
     Ok(html) => {
       assert_true(html.contains("3 min"))
       assert_true(html.contains("612 words"))
@@ -573,19 +579,20 @@ test "template render reading_time and word_count slots" {
 
 ///|
 test "template render table_of_contents slot" {
-  let tpl = match parse_template("<aside>{{table_of_contents}}</aside>") {
+  let tpl = match
+    @template.parse_template("<aside>{{table_of_contents}}</aside>") {
     Ok(v) => v
     Err(_) => {
       assert_true(false)
       { parts: [], required_slots: [], layout: None }
     }
   }
-  let slots : Map[TemplateSlot, String] = Map::new()
+  let slots : Map[@template.TemplateSlot, String] = Map([])
   slots.set(
     TableOfContents,
     "<nav class=\"table-of-contents\"><ul><li>Intro</li></ul></nav>",
   )
-  match render_template(tpl, slots, Map::new()) {
+  match @template.render_template(tpl, slots, Map([])) {
     Ok(html) => assert_true(html.contains("table-of-contents"))
     Err(_) => assert_true(false)
   }
@@ -594,16 +601,18 @@ test "template render table_of_contents slot" {
 ///|
 test "template render description slot" {
   let tpl = match
-    parse_template("<meta name=\"description\" content=\"{{description}}\">") {
+    @template.parse_template(
+      "<meta name=\"description\" content=\"{{description}}\">",
+    ) {
     Ok(v) => v
     Err(_) => {
       assert_true(false)
       { parts: [], required_slots: [], layout: None }
     }
   }
-  let slots : Map[TemplateSlot, String] = Map::new()
+  let slots : Map[@template.TemplateSlot, String] = Map([])
   slots.set(Description, "A short intro extracted from the first paragraph.")
-  match render_template(tpl, slots, Map::new()) {
+  match @template.render_template(tpl, slots, Map([])) {
     Ok(html) =>
       assert_true(
         html.contains("A short intro extracted from the first paragraph."),
@@ -614,16 +623,17 @@ test "template render description slot" {
 
 ///|
 test "template conditional renders body when slot is non-empty" {
-  let tpl = match parse_template("{{?title}}<h1>{{title}}</h1>{{/?title}}") {
+  let tpl = match
+    @template.parse_template("{{?title}}<h1>{{title}}</h1>{{/?title}}") {
     Ok(v) => v
     Err(_) => {
       assert_true(false)
       { parts: [], required_slots: [], layout: None }
     }
   }
-  let slots : Map[TemplateSlot, String] = Map::new()
+  let slots : Map[@template.TemplateSlot, String] = Map([])
   slots.set(Title, "Hello World")
-  match render_template(tpl, slots, Map::new()) {
+  match @template.render_template(tpl, slots, Map([])) {
     Ok(html) => {
       assert_true(html.contains("<h1>Hello World</h1>"))
       assert_eq(html, "<h1>Hello World</h1>")
@@ -634,16 +644,17 @@ test "template conditional renders body when slot is non-empty" {
 
 ///|
 test "template conditional hides body when slot is empty string" {
-  let tpl = match parse_template("{{?title}}<h1>{{title}}</h1>{{/?title}}") {
+  let tpl = match
+    @template.parse_template("{{?title}}<h1>{{title}}</h1>{{/?title}}") {
     Ok(v) => v
     Err(_) => {
       assert_true(false)
       { parts: [], required_slots: [], layout: None }
     }
   }
-  let slots : Map[TemplateSlot, String] = Map::new()
+  let slots : Map[@template.TemplateSlot, String] = Map([])
   slots.set(Title, "")
-  match render_template(tpl, slots, Map::new()) {
+  match @template.render_template(tpl, slots, Map([])) {
     Ok(html) => assert_eq(html, "")
     Err(_) => assert_true(false)
   }
@@ -651,16 +662,17 @@ test "template conditional hides body when slot is empty string" {
 
 ///|
 test "template conditional hides body when slot is absent from map" {
-  let tpl = match parse_template("{{?title}}<h1>{{title}}</h1>{{/?title}}") {
+  let tpl = match
+    @template.parse_template("{{?title}}<h1>{{title}}</h1>{{/?title}}") {
     Ok(v) => v
     Err(_) => {
       assert_true(false)
       { parts: [], required_slots: [], layout: None }
     }
   }
-  let slots : Map[TemplateSlot, String] = Map::new()
+  let slots : Map[@template.TemplateSlot, String] = Map([])
   // Title slot not set
-  match render_template(tpl, slots, Map::new()) {
+  match @template.render_template(tpl, slots, Map([])) {
     Ok(html) => assert_eq(html, "")
     Err(_) => assert_true(false)
   }
@@ -668,16 +680,17 @@ test "template conditional hides body when slot is absent from map" {
 
 ///|
 test "template conditional nested slot inside conditional renders correctly" {
-  let tpl = match parse_template("{{?title}}<h1>{{title}}</h1>{{/?title}}") {
+  let tpl = match
+    @template.parse_template("{{?title}}<h1>{{title}}</h1>{{/?title}}") {
     Ok(v) => v
     Err(_) => {
       assert_true(false)
       { parts: [], required_slots: [], layout: None }
     }
   }
-  let slots : Map[TemplateSlot, String] = Map::new()
+  let slots : Map[@template.TemplateSlot, String] = Map([])
   slots.set(Title, "My Page")
-  match render_template(tpl, slots, Map::new()) {
+  match @template.render_template(tpl, slots, Map([])) {
     Ok(html) => assert_eq(html, "<h1>My Page</h1>")
     Err(_) => assert_true(false)
   }
@@ -686,7 +699,7 @@ test "template conditional nested slot inside conditional renders correctly" {
 ///|
 test "template conditional with prev_post_url slot" {
   let tpl = match
-    parse_template(
+    @template.parse_template(
       "{{?prev_post_url}}<a href=\"{{prev_post_url}}\">← Previous</a>{{/?prev_post_url}}",
     ) {
     Ok(v) => v
@@ -697,9 +710,9 @@ test "template conditional with prev_post_url slot" {
   }
 
   // Test with prev_post_url present
-  let slots_with_prev : Map[TemplateSlot, String] = Map::new()
+  let slots_with_prev : Map[@template.TemplateSlot, String] = Map([])
   slots_with_prev.set(PrevPostUrl, "/prev-post.html")
-  match render_template(tpl, slots_with_prev, Map::new()) {
+  match @template.render_template(tpl, slots_with_prev, Map([])) {
     Ok(html) => {
       assert_true(html.contains("<a href=\"/prev-post.html\">"))
       assert_true(html.contains("← Previous"))
@@ -708,8 +721,8 @@ test "template conditional with prev_post_url slot" {
   }
 
   // Test with prev_post_url absent (first post)
-  let slots_no_prev : Map[TemplateSlot, String] = Map::new()
-  match render_template(tpl, slots_no_prev, Map::new()) {
+  let slots_no_prev : Map[@template.TemplateSlot, String] = Map([])
+  match @template.render_template(tpl, slots_no_prev, Map([])) {
     Ok(html) => assert_eq(html, "")
     Err(_) => assert_true(false)
   }
@@ -717,7 +730,7 @@ test "template conditional with prev_post_url slot" {
 
 ///|
 test "template conditional unknown slot name reports error" {
-  match parse_template("{{?unknown_slot}}content{{/?unknown_slot}}") {
+  match @template.parse_template("{{?unknown_slot}}content{{/?unknown_slot}}") {
     Ok(_) => assert_true(false)
     Err(UnknownSlot(name)) => assert_eq(name, "unknown_slot")
     Err(_) => assert_true(false)
@@ -726,7 +739,7 @@ test "template conditional unknown slot name reports error" {
 
 ///|
 test "template conditional closing tag mismatch is an error" {
-  match parse_template("{{?title}}content{{/?wrong_slot}}") {
+  match @template.parse_template("{{?title}}content{{/?wrong_slot}}") {
     Ok(_) => assert_true(false)
     Err(ParseError(msg)) =>
       assert_true(
@@ -738,7 +751,7 @@ test "template conditional closing tag mismatch is an error" {
 
 ///|
 test "template conditional missing closing tag is an error" {
-  match parse_template("{{?title}}content") {
+  match @template.parse_template("{{?title}}content") {
     Ok(_) => assert_true(false)
     Err(ParseError(msg)) => assert_true(msg.contains("missing closing tag"))
     Err(_) => assert_true(false)
@@ -748,16 +761,17 @@ test "template conditional missing closing tag is an error" {
 ///|
 test "template conditional nested conditionals - simple case" {
   // Simple test: {{?title}}body{{/?title}}
-  let tpl1 = match parse_template("{{?title}}<h1>{{title}}</h1>{{/?title}}") {
+  let tpl1 = match
+    @template.parse_template("{{?title}}<h1>{{title}}</h1>{{/?title}}") {
     Ok(v) => v
     Err(_) => {
       assert_true(false)
       { parts: [], required_slots: [], layout: None }
     }
   }
-  let slots_with : Map[TemplateSlot, String] = Map::new()
+  let slots_with : Map[@template.TemplateSlot, String] = Map([])
   slots_with.set(Title, "My Title")
-  match render_template(tpl1, slots_with, Map::new()) {
+  match @template.render_template(tpl1, slots_with, Map([])) {
     Ok(html) => assert_eq(html, "<h1>My Title</h1>")
     Err(_) => assert_true(false)
   }
@@ -777,10 +791,10 @@ test "template conditional nested conditionals - simple case" {
 //   }
 //   
 //   // Both slots present
-//   let slots_both : Map[TemplateSlot, String] = Map::new()
+//   let slots_both : Map[TemplateSlot, String] = Map([])
 //   slots_both.set(Title, "My Title")
 //   slots_both.set(Description, "My Description")
-//   match render_template(tpl, slots_both, Map::new()) {
+//   match render_template(tpl, slots_both, Map([])) {
 //     Ok(html) => {
 //       assert_true(html.contains("<h1>My Title</h1>"))
 //       assert_true(html.contains("<p>My Description</p>"))
@@ -789,7 +803,7 @@ test "template conditional nested conditionals - simple case" {
 //   }
 //   
 //   // Only title present - outer conditional renders but inner doesn't
-//   let slots_title : Map[TemplateSlot, String] = Map::new()
+//   let slots_title : Map[TemplateSlot, String] = Map([])
 //   slots_title.set(Title, "My Title")
 //   match render_template(tpl, slots_title) {
 //     Ok(html) => {
@@ -799,8 +813,8 @@ test "template conditional nested conditionals - simple case" {
 //   }
 //   
 //   // No slots present
-//   let slots_none : Map[TemplateSlot, String] = Map::new()
-//   match render_template(tpl, slots_none, Map::new()) {
+//   let slots_none : Map[TemplateSlot, String] = Map([])
+//   match render_template(tpl, slots_none, Map([])) {
 //     Ok(html) => {
 //       assert_eq(html, "")
 //     }
@@ -811,7 +825,7 @@ test "template conditional nested conditionals - simple case" {
 ///|
 test "template conditional multiple conditionals in template" {
   let tpl = match
-    parse_template(
+    @template.parse_template(
       "{{?prev_post_url}}<a href=\"{{prev_post_url}}\">Previous</a>{{/?prev_post_url}} | {{?next_post_url}}<a href=\"{{next_post_url}}\">Next</a>{{/?next_post_url}}",
     ) {
     Ok(v) => v
@@ -822,10 +836,10 @@ test "template conditional multiple conditionals in template" {
   }
 
   // Both present
-  let slots_both : Map[TemplateSlot, String] = Map::new()
+  let slots_both : Map[@template.TemplateSlot, String] = Map([])
   slots_both.set(PrevPostUrl, "/prev.html")
   slots_both.set(NextPostUrl, "/next.html")
-  match render_template(tpl, slots_both, Map::new()) {
+  match @template.render_template(tpl, slots_both, Map([])) {
     Ok(html) => {
       assert_true(html.contains("<a href=\"/prev.html\">Previous</a>"))
       assert_true(html.contains("<a href=\"/next.html\">Next</a>"))
@@ -835,9 +849,9 @@ test "template conditional multiple conditionals in template" {
   }
 
   // Only next present
-  let slots_next : Map[TemplateSlot, String] = Map::new()
+  let slots_next : Map[@template.TemplateSlot, String] = Map([])
   slots_next.set(NextPostUrl, "/next.html")
-  match render_template(tpl, slots_next, Map::new()) {
+  match @template.render_template(tpl, slots_next, Map([])) {
     Ok(html) => {
       assert_true(!html.contains("Previous"))
       assert_true(html.contains("<a href=\"/next.html\">Next</a>"))
@@ -847,8 +861,8 @@ test "template conditional multiple conditionals in template" {
   }
 
   // Neither present - only the static separator remains
-  let slots_none : Map[TemplateSlot, String] = Map::new()
-  match render_template(tpl, slots_none, Map::new()) {
+  let slots_none : Map[@template.TemplateSlot, String] = Map([])
+  match @template.render_template(tpl, slots_none, Map([])) {
     Ok(html) => assert_eq(html, " | ")
     Err(_) => assert_true(false)
   }
@@ -861,7 +875,7 @@ test "template conditional with data slot inside body" {
   ])
 
   let tpl = match
-    parse_template(
+    @template.parse_template(
       "{{?title}}<h1>{{title}}</h1><p>{{data.site.tagline}}</p>{{/?title}}",
     ) {
     Ok(v) => v
@@ -871,9 +885,10 @@ test "template conditional with data slot inside body" {
     }
   }
 
-  let slots : Map[TemplateSlot, String] = Map::new()
+  let slots : Map[@template.TemplateSlot, String] = Map([])
   slots.set(Title, "My Site")
-  match render_template_with_data(tpl, slots, store, Map::new(), Map::new()) {
+  match
+    @template.render_template_with_data(tpl, slots, store, Map([]), Map([])) {
     Ok(html) => {
       assert_true(html.contains("<h1>My Site</h1>"))
       assert_true(html.contains("<p>Build fast</p>"))
@@ -884,7 +899,7 @@ test "template conditional with data slot inside body" {
 
 ///|
 test "parse {{page.field}} frontmatter slot" {
-  let tpl = match parse_template("Series: {{page.series}}") {
+  let tpl = match @template.parse_template("Series: {{page.series}}") {
     Ok(v) => v
     Err(_) => {
       assert_true(false)
@@ -907,17 +922,17 @@ test "parse {{page.field}} frontmatter slot" {
 
 ///|
 test "render {{page.field}} with field present" {
-  let tpl = match parse_template("Series: {{page.series}}") {
+  let tpl = match @template.parse_template("Series: {{page.series}}") {
     Ok(v) => v
     Err(_) => {
       assert_true(false)
       { parts: [], required_slots: [], layout: None }
     }
   }
-  let slots : Map[TemplateSlot, String] = Map::new()
-  let page_fields : Map[String, String] = Map::new()
+  let slots : Map[@template.TemplateSlot, String] = Map([])
+  let page_fields : Map[String, String] = Map([])
   page_fields.set("series", "MoonBit Deep Dive")
-  match render_template(tpl, slots, page_fields) {
+  match @template.render_template(tpl, slots, page_fields) {
     Ok(html) => assert_eq(html, "Series: MoonBit Deep Dive")
     Err(_) => assert_true(false)
   }
@@ -925,17 +940,17 @@ test "render {{page.field}} with field present" {
 
 ///|
 test "render {{page.field}} with missing field" {
-  let tpl = match parse_template("Series: {{page.series}}") {
+  let tpl = match @template.parse_template("Series: {{page.series}}") {
     Ok(v) => v
     Err(_) => {
       assert_true(false)
       { parts: [], required_slots: [], layout: None }
     }
   }
-  let slots : Map[TemplateSlot, String] = Map::new()
-  let page_fields : Map[String, String] = Map::new()
+  let slots : Map[@template.TemplateSlot, String] = Map([])
+  let page_fields : Map[String, String] = Map([])
   // No "series" field in page_fields
-  match render_template(tpl, slots, page_fields) {
+  match @template.render_template(tpl, slots, page_fields) {
     Ok(html) => assert_eq(html, "Series: ")
     Err(_) => assert_true(false)
   }
@@ -943,7 +958,7 @@ test "render {{page.field}} with missing field" {
 
 ///|
 test "render {{page.field}} with empty key fails to parse" {
-  match parse_template("{{page.}}") {
+  match @template.parse_template("{{page.}}") {
     Ok(_) => assert_true(false) // Should fail to parse
     Err(ParseError(msg)) => assert_true(msg.contains("invalid page slot"))
     Err(_) => assert_true(false)
@@ -953,7 +968,7 @@ test "render {{page.field}} with empty key fails to parse" {
 ///|
 test "{{?page.field}} conditional renders body when field is present and non-empty" {
   let tpl = match
-    parse_template(
+    @template.parse_template(
       "{{?page.og_image}}<img src=\"{{page.og_image}}\">{{/?page.og_image}}",
     ) {
     Ok(v) => v
@@ -962,10 +977,10 @@ test "{{?page.field}} conditional renders body when field is present and non-emp
       { parts: [], required_slots: [], layout: None }
     }
   }
-  let slots : Map[TemplateSlot, String] = Map::new()
-  let page_fields : Map[String, String] = Map::new()
+  let slots : Map[@template.TemplateSlot, String] = Map([])
+  let page_fields : Map[String, String] = Map([])
   page_fields.set("og_image", "/images/og.png")
-  match render_template(tpl, slots, page_fields) {
+  match @template.render_template(tpl, slots, page_fields) {
     Ok(html) => assert_true(html.contains("<img src=\"/images/og.png\">"))
     Err(_) => assert_true(false)
   }
@@ -974,7 +989,7 @@ test "{{?page.field}} conditional renders body when field is present and non-emp
 ///|
 test "{{?page.field}} conditional renders nothing when field is absent" {
   let tpl = match
-    parse_template(
+    @template.parse_template(
       "{{?page.og_image}}<img src=\"{{page.og_image}}\">{{/?page.og_image}}",
     ) {
     Ok(v) => v
@@ -983,10 +998,10 @@ test "{{?page.field}} conditional renders nothing when field is absent" {
       { parts: [], required_slots: [], layout: None }
     }
   }
-  let slots : Map[TemplateSlot, String] = Map::new()
-  let page_fields : Map[String, String] = Map::new()
+  let slots : Map[@template.TemplateSlot, String] = Map([])
+  let page_fields : Map[String, String] = Map([])
   // No "og_image" field
-  match render_template(tpl, slots, page_fields) {
+  match @template.render_template(tpl, slots, page_fields) {
     Ok(html) => assert_eq(html, "")
     Err(_) => assert_true(false)
   }
@@ -995,7 +1010,7 @@ test "{{?page.field}} conditional renders nothing when field is absent" {
 ///|
 test "{{?page.field}} conditional renders nothing when field is empty string" {
   let tpl = match
-    parse_template(
+    @template.parse_template(
       "{{?page.og_image}}<img src=\"{{page.og_image}}\">{{/?page.og_image}}",
     ) {
     Ok(v) => v
@@ -1004,10 +1019,10 @@ test "{{?page.field}} conditional renders nothing when field is empty string" {
       { parts: [], required_slots: [], layout: None }
     }
   }
-  let slots : Map[TemplateSlot, String] = Map::new()
-  let page_fields : Map[String, String] = Map::new()
+  let slots : Map[@template.TemplateSlot, String] = Map([])
+  let page_fields : Map[String, String] = Map([])
   page_fields.set("og_image", "")
-  match render_template(tpl, slots, page_fields) {
+  match @template.render_template(tpl, slots, page_fields) {
     Ok(html) => assert_eq(html, "")
     Err(_) => assert_true(false)
   }
@@ -1016,7 +1031,7 @@ test "{{?page.field}} conditional renders nothing when field is empty string" {
 ///|
 test "{{?page.field}} conditional nested inside {{?slot}} conditional" {
   let tpl = match
-    parse_template(
+    @template.parse_template(
       "{{?title}}{{?page.series}}<p>Part of: {{page.series}}</p>{{/?page.series}}{{/?title}}",
     ) {
     Ok(v) => v
@@ -1027,20 +1042,20 @@ test "{{?page.field}} conditional nested inside {{?slot}} conditional" {
   }
 
   // Both title and series present
-  let slots_both : Map[TemplateSlot, String] = Map::new()
+  let slots_both : Map[@template.TemplateSlot, String] = Map([])
   slots_both.set(Title, "My Post")
-  let page_fields_with_series : Map[String, String] = Map::new()
+  let page_fields_with_series : Map[String, String] = Map([])
   page_fields_with_series.set("series", "MoonBit Series")
-  match render_template(tpl, slots_both, page_fields_with_series) {
+  match @template.render_template(tpl, slots_both, page_fields_with_series) {
     Ok(html) => assert_true(html.contains("<p>Part of: MoonBit Series</p>"))
     Err(_) => assert_true(false)
   }
 
   // Title present but no series
-  let slots_title : Map[TemplateSlot, String] = Map::new()
+  let slots_title : Map[@template.TemplateSlot, String] = Map([])
   slots_title.set(Title, "My Post")
-  let page_fields_no_series : Map[String, String] = Map::new()
-  match render_template(tpl, slots_title, page_fields_no_series) {
+  let page_fields_no_series : Map[String, String] = Map([])
+  match @template.render_template(tpl, slots_title, page_fields_no_series) {
     Ok(html) => {
       inspect(html, content="")
       assert_eq(html, "")
@@ -1052,7 +1067,7 @@ test "{{?page.field}} conditional nested inside {{?slot}} conditional" {
 ///|
 test "{{?page.field}} conditional with multiple page fields" {
   let tpl = match
-    parse_template(
+    @template.parse_template(
       "{{?page.og_image}}<img src=\"{{page.og_image}}\">{{/?page.og_image}}{{?page.og_description}}<meta name=\"og:description\" content=\"{{page.og_description}}\">{{/?page.og_description}}",
     ) {
     Ok(v) => v
@@ -1063,11 +1078,11 @@ test "{{?page.field}} conditional with multiple page fields" {
   }
 
   // Both fields present
-  let page_fields_both : Map[String, String] = Map::new()
+  let page_fields_both : Map[String, String] = Map([])
   page_fields_both.set("og_image", "/images/og.png")
   page_fields_both.set("og_description", "A great post")
-  let slots : Map[TemplateSlot, String] = Map::new()
-  match render_template(tpl, slots, page_fields_both) {
+  let slots : Map[@template.TemplateSlot, String] = Map([])
+  match @template.render_template(tpl, slots, page_fields_both) {
     Ok(html) => {
       assert_true(html.contains("<img src=\"/images/og.png\">"))
       assert_true(
@@ -1078,9 +1093,9 @@ test "{{?page.field}} conditional with multiple page fields" {
   }
 
   // Only og_image present
-  let page_fields_image : Map[String, String] = Map::new()
+  let page_fields_image : Map[String, String] = Map([])
   page_fields_image.set("og_image", "/images/og.png")
-  match render_template(tpl, slots, page_fields_image) {
+  match @template.render_template(tpl, slots, page_fields_image) {
     Ok(html) => {
       assert_true(html.contains("<img src=\"/images/og.png\">"))
       assert_true(!html.contains("og:description"))
@@ -1092,7 +1107,7 @@ test "{{?page.field}} conditional with multiple page fields" {
 ///|
 test "{{?page.field}} conditional closing tag mismatch returns ParseError" {
   match
-    parse_template(
+    @template.parse_template(
       "{{?page.og_image}}<img src=\"{{page.og_image}}\">{{/?page.og_description}}",
     ) {
     Ok(_) => assert_true(false)
@@ -1103,7 +1118,10 @@ test "{{?page.field}} conditional closing tag mismatch returns ParseError" {
 
 ///|
 test "{{?page.field}} conditional missing closing tag returns ParseError" {
-  match parse_template("{{?page.og_image}}<img src=\"{{page.og_image}}\">") {
+  match
+    @template.parse_template(
+      "{{?page.og_image}}<img src=\"{{page.og_image}}\">",
+    ) {
     Ok(_) => assert_true(false)
     Err(ParseError(msg)) => assert_true(msg.contains("missing closing tag"))
     Err(_) => assert_true(false)
@@ -1112,7 +1130,7 @@ test "{{?page.field}} conditional missing closing tag returns ParseError" {
 
 ///|
 test "{{?page.}} with empty field name returns ParseError" {
-  match parse_template("{{?page.}}content{{/?page.}}") {
+  match @template.parse_template("{{?page.}}content{{/?page.}}") {
     Ok(_) => assert_true(false)
     Err(ParseError(msg)) =>
       assert_true(msg.contains("invalid page conditional slot"))
@@ -1123,7 +1141,7 @@ test "{{?page.}} with empty field name returns ParseError" {
 ///|
 test "render {{page.field}} in conditional body with data store" {
   let tpl = match
-    parse_template("{{?title}}Series: {{page.series}}{{/?title}}") {
+    @template.parse_template("{{?title}}Series: {{page.series}}{{/?title}}") {
     Ok(v) => v
     Err(_) => {
       assert_true(false)
@@ -1133,11 +1151,12 @@ test "render {{page.field}} in conditional body with data store" {
   let store = @data.new_store([
     @data.new_string_file("test", [("name", "Lattice")]),
   ])
-  let slots : Map[TemplateSlot, String] = Map::new()
+  let slots : Map[@template.TemplateSlot, String] = Map([])
   slots.set(Title, "My Post")
-  let page_fields : Map[String, String] = Map::new()
+  let page_fields : Map[String, String] = Map([])
   page_fields.set("series", "MoonBit Series")
-  match render_template_with_data(tpl, slots, store, page_fields, Map::new()) {
+  match
+    @template.render_template_with_data(tpl, slots, store, page_fields, Map([])) {
     Ok(html) => assert_eq(html, "Series: MoonBit Series")
     Err(_) => assert_true(false)
   }
@@ -1145,7 +1164,8 @@ test "render {{page.field}} in conditional body with data store" {
 
 ///|
 test "parse {{#each data.nav.items}}...{{/each}} loop" {
-  let tpl = match parse_template("{{#each data.nav.items}}{{item}}{{/each}}") {
+  let tpl = match
+    @template.parse_template("{{#each data.nav.items}}{{item}}{{/each}}") {
     Ok(v) => v
     Err(_) => {
       assert_true(false)
@@ -1174,7 +1194,7 @@ test "parse {{#each data.nav.items}}...{{/each}} loop" {
 ///|
 test "parse {{#each data.nav.links}}...{{/each}} with field access" {
   let tpl = match
-    parse_template(
+    @template.parse_template(
       "{{#each data.nav.links}}<a href=\"{{item.url}}\">{{item.title}}</a>{{/each}}",
     ) {
     Ok(v) => v
@@ -1211,7 +1231,7 @@ test "parse {{#each data.nav.links}}...{{/each}} with field access" {
 
 ///|
 test "parse {{item.title}} creates LoopItemSlot with path" {
-  let tpl = match parse_template("{{item.title}}") {
+  let tpl = match @template.parse_template("{{item.title}}") {
     Ok(v) => v
     Err(_) => {
       assert_true(false)
@@ -1230,7 +1250,7 @@ test "parse {{item.title}} creates LoopItemSlot with path" {
 
 ///|
 test "parse {{item.a.b}} creates LoopItemSlot with nested path" {
-  let tpl = match parse_template("{{item.a.b}}") {
+  let tpl = match @template.parse_template("{{item.a.b}}") {
     Ok(v) => v
     Err(_) => {
       assert_true(false)
@@ -1250,7 +1270,7 @@ test "parse {{item.a.b}} creates LoopItemSlot with nested path" {
 
 ///|
 test "parse unclosed {{#each}} returns ParseError" {
-  match parse_template("{{#each data.nav.items}}{{item}}") {
+  match @template.parse_template("{{#each data.nav.items}}{{item}}") {
     Ok(_) => assert_true(false)
     Err(ParseError(msg)) => assert_true(msg.contains("missing closing tag"))
     Err(_) => assert_true(false)
@@ -1260,7 +1280,7 @@ test "parse unclosed {{#each}} returns ParseError" {
 ///|
 test "render loop over string array" {
   // Create a data file with an actual array
-  let fields : Map[String, @frontmatter.FrontmatterValue] = Map::new()
+  let fields : Map[String, @frontmatter.FrontmatterValue] = Map([])
   fields.set(
     "items",
     @frontmatter.FArray([
@@ -1273,7 +1293,9 @@ test "render loop over string array" {
   let array_store = @data.new_store([array_file])
 
   let tpl = match
-    parse_template("{{#each data.nav.items}}<li>{{item}}</li>{{/each}}") {
+    @template.parse_template(
+      "{{#each data.nav.items}}<li>{{item}}</li>{{/each}}",
+    ) {
     Ok(v) => v
     Err(_) => {
       assert_true(false)
@@ -1281,9 +1303,15 @@ test "render loop over string array" {
     }
   }
 
-  let slots : Map[TemplateSlot, String] = Map::new()
+  let slots : Map[@template.TemplateSlot, String] = Map([])
   match
-    render_template_with_data(tpl, slots, array_store, Map::new(), Map::new()) {
+    @template.render_template_with_data(
+      tpl,
+      slots,
+      array_store,
+      Map([]),
+      Map([]),
+    ) {
     Ok(html) => {
       assert_true(html.contains("<li>home</li>"))
       assert_true(html.contains("<li>blog</li>"))
@@ -1296,15 +1324,15 @@ test "render loop over string array" {
 ///|
 test "render loop over map array with field access" {
   // Create a data file with an array of maps
-  let link1 : Map[String, @frontmatter.FrontmatterValue] = Map::new()
+  let link1 : Map[String, @frontmatter.FrontmatterValue] = Map([])
   link1.set("title", @frontmatter.FStr("Home"))
   link1.set("url", @frontmatter.FStr("/"))
 
-  let link2 : Map[String, @frontmatter.FrontmatterValue] = Map::new()
+  let link2 : Map[String, @frontmatter.FrontmatterValue] = Map([])
   link2.set("title", @frontmatter.FStr("Blog"))
   link2.set("url", @frontmatter.FStr("/blog"))
 
-  let fields : Map[String, @frontmatter.FrontmatterValue] = Map::new()
+  let fields : Map[String, @frontmatter.FrontmatterValue] = Map([])
   fields.set(
     "links",
     @frontmatter.FArray([@frontmatter.FMap(link1), @frontmatter.FMap(link2)]),
@@ -1314,7 +1342,7 @@ test "render loop over map array with field access" {
   let store = @data.new_store([file])
 
   let tpl = match
-    parse_template(
+    @template.parse_template(
       "{{#each data.nav.links}}<a href=\"{{item.url}}\">{{item.title}}</a>{{/each}}",
     ) {
     Ok(v) => v
@@ -1324,8 +1352,9 @@ test "render loop over map array with field access" {
     }
   }
 
-  let slots : Map[TemplateSlot, String] = Map::new()
-  match render_template_with_data(tpl, slots, store, Map::new(), Map::new()) {
+  let slots : Map[@template.TemplateSlot, String] = Map([])
+  match
+    @template.render_template_with_data(tpl, slots, store, Map([]), Map([])) {
     Ok(html) => {
       assert_true(html.contains("<a href=\"/\">Home</a>"))
       assert_true(html.contains("<a href=\"/blog\">Blog</a>"))
@@ -1340,7 +1369,8 @@ test "render loop with non-array value renders nothing" {
     @data.new_string_file("nav", [("title", "Main")]),
   ])
 
-  let tpl = match parse_template("{{#each data.nav.title}}{{item}}{{/each}}") {
+  let tpl = match
+    @template.parse_template("{{#each data.nav.title}}{{item}}{{/each}}") {
     Ok(v) => v
     Err(_) => {
       assert_true(false)
@@ -1348,8 +1378,9 @@ test "render loop with non-array value renders nothing" {
     }
   }
 
-  let slots : Map[TemplateSlot, String] = Map::new()
-  match render_template_with_data(tpl, slots, store, Map::new(), Map::new()) {
+  let slots : Map[@template.TemplateSlot, String] = Map([])
+  match
+    @template.render_template_with_data(tpl, slots, store, Map([]), Map([])) {
     Ok(html) => assert_eq(html, "")
     Err(_) => assert_true(false)
   }
@@ -1362,7 +1393,7 @@ test "render loop with missing key renders nothing" {
   ])
 
   let tpl = match
-    parse_template("{{#each data.nav.missing}}{{item}}{{/each}}") {
+    @template.parse_template("{{#each data.nav.missing}}{{item}}{{/each}}") {
     Ok(v) => v
     Err(_) => {
       assert_true(false)
@@ -1370,8 +1401,9 @@ test "render loop with missing key renders nothing" {
     }
   }
 
-  let slots : Map[TemplateSlot, String] = Map::new()
-  match render_template_with_data(tpl, slots, store, Map::new(), Map::new()) {
+  let slots : Map[@template.TemplateSlot, String] = Map([])
+  match
+    @template.render_template_with_data(tpl, slots, store, Map([]), Map([])) {
     Ok(html) => assert_eq(html, "")
     Err(_) => assert_true(false)
   }
@@ -1379,14 +1411,14 @@ test "render loop with missing key renders nothing" {
 
 ///|
 test "render {{item.field}} with non-map item renders empty" {
-  let fields : Map[String, @frontmatter.FrontmatterValue] = Map::new()
+  let fields : Map[String, @frontmatter.FrontmatterValue] = Map([])
   fields.set("items", @frontmatter.FArray([@frontmatter.FStr("string_value")]))
 
   let file = @data.new_file("nav", fields)
   let store = @data.new_store([file])
 
   let tpl = match
-    parse_template("{{#each data.nav.items}}{{item.title}}{{/each}}") {
+    @template.parse_template("{{#each data.nav.items}}{{item.title}}{{/each}}") {
     Ok(v) => v
     Err(_) => {
       assert_true(false)
@@ -1394,8 +1426,9 @@ test "render {{item.field}} with non-map item renders empty" {
     }
   }
 
-  let slots : Map[TemplateSlot, String] = Map::new()
-  match render_template_with_data(tpl, slots, store, Map::new(), Map::new()) {
+  let slots : Map[@template.TemplateSlot, String] = Map([])
+  match
+    @template.render_template_with_data(tpl, slots, store, Map([]), Map([])) {
     Ok(html) => assert_eq(html, "")
     Err(_) => assert_true(false)
   }
@@ -1407,7 +1440,7 @@ test "render {{item}} outside loop renders empty" {
     @data.new_string_file("nav", [("title", "Main")]),
   ])
 
-  let tpl = match parse_template("Item: {{item}}") {
+  let tpl = match @template.parse_template("Item: {{item}}") {
     Ok(v) => v
     Err(_) => {
       assert_true(false)
@@ -1415,8 +1448,9 @@ test "render {{item}} outside loop renders empty" {
     }
   }
 
-  let slots : Map[TemplateSlot, String] = Map::new()
-  match render_template_with_data(tpl, slots, store, Map::new(), Map::new()) {
+  let slots : Map[@template.TemplateSlot, String] = Map([])
+  match
+    @template.render_template_with_data(tpl, slots, store, Map([]), Map([])) {
     Ok(html) => assert_eq(html, "Item: ")
     Err(_) => assert_true(false)
   }
@@ -1425,7 +1459,7 @@ test "render {{item}} outside loop renders empty" {
 ///|
 test "parse {{#each}} with nested path" {
   let tpl = match
-    parse_template("{{#each data.site.nav.links}}{{item}}{{/each}}") {
+    @template.parse_template("{{#each data.site.nav.links}}{{item}}{{/each}}") {
     Ok(v) => v
     Err(_) => {
       assert_true(false)
@@ -1446,7 +1480,8 @@ test "parse {{#each}} with nested path" {
 
 ///|
 test "parse {{#each page.keywords}}...{{/each}} loop" {
-  let tpl = match parse_template("{{#each page.keywords}}{{item}}{{/each}}") {
+  let tpl = match
+    @template.parse_template("{{#each page.keywords}}{{item}}{{/each}}") {
     Ok(v) => v
     Err(_) => {
       assert_true(false)
@@ -1473,7 +1508,7 @@ test "parse {{#each page.keywords}}...{{/each}} loop" {
 ///|
 test "parse {{#each page.tags}}...{{/each}} with text" {
   let tpl = match
-    parse_template("Tags: {{#each page.tags}}{{item}}, {{/each}}") {
+    @template.parse_template("Tags: {{#each page.tags}}{{item}}, {{/each}}") {
     Ok(v) => v
     Err(_) => {
       assert_true(false)
@@ -1497,7 +1532,7 @@ test "parse {{#each page.tags}}...{{/each}} with text" {
 
 ///|
 test "parse {{#each page.}} empty field returns ParseError" {
-  match parse_template("{{#each page.}}{{item}}{{/each}}") {
+  match @template.parse_template("{{#each page.}}{{item}}{{/each}}") {
     Ok(_) => assert_true(false)
     Err(ParseError(msg)) => assert_true(msg.contains("invalid each block"))
     Err(_) => assert_true(false)
@@ -1506,7 +1541,8 @@ test "parse {{#each page.}} empty field returns ParseError" {
 
 ///|
 test "render {{#each page.keywords}} with array present" {
-  let tpl = match parse_template("{{#each page.keywords}}{{item}} {{/each}}") {
+  let tpl = match
+    @template.parse_template("{{#each page.keywords}}{{item}} {{/each}}") {
     Ok(v) => v
     Err(_) => {
       assert_true(false)
@@ -1514,14 +1550,14 @@ test "render {{#each page.keywords}} with array present" {
     }
   }
 
-  let slots = Map::new()
-  let page_fields = Map::new()
-  let page_field_arrays = Map::new()
+  let slots = Map([])
+  let page_fields = Map([])
+  let page_field_arrays = Map([])
   page_field_arrays.set("keywords", ["moonbit", "ssg", "template"])
   let data_store = @data.empty_store()
 
   match
-    render_template_with_data(
+    @template.render_template_with_data(
       tpl, slots, data_store, page_fields, page_field_arrays,
     ) {
     Ok(output) => assert_eq(output, "moonbit ssg template ")
@@ -1531,7 +1567,8 @@ test "render {{#each page.keywords}} with array present" {
 
 ///|
 test "render {{#each page.tags}} with missing field renders empty" {
-  let tpl = match parse_template("{{#each page.tags}}{{item}}{{/each}}") {
+  let tpl = match
+    @template.parse_template("{{#each page.tags}}{{item}}{{/each}}") {
     Ok(v) => v
     Err(_) => {
       assert_true(false)
@@ -1539,14 +1576,14 @@ test "render {{#each page.tags}} with missing field renders empty" {
     }
   }
 
-  let slots = Map::new()
-  let page_fields = Map::new()
-  let page_field_arrays = Map::new()
+  let slots = Map([])
+  let page_fields = Map([])
+  let page_field_arrays = Map([])
   // tags not present in page_field_arrays
   let data_store = @data.empty_store()
 
   match
-    render_template_with_data(
+    @template.render_template_with_data(
       tpl, slots, data_store, page_fields, page_field_arrays,
     ) {
     Ok(output) => assert_eq(output, "")
@@ -1557,7 +1594,7 @@ test "render {{#each page.tags}} with missing field renders empty" {
 ///|
 test "render {{#each page.contributors}} with empty array renders empty" {
   let tpl = match
-    parse_template("{{#each page.contributors}}{{item}}{{/each}}") {
+    @template.parse_template("{{#each page.contributors}}{{item}}{{/each}}") {
     Ok(v) => v
     Err(_) => {
       assert_true(false)
@@ -1565,14 +1602,14 @@ test "render {{#each page.contributors}} with empty array renders empty" {
     }
   }
 
-  let slots = Map::new()
-  let page_fields = Map::new()
-  let page_field_arrays = Map::new()
+  let slots = Map([])
+  let page_fields = Map([])
+  let page_field_arrays = Map([])
   page_field_arrays.set("contributors", [])
   let data_store = @data.empty_store()
 
   match
-    render_template_with_data(
+    @template.render_template_with_data(
       tpl, slots, data_store, page_fields, page_field_arrays,
     ) {
     Ok(output) => assert_eq(output, "")
@@ -1583,7 +1620,7 @@ test "render {{#each page.contributors}} with empty array renders empty" {
 ///|
 test "render {{#each page.keywords}} with {{item.field}} renders empty for string arrays" {
   let tpl = match
-    parse_template("{{#each page.keywords}}{{item.name}} {{/each}}") {
+    @template.parse_template("{{#each page.keywords}}{{item.name}} {{/each}}") {
     Ok(v) => v
     Err(_) => {
       assert_true(false)
@@ -1591,15 +1628,15 @@ test "render {{#each page.keywords}} with {{item.field}} renders empty for strin
     }
   }
 
-  let slots = Map::new()
-  let page_fields = Map::new()
-  let page_field_arrays = Map::new()
+  let slots = Map([])
+  let page_fields = Map([])
+  let page_field_arrays = Map([])
   page_field_arrays.set("keywords", ["moonbit", "ssg"])
   let data_store = @data.empty_store()
 
   // String arrays don't support subfield access, so {{item.name}} renders empty
   match
-    render_template_with_data(
+    @template.render_template_with_data(
       tpl, slots, data_store, page_fields, page_field_arrays,
     ) {
     Ok(output) => assert_eq(output, "  ")
@@ -1609,27 +1646,29 @@ test "render {{#each page.keywords}} with {{item.field}} renders empty for strin
 
 ///|
 test "collect_frontmatter_refs returns empty for template with no page slots" {
-  let tpl = match parse_template("<html>{{title}}{{content}}</html>") {
+  let tpl = match
+    @template.parse_template("<html>{{title}}{{content}}</html>") {
     Ok(v) => v
     Err(_) => {
       assert_true(false)
       { parts: [], required_slots: [], layout: None }
     }
   }
-  let refs = collect_frontmatter_refs(tpl)
+  let refs = @template.collect_frontmatter_refs(tpl)
   assert_eq(refs.length(), 0)
 }
 
 ///|
 test "collect_frontmatter_refs collects {{page.field}} references" {
-  let tpl = match parse_template("{{page.subtitle}} {{page.author}}") {
+  let tpl = match
+    @template.parse_template("{{page.subtitle}} {{page.author}}") {
     Ok(v) => v
     Err(_) => {
       assert_true(false)
       { parts: [], required_slots: [], layout: None }
     }
   }
-  let refs = collect_frontmatter_refs(tpl)
+  let refs = @template.collect_frontmatter_refs(tpl)
   assert_eq(refs.length(), 2)
   assert_true(refs.contains("subtitle"))
   assert_true(refs.contains("author"))
@@ -1638,14 +1677,16 @@ test "collect_frontmatter_refs collects {{page.field}} references" {
 ///|
 test "collect_frontmatter_refs collects {{?page.field}} conditional refs" {
   let tpl = match
-    parse_template("{{?page.hero}}<img src=\"{{page.hero}}\">{{/?page.hero}}") {
+    @template.parse_template(
+      "{{?page.hero}}<img src=\"{{page.hero}}\">{{/?page.hero}}",
+    ) {
     Ok(v) => v
     Err(_) => {
       assert_true(false)
       { parts: [], required_slots: [], layout: None }
     }
   }
-  let refs = collect_frontmatter_refs(tpl)
+  let refs = @template.collect_frontmatter_refs(tpl)
   // "hero" appears in both the conditional guard and the body slot — deduplicated
   assert_eq(refs.length(), 1)
   assert_true(refs.contains("hero"))
@@ -1654,28 +1695,31 @@ test "collect_frontmatter_refs collects {{?page.field}} conditional refs" {
 ///|
 test "collect_frontmatter_refs collects {{#each page.field}} loop refs" {
   let tpl = match
-    parse_template("{{#each page.keywords}}<li>{{item}}</li>{{/each}}") {
+    @template.parse_template(
+      "{{#each page.keywords}}<li>{{item}}</li>{{/each}}",
+    ) {
     Ok(v) => v
     Err(_) => {
       assert_true(false)
       { parts: [], required_slots: [], layout: None }
     }
   }
-  let refs = collect_frontmatter_refs(tpl)
+  let refs = @template.collect_frontmatter_refs(tpl)
   assert_eq(refs.length(), 1)
   assert_true(refs.contains("keywords"))
 }
 
 ///|
 test "collect_frontmatter_refs deduplicates repeated field references" {
-  let tpl = match parse_template("{{page.hero}} and again {{page.hero}}") {
+  let tpl = match
+    @template.parse_template("{{page.hero}} and again {{page.hero}}") {
     Ok(v) => v
     Err(_) => {
       assert_true(false)
       { parts: [], required_slots: [], layout: None }
     }
   }
-  let refs = collect_frontmatter_refs(tpl)
+  let refs = @template.collect_frontmatter_refs(tpl)
   assert_eq(refs.length(), 1)
   assert_true(refs.contains("hero"))
 }
@@ -1683,7 +1727,7 @@ test "collect_frontmatter_refs deduplicates repeated field references" {
 ///|
 test "collect_frontmatter_refs collects refs from mixed expression types" {
   let tpl = match
-    parse_template(
+    @template.parse_template(
       "{{page.title_override}}{{?page.hero}}img{{/?page.hero}}{{#each page.authors}}.{{/each}}",
     ) {
     Ok(v) => v
@@ -1692,7 +1736,7 @@ test "collect_frontmatter_refs collects refs from mixed expression types" {
       { parts: [], required_slots: [], layout: None }
     }
   }
-  let refs = collect_frontmatter_refs(tpl)
+  let refs = @template.collect_frontmatter_refs(tpl)
   assert_eq(refs.length(), 3)
   assert_true(refs.contains("title_override"))
   assert_true(refs.contains("hero"))
@@ -1701,7 +1745,7 @@ test "collect_frontmatter_refs collects refs from mixed expression types" {
 
 ///|
 test "template parse body_no_h1 slot" {
-  let tpl = match parse_template("<div>{{body_no_h1}}</div>") {
+  let tpl = match @template.parse_template("<div>{{body_no_h1}}</div>") {
     Ok(v) => v
     Err(_) => {
       assert_true(false)
@@ -1720,16 +1764,17 @@ test "template parse body_no_h1 slot" {
 
 ///|
 test "template render body_no_h1 slot" {
-  let tpl = match parse_template("<article>{{body_no_h1}}</article>") {
+  let tpl = match
+    @template.parse_template("<article>{{body_no_h1}}</article>") {
     Ok(v) => v
     Err(_) => {
       assert_true(false)
       { parts: [], required_slots: [], layout: None }
     }
   }
-  let slots : Map[TemplateSlot, String] = Map::new()
+  let slots : Map[@template.TemplateSlot, String] = Map([])
   slots.set(BodyNoH1, "<p>Content without H1</p>")
-  match render_template(tpl, slots, Map::new()) {
+  match @template.render_template(tpl, slots, Map([])) {
     Ok(html) => assert_eq(html, "<article><p>Content without H1</p></article>")
     Err(_) => assert_true(false)
   }
@@ -1737,7 +1782,7 @@ test "template render body_no_h1 slot" {
 
 ///|
 test "template parse head_meta slot" {
-  let tpl = match parse_template("{{head_meta}}") {
+  let tpl = match @template.parse_template("{{head_meta}}") {
     Ok(v) => v
     Err(_) => {
       assert_true(false)
@@ -1752,19 +1797,19 @@ test "template parse head_meta slot" {
 
 ///|
 test "template render head_meta slot" {
-  let tpl = match parse_template("<head>{{head_meta}}</head>") {
+  let tpl = match @template.parse_template("<head>{{head_meta}}</head>") {
     Ok(v) => v
     Err(_) => {
       assert_true(false)
       { parts: [], required_slots: [], layout: None }
     }
   }
-  let slots : Map[TemplateSlot, String] = Map::new()
+  let slots : Map[@template.TemplateSlot, String] = Map([])
   slots.set(
     HeadMeta,
     "  <meta property=\"og:title\" content=\"Test\" />\n  <link rel=\"canonical\" href=\"https://example.com/\" />\n",
   )
-  match render_template(tpl, slots, Map::new()) {
+  match @template.render_template(tpl, slots, Map([])) {
     Ok(html) => {
       assert_true(html.contains("og:title"))
       assert_true(html.contains("canonical"))
@@ -1783,21 +1828,21 @@ test "head.html conditional description - with description" {
     #|{{/?description}}{{head_meta}}
     #|
   let resolver = fn(_ : String) -> Result[String, String] { Err("not found") }
-  let tpl = match parse_template_with_includes(source, resolver) {
+  let tpl = match @template.parse_template_with_includes(source, resolver) {
     Ok(v) => v
     Err(_) => {
       assert_true(false)
       { parts: [], required_slots: [], layout: None }
     }
   }
-  let slots : Map[TemplateSlot, String] = Map::new()
+  let slots : Map[@template.TemplateSlot, String] = Map([])
   slots.set(Title, "My Article")
   slots.set(Description, "An article about MoonBit")
   slots.set(
     HeadMeta,
     "  <meta property=\"og:title\" content=\"My Article\" />\n",
   )
-  match render_template(tpl, slots, Map::new()) {
+  match @template.render_template(tpl, slots, Map([])) {
     Ok(html) => {
       assert_true(
         html.contains(
@@ -1820,21 +1865,21 @@ test "head.html conditional description - empty description omits meta tag" {
     #|{{/?description}}{{head_meta}}
     #|
   let resolver = fn(_ : String) -> Result[String, String] { Err("not found") }
-  let tpl = match parse_template_with_includes(source, resolver) {
+  let tpl = match @template.parse_template_with_includes(source, resolver) {
     Ok(v) => v
     Err(_) => {
       assert_true(false)
       { parts: [], required_slots: [], layout: None }
     }
   }
-  let slots : Map[TemplateSlot, String] = Map::new()
+  let slots : Map[@template.TemplateSlot, String] = Map([])
   slots.set(Title, "posts index")
   slots.set(Description, "") // Empty description — collection page without configured description
   slots.set(
     HeadMeta,
     "  <meta property=\"og:title\" content=\"posts index\" />\n  <link rel=\"canonical\" href=\"https://example.com/posts/\" />\n",
   )
-  match render_template(tpl, slots, Map::new()) {
+  match @template.render_template(tpl, slots, Map([])) {
     Ok(html) => {
       // The meta description tag must NOT appear
       assert_true(!html.contains("meta name=\"description\""))
@@ -1848,17 +1893,17 @@ test "head.html conditional description - empty description omits meta tag" {
 
 ///|
 test "{{page.title | upper}} renders uppercase" {
-  let tpl = match parse_template("Title: {{page.title | upper}}") {
+  let tpl = match @template.parse_template("Title: {{page.title | upper}}") {
     Ok(v) => v
     Err(_) => {
       assert_true(false)
       { parts: [], required_slots: [], layout: None }
     }
   }
-  let slots : Map[TemplateSlot, String] = Map::new()
-  let page_fields : Map[String, String] = Map::new()
+  let slots : Map[@template.TemplateSlot, String] = Map([])
+  let page_fields : Map[String, String] = Map([])
   page_fields.set("title", "hello world")
-  match render_template(tpl, slots, page_fields) {
+  match @template.render_template(tpl, slots, page_fields) {
     Ok(html) => assert_eq(html, "Title: HELLO WORLD")
     Err(_) => assert_true(false)
   }
@@ -1866,17 +1911,17 @@ test "{{page.title | upper}} renders uppercase" {
 
 ///|
 test "{{page.title | lower}} renders lowercase" {
-  let tpl = match parse_template("Title: {{page.title | lower}}") {
+  let tpl = match @template.parse_template("Title: {{page.title | lower}}") {
     Ok(v) => v
     Err(_) => {
       assert_true(false)
       { parts: [], required_slots: [], layout: None }
     }
   }
-  let slots : Map[TemplateSlot, String] = Map::new()
-  let page_fields : Map[String, String] = Map::new()
+  let slots : Map[@template.TemplateSlot, String] = Map([])
+  let page_fields : Map[String, String] = Map([])
   page_fields.set("title", "HELLO WORLD")
-  match render_template(tpl, slots, page_fields) {
+  match @template.render_template(tpl, slots, page_fields) {
     Ok(html) => assert_eq(html, "Title: hello world")
     Err(_) => assert_true(false)
   }
@@ -1884,19 +1929,20 @@ test "{{page.title | lower}} renders lowercase" {
 
 ///|
 test "{{page.description | truncate 20}} truncates with '...'" {
-  let tpl = match parse_template("{{page.description | truncate 20}}") {
+  let tpl = match
+    @template.parse_template("{{page.description | truncate 20}}") {
     Ok(v) => v
     Err(_) => {
       assert_true(false)
       { parts: [], required_slots: [], layout: None }
     }
   }
-  let slots : Map[TemplateSlot, String] = Map::new()
-  let page_fields : Map[String, String] = Map::new()
+  let slots : Map[@template.TemplateSlot, String] = Map([])
+  let page_fields : Map[String, String] = Map([])
   page_fields.set(
     "description", "This is a very long description that should be truncated",
   )
-  match render_template(tpl, slots, page_fields) {
+  match @template.render_template(tpl, slots, page_fields) {
     Ok(html) => assert_eq(html, "This is a very long ...")
     Err(_) => assert_true(false)
   }
@@ -1904,17 +1950,18 @@ test "{{page.description | truncate 20}} truncates with '...'" {
 
 ///|
 test "{{page.description | truncate 20}} does NOT truncate short strings" {
-  let tpl = match parse_template("{{page.description | truncate 20}}") {
+  let tpl = match
+    @template.parse_template("{{page.description | truncate 20}}") {
     Ok(v) => v
     Err(_) => {
       assert_true(false)
       { parts: [], required_slots: [], layout: None }
     }
   }
-  let slots : Map[TemplateSlot, String] = Map::new()
-  let page_fields : Map[String, String] = Map::new()
+  let slots : Map[@template.TemplateSlot, String] = Map([])
+  let page_fields : Map[String, String] = Map([])
   page_fields.set("description", "Short text")
-  match render_template(tpl, slots, page_fields) {
+  match @template.render_template(tpl, slots, page_fields) {
     Ok(html) => assert_eq(html, "Short text")
     Err(_) => assert_true(false)
   }
@@ -1922,17 +1969,18 @@ test "{{page.description | truncate 20}} does NOT truncate short strings" {
 
 ///|
 test "{{page.slug | upper | truncate 5}} chains two filters" {
-  let tpl = match parse_template("{{page.slug | upper | truncate 5}}") {
+  let tpl = match
+    @template.parse_template("{{page.slug | upper | truncate 5}}") {
     Ok(v) => v
     Err(_) => {
       assert_true(false)
       { parts: [], required_slots: [], layout: None }
     }
   }
-  let slots : Map[TemplateSlot, String] = Map::new()
-  let page_fields : Map[String, String] = Map::new()
+  let slots : Map[@template.TemplateSlot, String] = Map([])
+  let page_fields : Map[String, String] = Map([])
   page_fields.set("slug", "hello-world")
-  match render_template(tpl, slots, page_fields) {
+  match @template.render_template(tpl, slots, page_fields) {
     Ok(html) => assert_eq(html, "HELLO...")
     Err(_) => assert_true(false)
   }
@@ -1940,7 +1988,7 @@ test "{{page.slug | upper | truncate 5}} chains two filters" {
 
 ///|
 test "{{date | date_part year}} extracts year from date string" {
-  let tpl = match parse_template("{{date | date_part year}}") {
+  let tpl = match @template.parse_template("{{date | date_part year}}") {
     Ok(v) => v
     Err(_) => {
       assert_true(false)
@@ -1948,9 +1996,9 @@ test "{{date | date_part year}} extracts year from date string" {
     }
   }
   // The Date slot renders the date string
-  let slots : Map[TemplateSlot, String] = Map::new()
+  let slots : Map[@template.TemplateSlot, String] = Map([])
   slots.set(Date, "2024-03-15")
-  match render_template(tpl, slots, Map::new()) {
+  match @template.render_template(tpl, slots, Map([])) {
     Ok(html) => assert_eq(html, "2024")
     Err(_) => assert_true(false)
   }
@@ -1958,16 +2006,16 @@ test "{{date | date_part year}} extracts year from date string" {
 
 ///|
 test "{{date | date_part month}} extracts month from date string" {
-  let tpl = match parse_template("{{date | date_part month}}") {
+  let tpl = match @template.parse_template("{{date | date_part month}}") {
     Ok(v) => v
     Err(_) => {
       assert_true(false)
       { parts: [], required_slots: [], layout: None }
     }
   }
-  let slots : Map[TemplateSlot, String] = Map::new()
+  let slots : Map[@template.TemplateSlot, String] = Map([])
   slots.set(Date, "2024-03-15")
-  match render_template(tpl, slots, Map::new()) {
+  match @template.render_template(tpl, slots, Map([])) {
     Ok(html) => assert_eq(html, "03")
     Err(_) => assert_true(false)
   }
@@ -1975,17 +2023,18 @@ test "{{date | date_part month}} extracts month from date string" {
 
 ///|
 test "{{page.missing_field | default \"N/A\"}} returns fallback for empty/missing" {
-  let tpl = match parse_template("{{page.missing_field | default \"N/A\"}}") {
+  let tpl = match
+    @template.parse_template("{{page.missing_field | default \"N/A\"}}") {
     Ok(v) => v
     Err(_) => {
       assert_true(false)
       { parts: [], required_slots: [], layout: None }
     }
   }
-  let slots : Map[TemplateSlot, String] = Map::new()
-  let page_fields : Map[String, String] = Map::new()
+  let slots : Map[@template.TemplateSlot, String] = Map([])
+  let page_fields : Map[String, String] = Map([])
   // "missing_field" is not set, so it renders as empty → default kicks in
-  match render_template(tpl, slots, page_fields) {
+  match @template.render_template(tpl, slots, page_fields) {
     Ok(html) => assert_eq(html, "N/A")
     Err(_) => assert_true(false)
   }
@@ -1993,16 +2042,16 @@ test "{{page.missing_field | default \"N/A\"}} returns fallback for empty/missin
 
 ///|
 test "{{title | upper}} works on standard slots" {
-  let tpl = match parse_template("{{title | upper}}") {
+  let tpl = match @template.parse_template("{{title | upper}}") {
     Ok(v) => v
     Err(_) => {
       assert_true(false)
       { parts: [], required_slots: [], layout: None }
     }
   }
-  let slots : Map[TemplateSlot, String] = Map::new()
+  let slots : Map[@template.TemplateSlot, String] = Map([])
   slots.set(Title, "my page title")
-  match render_template(tpl, slots, Map::new()) {
+  match @template.render_template(tpl, slots, Map([])) {
     Ok(html) => assert_eq(html, "MY PAGE TITLE")
     Err(_) => assert_true(false)
   }
@@ -2010,7 +2059,7 @@ test "{{title | upper}} works on standard slots" {
 
 ///|
 test "unknown filter name on standard slot returns UnknownFilter error" {
-  match parse_template("{{title | uper}}") {
+  match @template.parse_template("{{title | uper}}") {
     Ok(_) => assert_true(false)
     Err(UnknownFilter(msg)) => {
       assert_true(msg.contains("uper"))
@@ -2022,7 +2071,7 @@ test "unknown filter name on standard slot returns UnknownFilter error" {
 
 ///|
 test "unknown filter name on page slot returns UnknownFilter error" {
-  match parse_template("{{page.title | capitaize}}") {
+  match @template.parse_template("{{page.title | capitaize}}") {
     Ok(_) => assert_true(false)
     Err(UnknownFilter(msg)) => {
       assert_true(msg.contains("capitaize"))
@@ -2034,7 +2083,7 @@ test "unknown filter name on page slot returns UnknownFilter error" {
 
 ///|
 test "unknown filter name in chained filters returns error at the bad filter" {
-  match parse_template("{{page.slug | upper | nope | truncate 10}}") {
+  match @template.parse_template("{{page.slug | upper | nope | truncate 10}}") {
     Ok(_) => assert_true(false)
     Err(UnknownFilter(msg)) => {
       assert_true(msg.contains("nope"))
@@ -2047,7 +2096,7 @@ test "unknown filter name in chained filters returns error at the bad filter" {
 ///|
 test "known filters still parse successfully" {
   let tpl = match
-    parse_template(
+    @template.parse_template(
       "{{page.title | upper | lower | truncate 20 | date_part year | default \"fallback\"}}",
     ) {
     Ok(v) => v
@@ -2068,7 +2117,8 @@ test "known filters still parse successfully" {
 
 ///|
 test "unknown filter on loop item slot returns error" {
-  match parse_template("{{#each data.nav.items}}{{item | uper}}{{/each}}") {
+  match
+    @template.parse_template("{{#each data.nav.items}}{{item | uper}}{{/each}}") {
     Ok(_) => assert_true(false)
     Err(UnknownFilter(msg)) => assert_true(msg.contains("uper"))
     Err(_) => assert_true(false)
@@ -2077,7 +2127,7 @@ test "unknown filter on loop item slot returns error" {
 
 ///|
 test "unknown filter error includes slot expression context" {
-  match parse_template("{{title | xyz}}") {
+  match @template.parse_template("{{title | xyz}}") {
     Ok(_) => assert_true(false)
     Err(UnknownFilter(msg)) =>
       // The error message should include the filter name AND the slot expression

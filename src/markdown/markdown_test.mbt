@@ -1,12 +1,12 @@
 ///|
 fn empty_wl() -> Map[String, String] {
-  Map::new()
+  Map([])
 }
 
 ///|
 test "flat list still works" {
   let body = "- One\n- Two\n- Three"
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   assert_true(rendered.contains("<ul>"))
   assert_true(rendered.contains("<li>One</li>"))
   assert_true(rendered.contains("<li>Two</li>"))
@@ -19,7 +19,7 @@ test "flat list still works" {
 ///|
 test "markdown toc duplicate headings get unique anchors" {
   let body = "## Repeat!\n\n## Repeat?\n\n### Repeat\n"
-  let entries = extract_table_of_contents(body, 3)
+  let entries = @markdown.extract_table_of_contents(body, 3)
   assert_eq(entries.length(), 3)
   assert_eq(entries[0].anchor, "repeat")
   assert_eq(entries[1].anchor, "repeat-2")
@@ -29,7 +29,7 @@ test "markdown toc duplicate headings get unique anchors" {
 ///|
 test "markdown toc depth filter excludes deeper headings" {
   let body = "## Keep\n\n### Skip\n"
-  let entries = extract_table_of_contents(body, 2)
+  let entries = @markdown.extract_table_of_contents(body, 2)
   assert_eq(entries.length(), 1)
   assert_eq(entries[0].anchor, "keep")
 }
@@ -37,7 +37,9 @@ test "markdown toc depth filter excludes deeper headings" {
 ///|
 test "markdown toc html renders anchor links" {
   let body = "## Intro & Setup\n\n### API\n"
-  let html = render_table_of_contents(extract_table_of_contents(body, 3))
+  let html = @markdown.render_table_of_contents(
+    @markdown.extract_table_of_contents(body, 3),
+  )
   assert_true(html.contains("<nav class=\"table-of-contents\">"))
   assert_true(html.contains("href=\"#intro-setup\""))
   assert_true(html.contains("class=\"toc-level-2\""))
@@ -47,7 +49,9 @@ test "markdown toc html renders anchor links" {
 ///|
 test "markdown toc html empty for no headings" {
   assert_eq(
-    render_table_of_contents(extract_table_of_contents("Plain text only", 3)),
+    @markdown.render_table_of_contents(
+      @markdown.extract_table_of_contents("Plain text only", 3),
+    ),
     "",
   )
 }
@@ -55,14 +59,17 @@ test "markdown toc html empty for no headings" {
 ///|
 test "markdown image shortcode" {
   let body = "Before {{< image src=\"/img.png\" alt=\"hero\" >}} after"
-  let rendered = render_with_diagnostics(body, empty_wl())
+  let rendered = @markdown.render_with_diagnostics(body, empty_wl())
   assert_eq(rendered.shortcode_errors.length(), 0)
   assert_true(rendered.html.contains("<img src=\"/img.png\""))
 }
 
 ///|
 test "markdown unknown shortcode" {
-  let rendered = render_with_diagnostics("{{< unknown value=1 >}}", empty_wl())
+  let rendered = @markdown.render_with_diagnostics(
+    "{{< unknown value=1 >}}",
+    empty_wl(),
+  )
   assert_eq(rendered.shortcode_errors.length(), 1)
   match rendered.shortcode_errors[0].error {
     @shortcode.UnknownShortcode(name) => assert_eq(name, "unknown")
@@ -73,7 +80,7 @@ test "markdown unknown shortcode" {
 ///|
 test "markdown callout body" {
   let body = "{{< callout type=\"note\" title=\"Heads up\" >}}Body{{< /callout >}}"
-  let rendered = render_with_diagnostics(body, empty_wl())
+  let rendered = @markdown.render_with_diagnostics(body, empty_wl())
   assert_eq(rendered.shortcode_errors.length(), 0)
   assert_true(rendered.html.contains("callout-note"))
   assert_true(rendered.html.contains("Body"))
@@ -82,7 +89,7 @@ test "markdown callout body" {
 ///|
 test "markdown fenced code highlighting recognized language" {
   let body = "```moonbit\nfn main() {\n  let x = 1\n}\n```"
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   assert_true(
     rendered.contains("<pre class=\"highlight language-moonbit\"><code>"),
   )
@@ -92,7 +99,7 @@ test "markdown fenced code highlighting recognized language" {
 ///|
 test "markdown fenced code unknown language stays plain" {
   let body = "```brainlang\nloop forever\n```"
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   assert_true(rendered.contains("<pre><code class=\"language-brainlang\">"))
   assert_true(!rendered.contains("hl-"))
 }
@@ -100,7 +107,7 @@ test "markdown fenced code unknown language stays plain" {
 ///|
 test "markdown fenced code empty language stays plain" {
   let body = "```\nplain text\n```"
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   assert_true(rendered.contains("<pre><code>plain text</code></pre>"))
   assert_true(!rendered.contains("hl-"))
 }
@@ -108,7 +115,7 @@ test "markdown fenced code empty language stays plain" {
 ///|
 test "markdown table basic" {
   let body = "| Name | Age |\n| ---- | --- |\n| Alice | 30 |\n| Bob | 25 |"
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   assert_true(rendered.contains("<table>"))
   assert_true(rendered.contains("<thead>"))
   assert_true(rendered.contains("<tbody>"))
@@ -123,7 +130,7 @@ test "markdown table basic" {
 ///|
 test "markdown table alignment" {
   let body = "| L | C | R |\n| :--- | :---: | ---: |\n| a | b | c |"
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   assert_true(rendered.contains("<th style=\"text-align:left\">L</th>"))
   assert_true(rendered.contains("<th style=\"text-align:center\">C</th>"))
   assert_true(rendered.contains("<th style=\"text-align:right\">R</th>"))
@@ -135,7 +142,7 @@ test "markdown table alignment" {
 ///|
 test "markdown table inline content in cells" {
   let body = "| Feature | Status |\n| --- | --- |\n| **bold** | `code` |"
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   assert_true(rendered.contains("<strong>bold</strong>"))
   assert_true(rendered.contains("<code>code</code>"))
 }
@@ -143,7 +150,7 @@ test "markdown table inline content in cells" {
 ///|
 test "markdown table no data rows" {
   let body = "| X | Y |\n| --- | --- |"
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   assert_true(rendered.contains("<table>"))
   assert_true(rendered.contains("<th>X</th>"))
   assert_true(rendered.contains("<th>Y</th>"))
@@ -154,7 +161,7 @@ test "markdown table no data rows" {
 test "non-table pipe line not parsed as table" {
   // A line with | but no separator row should become a paragraph
   let body = "a | b | c\nno separator here"
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   assert_true(!rendered.contains("<table>"))
   assert_true(rendered.contains("<p>"))
 }
@@ -162,7 +169,7 @@ test "non-table pipe line not parsed as table" {
 ///|
 test "markdown image basic" {
   let body = "![hero image](/images/hero.png)"
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   assert_true(rendered.contains("<img src=\"/images/hero.png\""))
   assert_true(rendered.contains("alt=\"hero image\""))
   assert_true(rendered.contains("/>"))
@@ -171,7 +178,7 @@ test "markdown image basic" {
 ///|
 test "markdown image empty alt" {
   let body = "![](/logo.svg)"
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   assert_true(rendered.contains("<img src=\"/logo.svg\""))
   assert_true(rendered.contains("alt=\"\""))
 }
@@ -179,14 +186,14 @@ test "markdown image empty alt" {
 ///|
 test "markdown image with special chars in alt escaped" {
   let body = "![a & b](/img.png)"
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   assert_true(rendered.contains("alt=\"a &amp; b\""))
 }
 
 ///|
 test "markdown image inline in paragraph" {
   let body = "Before ![photo](/p.jpg) after"
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   assert_true(rendered.contains("<img src=\"/p.jpg\""))
   assert_true(rendered.contains("alt=\"photo\""))
   assert_true(rendered.contains("Before"))
@@ -197,7 +204,7 @@ test "markdown image inline in paragraph" {
 test "markdown bare exclamation not image" {
   // ! without following [ is literal
   let body = "Hello! World"
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   assert_true(rendered.contains("Hello! World"))
   assert_true(!rendered.contains("<img"))
 }
@@ -205,21 +212,21 @@ test "markdown bare exclamation not image" {
 ///|
 test "strikethrough basic" {
   let body = "~~hello~~"
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   assert_true(rendered.contains("<del>hello</del>"))
 }
 
 ///|
 test "strikethrough nested inline" {
   let body = "~~**bold**~~"
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   assert_true(rendered.contains("<del><strong>bold</strong></del>"))
 }
 
 ///|
 test "strikethrough unclosed falls back" {
   let body = "~~hello"
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   // Unclosed ~~ should be treated as literal text, no <del> tag
   assert_true(!rendered.contains("<del>"))
   assert_true(rendered.contains("~~hello"))
@@ -228,28 +235,28 @@ test "strikethrough unclosed falls back" {
 ///|
 test "task list unchecked" {
   let body = "- [ ] buy milk"
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   assert_true(rendered.contains("<input type=\"checkbox\" disabled"))
 }
 
 ///|
 test "task list checked" {
   let body = "- [x] done"
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   assert_true(rendered.contains("<input type=\"checkbox\" checked disabled"))
 }
 
 ///|
 test "task list checked uppercase" {
   let body = "- [X] done"
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   assert_true(rendered.contains("<input type=\"checkbox\" checked disabled"))
 }
 
 ///|
 test "task list mixed" {
   let body = "- [ ] todo\n- [x] done\n- [ ] another"
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   // Should have both checked and unchecked checkboxes
   assert_true(rendered.contains("<input type=\"checkbox\" disabled"))
   assert_true(rendered.contains("<input type=\"checkbox\" checked disabled"))
@@ -258,7 +265,7 @@ test "task list mixed" {
 ///|
 test "regular list unaffected" {
   let body = "- plain item"
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   // Should not have checkbox input
   assert_true(!rendered.contains("<input"))
   assert_true(rendered.contains("<li>"))
@@ -268,7 +275,7 @@ test "regular list unaffected" {
 ///|
 test "footnote single reference and definition" {
   let body = "Text with a footnote[^1].\n\n[^1]: This is the footnote text."
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   // Check inline reference
   assert_true(
     rendered.contains("<sup><a href=\"#fn-1\" id=\"fnref-1\">[1]</a></sup>"),
@@ -284,7 +291,7 @@ test "footnote single reference and definition" {
 ///|
 test "footnote multiple references" {
   let body = "First[^a] and second[^b] footnotes.\n\n[^a]: First note\n[^b]: Second note"
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   // Check inline references with correct ordinals
   assert_true(
     rendered.contains("<sup><a href=\"#fn-a\" id=\"fnref-a\">[1]</a></sup>"),
@@ -300,7 +307,7 @@ test "footnote multiple references" {
 ///|
 test "footnote declaration order preserved" {
   let body = "Ref[^z] Ref[^a]\n\n[^a]: First defined\n[^z]: Later defined"
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   // Ordinals follow definition order: [^a] is defined first → 1, [^z] second → 2
   assert_true(rendered.contains("id=\"fnref-a\">[1]</a></sup>"))
   assert_true(rendered.contains("id=\"fnref-z\">[2]</a></sup>"))
@@ -314,7 +321,7 @@ test "footnote declaration order preserved" {
 ///|
 test "footnote in paragraph" {
   let body = "This is a paragraph with a footnote[^note].\n\n[^note]: The footnote content"
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   assert_true(rendered.contains("<p>"))
   assert_true(rendered.contains("This is a paragraph with a footnote"))
   assert_true(rendered.contains("<sup><a href=\"#fn-note\""))
@@ -325,7 +332,7 @@ test "footnote in paragraph" {
 ///|
 test "footnote with special characters in label" {
   let body = "Text[^note-123] and more[^note_2].\n\n[^note-123]: Dash\n[^note_2]: Underscore"
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   assert_true(rendered.contains("href=\"#fn-note-123\""))
   assert_true(rendered.contains("id=\"fnref-note-123\">[1]</a></sup>"))
   assert_true(rendered.contains("href=\"#fn-note_2\""))
@@ -335,7 +342,7 @@ test "footnote with special characters in label" {
 ///|
 test "footnote backlink present" {
   let body = "Ref[^1]\n\n[^1]: Note text"
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   assert_true(rendered.contains("href=\"#fnref-1\""))
   assert_true(rendered.contains("class=\"footnote-backref\">↩</a>"))
 }
@@ -343,7 +350,7 @@ test "footnote backlink present" {
 ///|
 test "footnote unresolved reference falls back" {
   let body = "Text[^missing]"
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   // Unresolved footnote should render as plain text
   assert_true(rendered.contains("[^missing]"))
   assert_true(!rendered.contains("<sup><a href=\"#fn-missing\""))
@@ -352,7 +359,7 @@ test "footnote unresolved reference falls back" {
 ///|
 test "footnote no section when no definitions" {
   let body = "Text[^1] but no definition"
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   // Should not have footnotes section
   assert_true(!rendered.contains("<section class=\"footnotes\">"))
 }
@@ -360,7 +367,7 @@ test "footnote no section when no definitions" {
 ///|
 test "footnote with inline formatting" {
   let body = "Text[^fmt]\n\n[^fmt]: Note with **bold** and `code`"
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   assert_true(
     rendered.contains(
       "<li id=\"fn-fmt\">Note with <strong>bold</strong> and <code>code</code>",
@@ -371,14 +378,14 @@ test "footnote with inline formatting" {
 ///|
 test "footnote empty text" {
   let body = "Text[^empty]\n\n[^empty]:"
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   assert_true(rendered.contains("<li id=\"fn-empty\">"))
 }
 
 ///|
 test "footnote multiline text" {
   let body = "Text[^multi]\n\n[^multi]: Line one\n\nParagraph two"
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   // Only the first line after the definition is captured
   assert_true(rendered.contains("<li id=\"fn-multi\">Line one"))
 }
@@ -386,7 +393,7 @@ test "footnote multiline text" {
 ///|
 test "nested unordered list basic" {
   let body = "- Item 1\n  - Nested 1\n  - Nested 2\n- Item 2"
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   assert_true(rendered.contains("<ul>"))
   // Parent item has nested children so it renders as <li>Item 1<ul>...</ul></li>
   assert_true(rendered.contains("<li>Item 1"))
@@ -399,7 +406,7 @@ test "nested unordered list basic" {
 ///|
 test "nested ordered list basic" {
   let body = "1. First\n  2. Nested first\n  2. Nested second\n2. Second"
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   assert_true(rendered.contains("<ol>"))
   // Parent item has nested children so it renders as <li>First<ol>...</ol></li>
   assert_true(rendered.contains("<li>First"))
@@ -412,7 +419,7 @@ test "nested ordered list basic" {
 ///|
 test "mixed nested list ul inside ol" {
   let body = "1. Ordered item\n  - Nested unordered\n  - Another nested\n2. Next ordered"
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   assert_true(rendered.contains("<ol>"))
   // Parent item has nested children so it renders as <li>Ordered item<ul>...</ul></li>
   assert_true(rendered.contains("<li>Ordered item"))
@@ -425,7 +432,7 @@ test "mixed nested list ul inside ol" {
 ///|
 test "mixed nested list ol inside ul" {
   let body = "- Unordered item\n  1. Nested ordered\n  2. Another nested\n- Next unordered"
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   assert_true(rendered.contains("<ul>"))
   // Parent item has nested children so it renders as <li>Unordered item<ol>...</ol></li>
   assert_true(rendered.contains("<li>Unordered item"))
@@ -438,7 +445,7 @@ test "mixed nested list ol inside ul" {
 ///|
 test "nested list with task list item" {
   let body = "- [ ] Parent task\n  - [x] Nested checked\n  - [ ] Nested unchecked"
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   assert_true(rendered.contains("<input type=\"checkbox\" disabled"))
   assert_true(rendered.contains("<input type=\"checkbox\" checked disabled"))
   assert_true(rendered.contains("Parent task"))
@@ -449,7 +456,7 @@ test "nested list with task list item" {
 ///|
 test "deeply nested lists" {
   let body = "- Level 1\n  - Level 2\n    - Level 3\n- Back to 1"
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   assert_true(rendered.contains("Level 1"))
   assert_true(rendered.contains("Level 2"))
   assert_true(rendered.contains("Level 3"))
@@ -462,7 +469,7 @@ test "deeply nested lists" {
 ///|
 test "nested list with inline formatting" {
   let body = "- **Bold** item\n  - *Italic* nested\n  - `code` nested"
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   assert_true(rendered.contains("<strong>Bold</strong>"))
   assert_true(rendered.contains("<em>Italic</em>"))
   assert_true(rendered.contains("<code>code</code>"))
@@ -471,7 +478,7 @@ test "nested list with inline formatting" {
 ///|
 test "definition list basic" {
   let body = "Apple\n:   A fruit that grows on trees."
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   assert_true(rendered.contains("<dl>"))
   assert_true(rendered.contains("<dt>Apple</dt>"))
   assert_true(rendered.contains("<dd>A fruit that grows on trees.</dd>"))
@@ -481,7 +488,7 @@ test "definition list basic" {
 ///|
 test "definition list multiple definitions per term" {
   let body = "Orange\n:   A citrus fruit.\n:   Also a color."
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   assert_true(rendered.contains("<dl>"))
   assert_true(rendered.contains("<dt>Orange</dt>"))
   assert_true(rendered.contains("<dd>A citrus fruit.</dd>"))
@@ -492,7 +499,7 @@ test "definition list multiple definitions per term" {
 ///|
 test "definition list multiple terms" {
   let body = "Apple\n:   A fruit.\nOrange\n:   A citrus."
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   assert_true(rendered.contains("<dl>"))
   assert_true(rendered.contains("<dt>Apple</dt>"))
   assert_true(rendered.contains("<dd>A fruit.</dd>"))
@@ -504,7 +511,7 @@ test "definition list multiple terms" {
 ///|
 test "definition list followed by paragraph" {
   let body = "Apple\n:   A fruit.\n\nThis is a paragraph."
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   // Definition list should be complete
   assert_true(rendered.contains("<dl>"))
   assert_true(rendered.contains("<dt>Apple</dt>"))
@@ -517,7 +524,7 @@ test "definition list followed by paragraph" {
 test "definition list html escaping" {
   // & in terms escapes to &amp;; inline HTML tags in definitions pass through.
   let body = "Apple & Banana\n:   A <b>fruit</b> that grows on trees."
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   assert_true(rendered.contains("<dt>Apple &amp; Banana</dt>"))
   assert_true(rendered.contains("<dd>A <b>fruit</b> that grows on trees.</dd>"))
 }
@@ -525,7 +532,7 @@ test "definition list html escaping" {
 ///|
 test "definition list term with bold inline" {
   let body = "**Bold Term**\n:   A fruit."
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   assert_true(rendered.contains("<dt><strong>Bold Term</strong></dt>"))
   assert_true(rendered.contains("<dd>A fruit.</dd>"))
 }
@@ -533,7 +540,7 @@ test "definition list term with bold inline" {
 ///|
 test "definition list definition with bold" {
   let body = "Apple\n:   A **sweet** fruit."
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   assert_true(rendered.contains("<dt>Apple</dt>"))
   assert_true(rendered.contains("<dd>A <strong>sweet</strong> fruit.</dd>"))
 }
@@ -541,14 +548,14 @@ test "definition list definition with bold" {
 ///|
 test "definition list definition with italic" {
   let body = "Unix\n:   _The_ operating system."
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   assert_true(rendered.contains("<dd><em>The</em> operating system.</dd>"))
 }
 
 ///|
 test "definition list definition with inline code" {
   let body = "Lattice\n:   An SSG that enforces `typed` frontmatter."
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   assert_true(
     rendered.contains(
       "<dd>An SSG that enforces <code>typed</code> frontmatter.</dd>",
@@ -559,7 +566,7 @@ test "definition list definition with inline code" {
 ///|
 test "definition list definition with link" {
   let body = "Lattice\n:   See [the docs](https://example.com) for more."
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   assert_true(
     rendered.contains(
       "<dd>See <a href=\"https://example.com\">the docs</a> for more.</dd>",
@@ -570,7 +577,7 @@ test "definition list definition with link" {
 ///|
 test "definition list complex" {
   let body = "Apple\n:   A fruit.\n:   Sweet and crunchy.\n\nOrange\n:   A citrus fruit.\n\nThis is a paragraph."
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   assert_true(rendered.contains("<dl>"))
   assert_true(rendered.contains("<dt>Apple</dt>"))
   assert_true(rendered.contains("<dd>A fruit.</dd>"))
@@ -586,7 +593,7 @@ test "definition list complex" {
 ///|
 test "html block div passes through verbatim" {
   let body = "<div class=\"custom\">\nSome content.\n</div>"
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   // Raw HTML must pass through without escaping
   assert_true(rendered.contains("<div class=\"custom\">"))
   assert_true(rendered.contains("Some content."))
@@ -598,7 +605,7 @@ test "html block div passes through verbatim" {
 ///|
 test "html block closing tag passes through" {
   let body = "<section>\nInside section.\n</section>"
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   assert_true(rendered.contains("<section>"))
   assert_true(rendered.contains("Inside section."))
   assert_true(rendered.contains("</section>"))
@@ -608,7 +615,7 @@ test "html block closing tag passes through" {
 ///|
 test "html comment block passes through" {
   let body = "<!-- This is a comment\n     spanning lines -->\n\nAfter comment."
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   assert_true(rendered.contains("<!-- This is a comment"))
   assert_true(rendered.contains("After comment."))
   assert_false(rendered.contains("&lt;!--"))
@@ -617,7 +624,7 @@ test "html comment block passes through" {
 ///|
 test "html block surrounded by markdown" {
   let body = "Before.\n\n<div class=\"note\">\nInner note content.\n</div>\n\nAfter."
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   assert_true(rendered.contains("<p>Before.</p>"))
   assert_true(rendered.contains("<div class=\"note\">"))
   assert_true(rendered.contains("Inner note content."))
@@ -628,7 +635,7 @@ test "html block surrounded by markdown" {
 ///|
 test "html block iframe passes through" {
   let body = "<iframe src=\"https://example.com\" width=\"800\" height=\"600\"></iframe>"
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   assert_true(rendered.contains("<iframe src=\"https://example.com\""))
   assert_false(rendered.contains("&lt;iframe"))
 }
@@ -636,7 +643,7 @@ test "html block iframe passes through" {
 ///|
 test "html block details summary passes through" {
   let body = "<details>\n<summary>Click to expand</summary>\nHidden content here.\n</details>"
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   assert_true(rendered.contains("<details>"))
   assert_true(rendered.contains("<summary>Click to expand</summary>"))
   assert_true(rendered.contains("Hidden content here."))
@@ -646,7 +653,7 @@ test "html block details summary passes through" {
 ///|
 test "non-html angle bracket in paragraph is still escaped" {
   let body = "x < y is a comparison."
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   // Inline text with < should be escaped because it's NOT a block HTML start
   assert_true(rendered.contains("x &lt; y is a comparison."))
 }
@@ -656,21 +663,21 @@ test "non-html angle bracket in paragraph is still escaped" {
 ///|
 test "underscore italic basic" {
   let body = "_italic_"
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   assert_true(rendered.contains("<em>italic</em>"))
 }
 
 ///|
 test "underscore bold basic" {
   let body = "__bold__"
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   assert_true(rendered.contains("<strong>bold</strong>"))
 }
 
 ///|
 test "underscore bold italic basic" {
   let body = "___bold italic___"
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   assert_true(rendered.contains("<strong><em>bold italic</em></strong>"))
 }
 
@@ -678,7 +685,7 @@ test "underscore bold italic basic" {
 test "underscore italic word boundary prevents mid-word" {
   // foo_bar_baz should NOT be treated as italic — underscores are mid-word
   let body = "foo_bar_baz"
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   assert_true(!rendered.contains("<em>"))
   assert_true(rendered.contains("foo_bar_baz"))
 }
@@ -686,7 +693,7 @@ test "underscore italic word boundary prevents mid-word" {
 ///|
 test "underscore snake_case ident not italic" {
   let body = "snake_case_ident"
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   assert_true(!rendered.contains("<em>"))
   assert_true(rendered.contains("snake_case_ident"))
 }
@@ -694,7 +701,7 @@ test "underscore snake_case ident not italic" {
 ///|
 test "underscore italic in sentence" {
   let body = "This is _emphasized_ text"
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   assert_true(rendered.contains("<em>emphasized</em>"))
   assert_true(rendered.contains("This is"))
   assert_true(rendered.contains("text"))
@@ -703,14 +710,14 @@ test "underscore italic in sentence" {
 ///|
 test "underscore bold in sentence" {
   let body = "This is __strong__ text"
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   assert_true(rendered.contains("<strong>strong</strong>"))
 }
 
 ///|
 test "underscore mixed italic and bold" {
   let body = "_italic_ and __bold__"
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   assert_true(rendered.contains("<em>italic</em>"))
   assert_true(rendered.contains("<strong>bold</strong>"))
 }
@@ -718,7 +725,7 @@ test "underscore mixed italic and bold" {
 ///|
 test "underscore unclosed falls back" {
   let body = "_unclosed"
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   assert_true(!rendered.contains("<em>"))
   assert_true(rendered.contains("_unclosed"))
 }
@@ -726,7 +733,7 @@ test "underscore unclosed falls back" {
 ///|
 test "underscore unclosed double falls back" {
   let body = "__unclosed"
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   assert_true(!rendered.contains("<strong>"))
   assert_true(rendered.contains("__unclosed"))
 }
@@ -734,14 +741,14 @@ test "underscore unclosed double falls back" {
 ///|
 test "underscore at start of string" {
   let body = "_italic at start_"
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   assert_true(rendered.contains("<em>italic at start</em>"))
 }
 
 ///|
 test "underscore bold at start of string" {
   let body = "__bold at start__"
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   assert_true(rendered.contains("<strong>bold at start</strong>"))
 }
 
@@ -750,7 +757,7 @@ test "underscore bold at start of string" {
 ///|
 test "autolink https basic" {
   let body = "<https://example.com>"
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   assert_true(
     rendered.contains("<a href=\"https://example.com\">https://example.com</a>"),
   )
@@ -759,7 +766,7 @@ test "autolink https basic" {
 ///|
 test "autolink http basic" {
   let body = "<http://example.com>"
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   assert_true(
     rendered.contains("<a href=\"http://example.com\">http://example.com</a>"),
   )
@@ -768,7 +775,7 @@ test "autolink http basic" {
 ///|
 test "autolink with path and query" {
   let body = "<http://example.com/path?q=1>"
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   assert_true(rendered.contains("href=\"http://example.com/path?q=1\""))
   assert_true(rendered.contains(">http://example.com/path?q=1</a>"))
 }
@@ -776,7 +783,7 @@ test "autolink with path and query" {
 ///|
 test "autolink mailto" {
   let body = "<mailto:user@example.com>"
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   assert_true(
     rendered.contains(
       "<a href=\"mailto:user@example.com\">mailto:user@example.com</a>",
@@ -787,7 +794,7 @@ test "autolink mailto" {
 ///|
 test "autolink in sentence" {
   let body = "Visit <https://example.com> for more info."
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   assert_true(rendered.contains("<a href=\"https://example.com\">"))
   assert_true(rendered.contains("Visit"))
   assert_true(rendered.contains("for more info"))
@@ -798,7 +805,7 @@ test "non-autolink angle bracket stays literal" {
   // A bare < that doesn't look like an autolink should pass through as text
   // and get HTML-escaped in the renderer
   let body = "x < y"
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   assert_true(rendered.contains("&lt;"))
   assert_true(!rendered.contains("<a href="))
 }
@@ -806,7 +813,7 @@ test "non-autolink angle bracket stays literal" {
 ///|
 test "autolink unclosed falls back" {
   let body = "<https://example.com"
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   // No matching > — should be literal (HTML-escaped <)
   assert_true(!rendered.contains("<a href="))
   assert_true(rendered.contains("&lt;"))
@@ -817,7 +824,7 @@ test "autolink unclosed falls back" {
 ///|
 test "link text bold" {
   let body = "[**bold link**](https://example.com)"
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   assert_true(
     rendered.contains(
       "<a href=\"https://example.com\"><strong>bold link</strong></a>",
@@ -828,7 +835,7 @@ test "link text bold" {
 ///|
 test "link text italic" {
   let body = "[_italic link_](https://example.com)"
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   assert_true(
     rendered.contains(
       "<a href=\"https://example.com\"><em>italic link</em></a>",
@@ -839,7 +846,7 @@ test "link text italic" {
 ///|
 test "link text inline code" {
   let body = "[`code`](https://example.com)"
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   assert_true(
     rendered.contains("<a href=\"https://example.com\"><code>code</code></a>"),
   )
@@ -848,7 +855,7 @@ test "link text inline code" {
 ///|
 test "link text bold italic mixed" {
   let body = "[plain **bold** more](https://example.com)"
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   assert_true(
     rendered.contains(
       "<a href=\"https://example.com\">plain <strong>bold</strong> more</a>",
@@ -859,7 +866,7 @@ test "link text bold italic mixed" {
 ///|
 test "link text plain still works" {
   let body = "[plain text](https://example.com)"
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   assert_true(
     rendered.contains("<a href=\"https://example.com\">plain text</a>"),
   )
@@ -868,7 +875,7 @@ test "link text plain still works" {
 ///|
 test "link text html escaping preserved" {
   let body = "[a & b](https://example.com)"
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   assert_true(
     rendered.contains("<a href=\"https://example.com\">a &amp; b</a>"),
   )
@@ -879,7 +886,7 @@ test "toc heading with link text uses plain text" {
   // TOC extraction uses plain_text_inlines — a heading with a link should
   // produce the link's display text (not the url) as the anchor text.
   let body = "## See [the docs](https://example.com) here"
-  let entries = extract_table_of_contents(body, 2)
+  let entries = @markdown.extract_table_of_contents(body, 2)
   assert_eq(entries.length(), 1)
   assert_true(entries[0].text.contains("the docs"))
   assert_true(!entries[0].text.contains("https://"))
@@ -890,7 +897,7 @@ test "toc heading with link text uses plain text" {
 ///|
 test "inline math basic" {
   let body = "The formula $x^2 + y^2 = r^2$ is known."
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   assert_true(rendered.contains("<span class=\"math-inline\">"))
   assert_true(rendered.contains("\\(x^2 + y^2 = r^2\\)"))
   assert_true(rendered.contains("</span>"))
@@ -901,7 +908,7 @@ test "inline math basic" {
 ///|
 test "inline math content preserved" {
   let body = "Use $\\frac{a}{b}$ for fractions."
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   assert_true(rendered.contains("<span class=\"math-inline\">"))
   assert_true(rendered.contains("\\(\\frac{a}{b}\\)"))
 }
@@ -909,7 +916,7 @@ test "inline math content preserved" {
 ///|
 test "inline math html escaping" {
   let body = "We have $x < y$ and $a & b$."
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   assert_true(rendered.contains("&lt;"))
   assert_true(rendered.contains("&amp;"))
 }
@@ -917,7 +924,7 @@ test "inline math html escaping" {
 ///|
 test "inline math dollar not math when space follows" {
   let body = "costs $5 each"
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   // Dollar followed by digit is not preceded by space, so it could be parsed.
   // But "costs $ 5 each" with space after dollar should NOT be math.
   assert_true(!rendered.contains("<span class=\"math-inline\">"))
@@ -926,7 +933,7 @@ test "inline math dollar not math when space follows" {
 ///|
 test "inline math dollar space after opener not math" {
   let body = "costs $ 5 each"
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   assert_true(!rendered.contains("<span class=\"math-inline\">"))
   assert_true(rendered.contains("$ 5 each"))
 }
@@ -934,7 +941,7 @@ test "inline math dollar space after opener not math" {
 ///|
 test "inline math unclosed falls back" {
   let body = "just a $ sign"
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   assert_true(!rendered.contains("<span class=\"math-inline\">"))
   assert_true(rendered.contains("$"))
 }
@@ -942,7 +949,7 @@ test "inline math unclosed falls back" {
 ///|
 test "block math basic" {
   let body = "$$\n\\sum_{i=0}^{n} i\n$$"
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   assert_true(rendered.contains("<div class=\"math-block\">"))
   assert_true(rendered.contains("\\[\\sum_{i=0}^{n} i\\]"))
   assert_true(rendered.contains("</div>"))
@@ -951,7 +958,7 @@ test "block math basic" {
 ///|
 test "block math content preserved" {
   let body = "$$\n\\frac{1}{2} +\n\\frac{3}{4}\n$$"
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   assert_true(rendered.contains("<div class=\"math-block\">"))
   assert_true(rendered.contains("\\frac{1}{2}"))
   assert_true(rendered.contains("\\frac{3}{4}"))
@@ -960,7 +967,7 @@ test "block math content preserved" {
 ///|
 test "inline math in paragraph" {
   let body = "The equation $E = mc^2$ is famous."
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   assert_true(rendered.contains("<p>"))
   assert_true(rendered.contains("<span class=\"math-inline\">"))
   assert_true(rendered.contains("\\(E = mc^2\\)"))
@@ -969,7 +976,7 @@ test "inline math in paragraph" {
 ///|
 test "block math unclosed falls back to paragraph" {
   let body = "$$\nno closing"
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   // No closing $$ → treated as paragraph
   assert_true(!rendered.contains("<div class=\"math-block\">"))
   assert_true(rendered.contains("<p>"))
@@ -978,7 +985,7 @@ test "block math unclosed falls back to paragraph" {
 ///|
 test "block math with surrounding content" {
   let body = "Before.\n\n$$\nx^2\n$$\n\nAfter."
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   assert_true(rendered.contains("<p>Before.</p>"))
   assert_true(rendered.contains("<div class=\"math-block\">"))
   assert_true(rendered.contains("<p>After.</p>"))
@@ -990,14 +997,14 @@ test "inline math empty not math" {
   // parser skips double-dollar, treating first $ as literal then second $ also
   // as literal (since it sees $$ and skips). This tests the fallback behavior.
   let body = "a$$b"
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   // Should not produce math spans — $$ is block-level
   assert_true(!rendered.contains("<span class=\"math-inline\">"))
 }
 
 ///|
 test "inline html open tag passthrough" {
-  let rendered = render(
+  let rendered = @markdown.render(
     "Press <kbd>Ctrl</kbd>+<kbd>C</kbd> to copy.",
     empty_wl(),
   )
@@ -1007,27 +1014,33 @@ test "inline html open tag passthrough" {
 
 ///|
 test "inline html self-closing tag passthrough" {
-  let rendered = render("Line one.<br/>Line two.", empty_wl())
+  let rendered = @markdown.render("Line one.<br/>Line two.", empty_wl())
   assert_true(rendered.contains("<br/>"))
   assert_true(!rendered.contains("&lt;br/&gt;"))
 }
 
 ///|
 test "inline html mark tag passthrough" {
-  let rendered = render("This is <mark>highlighted</mark> text.", empty_wl())
+  let rendered = @markdown.render(
+    "This is <mark>highlighted</mark> text.",
+    empty_wl(),
+  )
   assert_true(rendered.contains("<mark>highlighted</mark>"))
 }
 
 ///|
 test "inline html sub and sup passthrough" {
-  let rendered = render("H<sub>2</sub>O and x<sup>2</sup>", empty_wl())
+  let rendered = @markdown.render(
+    "H<sub>2</sub>O and x<sup>2</sup>",
+    empty_wl(),
+  )
   assert_true(rendered.contains("<sub>2</sub>"))
   assert_true(rendered.contains("<sup>2</sup>"))
 }
 
 ///|
 test "inline html abbr with title passthrough" {
-  let rendered = render(
+  let rendered = @markdown.render(
     "The <abbr title=\"HyperText Markup Language\">HTML</abbr> spec.",
     empty_wl(),
   )
@@ -1038,33 +1051,36 @@ test "inline html abbr with title passthrough" {
 
 ///|
 test "inline html does not fire on autolinks" {
-  let rendered = render("Visit <https://example.com> today.", empty_wl())
+  let rendered = @markdown.render(
+    "Visit <https://example.com> today.",
+    empty_wl(),
+  )
   assert_true(rendered.contains("href=\"https://example.com\""))
 }
 
 ///|
 test "inline html in bold context passthrough" {
-  let rendered = render("**bold <kbd>key</kbd> text**", empty_wl())
+  let rendered = @markdown.render("**bold <kbd>key</kbd> text**", empty_wl())
   assert_true(rendered.contains("<strong>bold <kbd>key</kbd> text</strong>"))
 }
 
 ///|
 test "inline html angle bracket space still escapes" {
   // bare < not followed by a letter is not inline HTML — escapes normally
-  let rendered = render("a < 5", empty_wl())
+  let rendered = @markdown.render("a < 5", empty_wl())
   assert_true(rendered.contains("&lt;"))
 }
 
 ///|
 test "inline html close tag passthrough" {
-  let rendered = render("text</em>more", empty_wl())
+  let rendered = @markdown.render("text</em>more", empty_wl())
   assert_true(rendered.contains("</em>"))
   assert_true(!rendered.contains("&lt;/em&gt;"))
 }
 
 ///|
 test "inline html span with class passthrough" {
-  let rendered = render(
+  let rendered = @markdown.render(
     "A <span class=\"highlight\">word</span> here.",
     empty_wl(),
   )
@@ -1075,42 +1091,42 @@ test "inline html span with class passthrough" {
 
 ///|
 test "is_hrule accepts dash star underscore" {
-  assert_true(is_hrule("---"))
-  assert_true(is_hrule("***"))
-  assert_true(is_hrule("___"))
-  assert_true(is_hrule("  ---  "))
+  assert_true(@markdown.is_hrule("---"))
+  assert_true(@markdown.is_hrule("***"))
+  assert_true(@markdown.is_hrule("___"))
+  assert_true(@markdown.is_hrule("  ---  "))
 }
 
 ///|
 test "is_hrule rejects short and mixed" {
-  assert_true(!is_hrule("--"))
-  assert_true(!is_hrule("--text"))
-  assert_true(!is_hrule("-*-"))
-  assert_true(!is_hrule(""))
-  assert_true(!is_hrule("---text"))
+  assert_true(!@markdown.is_hrule("--"))
+  assert_true(!@markdown.is_hrule("--text"))
+  assert_true(!@markdown.is_hrule("-*-"))
+  assert_true(!@markdown.is_hrule(""))
+  assert_true(!@markdown.is_hrule("---text"))
 }
 
 // ── is_blockquote_line ────────────────────────────────────────────────────────
 
 ///|
 test "is_blockquote_line accepts prefixed lines" {
-  assert_true(is_blockquote_line("> text"))
-  assert_true(is_blockquote_line("> "))
-  assert_true(is_blockquote_line(">>"))
+  assert_true(@markdown.is_blockquote_line("> text"))
+  assert_true(@markdown.is_blockquote_line("> "))
+  assert_true(@markdown.is_blockquote_line(">>"))
 }
 
 ///|
 test "is_blockquote_line rejects non-prefixed" {
-  assert_true(!is_blockquote_line("text"))
-  assert_true(!is_blockquote_line(""))
-  assert_true(!is_blockquote_line(" > indented"))
+  assert_true(!@markdown.is_blockquote_line("text"))
+  assert_true(!@markdown.is_blockquote_line(""))
+  assert_true(!@markdown.is_blockquote_line(" > indented"))
 }
 
 // ── blockquote rendering ──────────────────────────────────────────────────────
 
 ///|
 test "blockquote basic renders blockquote with p" {
-  let rendered = render("> quoted text", empty_wl())
+  let rendered = @markdown.render("> quoted text", empty_wl())
   assert_true(rendered.contains("<blockquote>"))
   assert_true(rendered.contains("<p>quoted text</p>"))
   assert_true(rendered.contains("</blockquote>"))
@@ -1118,7 +1134,7 @@ test "blockquote basic renders blockquote with p" {
 
 ///|
 test "blockquote nested renders nested blockquotes" {
-  let rendered = render("> > inner", empty_wl())
+  let rendered = @markdown.render("> > inner", empty_wl())
   // Outer blockquote contains an inner blockquote
   assert_true(rendered.contains("<blockquote>"))
   // Two blockquote tags — outer and nested
@@ -1128,7 +1144,7 @@ test "blockquote nested renders nested blockquotes" {
 
 ///|
 test "blockquote with inline formatting" {
-  let rendered = render("> **bold** text", empty_wl())
+  let rendered = @markdown.render("> **bold** text", empty_wl())
   assert_true(rendered.contains("<blockquote>"))
   assert_true(rendered.contains("<strong>bold</strong>"))
 }
@@ -1137,14 +1153,14 @@ test "blockquote with inline formatting" {
 
 ///|
 test "hrule renders hr tag" {
-  let rendered = render("---", empty_wl())
+  let rendered = @markdown.render("---", empty_wl())
   assert_true(rendered.contains("<hr />"))
 }
 
 ///|
 test "hrule surrounded by paragraphs" {
   let body = "Before.\n\n---\n\nAfter."
-  let rendered = render(body, empty_wl())
+  let rendered = @markdown.render(body, empty_wl())
   assert_true(rendered.contains("<p>Before.</p>"))
   assert_true(rendered.contains("<hr />"))
   assert_true(rendered.contains("<p>After.</p>"))
@@ -1154,16 +1170,16 @@ test "hrule surrounded by paragraphs" {
 
 ///|
 test "fence_char_of returns correct char" {
-  assert_eq(fence_char_of("```"), '`')
-  assert_eq(fence_char_of("~~~"), '~')
-  assert_eq(fence_char_of(""), '`')
+  assert_eq(@markdown.fence_char_of("```"), '`')
+  assert_eq(@markdown.fence_char_of("~~~"), '~')
+  assert_eq(@markdown.fence_char_of(""), '`')
 }
 
 ///|
 test "is_fence_end matching and non-matching" {
-  assert_true(is_fence_end("```", '`'))
-  assert_true(is_fence_end("~~~", '~'))
-  assert_true(!is_fence_end("```", '~'))
-  assert_true(!is_fence_end("``", '`'))
-  assert_true(!is_fence_end("", '`'))
+  assert_true(@markdown.is_fence_end("```", '`'))
+  assert_true(@markdown.is_fence_end("~~~", '~'))
+  assert_true(!@markdown.is_fence_end("```", '~'))
+  assert_true(!@markdown.is_fence_end("``", '`'))
+  assert_true(!@markdown.is_fence_end("", '`'))
 }

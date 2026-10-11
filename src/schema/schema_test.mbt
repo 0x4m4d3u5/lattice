@@ -1,5 +1,5 @@
 ///|
-fn sample_schema() -> Schema {
+fn sample_schema() -> @schema.Schema {
   {
     name: "posts",
     fields: [
@@ -37,7 +37,7 @@ test "schema accepts matching field types and optional absence" {
     "+++\n" +
     "Body",
   )
-  let errors = validate(fm, sample_schema())
+  let errors = @schema.validate(fm, sample_schema())
   assert_eq(errors.length(), 0)
 }
 
@@ -46,7 +46,7 @@ test "schema reports required field missing" {
   let fm = parse_frontmatter_or_fail(
     "+++\n" + "published = true\n" + "tags = [\"moonbit\"]\n" + "+++\n",
   )
-  let errors = validate(fm, sample_schema())
+  let errors = @schema.validate(fm, sample_schema())
   assert_eq(errors.length(), 2)
   assert_eq(errors[0].field, "title")
   assert_eq(errors[0].message, "required field missing")
@@ -64,7 +64,7 @@ test "schema reports field type mismatches for scalars and arrays" {
     "tags = [\"ok\", 2]\n" +
     "+++\n",
   )
-  let errors = validate(fm, sample_schema())
+  let errors = @schema.validate(fm, sample_schema())
   assert_eq(errors.length(), 3)
   assert_eq(errors[0].field, "title")
   assert_true(errors[0].message.contains("expected String"))
@@ -85,7 +85,7 @@ test "schema optional field still validates inner type when present" {
     "summary = true\n" +
     "+++\n",
   )
-  let errors = validate(fm, sample_schema())
+  let errors = @schema.validate(fm, sample_schema())
   assert_eq(errors.length(), 1)
   assert_eq(errors[0].field, "summary")
   assert_true(errors[0].message.contains("expected String"))
@@ -93,7 +93,7 @@ test "schema optional field still validates inner type when present" {
 
 ///|
 test "schema accepts valid date field" {
-  let schema : Schema = {
+  let schema : @schema.Schema = {
     name: "posts",
     fields: [
       { name: "published_at", field_type: TDate(None, None), required: true },
@@ -102,13 +102,13 @@ test "schema accepts valid date field" {
   let fm = parse_frontmatter_or_fail(
     "+++\n" + "published_at = 2026-03-11\n" + "+++\n",
   )
-  let errors = validate(fm, schema)
+  let errors = @schema.validate(fm, schema)
   assert_eq(errors.length(), 0)
 }
 
 ///|
 test "schema rejects invalid date string format with typed error" {
-  let schema : Schema = {
+  let schema : @schema.Schema = {
     name: "posts",
     fields: [
       { name: "published_at", field_type: TDate(None, None), required: true },
@@ -117,7 +117,7 @@ test "schema rejects invalid date string format with typed error" {
   let fm = parse_frontmatter_or_fail(
     "+++\n" + "published_at = 2026/03/11\n" + "+++\n",
   )
-  let errors = validate(fm, schema)
+  let errors = @schema.validate(fm, schema)
   assert_eq(errors.length(), 1)
   assert_eq(errors[0].field, "published_at")
   assert_true(errors[0].message.contains("expected Date"))
@@ -125,7 +125,7 @@ test "schema rejects invalid date string format with typed error" {
 
 ///|
 test "schema optional date field handles absence valid value and non-date error" {
-  let schema : Schema = {
+  let schema : @schema.Schema = {
     name: "posts",
     fields: [
       {
@@ -137,19 +137,19 @@ test "schema optional date field handles absence valid value and non-date error"
   }
 
   let absent = parse_frontmatter_or_fail("+++\n+++\n")
-  let absent_errors = validate(absent, schema)
+  let absent_errors = @schema.validate(absent, schema)
   assert_eq(absent_errors.length(), 0)
 
   let present_valid = parse_frontmatter_or_fail(
     "+++\n" + "published_at = 2026-03-11\n" + "+++\n",
   )
-  let valid_errors = validate(present_valid, schema)
+  let valid_errors = @schema.validate(present_valid, schema)
   assert_eq(valid_errors.length(), 0)
 
   let present_invalid = parse_frontmatter_or_fail(
     "+++\n" + "published_at = false\n" + "+++\n",
   )
-  let invalid_errors = validate(present_invalid, schema)
+  let invalid_errors = @schema.validate(present_invalid, schema)
   assert_eq(invalid_errors.length(), 1)
   assert_eq(invalid_errors[0].field, "published_at")
   assert_true(invalid_errors[0].message.contains("expected Date"))
@@ -166,7 +166,7 @@ test "schema rejects unrecognized field not in schema" {
     "typo_field = \"should error\"\n" +
     "+++\n",
   )
-  let errors = validate(fm, sample_schema())
+  let errors = @schema.validate(fm, sample_schema())
   assert_eq(errors.length(), 1)
   assert_eq(errors[0].field, "typo_field")
   assert_true(errors[0].message.contains("unrecognized"))
@@ -184,13 +184,13 @@ test "schema accepts all fields when every key matches schema" {
     "summary = \"A complete frontmatter\"\n" +
     "+++\n",
   )
-  let errors = validate(fm, sample_schema())
+  let errors = @schema.validate(fm, sample_schema())
   assert_eq(errors.length(), 0)
 }
 
 ///|
 test "TEnum accepts valid values" {
-  let schema : Schema = {
+  let schema : @schema.Schema = {
     name: "posts",
     fields: [
       {
@@ -203,13 +203,13 @@ test "TEnum accepts valid values" {
   let fm_valid = parse_frontmatter_or_fail(
     "+++\n" + "status = \"published\"\n" + "+++\n",
   )
-  let errors = validate(fm_valid, schema)
+  let errors = @schema.validate(fm_valid, schema)
   assert_eq(errors.length(), 0)
 }
 
 ///|
 test "TEnum rejects invalid values" {
-  let schema : Schema = {
+  let schema : @schema.Schema = {
     name: "posts",
     fields: [
       {
@@ -222,7 +222,7 @@ test "TEnum rejects invalid values" {
   let fm_invalid = parse_frontmatter_or_fail(
     "+++\n" + "status = \"wip\"\n" + "+++\n",
   )
-  let errors = validate(fm_invalid, schema)
+  let errors = @schema.validate(fm_invalid, schema)
   assert_eq(errors.length(), 1)
   assert_eq(errors[0].field, "status")
   assert_eq(
@@ -233,7 +233,7 @@ test "TEnum rejects invalid values" {
 
 ///|
 test "TOptional(TEnum) accepts absent field" {
-  let schema : Schema = {
+  let schema : @schema.Schema = {
     name: "posts",
     fields: [
       {
@@ -244,13 +244,13 @@ test "TOptional(TEnum) accepts absent field" {
     ],
   }
   let fm_absent = parse_frontmatter_or_fail("+++\n+++\n")
-  let errors = validate(fm_absent, schema)
+  let errors = @schema.validate(fm_absent, schema)
   assert_eq(errors.length(), 0)
 }
 
 ///|
 test "TOptional(TEnum) accepts valid value" {
-  let schema : Schema = {
+  let schema : @schema.Schema = {
     name: "posts",
     fields: [
       {
@@ -263,13 +263,13 @@ test "TOptional(TEnum) accepts valid value" {
   let fm_valid = parse_frontmatter_or_fail(
     "+++\n" + "status = \"draft\"\n" + "+++\n",
   )
-  let errors = validate(fm_valid, schema)
+  let errors = @schema.validate(fm_valid, schema)
   assert_eq(errors.length(), 0)
 }
 
 ///|
 test "TOptional(TEnum) rejects invalid value" {
-  let schema : Schema = {
+  let schema : @schema.Schema = {
     name: "posts",
     fields: [
       {
@@ -282,7 +282,7 @@ test "TOptional(TEnum) rejects invalid value" {
   let fm_invalid = parse_frontmatter_or_fail(
     "+++\n" + "status = \"archived\"\n" + "+++\n",
   )
-  let errors = validate(fm_invalid, schema)
+  let errors = @schema.validate(fm_invalid, schema)
   assert_eq(errors.length(), 1)
   assert_eq(errors[0].field, "status")
   assert_eq(
@@ -293,7 +293,7 @@ test "TOptional(TEnum) rejects invalid value" {
 
 ///|
 test "TEnum rejects non-string values" {
-  let schema : Schema = {
+  let schema : @schema.Schema = {
     name: "posts",
     fields: [
       {
@@ -306,7 +306,7 @@ test "TEnum rejects non-string values" {
   let fm_non_string = parse_frontmatter_or_fail(
     "+++\n" + "status = 123\n" + "+++\n",
   )
-  let errors = validate(fm_non_string, schema)
+  let errors = @schema.validate(fm_non_string, schema)
   assert_eq(errors.length(), 1)
   assert_eq(errors[0].field, "status")
   assert_true(errors[0].message.contains("expected Enum"))
@@ -314,7 +314,7 @@ test "TEnum rejects non-string values" {
 
 ///|
 test "TEnum in full schema validation" {
-  let schema : Schema = {
+  let schema : @schema.Schema = {
     name: "posts",
     fields: [
       { name: "title", field_type: TString(None, None), required: true },
@@ -337,18 +337,18 @@ test "TEnum in full schema validation" {
     "priority = \"high\"\n" +
     "+++\n",
   )
-  let errors = validate(fm, schema)
+  let errors = @schema.validate(fm, schema)
   assert_eq(errors.length(), 0)
 }
 
 ///|
 test "TEnum empty allowed set always fails" {
-  let schema : Schema = {
+  let schema : @schema.Schema = {
     name: "posts",
     fields: [{ name: "status", field_type: TEnum([]), required: true }],
   }
   let fm = parse_frontmatter_or_fail("+++\n" + "status = \"any\"\n" + "+++\n")
-  let errors = validate(fm, schema)
+  let errors = @schema.validate(fm, schema)
   assert_eq(errors.length(), 1)
   assert_eq(errors[0].field, "status")
   assert_eq(errors[0].message, "expected one of Enum[], got \"any\"")
@@ -356,53 +356,53 @@ test "TEnum empty allowed set always fails" {
 
 ///|
 test "TUrl accepts https URL" {
-  let schema : Schema = {
+  let schema : @schema.Schema = {
     name: "posts",
     fields: [{ name: "canonical_url", field_type: TUrl, required: true }],
   }
   let fm = parse_frontmatter_or_fail(
     "+++\n" + "canonical_url = \"https://example.com\"\n" + "+++\n",
   )
-  let errors = validate(fm, schema)
+  let errors = @schema.validate(fm, schema)
   assert_eq(errors.length(), 0)
 }
 
 ///|
 test "TUrl accepts http URL" {
-  let schema : Schema = {
+  let schema : @schema.Schema = {
     name: "posts",
     fields: [{ name: "canonical_url", field_type: TUrl, required: true }],
   }
   let fm = parse_frontmatter_or_fail(
     "+++\n" + "canonical_url = \"http://example.com/path\"\n" + "+++\n",
   )
-  let errors = validate(fm, schema)
+  let errors = @schema.validate(fm, schema)
   assert_eq(errors.length(), 0)
 }
 
 ///|
 test "TUrl accepts relative URL" {
-  let schema : Schema = {
+  let schema : @schema.Schema = {
     name: "posts",
     fields: [{ name: "canonical_url", field_type: TUrl, required: true }],
   }
   let fm = parse_frontmatter_or_fail(
     "+++\n" + "canonical_url = \"/relative/path\"\n" + "+++\n",
   )
-  let errors = validate(fm, schema)
+  let errors = @schema.validate(fm, schema)
   assert_eq(errors.length(), 0)
 }
 
 ///|
 test "TUrl rejects empty string" {
-  let schema : Schema = {
+  let schema : @schema.Schema = {
     name: "posts",
     fields: [{ name: "canonical_url", field_type: TUrl, required: true }],
   }
   let fm = parse_frontmatter_or_fail(
     "+++\n" + "canonical_url = \"\"\n" + "+++\n",
   )
-  let errors = validate(fm, schema)
+  let errors = @schema.validate(fm, schema)
   assert_eq(errors.length(), 1)
   assert_eq(errors[0].field, "canonical_url")
   assert_true(errors[0].message.contains("expected Url"))
@@ -410,14 +410,14 @@ test "TUrl rejects empty string" {
 
 ///|
 test "TUrl rejects plain text" {
-  let schema : Schema = {
+  let schema : @schema.Schema = {
     name: "posts",
     fields: [{ name: "canonical_url", field_type: TUrl, required: true }],
   }
   let fm = parse_frontmatter_or_fail(
     "+++\n" + "canonical_url = \"not-a-url\"\n" + "+++\n",
   )
-  let errors = validate(fm, schema)
+  let errors = @schema.validate(fm, schema)
   assert_eq(errors.length(), 1)
   assert_eq(errors[0].field, "canonical_url")
   assert_true(errors[0].message.contains("expected Url"))
@@ -425,14 +425,14 @@ test "TUrl rejects plain text" {
 
 ///|
 test "TUrl rejects ftp URL" {
-  let schema : Schema = {
+  let schema : @schema.Schema = {
     name: "posts",
     fields: [{ name: "canonical_url", field_type: TUrl, required: true }],
   }
   let fm = parse_frontmatter_or_fail(
     "+++\n" + "canonical_url = \"ftp://example.com\"\n" + "+++\n",
   )
-  let errors = validate(fm, schema)
+  let errors = @schema.validate(fm, schema)
   assert_eq(errors.length(), 1)
   assert_eq(errors[0].field, "canonical_url")
   assert_true(errors[0].message.contains("expected Url"))
@@ -440,18 +440,18 @@ test "TUrl rejects ftp URL" {
 
 ///|
 test "TOptional(TUrl) absent field produces no error" {
-  let schema : Schema = {
+  let schema : @schema.Schema = {
     name: "posts",
     fields: [{ name: "og_url", field_type: TOptional(TUrl), required: false }],
   }
   let fm = parse_frontmatter_or_fail("+++\n+++\n")
-  let errors = validate(fm, schema)
+  let errors = @schema.validate(fm, schema)
   assert_eq(errors.length(), 0)
 }
 
 ///|
 test "schema with canonical_url:Url rejects invalid value" {
-  let schema : Schema = {
+  let schema : @schema.Schema = {
     name: "posts",
     fields: [
       { name: "title", field_type: TString(None, None), required: true },
@@ -464,7 +464,7 @@ test "schema with canonical_url:Url rejects invalid value" {
     "canonical_url = \"not-valid\"\n" +
     "+++\n",
   )
-  let errors = validate(fm, schema)
+  let errors = @schema.validate(fm, schema)
   assert_eq(errors.length(), 1)
   assert_eq(errors[0].field, "canonical_url")
   assert_true(errors[0].message.contains("expected Url"))
@@ -472,66 +472,66 @@ test "schema with canonical_url:Url rejects invalid value" {
 
 ///|
 test "TSlug accepts valid slug" {
-  let schema : Schema = {
+  let schema : @schema.Schema = {
     name: "posts",
     fields: [{ name: "category", field_type: TSlug, required: true }],
   }
   let fm = parse_frontmatter_or_fail(
     "+++\n" + "category = \"my-category\"\n" + "+++\n",
   )
-  let errors = validate(fm, schema)
+  let errors = @schema.validate(fm, schema)
   assert_eq(errors.length(), 0)
 }
 
 ///|
 test "TSlug accepts simple lowercase slug" {
-  let schema : Schema = {
+  let schema : @schema.Schema = {
     name: "posts",
     fields: [{ name: "category", field_type: TSlug, required: true }],
   }
   let fm = parse_frontmatter_or_fail(
     "+++\n" + "category = \"hello\"\n" + "+++\n",
   )
-  let errors = validate(fm, schema)
+  let errors = @schema.validate(fm, schema)
   assert_eq(errors.length(), 0)
 }
 
 ///|
 test "TSlug accepts numeric slug" {
-  let schema : Schema = {
+  let schema : @schema.Schema = {
     name: "posts",
     fields: [{ name: "category", field_type: TSlug, required: true }],
   }
   let fm = parse_frontmatter_or_fail(
     "+++\n" + "category = \"2026\"\n" + "+++\n",
   )
-  let errors = validate(fm, schema)
+  let errors = @schema.validate(fm, schema)
   assert_eq(errors.length(), 0)
 }
 
 ///|
 test "TSlug accepts hyphenated slug" {
-  let schema : Schema = {
+  let schema : @schema.Schema = {
     name: "posts",
     fields: [{ name: "category", field_type: TSlug, required: true }],
   }
   let fm = parse_frontmatter_or_fail(
     "+++\n" + "category = \"my-cool-post-2026\"\n" + "+++\n",
   )
-  let errors = validate(fm, schema)
+  let errors = @schema.validate(fm, schema)
   assert_eq(errors.length(), 0)
 }
 
 ///|
 test "TSlug rejects slug with spaces" {
-  let schema : Schema = {
+  let schema : @schema.Schema = {
     name: "posts",
     fields: [{ name: "category", field_type: TSlug, required: true }],
   }
   let fm = parse_frontmatter_or_fail(
     "+++\n" + "category = \"not a slug\"\n" + "+++\n",
   )
-  let errors = validate(fm, schema)
+  let errors = @schema.validate(fm, schema)
   assert_eq(errors.length(), 1)
   assert_eq(errors[0].field, "category")
   assert_true(
@@ -543,12 +543,12 @@ test "TSlug rejects slug with spaces" {
 
 ///|
 test "TSlug rejects empty string" {
-  let schema : Schema = {
+  let schema : @schema.Schema = {
     name: "posts",
     fields: [{ name: "category", field_type: TSlug, required: true }],
   }
   let fm = parse_frontmatter_or_fail("+++\n" + "category = \"\"\n" + "+++\n")
-  let errors = validate(fm, schema)
+  let errors = @schema.validate(fm, schema)
   assert_eq(errors.length(), 1)
   assert_eq(errors[0].field, "category")
   assert_true(
@@ -560,14 +560,14 @@ test "TSlug rejects empty string" {
 
 ///|
 test "TSlug rejects uppercase letters" {
-  let schema : Schema = {
+  let schema : @schema.Schema = {
     name: "posts",
     fields: [{ name: "category", field_type: TSlug, required: true }],
   }
   let fm = parse_frontmatter_or_fail(
     "+++\n" + "category = \"My-Post\"\n" + "+++\n",
   )
-  let errors = validate(fm, schema)
+  let errors = @schema.validate(fm, schema)
   assert_eq(errors.length(), 1)
   assert_eq(errors[0].field, "category")
   assert_true(
@@ -579,25 +579,25 @@ test "TSlug rejects uppercase letters" {
 
 ///|
 test "TSlug rejects special characters" {
-  let schema : Schema = {
+  let schema : @schema.Schema = {
     name: "posts",
     fields: [{ name: "category", field_type: TSlug, required: true }],
   }
   let fm = parse_frontmatter_or_fail(
     "+++\n" + "category = \"hello_world!\"\n" + "+++\n",
   )
-  let errors = validate(fm, schema)
+  let errors = @schema.validate(fm, schema)
   assert_eq(errors.length(), 1)
 }
 
 ///|
 test "TSlug rejects non-string values" {
-  let schema : Schema = {
+  let schema : @schema.Schema = {
     name: "posts",
     fields: [{ name: "category", field_type: TSlug, required: true }],
   }
   let fm = parse_frontmatter_or_fail("+++\n" + "category = 42\n" + "+++\n")
-  let errors = validate(fm, schema)
+  let errors = @schema.validate(fm, schema)
   assert_eq(errors.length(), 1)
   assert_eq(errors[0].field, "category")
   assert_true(errors[0].message.contains("expected Slug"))
@@ -605,20 +605,20 @@ test "TSlug rejects non-string values" {
 
 ///|
 test "TOptional(TSlug) absent field produces no error" {
-  let schema : Schema = {
+  let schema : @schema.Schema = {
     name: "posts",
     fields: [
       { name: "category", field_type: TOptional(TSlug), required: false },
     ],
   }
   let fm = parse_frontmatter_or_fail("+++\n+++\n")
-  let errors = validate(fm, schema)
+  let errors = @schema.validate(fm, schema)
   assert_eq(errors.length(), 0)
 }
 
 ///|
 test "TOptional(TSlug) accepts valid slug when present" {
-  let schema : Schema = {
+  let schema : @schema.Schema = {
     name: "posts",
     fields: [
       { name: "category", field_type: TOptional(TSlug), required: false },
@@ -627,7 +627,7 @@ test "TOptional(TSlug) accepts valid slug when present" {
   let fm = parse_frontmatter_or_fail(
     "+++\n" + "category = \"tutorial\"\n" + "+++\n",
   )
-  let errors = validate(fm, schema)
+  let errors = @schema.validate(fm, schema)
   assert_eq(errors.length(), 0)
 }
 
@@ -635,25 +635,25 @@ test "TOptional(TSlug) accepts valid slug when present" {
 
 ///|
 test "TRef structural validation accepts valid slug string" {
-  let schema : Schema = {
+  let schema : @schema.Schema = {
     name: "posts",
     fields: [{ name: "related_post", field_type: TRef(None), required: true }],
   }
   let fm = parse_frontmatter_or_fail(
     "+++\n" + "related_post = \"my-post\"\n" + "+++\n",
   )
-  let errors = validate(fm, schema)
+  let errors = @schema.validate(fm, schema)
   assert_eq(errors.length(), 0)
 }
 
 ///|
 test "TRef structural validation rejects non-string values" {
-  let schema : Schema = {
+  let schema : @schema.Schema = {
     name: "posts",
     fields: [{ name: "related_post", field_type: TRef(None), required: true }],
   }
   let fm = parse_frontmatter_or_fail("+++\n" + "related_post = 42\n" + "+++\n")
-  let errors = validate(fm, schema)
+  let errors = @schema.validate(fm, schema)
   assert_eq(errors.length(), 1)
   assert_eq(errors[0].field, "related_post")
   assert_true(errors[0].message.contains("Ref"))
@@ -661,14 +661,14 @@ test "TRef structural validation rejects non-string values" {
 
 ///|
 test "TRef structural validation rejects invalid slug format" {
-  let schema : Schema = {
+  let schema : @schema.Schema = {
     name: "posts",
     fields: [{ name: "related_post", field_type: TRef(None), required: true }],
   }
   let fm = parse_frontmatter_or_fail(
     "+++\n" + "related_post = \"Not A Slug\"\n" + "+++\n",
   )
-  let errors = validate(fm, schema)
+  let errors = @schema.validate(fm, schema)
   assert_eq(errors.length(), 1)
   assert_eq(errors[0].field, "related_post")
   assert_true(errors[0].message.contains("expected a valid slug reference"))
@@ -676,7 +676,7 @@ test "TRef structural validation rejects invalid slug format" {
 
 ///|
 test "TRef with collection constraint structural validation accepts valid slug" {
-  let schema : Schema = {
+  let schema : @schema.Schema = {
     name: "posts",
     fields: [
       { name: "related_post", field_type: TRef(Some("blog")), required: true },
@@ -685,13 +685,13 @@ test "TRef with collection constraint structural validation accepts valid slug" 
   let fm = parse_frontmatter_or_fail(
     "+++\n" + "related_post = \"my-post\"\n" + "+++\n",
   )
-  let errors = validate(fm, schema)
+  let errors = @schema.validate(fm, schema)
   assert_eq(errors.length(), 0)
 }
 
 ///|
 test "TOptional(TRef) absent field produces no error" {
-  let schema : Schema = {
+  let schema : @schema.Schema = {
     name: "posts",
     fields: [
       {
@@ -702,37 +702,37 @@ test "TOptional(TRef) absent field produces no error" {
     ],
   }
   let fm = parse_frontmatter_or_fail("+++\n+++\n")
-  let errors = validate(fm, schema)
+  let errors = @schema.validate(fm, schema)
   assert_eq(errors.length(), 0)
 }
 
 ///|
 test "validate_refs: slug present in page index produces no error" {
-  let schema : Schema = {
+  let schema : @schema.Schema = {
     name: "posts",
     fields: [{ name: "related_post", field_type: TRef(None), required: true }],
   }
   let fm = parse_frontmatter_or_fail(
     "+++\n" + "related_post = \"my-post\"\n" + "+++\n",
   )
-  let page_index : Map[String, String] = Map::new()
+  let page_index : Map[String, String] = Map([])
   page_index.set("my-post", "blog")
-  let errors = validate_refs(fm, schema, page_index)
+  let errors = @schema.validate_refs(fm, schema, page_index)
   assert_eq(errors.length(), 0)
 }
 
 ///|
 test "validate_refs: slug absent from page index produces error" {
-  let schema : Schema = {
+  let schema : @schema.Schema = {
     name: "posts",
     fields: [{ name: "related_post", field_type: TRef(None), required: true }],
   }
   let fm = parse_frontmatter_or_fail(
     "+++\n" + "related_post = \"missing-post\"\n" + "+++\n",
   )
-  let page_index : Map[String, String] = Map::new()
+  let page_index : Map[String, String] = Map([])
   page_index.set("other-post", "blog")
-  let errors = validate_refs(fm, schema, page_index)
+  let errors = @schema.validate_refs(fm, schema, page_index)
   assert_eq(errors.length(), 1)
   assert_eq(errors[0].field, "related_post")
   assert_true(
@@ -742,7 +742,7 @@ test "validate_refs: slug absent from page index produces error" {
 
 ///|
 test "validate_refs: collection constraint satisfied produces no error" {
-  let schema : Schema = {
+  let schema : @schema.Schema = {
     name: "posts",
     fields: [
       { name: "related_post", field_type: TRef(Some("blog")), required: true },
@@ -751,15 +751,15 @@ test "validate_refs: collection constraint satisfied produces no error" {
   let fm = parse_frontmatter_or_fail(
     "+++\n" + "related_post = \"my-post\"\n" + "+++\n",
   )
-  let page_index : Map[String, String] = Map::new()
+  let page_index : Map[String, String] = Map([])
   page_index.set("my-post", "blog")
-  let errors = validate_refs(fm, schema, page_index)
+  let errors = @schema.validate_refs(fm, schema, page_index)
   assert_eq(errors.length(), 0)
 }
 
 ///|
 test "validate_refs: slug in wrong collection produces error" {
-  let schema : Schema = {
+  let schema : @schema.Schema = {
     name: "posts",
     fields: [
       { name: "related_post", field_type: TRef(Some("blog")), required: true },
@@ -768,9 +768,9 @@ test "validate_refs: slug in wrong collection produces error" {
   let fm = parse_frontmatter_or_fail(
     "+++\n" + "related_post = \"my-page\"\n" + "+++\n",
   )
-  let page_index : Map[String, String] = Map::new()
+  let page_index : Map[String, String] = Map([])
   page_index.set("my-page", "pages")
-  let errors = validate_refs(fm, schema, page_index)
+  let errors = @schema.validate_refs(fm, schema, page_index)
   assert_eq(errors.length(), 1)
   assert_eq(errors[0].field, "related_post")
   assert_true(
@@ -780,7 +780,7 @@ test "validate_refs: slug in wrong collection produces error" {
 
 ///|
 test "validate_refs: non-TRef fields are ignored" {
-  let schema : Schema = {
+  let schema : @schema.Schema = {
     name: "posts",
     fields: [
       { name: "title", field_type: TString(None, None), required: true },
@@ -793,15 +793,15 @@ test "validate_refs: non-TRef fields are ignored" {
     "related_post = \"existing-slug\"\n" +
     "+++\n",
   )
-  let page_index : Map[String, String] = Map::new()
+  let page_index : Map[String, String] = Map([])
   page_index.set("existing-slug", "blog")
-  let errors = validate_refs(fm, schema, page_index)
+  let errors = @schema.validate_refs(fm, schema, page_index)
   assert_eq(errors.length(), 0)
 }
 
 ///|
 test "validate_refs: TOptional(TRef) absent field produces no error" {
-  let schema : Schema = {
+  let schema : @schema.Schema = {
     name: "posts",
     fields: [
       {
@@ -812,15 +812,15 @@ test "validate_refs: TOptional(TRef) absent field produces no error" {
     ],
   }
   let fm = parse_frontmatter_or_fail("+++\n+++\n")
-  let page_index : Map[String, String] = Map::new()
+  let page_index : Map[String, String] = Map([])
   page_index.set("some-post", "blog")
-  let errors = validate_refs(fm, schema, page_index)
+  let errors = @schema.validate_refs(fm, schema, page_index)
   assert_eq(errors.length(), 0)
 }
 
 ///|
 test "validate_refs: multiple TRef fields report all broken refs" {
-  let schema : Schema = {
+  let schema : @schema.Schema = {
     name: "posts",
     fields: [
       { name: "related_post", field_type: TRef(None), required: true },
@@ -833,8 +833,8 @@ test "validate_refs: multiple TRef fields report all broken refs" {
     "featured_post = \"missing-b\"\n" +
     "+++\n",
   )
-  let page_index : Map[String, String] = Map::new()
-  let errors = validate_refs(fm, schema, page_index)
+  let page_index : Map[String, String] = Map([])
+  let errors = @schema.validate_refs(fm, schema, page_index)
   assert_eq(errors.length(), 2)
   assert_eq(errors[0].field, "related_post")
   assert_true(errors[0].message.contains("references unknown slug 'missing-a'"))
@@ -845,28 +845,28 @@ test "validate_refs: multiple TRef fields report all broken refs" {
 ///|
 test "field_type_name reports Ref for TRef(None)" {
   // Verify TRef(None) structural validation passes with a valid slug string
-  let schema : Schema = {
+  let schema : @schema.Schema = {
     name: "posts",
     fields: [{ name: "related_post", field_type: TRef(None), required: true }],
   }
   let fm = parse_frontmatter_or_fail(
     "+++\n" + "related_post = \"valid-slug\"\n" + "+++\n",
   )
-  let errors = validate(fm, schema)
+  let errors = @schema.validate(fm, schema)
   assert_eq(errors.length(), 0)
 }
 
 ///|
 test "field_type_name reports Ref[collection] for TRef(Some)" {
   // Verify TRef(Some("blog")) structural validation rejects non-string
-  let schema : Schema = {
+  let schema : @schema.Schema = {
     name: "posts",
     fields: [
       { name: "related_post", field_type: TRef(Some("blog")), required: true },
     ],
   }
   let fm = parse_frontmatter_or_fail("+++\n" + "related_post = 42\n" + "+++\n")
-  let errors = validate(fm, schema)
+  let errors = @schema.validate(fm, schema)
   assert_eq(errors.length(), 1)
   assert_eq(errors[0].field, "related_post")
 }
@@ -875,7 +875,7 @@ test "field_type_name reports Ref[collection] for TRef(Some)" {
 
 ///|
 test "validate_refs: TArray(TRef(None)) all slugs present produces no error" {
-  let schema : Schema = {
+  let schema : @schema.Schema = {
     name: "posts",
     fields: [
       { name: "related_posts", field_type: TArray(TRef(None)), required: true },
@@ -884,17 +884,17 @@ test "validate_refs: TArray(TRef(None)) all slugs present produces no error" {
   let fm = parse_frontmatter_or_fail(
     "+++\n" + "related_posts = [\"post-a\", \"post-b\", \"post-c\"]\n" + "+++\n",
   )
-  let page_index : Map[String, String] = Map::new()
+  let page_index : Map[String, String] = Map([])
   page_index.set("post-a", "blog")
   page_index.set("post-b", "blog")
   page_index.set("post-c", "blog")
-  let errors = validate_refs(fm, schema, page_index)
+  let errors = @schema.validate_refs(fm, schema, page_index)
   assert_eq(errors.length(), 0)
 }
 
 ///|
 test "validate_refs: TArray(TRef(None)) one slug missing produces one error" {
-  let schema : Schema = {
+  let schema : @schema.Schema = {
     name: "posts",
     fields: [
       { name: "related_posts", field_type: TArray(TRef(None)), required: true },
@@ -905,10 +905,10 @@ test "validate_refs: TArray(TRef(None)) one slug missing produces one error" {
     "related_posts = [\"post-a\", \"missing-post\", \"post-c\"]\n" +
     "+++\n",
   )
-  let page_index : Map[String, String] = Map::new()
+  let page_index : Map[String, String] = Map([])
   page_index.set("post-a", "blog")
   page_index.set("post-c", "blog")
-  let errors = validate_refs(fm, schema, page_index)
+  let errors = @schema.validate_refs(fm, schema, page_index)
   assert_eq(errors.length(), 1)
   assert_eq(errors[0].field, "related_posts")
   assert_true(
@@ -920,7 +920,7 @@ test "validate_refs: TArray(TRef(None)) one slug missing produces one error" {
 
 ///|
 test "validate_refs: TArray(TRef(Some)) slug in wrong collection produces error" {
-  let schema : Schema = {
+  let schema : @schema.Schema = {
     name: "posts",
     fields: [
       {
@@ -933,10 +933,10 @@ test "validate_refs: TArray(TRef(Some)) slug in wrong collection produces error"
   let fm = parse_frontmatter_or_fail(
     "+++\n" + "related_posts = [\"post-a\", \"wrong-page\"]\n" + "+++\n",
   )
-  let page_index : Map[String, String] = Map::new()
+  let page_index : Map[String, String] = Map([])
   page_index.set("post-a", "blog")
   page_index.set("wrong-page", "pages")
-  let errors = validate_refs(fm, schema, page_index)
+  let errors = @schema.validate_refs(fm, schema, page_index)
   assert_eq(errors.length(), 1)
   assert_eq(errors[0].field, "related_posts")
   assert_true(
@@ -948,7 +948,7 @@ test "validate_refs: TArray(TRef(Some)) slug in wrong collection produces error"
 
 ///|
 test "validate_refs: TOptional(TArray(TRef(None))) absent field produces no error" {
-  let schema : Schema = {
+  let schema : @schema.Schema = {
     name: "posts",
     fields: [
       {
@@ -959,29 +959,29 @@ test "validate_refs: TOptional(TArray(TRef(None))) absent field produces no erro
     ],
   }
   let fm = parse_frontmatter_or_fail("+++\n+++\n")
-  let page_index : Map[String, String] = Map::new()
+  let page_index : Map[String, String] = Map([])
   page_index.set("some-post", "blog")
-  let errors = validate_refs(fm, schema, page_index)
+  let errors = @schema.validate_refs(fm, schema, page_index)
   assert_eq(errors.length(), 0)
 }
 
 ///|
 test "validate_refs: TArray(TRef(None)) empty array produces no error" {
-  let schema : Schema = {
+  let schema : @schema.Schema = {
     name: "posts",
     fields: [
       { name: "related_posts", field_type: TArray(TRef(None)), required: false },
     ],
   }
   let fm = parse_frontmatter_or_fail("+++\n" + "related_posts = []\n" + "+++\n")
-  let page_index : Map[String, String] = Map::new()
-  let errors = validate_refs(fm, schema, page_index)
+  let page_index : Map[String, String] = Map([])
+  let errors = @schema.validate_refs(fm, schema, page_index)
   assert_eq(errors.length(), 0)
 }
 
 ///|
 test "validate_refs: TArray(TRef(None)) all slugs missing produces errors for each" {
-  let schema : Schema = {
+  let schema : @schema.Schema = {
     name: "posts",
     fields: [
       { name: "related_posts", field_type: TArray(TRef(None)), required: true },
@@ -992,8 +992,8 @@ test "validate_refs: TArray(TRef(None)) all slugs missing produces errors for ea
     "related_posts = [\"missing-a\", \"missing-b\", \"missing-c\"]\n" +
     "+++\n",
   )
-  let page_index : Map[String, String] = Map::new()
-  let errors = validate_refs(fm, schema, page_index)
+  let page_index : Map[String, String] = Map([])
+  let errors = @schema.validate_refs(fm, schema, page_index)
   assert_eq(errors.length(), 3)
   assert_true(
     errors[0].message.contains(
@@ -1016,52 +1016,52 @@ test "validate_refs: TArray(TRef(None)) all slugs missing produces errors for ea
 
 ///|
 test "TInt(None, None) validates any integer" {
-  let schema : Schema = {
+  let schema : @schema.Schema = {
     name: "posts",
     fields: [{ name: "count", field_type: TInt(None, None), required: true }],
   }
   let fm_neg = parse_frontmatter_or_fail("+++\n" + "count = -999\n" + "+++\n")
   let fm_zero = parse_frontmatter_or_fail("+++\n" + "count = 0\n" + "+++\n")
   let fm_pos = parse_frontmatter_or_fail("+++\n" + "count = 999\n" + "+++\n")
-  assert_eq(validate(fm_neg, schema).length(), 0)
-  assert_eq(validate(fm_zero, schema).length(), 0)
-  assert_eq(validate(fm_pos, schema).length(), 0)
+  assert_eq(@schema.validate(fm_neg, schema).length(), 0)
+  assert_eq(@schema.validate(fm_zero, schema).length(), 0)
+  assert_eq(@schema.validate(fm_pos, schema).length(), 0)
 }
 
 ///|
 test "TInt(Some(1), None) rejects 0 and accepts 1 and above" {
-  let schema : Schema = {
+  let schema : @schema.Schema = {
     name: "posts",
     fields: [
       { name: "priority", field_type: TInt(Some(1), None), required: true },
     ],
   }
   let fm_zero = parse_frontmatter_or_fail("+++\n" + "priority = 0\n" + "+++\n")
-  let errors_zero = validate(fm_zero, schema)
+  let errors_zero = @schema.validate(fm_zero, schema)
   assert_eq(errors_zero.length(), 1)
   assert_eq(errors_zero[0].field, "priority")
   assert_true(errors_zero[0].message.contains("expected Int in range [1, ∞)"))
   assert_true(errors_zero[0].message.contains("got: 0"))
 
   let fm_one = parse_frontmatter_or_fail("+++\n" + "priority = 1\n" + "+++\n")
-  assert_eq(validate(fm_one, schema).length(), 0)
+  assert_eq(@schema.validate(fm_one, schema).length(), 0)
 
   let fm_large = parse_frontmatter_or_fail(
     "+++\n" + "priority = 1000\n" + "+++\n",
   )
-  assert_eq(validate(fm_large, schema).length(), 0)
+  assert_eq(@schema.validate(fm_large, schema).length(), 0)
 }
 
 ///|
 test "TInt(None, Some(100)) rejects 101 and accepts 100 and below" {
-  let schema : Schema = {
+  let schema : @schema.Schema = {
     name: "posts",
     fields: [
       { name: "score", field_type: TInt(None, Some(100)), required: true },
     ],
   }
   let fm_over = parse_frontmatter_or_fail("+++\n" + "score = 101\n" + "+++\n")
-  let errors_over = validate(fm_over, schema)
+  let errors_over = @schema.validate(fm_over, schema)
   assert_eq(errors_over.length(), 1)
   assert_eq(errors_over[0].field, "score")
   assert_true(
@@ -1072,22 +1072,22 @@ test "TInt(None, Some(100)) rejects 101 and accepts 100 and below" {
   let fm_hundred = parse_frontmatter_or_fail(
     "+++\n" + "score = 100\n" + "+++\n",
   )
-  assert_eq(validate(fm_hundred, schema).length(), 0)
+  assert_eq(@schema.validate(fm_hundred, schema).length(), 0)
 
   let fm_neg = parse_frontmatter_or_fail("+++\n" + "score = -1\n" + "+++\n")
-  assert_eq(validate(fm_neg, schema).length(), 0)
+  assert_eq(@schema.validate(fm_neg, schema).length(), 0)
 }
 
 ///|
 test "TInt(Some(1), Some(100)) rejects 0 and 101, accepts 50" {
-  let schema : Schema = {
+  let schema : @schema.Schema = {
     name: "posts",
     fields: [
       { name: "percent", field_type: TInt(Some(1), Some(100)), required: true },
     ],
   }
   let fm_under = parse_frontmatter_or_fail("+++\n" + "percent = 0\n" + "+++\n")
-  let errors_under = validate(fm_under, schema)
+  let errors_under = @schema.validate(fm_under, schema)
   assert_eq(errors_under.length(), 1)
   assert_eq(errors_under[0].field, "percent")
   assert_true(
@@ -1096,29 +1096,29 @@ test "TInt(Some(1), Some(100)) rejects 0 and 101, accepts 50" {
   assert_true(errors_under[0].message.contains("got: 0"))
 
   let fm_over = parse_frontmatter_or_fail("+++\n" + "percent = 101\n" + "+++\n")
-  let errors_over = validate(fm_over, schema)
+  let errors_over = @schema.validate(fm_over, schema)
   assert_eq(errors_over.length(), 1)
   assert_eq(errors_over[0].field, "percent")
   assert_true(errors_over[0].message.contains("expected Int in range [1, 100]"))
   assert_true(errors_over[0].message.contains("got: 101"))
 
   let fm_mid = parse_frontmatter_or_fail("+++\n" + "percent = 50\n" + "+++\n")
-  assert_eq(validate(fm_mid, schema).length(), 0)
+  assert_eq(@schema.validate(fm_mid, schema).length(), 0)
 
   let fm_edge_low = parse_frontmatter_or_fail(
     "+++\n" + "percent = 1\n" + "+++\n",
   )
-  assert_eq(validate(fm_edge_low, schema).length(), 0)
+  assert_eq(@schema.validate(fm_edge_low, schema).length(), 0)
 
   let fm_edge_high = parse_frontmatter_or_fail(
     "+++\n" + "percent = 100\n" + "+++\n",
   )
-  assert_eq(validate(fm_edge_high, schema).length(), 0)
+  assert_eq(@schema.validate(fm_edge_high, schema).length(), 0)
 }
 
 ///|
 test "TOptional(TInt(Some(1), Some(10))) absent field produces no error" {
-  let schema : Schema = {
+  let schema : @schema.Schema = {
     name: "posts",
     fields: [
       {
@@ -1129,12 +1129,12 @@ test "TOptional(TInt(Some(1), Some(10))) absent field produces no error" {
     ],
   }
   let fm_absent = parse_frontmatter_or_fail("+++\n+++\n")
-  assert_eq(validate(fm_absent, schema).length(), 0)
+  assert_eq(@schema.validate(fm_absent, schema).length(), 0)
 }
 
 ///|
 test "TOptional(TInt(Some(1), Some(10))) out-of-range produces error" {
-  let schema : Schema = {
+  let schema : @schema.Schema = {
     name: "posts",
     fields: [
       {
@@ -1145,7 +1145,7 @@ test "TOptional(TInt(Some(1), Some(10))) out-of-range produces error" {
     ],
   }
   let fm = parse_frontmatter_or_fail("+++\n" + "rating = 11\n" + "+++\n")
-  let errors = validate(fm, schema)
+  let errors = @schema.validate(fm, schema)
   assert_eq(errors.length(), 1)
   assert_eq(errors[0].field, "rating")
   assert_true(errors[0].message.contains("expected Int in range [1, 10]"))
@@ -1153,7 +1153,7 @@ test "TOptional(TInt(Some(1), Some(10))) out-of-range produces error" {
 
 ///|
 test "TInt bounds rejects non-integer values" {
-  let schema : Schema = {
+  let schema : @schema.Schema = {
     name: "posts",
     fields: [
       { name: "count", field_type: TInt(Some(1), Some(100)), required: true },
@@ -1162,7 +1162,7 @@ test "TInt bounds rejects non-integer values" {
   let fm_str = parse_frontmatter_or_fail(
     "+++\n" + "count = \"hello\"\n" + "+++\n",
   )
-  let errors = validate(fm_str, schema)
+  let errors = @schema.validate(fm_str, schema)
   assert_eq(errors.length(), 1)
   assert_eq(errors[0].field, "count")
   assert_true(errors[0].message.contains("expected Int"))
@@ -1172,7 +1172,7 @@ test "TInt bounds rejects non-integer values" {
 
 ///|
 test "TDate(None, None) accepts any valid date" {
-  let schema : Schema = {
+  let schema : @schema.Schema = {
     name: "posts",
     fields: [{ name: "date", field_type: TDate(None, None), required: true }],
   }
@@ -1185,14 +1185,14 @@ test "TDate(None, None) accepts any valid date" {
   let fm_late = parse_frontmatter_or_fail(
     "+++\n" + "date = 2030-12-31\n" + "+++\n",
   )
-  assert_eq(validate(fm_early, schema).length(), 0)
-  assert_eq(validate(fm_mid, schema).length(), 0)
-  assert_eq(validate(fm_late, schema).length(), 0)
+  assert_eq(@schema.validate(fm_early, schema).length(), 0)
+  assert_eq(@schema.validate(fm_mid, schema).length(), 0)
+  assert_eq(@schema.validate(fm_late, schema).length(), 0)
 }
 
 ///|
 test "TDate(Some(\"2020-01-01\"), None) rejects 2019-12-31, accepts 2020-01-02" {
-  let schema : Schema = {
+  let schema : @schema.Schema = {
     name: "posts",
     fields: [
       {
@@ -1206,7 +1206,7 @@ test "TDate(Some(\"2020-01-01\"), None) rejects 2019-12-31, accepts 2020-01-02" 
   let fm_equal = parse_frontmatter_or_fail(
     "+++\n" + "date = 2020-01-01\n" + "+++\n",
   )
-  let errors_eq = validate(fm_equal, schema)
+  let errors_eq = @schema.validate(fm_equal, schema)
   assert_eq(errors_eq.length(), 1)
   assert_eq(errors_eq[0].field, "date")
   assert_true(errors_eq[0].message.contains("expected Date after 2020-01-01"))
@@ -1216,7 +1216,7 @@ test "TDate(Some(\"2020-01-01\"), None) rejects 2019-12-31, accepts 2020-01-02" 
   let fm_before = parse_frontmatter_or_fail(
     "+++\n" + "date = 2019-12-31\n" + "+++\n",
   )
-  let errors_before = validate(fm_before, schema)
+  let errors_before = @schema.validate(fm_before, schema)
   assert_eq(errors_before.length(), 1)
   assert_true(
     errors_before[0].message.contains("expected Date after 2020-01-01"),
@@ -1227,18 +1227,18 @@ test "TDate(Some(\"2020-01-01\"), None) rejects 2019-12-31, accepts 2020-01-02" 
   let fm_after = parse_frontmatter_or_fail(
     "+++\n" + "date = 2020-01-02\n" + "+++\n",
   )
-  assert_eq(validate(fm_after, schema).length(), 0)
+  assert_eq(@schema.validate(fm_after, schema).length(), 0)
 
   // Far future — accepted
   let fm_far = parse_frontmatter_or_fail(
     "+++\n" + "date = 2099-12-31\n" + "+++\n",
   )
-  assert_eq(validate(fm_far, schema).length(), 0)
+  assert_eq(@schema.validate(fm_far, schema).length(), 0)
 }
 
 ///|
 test "TDate(None, Some(\"2030-01-01\")) accepts 2029-12-31, rejects 2030-01-02" {
-  let schema : Schema = {
+  let schema : @schema.Schema = {
     name: "posts",
     fields: [
       {
@@ -1252,19 +1252,19 @@ test "TDate(None, Some(\"2030-01-01\")) accepts 2029-12-31, rejects 2030-01-02" 
   let fm_before = parse_frontmatter_or_fail(
     "+++\n" + "date = 2029-12-31\n" + "+++\n",
   )
-  assert_eq(validate(fm_before, schema).length(), 0)
+  assert_eq(@schema.validate(fm_before, schema).length(), 0)
 
   // Far past — accepted
   let fm_far = parse_frontmatter_or_fail(
     "+++\n" + "date = 2000-01-01\n" + "+++\n",
   )
-  assert_eq(validate(fm_far, schema).length(), 0)
+  assert_eq(@schema.validate(fm_far, schema).length(), 0)
 
   // Boundary: equal to before (exclusive) — rejected
   let fm_equal = parse_frontmatter_or_fail(
     "+++\n" + "date = 2030-01-01\n" + "+++\n",
   )
-  let errors_eq = validate(fm_equal, schema)
+  let errors_eq = @schema.validate(fm_equal, schema)
   assert_eq(errors_eq.length(), 1)
   assert_true(errors_eq[0].message.contains("expected Date before 2030-01-01"))
   assert_true(errors_eq[0].message.contains("got: 2030-01-01"))
@@ -1273,7 +1273,7 @@ test "TDate(None, Some(\"2030-01-01\")) accepts 2029-12-31, rejects 2030-01-02" 
   let fm_after = parse_frontmatter_or_fail(
     "+++\n" + "date = 2030-01-02\n" + "+++\n",
   )
-  let errors_after = validate(fm_after, schema)
+  let errors_after = @schema.validate(fm_after, schema)
   assert_eq(errors_after.length(), 1)
   assert_true(
     errors_after[0].message.contains("expected Date before 2030-01-01"),
@@ -1283,7 +1283,7 @@ test "TDate(None, Some(\"2030-01-01\")) accepts 2029-12-31, rejects 2030-01-02" 
 
 ///|
 test "TDate(Some(\"2020-01-01\"), Some(\"2030-01-01\")) accepts 2025-06-15, rejects boundaries" {
-  let schema : Schema = {
+  let schema : @schema.Schema = {
     name: "posts",
     fields: [
       {
@@ -1297,25 +1297,25 @@ test "TDate(Some(\"2020-01-01\"), Some(\"2030-01-01\")) accepts 2025-06-15, reje
   let fm_mid = parse_frontmatter_or_fail(
     "+++\n" + "date = 2025-06-15\n" + "+++\n",
   )
-  assert_eq(validate(fm_mid, schema).length(), 0)
+  assert_eq(@schema.validate(fm_mid, schema).length(), 0)
 
   // Just above after — accepted
   let fm_after_ok = parse_frontmatter_or_fail(
     "+++\n" + "date = 2020-01-02\n" + "+++\n",
   )
-  assert_eq(validate(fm_after_ok, schema).length(), 0)
+  assert_eq(@schema.validate(fm_after_ok, schema).length(), 0)
 
   // Just below before — accepted
   let fm_before_ok = parse_frontmatter_or_fail(
     "+++\n" + "date = 2029-12-31\n" + "+++\n",
   )
-  assert_eq(validate(fm_before_ok, schema).length(), 0)
+  assert_eq(@schema.validate(fm_before_ok, schema).length(), 0)
 
   // Equal to after (exclusive) — rejected
   let fm_lo = parse_frontmatter_or_fail(
     "+++\n" + "date = 2020-01-01\n" + "+++\n",
   )
-  let errors_lo = validate(fm_lo, schema)
+  let errors_lo = @schema.validate(fm_lo, schema)
   assert_eq(errors_lo.length(), 1)
   assert_true(
     errors_lo[0].message.contains(
@@ -1328,7 +1328,7 @@ test "TDate(Some(\"2020-01-01\"), Some(\"2030-01-01\")) accepts 2025-06-15, reje
   let fm_hi = parse_frontmatter_or_fail(
     "+++\n" + "date = 2030-01-01\n" + "+++\n",
   )
-  let errors_hi = validate(fm_hi, schema)
+  let errors_hi = @schema.validate(fm_hi, schema)
   assert_eq(errors_hi.length(), 1)
   assert_true(
     errors_hi[0].message.contains(
@@ -1340,18 +1340,18 @@ test "TDate(Some(\"2020-01-01\"), Some(\"2030-01-01\")) accepts 2025-06-15, reje
   let fm_far_before = parse_frontmatter_or_fail(
     "+++\n" + "date = 2019-12-31\n" + "+++\n",
   )
-  assert_eq(validate(fm_far_before, schema).length(), 1)
+  assert_eq(@schema.validate(fm_far_before, schema).length(), 1)
 
   // Far after — rejected
   let fm_far_after = parse_frontmatter_or_fail(
     "+++\n" + "date = 2030-01-02\n" + "+++\n",
   )
-  assert_eq(validate(fm_far_after, schema).length(), 1)
+  assert_eq(@schema.validate(fm_far_after, schema).length(), 1)
 }
 
 ///|
 test "TOptional(TDate(Some(\"2020-01-01\"), None)) absent field produces no error" {
-  let schema : Schema = {
+  let schema : @schema.Schema = {
     name: "posts",
     fields: [
       {
@@ -1362,12 +1362,12 @@ test "TOptional(TDate(Some(\"2020-01-01\"), None)) absent field produces no erro
     ],
   }
   let fm_absent = parse_frontmatter_or_fail("+++\n+++\n")
-  assert_eq(validate(fm_absent, schema).length(), 0)
+  assert_eq(@schema.validate(fm_absent, schema).length(), 0)
 }
 
 ///|
 test "TOptional(TDate(Some(\"2020-01-01\"), None)) out-of-range produces error" {
-  let schema : Schema = {
+  let schema : @schema.Schema = {
     name: "posts",
     fields: [
       {
@@ -1378,7 +1378,7 @@ test "TOptional(TDate(Some(\"2020-01-01\"), None)) out-of-range produces error" 
     ],
   }
   let fm = parse_frontmatter_or_fail("+++\n" + "date = 2019-12-31\n" + "+++\n")
-  let errors = validate(fm, schema)
+  let errors = @schema.validate(fm, schema)
   assert_eq(errors.length(), 1)
   assert_eq(errors[0].field, "date")
   assert_true(errors[0].message.contains("expected Date after 2020-01-01"))
@@ -1386,7 +1386,7 @@ test "TOptional(TDate(Some(\"2020-01-01\"), None)) out-of-range produces error" 
 
 ///|
 test "TDate bounds rejects non-date values" {
-  let schema : Schema = {
+  let schema : @schema.Schema = {
     name: "posts",
     fields: [
       {
@@ -1399,7 +1399,7 @@ test "TDate bounds rejects non-date values" {
   let fm_str = parse_frontmatter_or_fail(
     "+++\n" + "date = \"hello\"\n" + "+++\n",
   )
-  let errors = validate(fm_str, schema)
+  let errors = @schema.validate(fm_str, schema)
   assert_eq(errors.length(), 1)
   assert_eq(errors[0].field, "date")
   assert_true(errors[0].message.contains("expected Date"))
@@ -1409,7 +1409,7 @@ test "TDate bounds rejects non-date values" {
 
 ///|
 test "TFloat(None, None) validates any float" {
-  let schema : Schema = {
+  let schema : @schema.Schema = {
     name: "posts",
     fields: [{ name: "rating", field_type: TFloat(None, None), required: true }],
   }
@@ -1420,14 +1420,14 @@ test "TFloat(None, None) validates any float" {
   let fm_pos = parse_frontmatter_or_fail(
     "+++\n" + "rating = 999.99\n" + "+++\n",
   )
-  assert_eq(validate(fm_neg, schema).length(), 0)
-  assert_eq(validate(fm_zero, schema).length(), 0)
-  assert_eq(validate(fm_pos, schema).length(), 0)
+  assert_eq(@schema.validate(fm_neg, schema).length(), 0)
+  assert_eq(@schema.validate(fm_zero, schema).length(), 0)
+  assert_eq(@schema.validate(fm_pos, schema).length(), 0)
 }
 
 ///|
 test "TFloat(Some(0.0), Some(5.0)) accepts 2.5, rejects -1.0 and 5.1" {
-  let schema : Schema = {
+  let schema : @schema.Schema = {
     name: "posts",
     fields: [
       {
@@ -1438,29 +1438,29 @@ test "TFloat(Some(0.0), Some(5.0)) accepts 2.5, rejects -1.0 and 5.1" {
     ],
   }
   let fm_mid = parse_frontmatter_or_fail("+++\n" + "rating = 2.5\n" + "+++\n")
-  assert_eq(validate(fm_mid, schema).length(), 0)
+  assert_eq(@schema.validate(fm_mid, schema).length(), 0)
 
   let fm_edge_low = parse_frontmatter_or_fail(
     "+++\n" + "rating = 0.0\n" + "+++\n",
   )
-  assert_eq(validate(fm_edge_low, schema).length(), 0)
+  assert_eq(@schema.validate(fm_edge_low, schema).length(), 0)
 
   let fm_edge_high = parse_frontmatter_or_fail(
     "+++\n" + "rating = 5.0\n" + "+++\n",
   )
-  assert_eq(validate(fm_edge_high, schema).length(), 0)
+  assert_eq(@schema.validate(fm_edge_high, schema).length(), 0)
 
   let fm_under = parse_frontmatter_or_fail(
     "+++\n" + "rating = -1.0\n" + "+++\n",
   )
-  let errors_under = validate(fm_under, schema)
+  let errors_under = @schema.validate(fm_under, schema)
   assert_eq(errors_under.length(), 1)
   assert_eq(errors_under[0].field, "rating")
   assert_true(errors_under[0].message.contains("expected Float in range"))
   assert_true(errors_under[0].message.contains("got:"))
 
   let fm_over = parse_frontmatter_or_fail("+++\n" + "rating = 5.1\n" + "+++\n")
-  let errors_over = validate(fm_over, schema)
+  let errors_over = @schema.validate(fm_over, schema)
   assert_eq(errors_over.length(), 1)
   assert_eq(errors_over[0].field, "rating")
   assert_true(errors_over[0].message.contains("expected Float in range"))
@@ -1469,20 +1469,20 @@ test "TFloat(Some(0.0), Some(5.0)) accepts 2.5, rejects -1.0 and 5.1" {
 
 ///|
 test "TFloat(Some(0.0), None) accepts 0.5, rejects -0.1" {
-  let schema : Schema = {
+  let schema : @schema.Schema = {
     name: "posts",
     fields: [
       { name: "weight", field_type: TFloat(Some(0.0), None), required: true },
     ],
   }
   let fm_ok = parse_frontmatter_or_fail("+++\n" + "weight = 0.5\n" + "+++\n")
-  assert_eq(validate(fm_ok, schema).length(), 0)
+  assert_eq(@schema.validate(fm_ok, schema).length(), 0)
 
   let fm_zero = parse_frontmatter_or_fail("+++\n" + "weight = 0.0\n" + "+++\n")
-  assert_eq(validate(fm_zero, schema).length(), 0)
+  assert_eq(@schema.validate(fm_zero, schema).length(), 0)
 
   let fm_neg = parse_frontmatter_or_fail("+++\n" + "weight = -0.1\n" + "+++\n")
-  let errors = validate(fm_neg, schema)
+  let errors = @schema.validate(fm_neg, schema)
   assert_eq(errors.length(), 1)
   assert_eq(errors[0].field, "weight")
   assert_true(errors[0].message.contains("expected Float in range"))
@@ -1491,20 +1491,20 @@ test "TFloat(Some(0.0), None) accepts 0.5, rejects -0.1" {
 
 ///|
 test "TFloat(None, Some(10.0)) rejects 10.1, accepts 9.99" {
-  let schema : Schema = {
+  let schema : @schema.Schema = {
     name: "posts",
     fields: [
       { name: "score", field_type: TFloat(None, Some(10.0)), required: true },
     ],
   }
   let fm_ok = parse_frontmatter_or_fail("+++\n" + "score = 9.99\n" + "+++\n")
-  assert_eq(validate(fm_ok, schema).length(), 0)
+  assert_eq(@schema.validate(fm_ok, schema).length(), 0)
 
   let fm_edge = parse_frontmatter_or_fail("+++\n" + "score = 10.0\n" + "+++\n")
-  assert_eq(validate(fm_edge, schema).length(), 0)
+  assert_eq(@schema.validate(fm_edge, schema).length(), 0)
 
   let fm_over = parse_frontmatter_or_fail("+++\n" + "score = 10.1\n" + "+++\n")
-  let errors = validate(fm_over, schema)
+  let errors = @schema.validate(fm_over, schema)
   assert_eq(errors.length(), 1)
   assert_eq(errors[0].field, "score")
   assert_true(errors[0].message.contains("expected Float in range"))
@@ -1513,7 +1513,7 @@ test "TFloat(None, Some(10.0)) rejects 10.1, accepts 9.99" {
 
 ///|
 test "TOptional(TFloat(Some(0.0), Some(5.0))) absent field produces no error" {
-  let schema : Schema = {
+  let schema : @schema.Schema = {
     name: "posts",
     fields: [
       {
@@ -1524,12 +1524,12 @@ test "TOptional(TFloat(Some(0.0), Some(5.0))) absent field produces no error" {
     ],
   }
   let fm_absent = parse_frontmatter_or_fail("+++\n+++\n")
-  assert_eq(validate(fm_absent, schema).length(), 0)
+  assert_eq(@schema.validate(fm_absent, schema).length(), 0)
 }
 
 ///|
 test "TOptional(TFloat) out-of-range produces error" {
-  let schema : Schema = {
+  let schema : @schema.Schema = {
     name: "posts",
     fields: [
       {
@@ -1540,7 +1540,7 @@ test "TOptional(TFloat) out-of-range produces error" {
     ],
   }
   let fm = parse_frontmatter_or_fail("+++\n" + "rating = -1.0\n" + "+++\n")
-  let errors = validate(fm, schema)
+  let errors = @schema.validate(fm, schema)
   assert_eq(errors.length(), 1)
   assert_eq(errors[0].field, "rating")
   assert_true(errors[0].message.contains("expected Float in range"))
@@ -1548,7 +1548,7 @@ test "TOptional(TFloat) out-of-range produces error" {
 
 ///|
 test "TFloat rejects non-float values" {
-  let schema : Schema = {
+  let schema : @schema.Schema = {
     name: "posts",
     fields: [
       {
@@ -1561,7 +1561,7 @@ test "TFloat rejects non-float values" {
   let fm_str = parse_frontmatter_or_fail(
     "+++\n" + "rating = \"hello\"\n" + "+++\n",
   )
-  let errors = validate(fm_str, schema)
+  let errors = @schema.validate(fm_str, schema)
   assert_eq(errors.length(), 1)
   assert_eq(errors[0].field, "rating")
   assert_true(errors[0].message.contains("expected Float"))
@@ -1571,7 +1571,7 @@ test "TFloat rejects non-float values" {
 
 ///|
 test "TString(None, None) accepts any string" {
-  let schema : Schema = {
+  let schema : @schema.Schema = {
     name: "posts",
     fields: [{ name: "title", field_type: TString(None, None), required: true }],
   }
@@ -1584,14 +1584,14 @@ test "TString(None, None) accepts any string" {
     "+++\n",
   )
   let fm_empty = parse_frontmatter_or_fail("+++\n" + "title = \"\"\n" + "+++\n")
-  assert_eq(validate(fm_short, schema).length(), 0)
-  assert_eq(validate(fm_long, schema).length(), 0)
-  assert_eq(validate(fm_empty, schema).length(), 0)
+  assert_eq(@schema.validate(fm_short, schema).length(), 0)
+  assert_eq(@schema.validate(fm_long, schema).length(), 0)
+  assert_eq(@schema.validate(fm_empty, schema).length(), 0)
 }
 
 ///|
 test "TString(Some(5), None) accepts \"hello\" (5 chars), rejects \"hi\" (2 chars)" {
-  let schema : Schema = {
+  let schema : @schema.Schema = {
     name: "posts",
     fields: [
       { name: "title", field_type: TString(Some(5), None), required: true },
@@ -1600,12 +1600,12 @@ test "TString(Some(5), None) accepts \"hello\" (5 chars), rejects \"hi\" (2 char
   let fm_ok = parse_frontmatter_or_fail(
     "+++\n" + "title = \"hello\"\n" + "+++\n",
   )
-  assert_eq(validate(fm_ok, schema).length(), 0)
+  assert_eq(@schema.validate(fm_ok, schema).length(), 0)
 
   let fm_short = parse_frontmatter_or_fail(
     "+++\n" + "title = \"hi\"\n" + "+++\n",
   )
-  let errors = validate(fm_short, schema)
+  let errors = @schema.validate(fm_short, schema)
   assert_eq(errors.length(), 1)
   assert_eq(errors[0].field, "title")
   assert_true(errors[0].message.contains("expected String with minlen=5"))
@@ -1614,7 +1614,7 @@ test "TString(Some(5), None) accepts \"hello\" (5 chars), rejects \"hi\" (2 char
 
 ///|
 test "TString(None, Some(10)) accepts \"hello\" (5 chars), rejects \"hello world!!\" (13 chars)" {
-  let schema : Schema = {
+  let schema : @schema.Schema = {
     name: "posts",
     fields: [
       { name: "excerpt", field_type: TString(None, Some(10)), required: true },
@@ -1623,12 +1623,12 @@ test "TString(None, Some(10)) accepts \"hello\" (5 chars), rejects \"hello world
   let fm_ok = parse_frontmatter_or_fail(
     "+++\n" + "excerpt = \"hello\"\n" + "+++\n",
   )
-  assert_eq(validate(fm_ok, schema).length(), 0)
+  assert_eq(@schema.validate(fm_ok, schema).length(), 0)
 
   let fm_long = parse_frontmatter_or_fail(
     "+++\n" + "excerpt = \"hello world!!\"\n" + "+++\n",
   )
-  let errors = validate(fm_long, schema)
+  let errors = @schema.validate(fm_long, schema)
   assert_eq(errors.length(), 1)
   assert_eq(errors[0].field, "excerpt")
   assert_true(errors[0].message.contains("expected String with maxlen=10"))
@@ -1637,7 +1637,7 @@ test "TString(None, Some(10)) accepts \"hello\" (5 chars), rejects \"hello world
 
 ///|
 test "TString(Some(5), Some(10)) accepts 5-10 chars, rejects 2 and 13" {
-  let schema : Schema = {
+  let schema : @schema.Schema = {
     name: "posts",
     fields: [
       { name: "title", field_type: TString(Some(5), Some(10)), required: true },
@@ -1647,21 +1647,21 @@ test "TString(Some(5), Some(10)) accepts 5-10 chars, rejects 2 and 13" {
   let fm_5 = parse_frontmatter_or_fail(
     "+++\n" + "title = \"01234\"\n" + "+++\n",
   )
-  assert_eq(validate(fm_5, schema).length(), 0)
+  assert_eq(@schema.validate(fm_5, schema).length(), 0)
 
   let fm_10 = parse_frontmatter_or_fail(
     "+++\n" + "title = \"0123456789\"\n" + "+++\n",
   )
-  assert_eq(validate(fm_10, schema).length(), 0)
+  assert_eq(@schema.validate(fm_10, schema).length(), 0)
 
   let fm_7 = parse_frontmatter_or_fail(
     "+++\n" + "title = \"hello!!\"\n" + "+++\n",
   )
-  assert_eq(validate(fm_7, schema).length(), 0)
+  assert_eq(@schema.validate(fm_7, schema).length(), 0)
 
   // Rejects below min
   let fm_2 = parse_frontmatter_or_fail("+++\n" + "title = \"hi\"\n" + "+++\n")
-  let errors_short = validate(fm_2, schema)
+  let errors_short = @schema.validate(fm_2, schema)
   assert_eq(errors_short.length(), 1)
   assert_eq(errors_short[0].field, "title")
   assert_true(
@@ -1673,7 +1673,7 @@ test "TString(Some(5), Some(10)) accepts 5-10 chars, rejects 2 and 13" {
   let fm_13 = parse_frontmatter_or_fail(
     "+++\n" + "title = \"hello world!!\"\n" + "+++\n",
   )
-  let errors_long = validate(fm_13, schema)
+  let errors_long = @schema.validate(fm_13, schema)
   assert_eq(errors_long.length(), 1)
   assert_eq(errors_long[0].field, "title")
   assert_true(
@@ -1684,7 +1684,7 @@ test "TString(Some(5), Some(10)) accepts 5-10 chars, rejects 2 and 13" {
 
 ///|
 test "TOptional(TString(Some(5), Some(10))) absent field produces no error" {
-  let schema : Schema = {
+  let schema : @schema.Schema = {
     name: "posts",
     fields: [
       {
@@ -1695,12 +1695,12 @@ test "TOptional(TString(Some(5), Some(10))) absent field produces no error" {
     ],
   }
   let fm_absent = parse_frontmatter_or_fail("+++\n+++\n")
-  assert_eq(validate(fm_absent, schema).length(), 0)
+  assert_eq(@schema.validate(fm_absent, schema).length(), 0)
 }
 
 ///|
 test "TOptional(TString(Some(5), Some(10))) out-of-range produces error" {
-  let schema : Schema = {
+  let schema : @schema.Schema = {
     name: "posts",
     fields: [
       {
@@ -1711,7 +1711,7 @@ test "TOptional(TString(Some(5), Some(10))) out-of-range produces error" {
     ],
   }
   let fm = parse_frontmatter_or_fail("+++\n" + "subtitle = \"hi\"\n" + "+++\n")
-  let errors = validate(fm, schema)
+  let errors = @schema.validate(fm, schema)
   assert_eq(errors.length(), 1)
   assert_eq(errors[0].field, "subtitle")
   assert_true(
@@ -1721,14 +1721,14 @@ test "TOptional(TString(Some(5), Some(10))) out-of-range produces error" {
 
 ///|
 test "TString bounds rejects non-string values" {
-  let schema : Schema = {
+  let schema : @schema.Schema = {
     name: "posts",
     fields: [
       { name: "title", field_type: TString(Some(5), Some(10)), required: true },
     ],
   }
   let fm_int = parse_frontmatter_or_fail("+++\n" + "title = 42\n" + "+++\n")
-  let errors = validate(fm_int, schema)
+  let errors = @schema.validate(fm_int, schema)
   assert_eq(errors.length(), 1)
   assert_eq(errors[0].field, "title")
   assert_true(errors[0].message.contains("expected String"))
@@ -1737,7 +1737,7 @@ test "TString bounds rejects non-string values" {
 
 ///|
 test "TDateTime(None, None) accepts valid ISO 8601 datetime with Z" {
-  let schema : Schema = {
+  let schema : @schema.Schema = {
     name: "events",
     fields: [
       { name: "starts_at", field_type: TDateTime(None, None), required: true },
@@ -1746,13 +1746,13 @@ test "TDateTime(None, None) accepts valid ISO 8601 datetime with Z" {
   let fm = parse_frontmatter_or_fail(
     "+++\n" + "starts_at = \"2026-03-15T10:30:00Z\"\n" + "+++\n",
   )
-  let errors = validate(fm, schema)
+  let errors = @schema.validate(fm, schema)
   assert_eq(errors.length(), 0)
 }
 
 ///|
 test "TDateTime(None, None) accepts datetime with positive timezone offset" {
-  let schema : Schema = {
+  let schema : @schema.Schema = {
     name: "events",
     fields: [
       { name: "starts_at", field_type: TDateTime(None, None), required: true },
@@ -1761,13 +1761,13 @@ test "TDateTime(None, None) accepts datetime with positive timezone offset" {
   let fm = parse_frontmatter_or_fail(
     "+++\n" + "starts_at = \"2026-03-15T10:30:00+05:30\"\n" + "+++\n",
   )
-  let errors = validate(fm, schema)
+  let errors = @schema.validate(fm, schema)
   assert_eq(errors.length(), 0)
 }
 
 ///|
 test "TDateTime(None, None) accepts datetime with negative timezone offset" {
-  let schema : Schema = {
+  let schema : @schema.Schema = {
     name: "events",
     fields: [
       { name: "starts_at", field_type: TDateTime(None, None), required: true },
@@ -1776,13 +1776,13 @@ test "TDateTime(None, None) accepts datetime with negative timezone offset" {
   let fm = parse_frontmatter_or_fail(
     "+++\n" + "starts_at = \"2026-03-15T10:30:00-08:00\"\n" + "+++\n",
   )
-  let errors = validate(fm, schema)
+  let errors = @schema.validate(fm, schema)
   assert_eq(errors.length(), 0)
 }
 
 ///|
 test "TDateTime(None, None) accepts datetime without timezone" {
-  let schema : Schema = {
+  let schema : @schema.Schema = {
     name: "events",
     fields: [
       { name: "starts_at", field_type: TDateTime(None, None), required: true },
@@ -1791,13 +1791,13 @@ test "TDateTime(None, None) accepts datetime without timezone" {
   let fm = parse_frontmatter_or_fail(
     "+++\n" + "starts_at = \"2026-03-15T10:30:00\"\n" + "+++\n",
   )
-  let errors = validate(fm, schema)
+  let errors = @schema.validate(fm, schema)
   assert_eq(errors.length(), 0)
 }
 
 ///|
 test "TDateTime rejects date-only string" {
-  let schema : Schema = {
+  let schema : @schema.Schema = {
     name: "events",
     fields: [
       { name: "starts_at", field_type: TDateTime(None, None), required: true },
@@ -1806,7 +1806,7 @@ test "TDateTime rejects date-only string" {
   let fm = parse_frontmatter_or_fail(
     "+++\n" + "starts_at = \"2026-03-15\"\n" + "+++\n",
   )
-  let errors = validate(fm, schema)
+  let errors = @schema.validate(fm, schema)
   assert_eq(errors.length(), 1)
   assert_eq(errors[0].field, "starts_at")
   assert_true(errors[0].message.contains("expected ISO 8601 datetime"))
@@ -1814,7 +1814,7 @@ test "TDateTime rejects date-only string" {
 
 ///|
 test "TDateTime rejects invalid datetime format" {
-  let schema : Schema = {
+  let schema : @schema.Schema = {
     name: "events",
     fields: [
       { name: "starts_at", field_type: TDateTime(None, None), required: true },
@@ -1823,7 +1823,7 @@ test "TDateTime rejects invalid datetime format" {
   let fm = parse_frontmatter_or_fail(
     "+++\n" + "starts_at = \"not-a-datetime\"\n" + "+++\n",
   )
-  let errors = validate(fm, schema)
+  let errors = @schema.validate(fm, schema)
   assert_eq(errors.length(), 1)
   assert_eq(errors[0].field, "starts_at")
   assert_true(errors[0].message.contains("expected ISO 8601 datetime"))
@@ -1831,7 +1831,7 @@ test "TDateTime rejects invalid datetime format" {
 
 ///|
 test "TDateTime rejects datetime missing seconds" {
-  let schema : Schema = {
+  let schema : @schema.Schema = {
     name: "events",
     fields: [
       { name: "starts_at", field_type: TDateTime(None, None), required: true },
@@ -1840,14 +1840,14 @@ test "TDateTime rejects datetime missing seconds" {
   let fm = parse_frontmatter_or_fail(
     "+++\n" + "starts_at = \"2026-03-15T10:30\"\n" + "+++\n",
   )
-  let errors = validate(fm, schema)
+  let errors = @schema.validate(fm, schema)
   assert_eq(errors.length(), 1)
   assert_eq(errors[0].field, "starts_at")
 }
 
 ///|
 test "TDateTime rejects invalid hour (25:00:00)" {
-  let schema : Schema = {
+  let schema : @schema.Schema = {
     name: "events",
     fields: [
       { name: "starts_at", field_type: TDateTime(None, None), required: true },
@@ -1856,27 +1856,27 @@ test "TDateTime rejects invalid hour (25:00:00)" {
   let fm = parse_frontmatter_or_fail(
     "+++\n" + "starts_at = \"2026-03-15T25:00:00Z\"\n" + "+++\n",
   )
-  let errors = validate(fm, schema)
+  let errors = @schema.validate(fm, schema)
   assert_eq(errors.length(), 1)
 }
 
 ///|
 test "TDateTime rejects non-string values" {
-  let schema : Schema = {
+  let schema : @schema.Schema = {
     name: "events",
     fields: [
       { name: "starts_at", field_type: TDateTime(None, None), required: true },
     ],
   }
   let fm = parse_frontmatter_or_fail("+++\n" + "starts_at = 42\n" + "+++\n")
-  let errors = validate(fm, schema)
+  let errors = @schema.validate(fm, schema)
   assert_eq(errors.length(), 1)
   assert_eq(errors[0].field, "starts_at")
 }
 
 ///|
 test "TDateTime(Some(\"2026-01-01T00:00:00Z\"), None) rejects earlier datetime" {
-  let schema : Schema = {
+  let schema : @schema.Schema = {
     name: "events",
     fields: [
       {
@@ -1890,7 +1890,7 @@ test "TDateTime(Some(\"2026-01-01T00:00:00Z\"), None) rejects earlier datetime" 
   let fm_equal = parse_frontmatter_or_fail(
     "+++\n" + "starts_at = \"2026-01-01T10:00:00Z\"\n" + "+++\n",
   )
-  let errors_eq = validate(fm_equal, schema)
+  let errors_eq = @schema.validate(fm_equal, schema)
   assert_eq(errors_eq.length(), 1)
   assert_true(errors_eq[0].message.contains("expected DateTime after"))
 
@@ -1898,18 +1898,18 @@ test "TDateTime(Some(\"2026-01-01T00:00:00Z\"), None) rejects earlier datetime" 
   let fm_after = parse_frontmatter_or_fail(
     "+++\n" + "starts_at = \"2026-01-02T00:00:00Z\"\n" + "+++\n",
   )
-  assert_eq(validate(fm_after, schema).length(), 0)
+  assert_eq(@schema.validate(fm_after, schema).length(), 0)
 
   // Before — rejected (date part 2025-12-31 < 2026-01-01)
   let fm_before = parse_frontmatter_or_fail(
     "+++\n" + "starts_at = \"2025-12-31T23:59:59Z\"\n" + "+++\n",
   )
-  assert_eq(validate(fm_before, schema).length(), 1)
+  assert_eq(@schema.validate(fm_before, schema).length(), 1)
 }
 
 ///|
 test "TDateTime(None, Some(\"2027-01-01T00:00:00Z\")) rejects later datetime" {
-  let schema : Schema = {
+  let schema : @schema.Schema = {
     name: "events",
     fields: [
       {
@@ -1923,24 +1923,24 @@ test "TDateTime(None, Some(\"2027-01-01T00:00:00Z\")) rejects later datetime" {
   let fm_before = parse_frontmatter_or_fail(
     "+++\n" + "starts_at = \"2026-06-15T12:00:00Z\"\n" + "+++\n",
   )
-  assert_eq(validate(fm_before, schema).length(), 0)
+  assert_eq(@schema.validate(fm_before, schema).length(), 0)
 
   // Equal to before (exclusive) — rejected
   let fm_equal = parse_frontmatter_or_fail(
     "+++\n" + "starts_at = \"2027-01-01T00:00:00Z\"\n" + "+++\n",
   )
-  assert_eq(validate(fm_equal, schema).length(), 1)
+  assert_eq(@schema.validate(fm_equal, schema).length(), 1)
 
   // After — rejected
   let fm_after = parse_frontmatter_or_fail(
     "+++\n" + "starts_at = \"2027-01-02T00:00:00Z\"\n" + "+++\n",
   )
-  assert_eq(validate(fm_after, schema).length(), 1)
+  assert_eq(@schema.validate(fm_after, schema).length(), 1)
 }
 
 ///|
 test "TDateTime(Some(\"2026-01-01T00:00:00Z\"), Some(\"2027-01-01T00:00:00Z\")) validates range" {
-  let schema : Schema = {
+  let schema : @schema.Schema = {
     name: "events",
     fields: [
       {
@@ -1957,13 +1957,13 @@ test "TDateTime(Some(\"2026-01-01T00:00:00Z\"), Some(\"2027-01-01T00:00:00Z\")) 
   let fm_mid = parse_frontmatter_or_fail(
     "+++\n" + "starts_at = \"2026-06-15T12:00:00Z\"\n" + "+++\n",
   )
-  assert_eq(validate(fm_mid, schema).length(), 0)
+  assert_eq(@schema.validate(fm_mid, schema).length(), 0)
 
   // At after boundary (same date as after) — rejected
   let fm_lo = parse_frontmatter_or_fail(
     "+++\n" + "starts_at = \"2026-01-01T12:00:00Z\"\n" + "+++\n",
   )
-  let errors_lo = validate(fm_lo, schema)
+  let errors_lo = @schema.validate(fm_lo, schema)
   assert_eq(errors_lo.length(), 1)
   assert_true(
     errors_lo[0].message.contains(
@@ -1975,23 +1975,23 @@ test "TDateTime(Some(\"2026-01-01T00:00:00Z\"), Some(\"2027-01-01T00:00:00Z\")) 
   let fm_hi = parse_frontmatter_or_fail(
     "+++\n" + "starts_at = \"2027-01-01T00:00:00Z\"\n" + "+++\n",
   )
-  assert_eq(validate(fm_hi, schema).length(), 1)
+  assert_eq(@schema.validate(fm_hi, schema).length(), 1)
 
   // Just inside range — accepted
   let fm_just_after = parse_frontmatter_or_fail(
     "+++\n" + "starts_at = \"2026-01-02T00:00:00Z\"\n" + "+++\n",
   )
-  assert_eq(validate(fm_just_after, schema).length(), 0)
+  assert_eq(@schema.validate(fm_just_after, schema).length(), 0)
 
   let fm_just_before = parse_frontmatter_or_fail(
     "+++\n" + "starts_at = \"2026-12-31T23:59:59Z\"\n" + "+++\n",
   )
-  assert_eq(validate(fm_just_before, schema).length(), 0)
+  assert_eq(@schema.validate(fm_just_before, schema).length(), 0)
 }
 
 ///|
 test "TOptional(TDateTime) absent field produces no error" {
-  let schema : Schema = {
+  let schema : @schema.Schema = {
     name: "events",
     fields: [
       {
@@ -2002,12 +2002,12 @@ test "TOptional(TDateTime) absent field produces no error" {
     ],
   }
   let fm = parse_frontmatter_or_fail("+++\n+++\n")
-  assert_eq(validate(fm, schema).length(), 0)
+  assert_eq(@schema.validate(fm, schema).length(), 0)
 }
 
 ///|
 test "TOptional(TDateTime) valid value produces no error" {
-  let schema : Schema = {
+  let schema : @schema.Schema = {
     name: "events",
     fields: [
       {
@@ -2020,12 +2020,12 @@ test "TOptional(TDateTime) valid value produces no error" {
   let fm = parse_frontmatter_or_fail(
     "+++\n" + "starts_at = \"2026-03-15T10:30:00Z\"\n" + "+++\n",
   )
-  assert_eq(validate(fm, schema).length(), 0)
+  assert_eq(@schema.validate(fm, schema).length(), 0)
 }
 
 ///|
 test "TOptional(TDateTime) invalid value produces error" {
-  let schema : Schema = {
+  let schema : @schema.Schema = {
     name: "events",
     fields: [
       {
@@ -2038,7 +2038,7 @@ test "TOptional(TDateTime) invalid value produces error" {
   let fm = parse_frontmatter_or_fail(
     "+++\n" + "starts_at = \"2026-03-15\"\n" + "+++\n",
   )
-  let errors = validate(fm, schema)
+  let errors = @schema.validate(fm, schema)
   assert_eq(errors.length(), 1)
   assert_eq(errors[0].field, "starts_at")
 }

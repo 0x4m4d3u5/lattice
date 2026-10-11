@@ -6,7 +6,7 @@ fn page_url(page_number : Int) -> String {
 ///|
 test "pagination returns one logical page for empty input" {
   let docs : Array[Int] = []
-  let pages = paginate(docs, 5, page_url)
+  let pages = @pagination.paginate(docs, 5, page_url)
   assert_eq(pages.length(), 1)
   assert_eq(pages[0].page_number, 1)
   assert_eq(pages[0].total_pages, 1)
@@ -24,7 +24,7 @@ test "pagination returns one logical page for empty input" {
 
 ///|
 test "pagination normalizes non positive page size to one" {
-  let pages = paginate([1, 2, 3], 0, page_url)
+  let pages = @pagination.paginate([1, 2, 3], 0, page_url)
   assert_eq(pages.length(), 3)
   assert_eq(pages[0].page_size, 1)
   assert_eq(pages[0].documents.length(), 1)
@@ -41,7 +41,7 @@ test "pagination normalizes non positive page size to one" {
 
 ///|
 test "pagination splits exact and partial final pages correctly" {
-  let pages = paginate(["a", "b", "c", "d", "e"], 2, page_url)
+  let pages = @pagination.paginate(["a", "b", "c", "d", "e"], 2, page_url)
   assert_eq(pages.length(), 3)
   assert_eq(pages[0].documents.length(), 2)
   assert_eq(pages[1].documents.length(), 2)
@@ -63,7 +63,7 @@ test "pagination splits exact and partial final pages correctly" {
 
 ///|
 test "pagination exactly fills one page produces single page no nav" {
-  let pages = paginate([1, 2, 3], 3, page_url)
+  let pages = @pagination.paginate([1, 2, 3], 3, page_url)
   assert_eq(pages.length(), 1)
   assert_eq(pages[0].page_number, 1)
   assert_eq(pages[0].total_pages, 1)
@@ -81,7 +81,7 @@ test "pagination exactly fills one page produces single page no nav" {
 
 ///|
 test "pagination one item over page size splits into two pages" {
-  let pages = paginate([1, 2, 3, 4], 3, page_url)
+  let pages = @pagination.paginate([1, 2, 3, 4], 3, page_url)
   assert_eq(pages.length(), 2)
   assert_eq(pages[0].documents.length(), 3)
   assert_eq(pages[1].documents.length(), 1)
@@ -105,7 +105,7 @@ test "pagination one item over page size splits into two pages" {
 ///|
 test "pagination metadata fields are consistent across all pages" {
   let docs = [1, 2, 3, 4, 5, 6, 7]
-  let pages = paginate(docs, 3, page_url)
+  let pages = @pagination.paginate(docs, 3, page_url)
   assert_eq(pages.length(), 3)
   let mut i = 0
   while i < pages.length() {
@@ -137,7 +137,7 @@ test "pagination metadata fields are consistent across all pages" {
 
 ///|
 test "pagination preserves documents with maximum positive page size" {
-  let pages = paginate(["a", "b", "c"], 2147483647, page_url)
+  let pages = @pagination.paginate(["a", "b", "c"], 2147483647, page_url)
   assert_eq(pages.length(), 1)
   assert_eq(pages[0].page_size, 2147483647)
   assert_eq(pages[0].total_pages, 1)

@@ -99,7 +99,7 @@ pub fn trim_h(s : String) -> String {
 ///|
 /// Extract substring `s[start..end)`.
 pub fn substr(s : String, start : Int, end_pos : Int) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   let mut i = start
   while i < end_pos {
     buf.write_char(char_at(s, i))
@@ -133,7 +133,7 @@ pub fn split_lines(s : String) -> Array[String] {
 ///|
 /// Join an array of strings with newline separator.
 pub fn join_lines(lines : Array[String]) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   let mut i = 0
   while i < lines.length() {
     if i > 0 {
@@ -259,7 +259,7 @@ pub fn ends_with(s : String, suffix : String) -> Bool {
 ///|
 /// Escape text for HTML body context (&, <, >).
 pub fn escape_html_body(s : String) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   for c in s {
     match c {
       '&' => buf.write_string("&amp;")
@@ -274,7 +274,7 @@ pub fn escape_html_body(s : String) -> String {
 ///|
 /// Escape text for HTML attribute context (&, <, >, ").
 pub fn escape_html_attr(s : String) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   for c in s {
     match c {
       '&' => buf.write_string("&amp;")
@@ -395,7 +395,7 @@ pub fn write_json_string(buf : StringBuilder, s : String) -> Unit {
 ///|
 /// Convert ASCII uppercase letters to lowercase. Non-ASCII characters are unchanged.
 pub fn to_ascii_lower(s : String) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   for c in s {
     if c >= 'A' && c <= 'Z' {
       buf.write_char((c.to_int() + 32).unsafe_to_char())
@@ -533,7 +533,7 @@ pub fn parse_quoted(s : String, pos : Int) -> Result[(String, Int), String] {
   if pos >= s.length() || char_at(s, pos) != '"' {
     return Err("expected '\"'")
   }
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   let mut i = pos + 1
   while i < s.length() {
     let c = char_at(s, i)
@@ -802,7 +802,7 @@ pub fn find_str(s : String, from : Int, needle : String, limit : Int) -> Int {
 /// plaintext suitable for content indexing or LLM/agent consumption.
 pub fn strip_html_tags(s : String) -> String {
   // Pass 1: remove tags — replace each <...> with a space
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   let n = s.length()
   let mut i = 0
   let mut in_tag = false
@@ -822,7 +822,7 @@ pub fn strip_html_tags(s : String) -> String {
   }
   // Pass 2: decode basic entities and collapse runs of whitespace
   let stripped = buf.to_string()
-  let out = StringBuilder::new()
+  let out = StringBuilder()
   let m = stripped.length()
   let mut j = 0
   let mut prev_ws = true // treat leading whitespace as already-spaced

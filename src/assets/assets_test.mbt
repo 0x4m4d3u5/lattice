@@ -18,27 +18,27 @@ fn write_file(path : String, content : String) -> Unit {
 
 ///|
 test "error_path returns path from SourceReadError" {
-  assert_eq(error_path(SourceReadError("/a/b", "msg")), "/a/b")
+  assert_eq(@assets.error_path(SourceReadError("/a/b", "msg")), "/a/b")
 }
 
 ///|
 test "error_path returns path from SourceNotDirectory" {
-  assert_eq(error_path(SourceNotDirectory("/a/b")), "/a/b")
+  assert_eq(@assets.error_path(SourceNotDirectory("/a/b")), "/a/b")
 }
 
 ///|
 test "error_path returns path from DestCreateError" {
-  assert_eq(error_path(DestCreateError("/out/b", "msg")), "/out/b")
+  assert_eq(@assets.error_path(DestCreateError("/out/b", "msg")), "/out/b")
 }
 
 ///|
 test "error_path returns path from FileReadError" {
-  assert_eq(error_path(FileReadError("/f.png", "msg")), "/f.png")
+  assert_eq(@assets.error_path(FileReadError("/f.png", "msg")), "/f.png")
 }
 
 ///|
 test "error_path returns path from FileWriteError" {
-  assert_eq(error_path(FileWriteError("/f.png", "msg")), "/f.png")
+  assert_eq(@assets.error_path(FileWriteError("/f.png", "msg")), "/f.png")
 }
 
 // ── format_error ─────────────────────────────────────────────────────────────
@@ -46,7 +46,7 @@ test "error_path returns path from FileWriteError" {
 ///|
 test "format_error SourceReadError includes path and reason" {
   assert_eq(
-    format_error(SourceReadError("/static", "permission denied")),
+    @assets.format_error(SourceReadError("/static", "permission denied")),
     "cannot read static assets source /static: permission denied",
   )
 }
@@ -54,7 +54,7 @@ test "format_error SourceReadError includes path and reason" {
 ///|
 test "format_error SourceNotDirectory includes path" {
   assert_eq(
-    format_error(SourceNotDirectory("/static")),
+    @assets.format_error(SourceNotDirectory("/static")),
     "static assets path exists but is not a directory: /static",
   )
 }
@@ -62,7 +62,7 @@ test "format_error SourceNotDirectory includes path" {
 ///|
 test "format_error DestCreateError includes path and reason" {
   assert_eq(
-    format_error(DestCreateError("/out/static", "disk full")),
+    @assets.format_error(DestCreateError("/out/static", "disk full")),
     "cannot create static asset directory /out/static: disk full",
   )
 }
@@ -70,7 +70,7 @@ test "format_error DestCreateError includes path and reason" {
 ///|
 test "format_error FileReadError includes path and reason" {
   assert_eq(
-    format_error(FileReadError("/static/img.png", "read error")),
+    @assets.format_error(FileReadError("/static/img.png", "read error")),
     "cannot read static asset file /static/img.png: read error",
   )
 }
@@ -78,7 +78,7 @@ test "format_error FileReadError includes path and reason" {
 ///|
 test "format_error FileWriteError includes path and reason" {
   assert_eq(
-    format_error(FileWriteError("/out/img.png", "write error")),
+    @assets.format_error(FileWriteError("/out/img.png", "write error")),
     "cannot write static asset file /out/img.png: write error",
   )
 }
@@ -88,7 +88,7 @@ test "format_error FileWriteError includes path and reason" {
 ///|
 test "copy_static is a no-op when site root does not exist" {
   assert_eq(
-    copy_static(
+    @assets.copy_static(
       "_tmp_assets_missing_9x7z", "_tmp_assets_missing_out_9x7z", "static",
     ),
     Ok(0),
@@ -100,7 +100,7 @@ test "copy_static returns SourceNotDirectory when static path is a regular file"
   let site = "_tmp_assets_copy_notdir"
   setup_dir(site)
   write_file(@strutil.join_path(site, "static"), "not a directory")
-  let result = copy_static(site, site + "_out", "static")
+  let result = @assets.copy_static(site, site + "_out", "static")
   match result {
     Err(SourceNotDirectory(_)) => ()
     _ => assert_true(false)
@@ -116,7 +116,7 @@ test "copy_static copies a flat directory of files" {
   let src = @strutil.join_path(site, "static")
   setup_dir(src)
   write_file(@strutil.join_path(src, "style.css"), "body { margin: 0; }")
-  let result = copy_static(site, out, "static")
+  let result = @assets.copy_static(site, out, "static")
   assert_eq(result, Ok(1))
   assert_eq(
     @fs.path_exists(
@@ -138,7 +138,7 @@ test "copy_static copies nested directory tree and returns total file count" {
   setup_dir(subdir)
   write_file(@strutil.join_path(src, "main.css"), ".a{}")
   write_file(@strutil.join_path(subdir, "logo.svg"), "<svg/>")
-  let result = copy_static(site, out, "static")
+  let result = @assets.copy_static(site, out, "static")
   assert_eq(result, Ok(2))
 }
 
@@ -146,7 +146,7 @@ test "copy_static copies nested directory tree and returns total file count" {
 
 ///|
 test "check_static returns no errors when source directory does not exist" {
-  let v = check_static("_tmp_assets_check_missing_9x7z", "static")
+  let v = @assets.check_static("_tmp_assets_check_missing_9x7z", "static")
   assert_eq(v.errors.length(), 0)
 }
 
@@ -155,7 +155,7 @@ test "check_static returns SourceNotDirectory when static path is a regular file
   let site = "_tmp_assets_check_notdir"
   setup_dir(site)
   write_file(@strutil.join_path(site, "static"), "not a directory")
-  let v = check_static(site, "static")
+  let v = @assets.check_static(site, "static")
   assert_eq(v.errors.length(), 1)
   match v.errors[0] {
     SourceNotDirectory(_) => ()
@@ -170,7 +170,7 @@ test "check_static returns no errors for a readable static directory" {
   let src = @strutil.join_path(site, "static")
   setup_dir(src)
   write_file(@strutil.join_path(src, "style.css"), "body {}")
-  let v = check_static(site, "static")
+  let v = @assets.check_static(site, "static")
   assert_eq(v.errors.length(), 0)
 }
 
@@ -185,7 +185,7 @@ test "read_static preserves binary bytes in an independent snapshot" {
   @fs.write_bytes_to_file(file, bytes) catch {
     @fs.IOError(_) => assert_true(false)
   }
-  let result = read_static(site, "static")
+  let result = @assets.read_static(site, "static")
   write_file(file, "changed after snapshot")
   match result {
     Ok(assets) => {
@@ -209,7 +209,7 @@ test "read_static keeps nested paths relative to the configured static root" {
   setup_dir(icons)
   write_file(@strutil.join_path(src, "main.css"), "a")
   write_file(@strutil.join_path(icons, "logo.svg"), "b")
-  match read_static(site, "public") {
+  match @assets.read_static(site, "public") {
     Ok(assets) => {
       assert_eq(assets.length(), 2)
       let paths = assets.map(fn(asset) { asset.relative_path })
@@ -225,7 +225,7 @@ test "read_static leaves missing source paths absent" {
   let site = "_tmp_assets_read_missing_9x7z"
   let directories : Array[String] = []
   assert_true(!@fs.path_exists(site))
-  match read_static(site, "static", directories~) {
+  match @assets.read_static(site, "static", directories~) {
     Ok(assets) => assert_eq(assets.length(), 0)
     Err(_) => assert_true(false)
   }
@@ -239,7 +239,7 @@ test "read_static returns SourceNotDirectory for a regular file" {
   let path = @strutil.join_path(site, "static")
   setup_dir(site)
   write_file(path, "not a directory")
-  match read_static(site, "static") {
+  match @assets.read_static(site, "static") {
     Err(SourceNotDirectory(actual)) => assert_eq(actual, path)
     _ => assert_true(false)
   }
@@ -255,7 +255,7 @@ test "read_static records the static root and empty nested directories" {
   setup_dir(empty_dir)
   setup_dir(@strutil.join_path(empty_dir, "nested"))
   let directories : Array[String] = []
-  match read_static(site, "static", directories~) {
+  match @assets.read_static(site, "static", directories~) {
     Ok(assets) => assert_eq(assets.length(), 0)
     Err(_) => assert_true(false)
   }

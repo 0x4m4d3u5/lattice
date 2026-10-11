@@ -84,7 +84,7 @@ fn[T] render_json_array(
   entries : Array[T],
   write_entry : (StringBuilder, T) -> Unit,
 ) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   buf.write_string("[\n")
   let mut i = 0
   while i < entries.length() {
