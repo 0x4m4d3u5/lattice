@@ -24,6 +24,31 @@ test "integer schema rejects overflowing frontmatter with typed diagnostic" {
 }
 
 ///|
+test "Date schema rejects nonexistent leap days with typed diagnostic" {
+  let schema : @schema.Schema = {
+    name: "posts",
+    fields: [{ name: "date", field_type: TDate(None, None), required: true, }],
+  }
+  for raw in ["2025-02-29", "1900-02-29", "2100-02-29"] {
+    for
+      src in [
+        "+++\ndate = " + raw + "\n+++\n",
+        "---\ndate: '" + raw + "'\n---\n",
+      ] {
+      let fm = parse_frontmatter_or_fail(src)
+      let errors = @schema.validate(fm, schema)
+      assert_eq(errors.length(), 1)
+      assert_eq(errors[0].field, "date")
+      assert_eq(errors[0].message, "expected Date but got incompatible value")
+    }
+  }
+  for raw in ["2024-02-29", "2000-02-29", "2400-02-29", "2025-02-28"] {
+    let fm = parse_frontmatter_or_fail("+++\ndate = " + raw + "\n+++\n")
+    assert_eq(@schema.validate(fm, schema).length(), 0)
+  }
+}
+
+///|
 fn sample_schema() -> @schema.Schema {
   {
     name: "posts",

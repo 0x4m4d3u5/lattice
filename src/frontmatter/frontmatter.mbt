@@ -84,60 +84,6 @@ fn split_lines(s : String) -> Array[String] {
 }
 
 ///|
-/// Validate ISO 8601 date format with month and day range checking.
-/// Returns true if the date is in YYYY-MM-DD format with valid month (1-12)
-/// and day within the valid range for that month.
-fn is_valid_iso8601_date(s : String) -> Bool {
-  if s.length() != 10 {
-    return false
-  }
-  // Check format: YYYY-MM-DD
-  if @strutil.char_at(s, 4) != '-' || @strutil.char_at(s, 7) != '-' {
-    return false
-  }
-  // Extract and validate year (YYYY) - positions 0-3
-  if !@strutil.is_digit(@strutil.char_at(s, 0)) ||
-    !@strutil.is_digit(@strutil.char_at(s, 1)) ||
-    !@strutil.is_digit(@strutil.char_at(s, 2)) ||
-    !@strutil.is_digit(@strutil.char_at(s, 3)) {
-    return false
-  }
-  // Extract and validate month (MM) - positions 5-6
-  if !@strutil.is_digit(@strutil.char_at(s, 5)) ||
-    !@strutil.is_digit(@strutil.char_at(s, 6)) {
-    return false
-  }
-  let month_1 = @strutil.char_at(s, 5).to_int() - '0'.to_int()
-  let month_2 = @strutil.char_at(s, 6).to_int() - '0'.to_int()
-  let month = month_1 * 10 + month_2
-  if month < 1 || month > 12 {
-    return false
-  }
-  // Extract and validate day (DD) - positions 8-9
-  if !@strutil.is_digit(@strutil.char_at(s, 8)) ||
-    !@strutil.is_digit(@strutil.char_at(s, 9)) {
-    return false
-  }
-  let day_1 = @strutil.char_at(s, 8).to_int() - '0'.to_int()
-  let day_2 = @strutil.char_at(s, 9).to_int() - '0'.to_int()
-  let day = day_1 * 10 + day_2
-  if day < 1 {
-    return false
-  }
-  // Validate day is within the valid range for the specific month
-  let max_day = match month {
-    1 | 3 | 5 | 7 | 8 | 10 | 12 => 31 // Months with 31 days
-    4 | 6 | 9 | 11 => 30 // Months with 30 days
-    2 => 29 // February: accept 29 for leap year compatibility
-    _ => 31 // Should never reach here
-  }
-  if day > max_day {
-    return false
-  }
-  true
-}
-
-///|
 /// Parse a string as a double, supporting negative values and decimal points.
 /// The string must contain at least one decimal point to be a float.
 fn parse_float_str(s : String) -> Result[Double, String] {
@@ -239,7 +185,7 @@ fn parse_value_at(
   if c == '"' {
     match @strutil.parse_quoted(s, i) {
       Ok((v, next)) =>
-        if is_valid_iso8601_date(v) {
+        if @strutil.is_valid_iso8601_date(v) {
           Ok((FDate(v), next))
         } else {
           Ok((FStr(v), next))
@@ -262,7 +208,7 @@ fn parse_value_at(
       j = j + 1
     }
     let raw = trim_ws(@strutil.substr(s, i, j))
-    if is_valid_iso8601_date(raw) {
+    if @strutil.is_valid_iso8601_date(raw) {
       Ok((FDate(raw), j))
     } else if raw.contains(".") {
       match parse_float_str(raw) {
@@ -386,7 +332,7 @@ fn parse_yaml_value(raw : String) -> FrontmatterValue {
     @strutil.char_at(value, 0) == '\'' &&
     @strutil.char_at(value, value.length() - 1) == '\'' {
     let unquoted = @strutil.substr(value, 1, value.length() - 1)
-    if is_valid_iso8601_date(unquoted) {
+    if @strutil.is_valid_iso8601_date(unquoted) {
       return FDate(unquoted)
     }
     return FStr(unquoted)
