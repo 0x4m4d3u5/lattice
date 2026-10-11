@@ -10,6 +10,7 @@ fn test_pages() -> Array[@graph.GraphPage] {
       url: "/posts/first-post/",
       description: Some("First post description"),
       date: Some("2024-01-15"),
+      content_html: "",
       outgoing: [],
       weight: None,
     },
@@ -19,6 +20,7 @@ fn test_pages() -> Array[@graph.GraphPage] {
       url: "/posts/second-post/",
       description: Some("Second post description"),
       date: Some("2024-02-20"),
+      content_html: "",
       outgoing: [],
       weight: None,
     },
@@ -28,6 +30,7 @@ fn test_pages() -> Array[@graph.GraphPage] {
       url: "/posts/third-post/",
       description: Some("Third post description"),
       date: Some("2024-01-10"),
+      content_html: "",
       outgoing: [],
       weight: None,
     },
@@ -72,6 +75,7 @@ test "render_feed includes entry details" {
       url: "/posts/test-post/",
       description: Some("Test description with <special> & chars"),
       date: Some("2024-03-01"),
+      content_html: "",
       outgoing: [],
       weight: None,
     },
@@ -108,6 +112,7 @@ test "render_feed handles pages without description" {
       url: "/posts/no-desc/",
       description: None,
       date: Some("2024-01-01"),
+      content_html: "",
       outgoing: [],
       weight: None,
     },
@@ -129,6 +134,7 @@ test "render_feed handles pages without date" {
       url: "/posts/no-date/",
       description: Some("No date"),
       date: None,
+      content_html: "",
       outgoing: [],
       weight: None,
     },
@@ -147,6 +153,7 @@ test "render_feed with RFC3339 date format" {
       url: "/posts/rfc-post/",
       description: Some("Has RFC3339 date"),
       date: Some("2024-03-15T14:30:00Z"),
+      content_html: "",
       outgoing: [],
       weight: None,
     },
@@ -209,6 +216,7 @@ test "render_feed XML character escaping" {
       url: "/posts/escape/",
       description: Some("Description with & < > \" '"),
       date: Some("2024-01-01"),
+      content_html: "",
       outgoing: [],
       weight: None,
     },
@@ -232,6 +240,7 @@ test "render_feed respects limit parameter" {
       url: "/posts/post-1/",
       description: Some("First"),
       date: Some("2024-01-01"),
+      content_html: "",
       outgoing: [],
       weight: None,
     },
@@ -241,6 +250,7 @@ test "render_feed respects limit parameter" {
       url: "/posts/post-2/",
       description: Some("Second"),
       date: Some("2024-01-02"),
+      content_html: "",
       outgoing: [],
       weight: None,
     },
@@ -250,6 +260,7 @@ test "render_feed respects limit parameter" {
       url: "/posts/post-3/",
       description: Some("Third"),
       date: Some("2024-01-03"),
+      content_html: "",
       outgoing: [],
       weight: None,
     },
@@ -300,6 +311,7 @@ test "render_json_feed basic structure" {
       url: "/posts/hello/",
       description: Some("A greeting"),
       date: Some("2024-01-01"),
+      content_html: "",
       outgoing: [],
       weight: None,
     },
@@ -340,6 +352,7 @@ test "render_json_feed items have correct fields" {
       url: "/posts/foo/",
       description: Some("Description text here"),
       date: Some("2024-01-01"),
+      content_html: "",
       outgoing: [],
       weight: None,
     },
@@ -371,6 +384,7 @@ test "render_json_feed summary present when description exists" {
       url: "/posts/with-desc/",
       description: Some("Description text here"),
       date: Some("2024-01-01"),
+      content_html: "",
       outgoing: [],
       weight: None,
     },
@@ -397,6 +411,7 @@ test "render_json_feed summary absent when description is None" {
       url: "/posts/no-desc/",
       description: None,
       date: Some("2024-01-01"),
+      content_html: "",
       outgoing: [],
       weight: None,
     },
@@ -420,6 +435,7 @@ test "render_json_feed date fields present when date exists" {
       url: "/posts/dated/",
       description: None,
       date: Some("2024-06-15"),
+      content_html: "",
       outgoing: [],
       weight: None,
     },
@@ -450,6 +466,7 @@ test "render_json_feed date fields absent when no date" {
       url: "/posts/undated/",
       description: None,
       date: None,
+      content_html: "",
       outgoing: [],
       weight: None,
     },
@@ -474,6 +491,7 @@ test "render_json_feed JSON string escaping" {
       url: "/posts/escape/",
       description: Some("Has <tag> & 'apos' too"),
       date: Some("2024-01-01"),
+      content_html: "",
       outgoing: [],
       weight: None,
     },
@@ -500,6 +518,7 @@ test "render_json_feed respects limit parameter" {
       url: "/posts/post-1/",
       description: Some("First"),
       date: Some("2024-01-01"),
+      content_html: "",
       outgoing: [],
       weight: None,
     },
@@ -509,6 +528,7 @@ test "render_json_feed respects limit parameter" {
       url: "/posts/post-2/",
       description: Some("Second"),
       date: Some("2024-01-02"),
+      content_html: "",
       outgoing: [],
       weight: None,
     },
@@ -518,6 +538,7 @@ test "render_json_feed respects limit parameter" {
       url: "/posts/post-3/",
       description: Some("Third"),
       date: Some("2024-01-03"),
+      content_html: "",
       outgoing: [],
       weight: None,
     },
@@ -679,4 +700,51 @@ test "normalize_feed_datetime: midnight is valid" {
 test "normalize_feed_datetime: end of day is valid" {
   let result = @rss.normalize_feed_datetime(Some("2026-12-31T23:59:59Z"))
   assert_true(result == Some("2026-12-31T23:59:59Z"))
+}
+
+///|
+test "JSON Feed content preserves authored HTML including an empty body" {
+  let body = "<p>\"quoted\" &amp; café \\ path</p>\n"
+  let pages : Array[@graph.GraphPage] = [
+    {
+      slug: "body",
+      title: "Body",
+      url: "/body/",
+      description: Some("Summary only"),
+      date: Some("2026-01-02"),
+      weight: None,
+      outgoing: [],
+      content_html: body,
+    },
+    {
+      slug: "empty",
+      title: "Empty",
+      url: "/empty/",
+      description: None,
+      date: None,
+      weight: None,
+      outgoing: [],
+      content_html: "",
+    },
+  ]
+  let text = @rss.render_json_feed_from_pages(
+    "Site",
+    "https://example.test",
+    pages,
+    None,
+    "https://example.test/feed.json",
+  )
+  guard @json.parse(text) is Object(fields) else {
+    abort("expected feed object")
+  }
+  guard fields.get("items") is Some(Array(items)) else {
+    abort("expected items")
+  }
+  assert_eq(items.length(), 2)
+  guard items[0] is Object(first) else { abort("expected first item") }
+  assert_eq(first.get("content_html"), Some(Json::string(body)))
+  assert_eq(first.get("summary"), Some(Json::string("Summary only")))
+  guard items[1] is Object(second) else { abort("expected second item") }
+  assert_eq(second.get("content_html"), Some(Json::string("")))
+  assert_eq(second.get("summary"), None)
 }

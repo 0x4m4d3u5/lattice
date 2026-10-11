@@ -30,6 +30,7 @@ test "render_graph_json preserves normalized resolved targets and deduplicates s
       description: None,
       date: None,
       weight: None,
+      content_html: "",
       outgoing: resolved,
     },
     {
@@ -39,6 +40,7 @@ test "render_graph_json preserves normalized resolved targets and deduplicates s
       description: None,
       date: None,
       weight: None,
+      content_html: "",
       outgoing: [],
     },
   ]
@@ -63,6 +65,7 @@ test "render_graph_json retains a resolved filename target without a literal slu
       description: None,
       date: None,
       weight: None,
+      content_html: "",
       outgoing: resolved,
     },
     {
@@ -72,6 +75,7 @@ test "render_graph_json retains a resolved filename target without a literal slu
       description: None,
       date: None,
       weight: None,
+      content_html: "",
       outgoing: [],
     },
   ]
@@ -101,6 +105,7 @@ test "render_graph_json single page with no outgoing links" {
       description: None,
       date: None,
       weight: None,
+      content_html: "",
       outgoing: [],
     },
   ]
@@ -120,6 +125,7 @@ test "render_graph_json emits edges for outgoing wikilinks" {
       description: None,
       date: None,
       weight: None,
+      content_html: "",
       outgoing: [raw_link("post-b")],
     },
     {
@@ -129,6 +135,7 @@ test "render_graph_json emits edges for outgoing wikilinks" {
       description: None,
       date: None,
       weight: None,
+      content_html: "",
       outgoing: [],
     },
   ]
@@ -147,6 +154,7 @@ test "render_graph_json escapes double quotes in title" {
       description: None,
       date: None,
       weight: None,
+      content_html: "",
       outgoing: [],
     },
   ]
@@ -166,6 +174,7 @@ test "render_graph_json multiple pages produce comma-separated node entries" {
       description: None,
       date: None,
       weight: None,
+      content_html: "",
       outgoing: [],
     },
     {
@@ -175,6 +184,7 @@ test "render_graph_json multiple pages produce comma-separated node entries" {
       description: None,
       date: None,
       weight: None,
+      content_html: "",
       outgoing: [],
     },
   ]
@@ -194,6 +204,7 @@ test "render_graph_json multiple outgoing edges from single page" {
       description: None,
       date: None,
       weight: None,
+      content_html: "",
       outgoing: [raw_link("alpha"), raw_link("beta"), raw_link("gamma")],
     },
     {
@@ -203,6 +214,7 @@ test "render_graph_json multiple outgoing edges from single page" {
       description: None,
       date: None,
       weight: None,
+      content_html: "",
       outgoing: [],
     },
     {
@@ -212,6 +224,7 @@ test "render_graph_json multiple outgoing edges from single page" {
       description: None,
       date: None,
       weight: None,
+      content_html: "",
       outgoing: [],
     },
     {
@@ -221,6 +234,7 @@ test "render_graph_json multiple outgoing edges from single page" {
       description: None,
       date: None,
       weight: None,
+      content_html: "",
       outgoing: [],
     },
   ]
@@ -244,6 +258,7 @@ test "render_graph_json filters dangling edges to excluded pages" {
       description: None,
       date: None,
       weight: None,
+      content_html: "",
       outgoing: [
         raw_link("guide"),
         raw_link("draft-page"),
@@ -257,6 +272,7 @@ test "render_graph_json filters dangling edges to excluded pages" {
       description: None,
       date: None,
       weight: None,
+      content_html: "",
       outgoing: [],
     },
     // draft-page and another-draft are NOT in the nodes array
@@ -280,6 +296,7 @@ test "render_graph_json does not html-escape angle brackets and ampersand in tit
       description: None,
       date: None,
       weight: None,
+      content_html: "",
       outgoing: [],
     },
   ]
@@ -303,6 +320,7 @@ test "render_graph_json self-loop edge source equals target" {
       description: None,
       date: None,
       weight: None,
+      content_html: "",
       outgoing: [raw_link("recursive")],
     },
   ]
@@ -325,6 +343,7 @@ test "render_graph_json cross-edges between multiple pages" {
       description: None,
       date: None,
       weight: None,
+      content_html: "",
       outgoing: [raw_link("b"), raw_link("c")],
     },
     {
@@ -334,6 +353,7 @@ test "render_graph_json cross-edges between multiple pages" {
       description: None,
       date: None,
       weight: None,
+      content_html: "",
       outgoing: [raw_link("a")],
     },
     {
@@ -343,6 +363,7 @@ test "render_graph_json cross-edges between multiple pages" {
       description: None,
       date: None,
       weight: None,
+      content_html: "",
       outgoing: [],
     },
   ]
@@ -368,6 +389,7 @@ test "render_graph_json deduplicates parallel edges from same source" {
       date: None,
       weight: None,
       // Two wikilinks to the same target — should produce one edge
+      content_html: "",
       outgoing: [
         raw_link("template-composition"),
         raw_link("template-composition"),
@@ -380,6 +402,7 @@ test "render_graph_json deduplicates parallel edges from same source" {
       description: None,
       date: None,
       weight: None,
+      content_html: "",
       outgoing: [],
     },
   ]
