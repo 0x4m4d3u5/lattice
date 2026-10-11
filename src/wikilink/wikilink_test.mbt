@@ -200,3 +200,33 @@ test "wikilink resolve error message contains target name" {
   assert_eq(errors.length(), 1)
   assert_true(errors[0].message.contains("missing-page"))
 }
+
+///|
+test "wikilink extract skips tilde code fences and resumes afterward" {
+  let links = @wikilink.extract(
+    "~~~text\n[[code-example]]\n~~~\n[[real-page]]\n", "content/guide.md",
+  )
+  assert_eq(links.length(), 1)
+  assert_eq(links[0].target, "real-page")
+}
+
+///|
+test "wikilink extract requires the opening fence character to close" {
+  let links = @wikilink.extract(
+    "~~~\n```\n[[code-example]]\n~~~\n[[real-page]]\n" +
+    "```\n~~~\n[[another-example]]\n```\n[[another-page]]\n",
+    "content/guide.md",
+  )
+  assert_eq(links.length(), 2)
+  assert_eq(links[0].target, "real-page")
+  assert_eq(links[1].target, "another-page")
+}
+
+///|
+test "wikilink extract ignores an unclosed tilde fence" {
+  let links = @wikilink.extract(
+    "[[real-page]]\n  ~~~text\n[[code-example]]\n", "content/guide.md",
+  )
+  assert_eq(links.length(), 1)
+  assert_eq(links[0].target, "real-page")
+}

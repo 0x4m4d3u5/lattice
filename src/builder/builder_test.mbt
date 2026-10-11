@@ -5940,3 +5940,80 @@ test "build emits collection and tag indexes with maximum positive page size" {
 
 
 }
+
+///|
+test "check ignores wikilink examples in tilde fences but validates real links" {
+  // Code examples must not become structural link errors.
+  let root = "./_tmp_builder_check_tilde_wikilink"
+  let content_root = root + "/content"
+  let posts_root = content_root + "/posts"
+  let data_root = content_root + "/data"
+  let templates_root = root + "/templates"
+  let output_root = root + "/dist"
+  ensure_dir_test(root)
+  ensure_dir_test(content_root)
+  ensure_dir_test(posts_root)
+  ensure_dir_test(data_root)
+  ensure_dir_test(templates_root)
+  ensure_dir_test(output_root)
+
+  assert_true(
+    write_file_test(
+      posts_root + "/hello.md",
+      "---\n" +
+      "title: Hello\n" +
+      "date: 2026-04-01\n" +
+      "---\n\n" +
+      "~~~text\n[[code-example]]\n```\n[[also-code]]\n~~~\n" +
+      "See [[missing-page]] for context.\n",
+    ),
+  )
+  assert_true(
+    write_file_test(
+      templates_root + "/page.html",
+      "<html><body>{{content}}</body></html>\n",
+    ),
+  )
+  let site_cfg = "title = WikilinkCheck\n" +
+    "base_url = /\n" +
+    "templates_dir = " +
+    templates_root +
+    "\n" +
+    "output_dir = " +
+    output_root +
+    "\n" +
+    "[[collections]]\n" +
+    "name = posts\n" +
+    "dir = " +
+    posts_root +
+    "\n" +
+    "schema = title:String,date:Date\n"
+  let site = match @config.parse(site_cfg) {
+    Ok(parsed) => parsed
+    Err(_) => {
+      assert_true(false)
+      abort("site config parse failed")
+    }
+  }
+  assert_true(write_file_test(output_root + "/sentinel.txt", "LAST_GOOD"))
+  let result = @builder.check({
+    content_dir: content_root,
+    output_dir: output_root,
+    config_path: root + "/site.cfg",
+    site,
+    collections_path: None,
+    force_rebuild: false,
+    include_drafts: false,
+  })
+  // BrokenWikilink must appear as a violation in check mode
+  let wl_violations = result.violations.filter(fn(v) {
+    v.kind == @lint.BrokenWikilink
+  })
+  assert_eq(wl_violations.length(), 1)
+  assert_true(wl_violations[0].message.contains("missing-page"))
+  assert_false(@fs.path_exists(output_root + "/posts/hello/index.html"))
+  let sentinel = @fs.read_file_to_string(output_root + "/sentinel.txt") catch {
+    @fs.IOError(_) => abort("check changed existing output")
+  }
+  assert_eq(sentinel, "LAST_GOOD")
+}
