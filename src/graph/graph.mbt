@@ -64,9 +64,12 @@ pub fn render_graph_json(pages : Array[GraphPage]) -> String {
     let mut j = 0
     while j < page.outgoing.length() {
       let edge = page.outgoing[j]
+      // Resolution accepts title/case/filename variants; use its canonical key
+      // for node membership, edge identity, and output as well.
+      let target = @wikilink.lookup_key(edge.raw.target)
       // Skip edges whose target is not a node in the graph (e.g. drafts)
-      if slug_set.contains(edge.raw.target) {
-        let edge_key = page.slug + ":" + edge.raw.target
+      if slug_set.contains(target) {
+        let edge_key = page.slug + ":" + target
         if !seen_edges.contains(edge_key) {
           seen_edges[edge_key] = true
           if !first_edge {
@@ -75,7 +78,7 @@ pub fn render_graph_json(pages : Array[GraphPage]) -> String {
           buf.write_string("    {\"source\": ")
           @strutil.write_json_string(buf, page.slug)
           buf.write_string(", \"target\": ")
-          @strutil.write_json_string(buf, edge.raw.target)
+          @strutil.write_json_string(buf, target)
           buf.write_char('}')
           first_edge = false
         }
