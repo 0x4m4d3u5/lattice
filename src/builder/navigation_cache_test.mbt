@@ -1,4 +1,61 @@
 ///|
+fn navigation_expected_slots(change : String) -> Array[(String, String)] {
+  // Literal neighboring URL/title expectations for the authored date fixtures.
+  // Keep these independent of production sorting and adjacency helpers.
+  match change {
+    "insert" =>
+      [
+        ("delta", "|||/posts/gamma/|Gamma|"),
+        ("gamma", "|/posts/delta/|Delta|/posts/epsilon/|Epsilon|"),
+        ("epsilon", "|/posts/gamma/|Gamma|/posts/beta/|Beta|"),
+        ("beta", "|/posts/epsilon/|Epsilon|/posts/alpha/|Alpha|"),
+        ("alpha", "|/posts/beta/|Beta|||"),
+      ]
+    "delete" =>
+      [
+        ("delta", "|||/posts/gamma/|Gamma|"),
+        ("gamma", "|/posts/delta/|Delta|/posts/alpha/|Alpha|"),
+        ("alpha", "|/posts/gamma/|Gamma|||"),
+      ]
+    "retitle" =>
+      [
+        ("delta", "|||/posts/gamma/|Gamma|"),
+        ("gamma", "|/posts/delta/|Delta|/posts/beta/|Revised Beta|"),
+        ("beta", "|/posts/gamma/|Gamma|/posts/alpha/|Alpha|"),
+        ("alpha", "|/posts/beta/|Revised Beta|||"),
+      ]
+    "reorder" =>
+      [
+        ("beta", "|||/posts/delta/|Delta|"),
+        ("delta", "|/posts/beta/|Beta|/posts/gamma/|Gamma|"),
+        ("gamma", "|/posts/delta/|Delta|/posts/alpha/|Alpha|"),
+        ("alpha", "|/posts/gamma/|Gamma|||"),
+      ]
+    "rename" =>
+      [
+        ("delta", "|||/posts/gamma/|Gamma|"),
+        ("gamma", "|/posts/delta/|Delta|/posts/omega/|Beta|"),
+        ("omega", "|/posts/gamma/|Gamma|/posts/alpha/|Alpha|"),
+        ("alpha", "|/posts/omega/|Beta|||"),
+      ]
+    _ => abort("unknown navigation fixture")
+  }
+}
+
+///|
+fn navigation_assert_slots(
+  config : @builder.BuildConfig,
+  change : String,
+) -> Unit raise {
+  for (slug, expected) in navigation_expected_slots(change) {
+    let html = @fs.read_file_to_string(
+      config.output_dir + "/posts/" + slug + "/index.html",
+    )
+    assert_true(html.contains(expected))
+  }
+}
+
+///|
 fn navigation_cache_case(change : String) -> Unit raise {
   let config = publication_fixture("navigation_" + change)
   let templates = match config.site.templates_dir {
@@ -65,6 +122,7 @@ fn navigation_cache_case(change : String) -> Unit raise {
   }
   let result = @builder.build(incremental, publication_load_cache(config))
   assert_eq(result.errors, 0)
+  navigation_assert_slots(config, change)
   let actual : Array[String] = []
   for slug in slugs {
     actual.push(
@@ -80,6 +138,7 @@ fn navigation_cache_case(change : String) -> Unit raise {
   // A cached build must publish the same navigation as a forced full build.
   let full = @builder.build(config, publication_load_cache(config))
   assert_eq(full.errors, 0)
+  navigation_assert_slots(config, change)
   for i, slug in slugs {
     assert_eq(
       actual[i],
