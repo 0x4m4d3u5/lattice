@@ -16,13 +16,22 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '26.10.0'
-      - name: Install pinned Rust build prerequisite
-        run: rustup toolchain install 1.99.0 --profile minimal
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        id: toolchain
+        with:
+          path: ${{ env.MOON_HOME }}
+          key: moon-${{ runner.os }}-${{ runner.arch }}-node26.10.0-${{ hashFiles('scripts/install-ci-prebuilt.sh') }}
       - id: install
-        name: Install tagged compiler and pinned Moon source
+        name: Install pinned prebuilt toolchain
+        if: steps.toolchain.outputs.cache-hit != 'true'
         run: |
-          bash scripts/install-ci-toolchain.sh
+          bash scripts/install-ci-prebuilt.sh
+      - name: Verify toolchain and add to path
+        run: |
           echo "$MOON_HOME/bin" >> "$GITHUB_PATH"
+          export PATH="$MOON_HOME/bin:$PATH"
+          version=$("$MOON_HOME/bin/moon" version --all)
+          [[ "$version" == *"moonc v0.10.14+7d59c7ec9"* && "$version" == *"(914d7da"* ]]
       - name: Resolve declared dependencies
         run: moon update
       - name: Check, test, and build
