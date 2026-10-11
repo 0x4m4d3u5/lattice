@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Install the durable WASM compiler and the verified open-source Moon CLI.
-# JS tests use Node: no Rust build, moonrun, or expiring native compiler is needed.
+# JS tests use Node; the CLI also requires its bundled Moonrun to resolve tools.
 set -euo pipefail
 : "${MOON_HOME:?Set MOON_HOME to a task/job toolchain directory}"
 MOON_HOME=$(realpath -m "$MOON_HOME")
@@ -19,7 +19,7 @@ version='0.10.14%2B7d59c7ec9'
 curl --fail --location --silent --show-error \
   "https://github.com/moonbitlang/moonbit-compiler/releases/download/v$version/moonbit-wasm.tar.gz" \
   -o "$work_dir/compiler.tar.gz"
-# This archive supplies only the Rust Moon CLI; its native compiler is never extracted.
+# Extract the open-source CLI/runtime pair; never extract the native compiler.
 curl --fail --location --silent --show-error \
   "https://cli.moonbitlang.com/binaries/$version/moonbit-linux-x86_64.tar.gz" \
   -o "$work_dir/cli.tar.gz"
@@ -34,8 +34,8 @@ tar xf "$work_dir/compiler.tar.gz" -C "$work_dir/compiler"
 mkdir -p "$(dirname "$MOON_HOME")"
 staging_dir=$(mktemp -d "$MOON_HOME.install.XXXXXX")
 mkdir "$staging_dir/bin" "$staging_dir/lib"
-tar xf "$work_dir/cli.tar.gz" --strip-components=2 -C "$staging_dir/bin" ./bin/moon
-chmod +x "$staging_dir/bin/moon"
+tar xf "$work_dir/cli.tar.gz" --strip-components=2 -C "$staging_dir/bin" ./bin/moon ./bin/moonrun
+chmod +x "$staging_dir/bin/moon" "$staging_dir/bin/moonrun"
 for name in moonc moonfmt mooninfo; do
   { printf '%s\n' '#!/usr/bin/env -S node --stack-size=4096'; cat "$work_dir/compiler/$name.js"; } > "$staging_dir/bin/$name"
   chmod +x "$staging_dir/bin/$name"

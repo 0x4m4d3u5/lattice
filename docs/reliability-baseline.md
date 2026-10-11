@@ -8,10 +8,11 @@ previous `_build`, `.mooncakes`, or synthetic test outputs. No real vault was pr
 
 Repository setup lives in `scripts/install-ci-toolchain.sh`; CI invokes that same
 installer. It downloads and verifies official archives, installs the durable WASM
-compiler release and **only the open-source Moon CLI** from the Linux archive, and
+compiler release and **the open-source Moon CLI and Moonrun** from the Linux archive, and
 bundles core for JavaScript. It never extracts or executes the expiring native
-compiler. JavaScript tests run through Node, so Rust compilation and the V8-based
-`moonrun` runtime are unnecessary and have been removed. There is no separate
+compiler. JavaScript tests run through Node. No Rust compilation is needed. The CLI eagerly
+resolves `moonrun` even for JS commands, so its official bundled runtime is retained
+and checksum-verified; JS tests do not execute it. There is no separate
 prebuilt installer or workflow-specific toolchain setup path.
 
 - Compiler: `v0.10.14+7d59c7ec9`, official tagged WASM distribution, including core.
@@ -25,7 +26,7 @@ prebuilt installer or workflow-specific toolchain setup path.
 | Official input | Verified SHA-256 |
 | --- | --- |
 | Tagged `moonbit-wasm.tar.gz`, compiler and core | `3c5d21564b0e8bbfcfda95d374eda90427f6a5e238ce4639b711b69f43391f62` |
-| Linux archive, extracting only `bin/moon` | `9226694de9ff978db1ecf820b7710c4224e84ec7a76b19a222d96f0cd4e31b6a` |
+| Linux archive, extracting `bin/moon` and `bin/moonrun` | `9226694de9ff978db1ecf820b7710c4224e84ec7a76b19a222d96f0cd4e31b6a` |
 
 [Compiler release](https://github.com/moonbitlang/moonbit-compiler/releases/tag/v0.10.14%2B7d59c7ec9),
 [official installer distribution paths](https://cli.moonbitlang.com/install/unix.sh),
@@ -38,7 +39,7 @@ evidence below, not as a second installer path.
 Archives are checked before extraction. Installation uses a temporary sibling
 and promotes only after verification and bundling succeed. An existing valid
 installation is reused; an invalid one is rejected without overwriting it.
-`scripts/verify-ci-toolchain.sh` checks the installed CLI, compiler wrappers,
+`scripts/verify-ci-toolchain.sh` checks the installed CLI/runtime pair, compiler wrappers,
 WASM assets and expected versions, including on cache hits. CI's exact cache key
 includes OS, architecture, Node version and both setup scripts. A cache miss
 runs the same installer; it never silently upgrades to a different version.

@@ -3188,10 +3188,11 @@ compared. Repository manifests now use `moon.mod`/`moon.work`, with the local pa
 explicitly selected. The baseline treats every compiler warning as an error.
 
 Hosted logs showed the old installer spent 278 seconds compiling Moon and the
-V8-based moonrun runtime. Neither Rust nor moonrun is needed to run our JavaScript
-baseline. The earlier native-compiler workaround was removed: the original setup
-script now installs the durable tagged WASM compiler, extracts only the verified
-open-source Moon CLI from the official Linux archive, and bundles JS core. The
+V8-based moonrun runtime. No Rust build is needed to run our JavaScript
+baseline. Hosted CI exposed the CLI eagerly resolving Moonrun even for JS commands;
+the official bundled runtime is retained and verified, although JS tests use Node. The earlier native-compiler workaround was removed: the original setup
+script now installs the durable tagged WASM compiler, extracts the verified
+open-source Moon CLI/runtime pair from the official Linux archive, and bundles JS core. The
 native compiler's expiration is therefore irrelevant to the installed profile.
 All artifact pins and verification live in repository scripts; CI calls those
 scripts and caches their verified outputs. Fresh local setup measured 12.6 seconds,

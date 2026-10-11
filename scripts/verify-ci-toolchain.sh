@@ -9,6 +9,7 @@ export MOON_HOME
 cd "$MOON_HOME"
 sha256sum --check --strict <<'HASHES'
 6da4919f45f4abf7c6d7f3cf8d9a457de77dca430d6fb811d21b27ae1ac8e11d  bin/moon
+1b22f489621059b8c22ee4acdaddc5f5d1781f62529d3000a24c03d45032d0e2  bin/moonrun
 7b3c7e35077a44be528044f1823fdaadf0e0917cc0fbab082b279d00dae98038  bin/moonc
 fcba7920f54f899b913ab43e1ffc813162430ddbc218f86af475e9923b61dc96  bin/moonfmt
 a02b12e005b7fd3fa3a9172e5a9160ff5e808e7a98f8b0577bab0084e7dc4d96  bin/mooninfo
