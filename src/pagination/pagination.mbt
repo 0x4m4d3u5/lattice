@@ -25,16 +25,19 @@ pub fn[T] paginate(
   let total_pages = if total_items == 0 {
     1
   } else {
-    (total_items + effective_page_size - 1) / effective_page_size
+    // Subtract before dividing: adding page_size can overflow for valid Int sizes.
+    1 + (total_items - 1) / effective_page_size
   }
 
   let pages : Array[PaginatedIndex[T]] = []
   let mut page_number = 1
   while page_number <= total_pages {
     let start = (page_number - 1) * effective_page_size
-    let mut end_pos = start + effective_page_size
-    if end_pos > total_items {
-      end_pos = total_items
+    // Bound the end before adding so a partial final page cannot overflow.
+    let end_pos = if effective_page_size >= total_items - start {
+      total_items
+    } else {
+      start + effective_page_size
     }
 
     let page_documents : Array[T] = []
