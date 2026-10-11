@@ -3220,3 +3220,21 @@ a real missing-link violation and verifies that check leaves output untouched.
 The change uses existing character access and Option matching, introduces no
 new utility or dependency, and preserves the current three-character fence
 policy rather than broadening Markdown syntax in this pass.
+
+## 2026-10-11 — Correct fence indentation parity after review
+
+The PR #14 review identified a missed validation bypass: extraction skipped spaces
+and tabs before fence markers, while Markdown recognized opening and closing
+fences only at column zero. An indented tilde example was rendered as a paragraph
+containing a wikilink but excluded from validation. The review was posted before
+merge; the agent checked CI but failed to inspect the review timeline.
+
+Two new extractor regressions and a rendering/check integration regression failed
+on merged main. Extraction now uses column zero for both delimiters and both
+boundaries, preserving existing renderer semantics. Tests cover spaces and tabs,
+backticks and tildes, indented opening text, and indented markers inside a real
+code block. The existing unclosed-fence test now uses a column-zero opener. The
+integration regression establishes paragraph rendering, a real broken-link
+violation, and unchanged output. This is an AI-assisted correction of a review
+finding; review threads and the full timeline are checked before the follow-up
+merge in addition to CI.

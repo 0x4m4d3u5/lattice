@@ -74,14 +74,8 @@ pub fn extract(content : String, source_file : String) -> Array[RawWikilink] {
   let mut line_start = true
   while i + 1 < n {
     if line_start {
-      let mut probe = i
-      while probe < n &&
-            (
-              @strutil.char_at(content, probe) == ' ' ||
-              @strutil.char_at(content, probe) == '\t'
-            ) {
-        probe = probe + 1
-      }
+      // Match Markdown's column-zero rule for opening and closing fences.
+      let probe = i
       if probe + 2 < n {
         let c = @strutil.char_at(content, probe)
         if (c == '`' || c == '~') &&
