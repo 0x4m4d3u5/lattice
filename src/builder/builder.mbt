@@ -342,23 +342,13 @@ fn compare_pages_by_title(
 
 ///|
 /// Compare two pages by weight (lower weight = earlier).
-/// Pages without a weight field sort after all weighted pages
-/// (treated as Int::max_value for ordering purposes).
+/// Pages without a weight field sort after every explicit Int weight.
 fn compare_pages_by_weight(a : @graph.GraphPage, b : @graph.GraphPage) -> Int {
-  let wa = match a.weight {
-    Some(n) => n
-    None => 2147483647
-  }
-  let wb = match b.weight {
-    Some(n) => n
-    None => 2147483647
-  }
-  if wa == wb {
-    0
-  } else if wa < wb {
-    -1
-  } else {
-    1
+  match (a.weight, b.weight) {
+    (Some(wa), Some(wb)) => if wa == wb { 0 } else if wa < wb { -1 } else { 1 }
+    (Some(_), None) => -1
+    (None, Some(_)) => 1
+    (None, None) => 0
   }
 }
 
