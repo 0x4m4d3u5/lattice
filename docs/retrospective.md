@@ -3588,3 +3588,35 @@ verifies the expected index order and all three neighboring links. Directory/
 hash snapshots confirm check leaves output/cache/manifest unchanged. The full
 pinned JS baseline passes 1,373 workspace tests, 16 dedicated clap tests, check
 and build with warnings denied. Only synthetic content was processed.
+
+### Match nested each blocks before parsing their bodies — 2026-10-12
+
+A synthetic workshop page used a data-file locations loop around a frontmatter
+sessions loop. Although the existing renderer supports nested loop contexts,
+both parser branches selected the first `{{/each}}`, belonging to the inner
+loop, as the outer closing tag. The valid template failed check/build with a
+missing-closing-tag error.
+
+After checking the core documentation and pinned string APIs, use StringView
+find to locate complete bounded template slots. A private matcher tracks depth
+for the existing data/page each grammar; string search alone cannot balance
+those application-specific blocks. Both loop parser branches share the matcher
+and still recursively validate their body parts. Keep the existing exact
+closing-token syntax, renderer/context rules, unknown-slot checks and error
+wording. Conditional parsing and all other block kinds are outside this change.
+
+AI-assisted inspection led to four independently authored regressions that fail
+on unchanged main (238/242 selected tests pass). Literal output covers both
+mixed nesting directions, three levels, siblings and restoring outer item
+context. Malformed templates still report missing closes or the actual unknown
+inner slot. A workshop-site fixture verifies exact published HTML, read-only
+check snapshots, cache reuse, data-dependency edits and full/cached parity.
+Removing the outer close after a successful build preserves output/cache/
+manifest; restoring it recovers the same HTML. The unfixed CLI independently
+reproduced rejection of the valid template without creating output.
+The fixed CLI check/build succeed for the valid schedule; an independent Python
+HTML parser confirms each location's session list and restored enclosing footer.
+Removing an outer close makes both commands exit 1 while directory/hash
+snapshots preserve publication artifacts, and recovery restores exact HTML.
+The full pinned JS baseline passes 1,377 workspace tests, 16 dedicated clap
+tests, check and build with warnings denied. Only synthetic content was used.
