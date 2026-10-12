@@ -70,8 +70,8 @@ the backlink after deletion, an unrelated page's cache hit, and restored cache
 hits on the following build. Review regressions also cover a renamed referrer
 with different old/new targets and deletion of a draft with either draft
 publication flag. They directly verify removal of the old manifest source entry
-and subsequent cache reuse. Existing backlink indexing includes drafts even when
-their pages are skipped; this change preserves that separate policy.
+and subsequent cache reuse. The later draft-visibility fix below makes backlink
+indexing follow the publication flag.
 
 Linux validation with the pinned WASM compiler `0.10.14+7d59c7ec9`, Moon
 `760759ca`, and the JavaScript target: the new regression fails before the fix
@@ -112,3 +112,28 @@ The pinned Linux JavaScript baseline passes check, all 1,286 project tests, buil
 and all 15 vendored parser tests. Shell syntax and `git diff --check` pass. The
 edited function and regression file match the pinned formatter output; unrelated
 existing builder formatting differences and compiler warnings remain.
+
+## Draft visibility
+
+By default, `draft: true` excludes collection, standalone, and root pages from
+new page writes, redirects, backlinks, previous/next navigation, and generated
+indexes. Tags found only on hidden drafts do not create tag pages or tag-index
+entries. A draft `content/404.md` uses the usual default error content.
+`--drafts` includes these pages and their derived entries.
+
+Source validation and slug ownership still cover all discovered sources. Tags
+unique to hidden drafts remain valid during validation, and authored wikilinks
+still resolve against the complete source catalog. Cache and manifest metadata
+can contain draft sources; static files are copied wholesale. Existing output
+files are retained, so switching off `--drafts` in an existing output directory
+does not remove previously emitted draft pages, aliases, redirects, or tag pages.
+Use a fresh output directory when you need to verify what a build emits.
+
+AI-assisted inspection traced the inconsistent behavior to full-source catalogs
+used by publication derivations. The fix keeps those validation catalogs and
+uses a separate visible URL/tag selection for publication. Literal synthetic
+fixtures cover page kinds, redirect paths, backlinks, navigation, tags, feeds,
+sitemap, graph, root aliases, and the `--drafts` control. Cache regressions toggle
+both frontmatter and the flag and compare rendered output with forced builds,
+while explicitly checking retained old files. Existing rendered-HTML
+fingerprints invalidate affected pages without a cache-format change.
