@@ -3686,3 +3686,14 @@ the layout-cycle message and no RangeError. Directory/hash snapshots preserve
 publication artifacts, and restoration recovers the literal expected HTML.
 The local pinned JS baseline passes 1,385 workspace tests, 16 dedicated clap
 tests, check and build with warnings denied. Only synthetic content was used.
+
+### Preserve cycle categories in builder diagnostics — 2026-10-12
+
+The PR33 review caught the builder prefixing every CycleError with "include
+cycle:", contradicting a layout-cycle message. Forward the already categorized
+message unchanged, as for other parser diagnostics. Include cycles still report
+"include cycle detected" and retain their rejection behavior. Exact check/build
+message assertions for both categories fail before this one-line fix; they also
+verify error severity, E006 in check, publication preservation and recovery.
+The local pinned JS baseline passes 1,386 workspace tests, 16 dedicated clap
+tests, check and build with warnings denied. Only synthetic content was used.
