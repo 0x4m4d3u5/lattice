@@ -47,6 +47,7 @@ pub struct SiteConfig {
   data_entries : Array[DataEntry]
   feed_limit : Int?
   site_feed_enabled : Bool?
+  require_image_alt : Bool?
 }
 
 ///|
@@ -162,6 +163,7 @@ fn parse_bool_config(value : String) -> Bool? {
 /// - `archive_pages`
 /// - `feed_limit`
 /// - `site_feed_enabled`
+/// - `require_image_alt` (opt-in Markdown image policy)
 ///
 /// Inline collections via `[[collections]]` array-of-tables:
 /// - `name`: required, collection name
@@ -190,6 +192,7 @@ pub fn parse(input : String) -> Result[SiteConfig, ConfigError] {
   let mut archive_pages : Bool? = None
   let mut feed_limit : Int? = None
   let mut site_feed_enabled : Bool? = None
+  let mut require_image_alt : Bool? = None
 
   let collections : Array[CollectionEntry] = []
   let data_entries : Array[DataEntry] = []
@@ -485,6 +488,16 @@ pub fn parse(input : String) -> Result[SiteConfig, ConfigError] {
                 ),
               )
           }
+        } else if key == "require_image_alt" {
+          match parse_bool_config(value) {
+            Some(parsed) => require_image_alt = Some(parsed)
+            None =>
+              return Err(
+                InvalidValue(
+                  "require_image_alt", "must be true/false, yes/no, 1/0, or on/off",
+                ),
+              )
+          }
         } else {
           // Unknown keys are ignored.
           ()
@@ -553,5 +566,6 @@ pub fn parse(input : String) -> Result[SiteConfig, ConfigError] {
     data_entries,
     feed_limit,
     site_feed_enabled,
+    require_image_alt,
   })
 }

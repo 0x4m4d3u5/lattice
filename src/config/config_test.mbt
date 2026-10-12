@@ -585,3 +585,29 @@ test "config preserves maximum positive integer settings" {
     Err(_) => assert_true(false)
   }
 }
+
+///|
+test "require_image_alt rejects invalid boolean policy values" {
+  match @config.parse("title=Site\nbase_url=/\nrequire_image_alt=perhaps\n") {
+    Err(@config.InvalidValue(key, _)) => assert_eq(key, "require_image_alt")
+    _ => abort("invalid editorial policy value was accepted")
+  }
+}
+
+///|
+test "require_image_alt defaults off and uses existing boolean grammar" {
+  let omitted = match @config.parse("title=Site\nbase_url=/\n") {
+    Ok(site) => site
+    _ => abort("invalid fixture")
+  }
+  assert_eq(omitted.require_image_alt, None)
+  for (text, expected) in [
+    ("true", true), ("yes", true), ("1", true), ("on", true),
+    ("false", false), ("no", false), ("0", false), ("off", false),
+  ] {
+    match @config.parse("title=Site\nbase_url=/\nrequire_image_alt=" + text + "\n") {
+      Ok(site) => assert_eq(site.require_image_alt, Some(expected))
+      _ => abort("valid policy boolean rejected")
+    }
+  }
+}

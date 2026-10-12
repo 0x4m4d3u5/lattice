@@ -175,6 +175,7 @@ fn code_for_violation(kind : @lint.ViolationType) -> String {
     @lint.CollectionsError => "E009"
     @lint.DuplicateSlug => "E010"
     @lint.IOError => "E011"
+    @lint.MissingImageAlt => "E012"
   }
 }
 
@@ -206,6 +207,10 @@ fn hint_for_violation(kind : @lint.ViolationType) -> String? {
     @lint.DuplicateSlug =>
       Some("rename one of the conflicting files so slugs are unique")
     @lint.IOError => Some("check file permissions and that the path exists")
+    @lint.MissingImageAlt =>
+      Some(
+        "add descriptive Markdown alt text; for decorative images use the image shortcode with explicit alt=\"\"",
+      )
   }
 }
 
@@ -243,7 +248,7 @@ pub(all) struct DiagnosticFileCount {
 ///
 /// Provides three breakdowns:
 /// - **error_count / warning_count**: totals by severity
-/// - **by_code**: how many diagnostics for each error code (E001–E011)
+/// - **by_code**: how many diagnostics for each error code (E001–E012)
 /// - **by_file**: how many diagnostics per source file
 ///
 /// Used by the build command to emit a structured summary after the

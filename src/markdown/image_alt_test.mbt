@@ -1,0 +1,58 @@
+///|
+test "missing image alt uses parsed nested Markdown rather than scanning source" {
+  for
+    (body, urls) in [
+      ("# ![](/heading.png)", ["/heading.png"]),
+      (
+        "**![](/bold.png)** *![](/italic.png)* ~~![](/strike.png)~~",
+        ["/bold.png", "/italic.png", "/strike.png"],
+      ),
+      (
+        "> ![](/quote.png)\n>\n> - ![](/quoted-list.png)",
+        ["/quote.png", "/quoted-list.png"],
+      ),
+      ("- ![](/list.png)\n  - ![](/nested.png)", ["/list.png", "/nested.png"]),
+      (
+        "| ![](/header.png) |\n| --- |\n| ![](/cell.png) |",
+        ["/header.png", "/cell.png"],
+      ),
+      (
+        "Term ![](/term.png)\n: Definition ![](/definition.png)",
+        ["/term.png", "/definition.png"],
+      ),
+      ("Footnote[^n]\n\n[^n]: ![](/footnote.png)", ["/footnote.png"]),
+      ("![](/same.png) ![ \t ](/same.png)", ["/same.png", "/same.png"]),
+      (
+        "![ ](/unicode-space.png) ![星空](/described.png)",
+        ["/unicode-space.png"],
+      ),
+    ] {
+    assert_eq(@markdown.missing_image_alt_urls(body), urls)
+  }
+}
+
+///|
+test "missing image alt excludes code math raw HTML and explicit decorative shortcodes" {
+  for
+    body in [
+      "`![](/example.png)`", "```markdown\n![](/example.png)\n```", "> ~~~\n> ![](/example.png)\n> ~~~",
+      "$![](/example.png)$", "$$\n![](/example.png)\n$$", "<img src=\"/decorative.png\" alt=\"\">",
+      "{{< image src=\"/decorative.png\" alt=\"\" >}}", "![Actual description](/example.png)",
+    ] {
+    assert_eq(@markdown.missing_image_alt_urls(body), [])
+  }
+  // Current parser does not render linked-image syntax as an Image node.
+  assert_eq(
+    @markdown.missing_image_alt_urls("[![](/linked.png)](/destination)"),
+    [],
+  )
+  assert_false(
+    @markdown.render("[![](/linked.png)](/destination)", Map([])).contains(
+      "<img",
+    ),
+  )
+  assert_eq(
+    @markdown.render("![](/plain.png)", Map([])),
+    "<p><img src=\"/plain.png\" alt=\"\" /></p>\n",
+  )
+}

@@ -2067,57 +2067,54 @@ pub fn extract_table_of_contents(
 }
 
 ///|
-fn collect_inline_wikilinks(
+fn visit_inlines(
   inlines : Array[Inline],
-  targets : Array[(String, String?)],
+  visit : (Inline) -> Unit,
 ) -> Unit {
   for inline in inlines {
+    visit(inline)
     match inline {
-      WikiRef(target, display) =>
-        if target != "" {
-          targets.push((target, display))
-        }
       Bold(inner)
       | Italic(inner)
       | BoldItalic(inner)
       | Strikethrough(inner)
-      | Link(inner, _) => collect_inline_wikilinks(inner, targets)
-      Text(_) | InlineCode(_) | Image(_, _) | FootnoteRef(_) |
+      | Link(inner, _) => visit_inlines(inner, visit)
+      Text(_) | InlineCode(_) | Image(_, _) | WikiRef(_, _) | FootnoteRef(_) |
       Shortcode(_) | Math(_) | InlineHtml(_) | HardBreak => ()
     }
   }
 }
 
 ///|
-fn collect_block_wikilinks(
+fn visit_blocks(
   blocks : Array[Block],
-  targets : Array[(String, String?)],
+  visit : (Inline) -> Unit,
 ) -> Unit {
   for block in blocks {
     match block {
       Heading(_, inlines) | Paragraph(inlines) =>
-        collect_inline_wikilinks(inlines, targets)
-      BlockQuote(children) => collect_block_wikilinks(children, targets)
+        visit_inlines(inlines, visit)
+      BlockQuote(children) => visit_blocks(children, visit)
       UnorderedList(items) | OrderedList(items) =>
         for item in items {
-          collect_inline_wikilinks(item.inlines, targets)
-          collect_block_wikilinks(item.children, targets)
+          visit_inlines(item.inlines, visit)
+          visit_blocks(item.children, visit)
         }
       Table(_, headers, rows) => {
         for cell in headers {
-          collect_inline_wikilinks(cell, targets)
+          visit_inlines(cell, visit)
         }
         for row in rows {
           for cell in row {
-            collect_inline_wikilinks(cell, targets)
+            visit_inlines(cell, visit)
           }
         }
       }
       DefinitionList(items) =>
         for (term, definitions) in items {
-          collect_inline_wikilinks(term, targets)
+          visit_inlines(term, visit)
           for definition in definitions {
-            collect_inline_wikilinks(definition, targets)
+            visit_inlines(definition, visit)
           }
         }
       FencedCode(_, _) | HRule | MathBlock(_) | HtmlBlock(_) => ()
@@ -2126,22 +2123,48 @@ fn collect_block_wikilinks(
 }
 
 ///|
-/// Collect only references parsed as rendered wikilinks. Reuse rendering's
-/// preprocessing, block/inline parsing and footnote parsing so code, escapes,
-/// unmatched delimiters and nested blocks cannot acquire different semantics.
-pub fn extract_wikilink_targets(body : String) -> Array[(String, String?)] {
+/// Visit the same parsed body and footnotes as rendering. This private AST walk
+/// excludes code, math, raw HTML and shortcode bodies; it does not scan text.
+fn visit_body_inlines(body : String, visit : (Inline) -> Unit) -> Unit {
   let (blocks, footnotes) = parse_blocks_with_footnotes(
     lines_of(preprocess_callout_next_line(body)),
   )
-  let targets : Array[(String, String?)] = []
-  collect_block_wikilinks(blocks, targets)
+  visit_blocks(blocks, visit)
   for footnote in footnotes {
-    collect_inline_wikilinks(
-      parse_inlines(footnote.text, 0, footnote.text.length()),
-      targets,
+    visit_inlines(
+      parse_inlines(footnote.text, 0, footnote.text.length()), visit,
     )
   }
+}
+
+///|
+/// Collect only references parsed as rendered wikilinks.
+pub fn extract_wikilink_targets(body : String) -> Array[(String, String?)] {
+  let targets : Array[(String, String?)] = []
+  visit_body_inlines(body, fn(inline) {
+    match inline {
+      WikiRef(target, display) =>
+        if target != "" { targets.push((target, display)) }
+      _ => ()
+    }
+  })
   targets
+}
+
+///|
+/// One URL per parsed Markdown image with empty or whitespace-only alt text.
+/// Shortcodes and raw HTML are outside this check's scope. A decorative image
+/// can use the existing image shortcode, which requires an explicit alt field.
+pub fn missing_image_alt_urls(body : String) -> Array[String] {
+  let urls : Array[String] = []
+  visit_body_inlines(body, fn(inline) {
+    match inline {
+      Image(alt, url) =>
+        if alt.iter().all(c => c.is_whitespace()) { urls.push(url) }
+      _ => ()
+    }
+  })
+  urls
 }
 
 ///|

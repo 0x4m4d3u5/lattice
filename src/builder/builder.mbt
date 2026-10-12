@@ -3185,6 +3185,22 @@ fn load_data_store(
 }
 
 ///|
+fn image_alt_violations(
+  body : String,
+  path : String,
+  site : @config.SiteConfig,
+) -> Array[@lint.LintViolation] {
+  if site.require_image_alt != Some(true) { return [] }
+  @markdown.missing_image_alt_urls(body).map(url => {
+    path,
+    line: None,
+    column: None,
+    kind: @lint.MissingImageAlt,
+    message: "Markdown image '" + url + "' needs descriptive alt text",
+  })
+}
+
+///|
 /// Process one markdown document through the full lattice pipeline.
 ///
 /// Returns the rendered HTML5 page on success, or None if validation fails.
@@ -3276,6 +3292,10 @@ fn process_document(
   // than aborting at the first category. This ensures the user sees every
   // problem in one pass instead of fixing them incrementally.
   let mut has_schema_errors = false
+  for v in image_alt_violations(fm.body, source_path, site) {
+    diagnostics.push(@diagnostic.of_lint_violation(v))
+    has_schema_errors = true
+  }
   let schema_errors = @schema.validate(fm, schema)
   if schema_errors.length() > 0 {
     has_schema_errors = true
@@ -3393,7 +3413,7 @@ fn process_document(
   let weight_value = extract_weight(fm)
   let author_value = extract_author(fm)
   let og_image_value = extract_og_image(fm)
-  // If any schema/tag errors accumulated, skip rendering but return
+  // If any schema/tag/editorial errors accumulated, skip rendering but return
   // all diagnostics so the caller can report every violation at once.
   if has_schema_errors {
     return { document: None, diagnostics }
@@ -3846,6 +3866,10 @@ fn process_document_for_lint(
       return { document: None, violations }
     }
     Ok(parsed) => parsed
+  }
+
+  for v in image_alt_violations(fm.body, source_path, site) {
+    violations.push(v)
   }
 
   // Check for per-page template override
