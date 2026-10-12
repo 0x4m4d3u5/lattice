@@ -1674,33 +1674,48 @@ fn line_col_of_first(source : String, pattern : String) -> (Int?, Int?) {
 
 ///|
 fn frontmatter_field_line(source : String, field : String) -> Int? {
-  let header = field + " ="
-  let (line, _) = line_col_of_first(source, header)
-  line
+  let (delimiter, separator) = if source.has_prefix("---") {
+    ("---", ":")
+  } else if source.has_prefix("+++") {
+    ("+++", "=")
+  } else {
+    return None
+  }
+  let mut line_number = 0
+  let mut found : Int? = None
+  for raw_line in source.split("\n") {
+    line_number = line_number + 1
+    if line_number == 1 {
+      continue
+    }
+    let line = raw_line.trim(chars=" \t\r\n")
+    if line.to_owned() == delimiter {
+      break
+    }
+    if line.has_prefix("#") {
+      continue
+    }
+    if line.split_once(separator) is Some((key, _)) &&
+      key.trim(chars=" \t\r\n").to_owned() == field {
+      // The parser overwrites duplicate keys; locate the active assignment.
+      found = Some(line_number)
+    }
+  }
+  found
 }
 
 ///|
-fn frontmatter_line_from_error(msg : String) -> Int? {
-  if !@strutil.starts_with(msg, "line ") {
-    return None
+// Parser line numbers are relative to the header contents, after its fence.
+// Convert both the location and displayed message to document coordinates.
+fn frontmatter_document_error(msg : String) -> (Int?, String) {
+  if msg.split_once(": ") is Some((prefix, detail)) &&
+    prefix.strip_prefix("line ") is Some(number) &&
+    @strutil.parse_positive_int(number.to_owned()) is Some(relative) {
+    let line = relative + 1
+    (Some(line), "line " + line.to_string() + ": " + detail.to_owned())
+  } else {
+    (None, msg)
   }
-  let n = msg.length()
-  let mut i = 5
-  let mut end = i
-  while end < n &&
-        @strutil.char_at(msg, end) >= '0' &&
-        @strutil.char_at(msg, end) <= '9' {
-    end = end + 1
-  }
-  if end == i {
-    return None
-  }
-  let buf = StringBuilder()
-  while i < end {
-    buf.write_char(@strutil.char_at(msg, i))
-    i = i + 1
-  }
-  @strutil.parse_int(buf.to_string())
 }
 
 ///|
@@ -3233,12 +3248,13 @@ fn process_document(
   // Step 1: parse frontmatter
   let fm = match @frontmatter.parse(source) {
     Err(e) => {
+      let (line, message) = frontmatter_document_error(e)
       diagnostics.push(
         build_error(
           Some(source_path),
-          frontmatter_line_from_error(e),
+          line,
           None,
-          "frontmatter: " + e,
+          "frontmatter: " + message,
         ),
       )
       return { document: None, diagnostics }
@@ -3855,13 +3871,13 @@ fn process_document_for_lint(
   let violations : Array[@lint.LintViolation] = []
   let fm = match @frontmatter.parse(source) {
     Err(msg) => {
-      let line = frontmatter_line_from_error(msg)
+      let (line, message) = frontmatter_document_error(msg)
       violations.push({
         path: source_path,
         line,
         column: None,
         kind: @lint.FrontmatterError,
-        message: msg,
+        message,
       })
       return { document: None, violations }
     }

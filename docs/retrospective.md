@@ -3450,3 +3450,30 @@ cases cover valid leap days, century rules, month ends, local/space syntax and
 both signs at the existing offset limits. All 1,358 workspace tests and 16
 dedicated clap tests, check and build pass with warnings denied on the pinned
 JavaScript profile. Only synthetic content was used; no deployment was performed.
+
+### Frontmatter diagnostic coordinates — 2026-10-12
+
+A synthetic authoring workflow put a schema-invalid priority next to comments and
+Markdown examples. The builder located fields by searching the entire document
+for `field =`, so a YAML error pointed to a comment at line 2 instead of the
+assignment at line 6. Missing fields borrowed locations from body code examples.
+Parser failures also exposed header-relative lines as document lines, one line
+early. Correct these coordinates in both strict check and build diagnostics.
+
+Use core split, trim, split_once and strip_prefix operations after checking the
+stdlib, rather than new string scanning utilities. Restrict field lookup to the
+leading header, use its YAML/TOML separator, skip comments, and match complete
+keys. Retain the last assignment, consistent with the parser's existing duplicate
+key behavior. Convert parser-relative lines and displayed messages together to
+document coordinates; errors without a reported line stay unlocated. Content
+validation, parsing acceptance and publication policy remain unchanged.
+
+AI-assisted implementation starts with three independently authored regressions:
+wrong active-field line, an invented missing-field location, and a parse-error
+line off by one. All fail on unchanged main (135/138 builder tests pass). Exact
+expected document lines and messages cover YAML/TOML, tab spacing, CRLF,
+indentation, duplicate assignments and misleading comments/value/body text.
+Output/cache/manifest snapshots verify rejection preserves a prior successful
+site; failed first builds create no output. The complete pinned JavaScript
+baseline passes 1,361 workspace tests, 16 dedicated clap tests, check and build
+with warnings denied. All sources are synthetic; no deployed site was touched.
