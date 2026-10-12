@@ -217,16 +217,22 @@ pub fn plain_text_inlines(inlines : Array[Inline]) -> String {
 ///|
 fn next_heading_anchor(text : String, counts : Map[String, Int]) -> String {
   let base = slugify_heading_text(text)
-  let next = match counts.get(base) {
+  let mut next = match counts.get(base) {
     Some(n) => n + 1
     None => 1
   }
-  counts.set(base, next)
-  if next == 1 {
-    base
-  } else {
-    base + "-" + next.to_string()
+  let mut anchor = if next == 1 { base } else { base + "-" + next.to_string() }
+  // A numbered heading may already own a duplicate's generated suffix.
+  // Reserve complete emitted anchors as well as each base's suffix counter.
+  while counts.contains(anchor) {
+    next = next + 1
+    anchor = base + "-" + next.to_string()
   }
+  counts.set(base, next)
+  if anchor != base {
+    counts.set(anchor, 1)
+  }
+  anchor
 }
 
 // ── inline parsing helpers ────────────────────────────────────────────────────

@@ -3496,3 +3496,31 @@ filtering, strict check and an unchanged cached rebuild. The full pinned JS
 baseline passes 1,364 workspace tests, 16 dedicated clap tests, check and build
 with warnings denied. No new utility or dependency is needed: the change uses
 the existing block tree and recursive collector.
+
+### Numbered headings and duplicate anchor collisions — 2026-10-12
+
+A synthetic release guide headed “Release 2”, “Release”, “Release” published
+two `id="release-2"` headings. Its TOC could not uniquely target the second
+Release section. The existing allocator only counted each heading's base slug,
+without reserving the complete IDs it emitted. This is separate from list
+traversal: even flat headings collide.
+
+Reserve each emitted ID in the existing map alongside base suffix counters,
+and advance the suffix until the candidate is unused. Both rendering and TOC
+collection already share this allocator. Source order owns an ID first;
+sequences without collisions retain their existing IDs. After a suffix skip,
+later duplicates continue from the advanced counter. This uses
+the existing core Map get/set/contains operations and string concatenation;
+no new helper, dependency, slug syntax or validation policy is introduced.
+
+AI-assisted inspection led to three independently authored regressions that
+fail on unchanged main (268/271 selected tests pass). Literal expected IDs,
+TOC entry order and HTML cover numbered headings before and after duplicates,
+consecutive occupied suffixes, suffix chains and filtered nested headings. The
+release-guide site fixture checks unique published targets, a cached source
+edit, full/incremental parity and read-only check snapshots. The CLI also
+reproduced duplicate IDs before the fix using Python's independent HTML parser.
+The fixed CLI check/build exit successfully; Python verifies every TOC target
+has exactly one matching heading and check preserves output bytes. The full
+pinned JS baseline passes 1,367 workspace tests, 16 dedicated clap tests, check
+and build with warnings denied. Only synthetic content was processed.
