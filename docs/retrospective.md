@@ -3323,3 +3323,29 @@ Verification: duplicate-ID mutation fails the strengthened feed identity asserti
 IDs previously passed the full 1,330-test suite. All four warning-free JavaScript
 gates pass on this test-only branch: 1,335 workspace tests and 16 dedicated clap
 tests, check and build, with the existing verified toolchain and cached dependencies.
+
+### Feed ordering by instant — 2026-10-12
+
+Accepted RFC3339 offset timestamps were compared as strings for feed ordering
+and Atom channel `updated`. This could omit a newer post under `feed_limit`:
+`2024-01-01T23:30:00-02:00` is later than `2024-01-02T00:30:00Z` despite its
+local calendar date. Equivalent timestamps also failed to reach the existing
+title tie-breaker.
+
+Compare normalized dates as `Int64` UTC seconds, retaining authored timestamp
+strings in emitted Atom and JSON Feed. Reuse the already pinned `moonbitlang/x/time`
+`PlainDateTime` parser and Gregorian calendar conversion instead of writing a
+second calendar implementation. Apply the numeric offset explicitly because
+Lattice accepts offsets up to ±23:59, wider than x/time's `ZoneOffset` ±18:00
+range. No new dependency version, timestamp grammar or validation policy is
+introduced. Undated/invalid-date placement and the existing title comparator
+remain unchanged.
+
+AI-assisted diagnosis and implementation used three output regressions that all
+fail on unchanged main (41/44 RSS tests pass) and pass with the fix (44/44).
+Literal expected orders cover UTC day/year/leap-day boundaries, equivalent
+instants, feed limits, offset preservation and channel update selection. Python's
+independent datetime implementation confirms the ordinary UTC fixture values;
+year 0000/9999 and accepted extreme offsets additionally exercise Int64 bounds.
+The pinned JavaScript baseline passes all 1,342 workspace tests and 16 dedicated
+clap tests, check and build with warnings denied. Only synthetic fixtures were used.

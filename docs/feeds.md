@@ -32,7 +32,9 @@ Each feed includes:
 Lattice normalizes dates to RFC3339 format for Atom feeds:
 - `YYYY-MM-DD` → `YYYY-MM-DDT00:00:00Z`
 - Full RFC3339 timestamps are preserved as-is
-- Pages without dates are excluded from feed sorting (they appear last)
+- Sorting and feed limits compare actual instants, including UTC offsets and date rollovers, rather than timestamp text
+- Equal instants sort by title; pages without valid dates appear last
+- Atom channel `updated` uses the latest included instant and preserves that entry's normalized timestamp
 
 ## Feed Limit
 

@@ -97,9 +97,43 @@ fn is_rfc3339_datetime(s : String) -> Bool {
 }
 
 ///|
+// Input is already normalized and validated by normalize_feed_datetime.
+// Delegate Gregorian calendar arithmetic to the pinned x/time dependency.
+// Apply the numeric offset ourselves: the existing accepted ±23:59 range is
+// wider than x/time's ZoneOffset range, and the emitted date stays unchanged.
+fn feed_instant(s : String) -> Int64 {
+  let wall_time : @time.PlainDateTime = @string.FromStr::from_str(s[:19]) catch {
+    _ => abort("validated feed datetime rejected by x/time")
+  }
+  let offset = if s.length() == 25 {
+    let minutes = parse_fixed_uint(s, 20, 2).unwrap() * 60 +
+      parse_fixed_uint(s, 23, 2).unwrap()
+    let seconds = (minutes * 60).to_int64()
+    if @strutil.char_at(s, 19) == '+' {
+      seconds
+    } else {
+      -seconds
+    }
+  } else {
+    0L
+  }
+  wall_time.to_unix_second() - offset
+}
+
+///|
 fn compare_iso_desc(a : String?, b : String?) -> Int {
   match (a, b) {
-    (Some(av), Some(bv)) => if av == bv { 0 } else if av > bv { -1 } else { 1 }
+    (Some(av), Some(bv)) => {
+      let ai = feed_instant(av)
+      let bi = feed_instant(bv)
+      if ai == bi {
+        0
+      } else if ai > bi {
+        -1
+      } else {
+        1
+      }
+    }
     (Some(_), None) => -1
     (None, Some(_)) => 1
     (None, None) => 0
@@ -176,7 +210,10 @@ fn build_feed_channel(
   while i < items.length() {
     match (latest, items[i].updated) {
       (None, Some(v)) => latest = Some(v)
-      (Some(cur), Some(v)) => if v > cur { latest = Some(v) }
+      (Some(cur), Some(v)) =>
+        if compare_iso_desc(Some(v), Some(cur)) < 0 {
+          latest = Some(v)
+        }
       _ => ()
     }
     i = i + 1
