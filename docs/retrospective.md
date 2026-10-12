@@ -3477,3 +3477,22 @@ Output/cache/manifest snapshots verify rejection preserves a prior successful
 site; failed first builds create no output. The complete pinned JavaScript
 baseline passes 1,361 workspace tests, 16 dedicated clap tests, check and build
 with warnings denied. All sources are synthetic; no deployed site was touched.
+
+### Table of contents inside list items — 2026-10-12
+
+An installation guide with a heading inside a numbered step followed by the
+same heading at top level rendered IDs `setup` and `setup-2`, but its TOC only
+listed the later heading and linked it to `setup`. Rendering visited list child
+blocks while TOC collection skipped them. Recurse through ordered and unordered
+list children in the same source order, retaining the existing shared heading
+counts. Visit even headings excluded by `toc_depth` so later duplicate anchors
+stay aligned. Nested lists, task lists and blockquotes use that same recursion.
+No parsing syntax, heading slug algorithm or depth policy changes.
+
+AI-assisted source inspection led to three independently authored regressions
+with literal expected heading IDs, entry order and links. All fail on unchanged
+main (265/268 selected tests pass). A synthetic published guide covers depth
+filtering, strict check and an unchanged cached rebuild. The full pinned JS
+baseline passes 1,364 workspace tests, 16 dedicated clap tests, check and build
+with warnings denied. No new utility or dependency is needed: the change uses
+the existing block tree and recursive collector.
