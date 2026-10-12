@@ -550,6 +550,11 @@ In practice, that means you get build-time diagnostics tied to the content file 
 
 Frontmatter parse failures also include line information, and the builder threads that into diagnostics. That keeps schema mistakes close to the authoring surface: the content file and the field that violated the contract.
 
+Diagnostic lines use document coordinates, including the opening frontmatter
+fence. Field errors point to the active assignment in the header for either YAML
+or TOML; comments, value text, and Markdown examples are not field locations.
+If a required field is absent, its diagnostic has no invented line number.
+
 ## Design reason
 
 The benefit of schema syntax is not just nicer metadata. It turns content modeling into a checked interface.
