@@ -33,204 +33,38 @@ pub(all) suberror CacheError {
 const CACHE_VERSION : Int = 1
 
 ///|
-fn expect_char_cache(
-  source : String,
-  idx : Int,
-  expected : Char,
-) -> Int raise CacheParseError {
-  let i = @strutil.skip_ws(source, idx)
-  if i >= source.length() || @strutil.char_at(source, i) != expected {
-    raise ParseFailure("expected '" + expected.to_string() + "'")
+fn parse_entry_cache(reader : @wire.Reader) -> CacheEntry raise @wire.WireError {
+  let mut slug : String? = None
+  let mut fingerprint : String? = None
+  reader.fields(key => {
+    match key {
+      "slug" => slug = Some(reader.string())
+      "fingerprint" => fingerprint = Some(reader.string())
+      _ => raise @wire.WireError("unknown entry field '" + key + "'")
+    }
+  })
+  guard slug is Some(slug) && fingerprint is Some(fingerprint) else {
+    raise @wire.WireError("entry missing required field")
   }
-  i + 1
-}
-
-///|
-fn parse_json_string_cache(
-  source : String,
-  idx : Int,
-) -> (String, Int) raise CacheParseError {
-  let mut i = @strutil.skip_ws(source, idx)
-  if i >= source.length() || @strutil.char_at(source, i) != '"' {
-    raise ParseFailure("expected string")
-  }
-  i = i + 1
-  let buf = StringBuilder()
-  while i < source.length() {
-    let c = @strutil.char_at(source, i)
-    if c == '"' {
-      return (buf.to_string(), i + 1)
-    }
-    if c != '\\' {
-      buf.write_char(c)
-      i = i + 1
-      continue
-    }
-    i = i + 1
-    if i >= source.length() {
-      raise ParseFailure("unterminated escape")
-    }
-    let escaped = @strutil.char_at(source, i)
-    if escaped == '"' {
-      buf.write_char('"')
-    } else if escaped == '\\' {
-      buf.write_char('\\')
-    } else if escaped == '/' {
-      buf.write_char('/')
-    } else if escaped == 'b' {
-      buf.write_char('\b')
-    } else if escaped == 'f' {
-      buf.write_char('\u000c')
-    } else if escaped == 'n' {
-      buf.write_char('\n')
-    } else if escaped == 'r' {
-      buf.write_char('\r')
-    } else if escaped == 't' {
-      buf.write_char('\t')
-    } else if escaped == 'u' {
-      raise ParseFailure("unicode escapes are not supported")
-    } else {
-      raise ParseFailure("invalid escape")
-    }
-    i = i + 1
-  }
-  raise ParseFailure("unterminated string")
-}
-
-///|
-fn parse_int_cache(
-  source : String,
-  idx : Int,
-) -> (Int, Int) raise CacheParseError {
-  let mut i = @strutil.skip_ws(source, idx)
-  if i >= source.length() ||
-    @strutil.char_at(source, i) < '0' ||
-    @strutil.char_at(source, i) > '9' {
-    raise ParseFailure("expected integer")
-  }
-  let mut value = 0
-  while i < source.length() &&
-        @strutil.char_at(source, i) >= '0' &&
-        @strutil.char_at(source, i) <= '9' {
-    value = value * 10 + (@strutil.char_at(source, i).to_int() - '0'.to_int())
-    i = i + 1
-  }
-  (value, i)
-}
-
-///|
-fn parse_entry_cache(
-  source : String,
-  idx : Int,
-) -> (CacheEntry, Int) raise CacheParseError {
-  let mut i = expect_char_cache(source, idx, '{')
-  let mut slug = ""
-  let mut fingerprint = ""
-  let mut seen_slug = false
-  let mut seen_fingerprint = false
-  while true {
-    i = @strutil.skip_ws(source, i)
-    if i >= source.length() {
-      raise ParseFailure("unterminated entry object")
-    }
-    if @strutil.char_at(source, i) == '}' {
-      if !seen_slug || !seen_fingerprint {
-        raise ParseFailure("entry missing required field")
-      }
-      return ({ slug, fingerprint }, i + 1)
-    }
-    let (key, next_after_key) = parse_json_string_cache(source, i)
-    i = expect_char_cache(source, next_after_key, ':')
-    if key == "slug" {
-      let (value, next) = parse_json_string_cache(source, i)
-      slug = value
-      seen_slug = true
-      i = next
-    } else if key == "fingerprint" {
-      let (value, next) = parse_json_string_cache(source, i)
-      fingerprint = value
-      seen_fingerprint = true
-      i = next
-    } else {
-      raise ParseFailure("unknown entry field '" + key + "'")
-    }
-    i = @strutil.skip_ws(source, i)
-    if i >= source.length() {
-      raise ParseFailure("unterminated entry object")
-    }
-    if @strutil.char_at(source, i) == '}' {
-      if !seen_slug || !seen_fingerprint {
-        raise ParseFailure("entry missing required field")
-      }
-      return ({ slug, fingerprint }, i + 1)
-    }
-    if @strutil.char_at(source, i) != ',' {
-      raise ParseFailure("expected ',' or '}' in entry object")
-    }
-    i = i + 1
-  }
-  raise ParseFailure("unterminated entry object")
-}
-
-///|
-fn parse_entries_cache(
-  source : String,
-  idx : Int,
-) -> (Array[CacheEntry], Int) raise CacheParseError {
-  let mut i = expect_char_cache(source, idx, '[')
-  let entries : Array[CacheEntry] = []
-  i = @strutil.skip_ws(source, i)
-  if i < source.length() && @strutil.char_at(source, i) == ']' {
-    return (entries, i + 1)
-  }
-  while true {
-    let (entry, next_after_entry) = parse_entry_cache(source, i)
-    entries.push(entry)
-    i = @strutil.skip_ws(source, next_after_entry)
-    if i >= source.length() {
-      raise ParseFailure("unterminated entries array")
-    }
-    let c = @strutil.char_at(source, i)
-    if c == ']' {
-      return (entries, i + 1)
-    }
-    if c != ',' {
-      raise ParseFailure("expected ',' or ']' in entries array")
-    }
-    i = i + 1
-  }
-  raise ParseFailure("unterminated entries array")
+  { slug, fingerprint, }
 }
 
 ///|
 pub fn parse(source : String) -> CacheFile raise CacheParseError {
-  let mut i = expect_char_cache(source, 0, '{')
-  let (version_key, next_after_version_key) = parse_json_string_cache(source, i)
-  if version_key != "version" {
-    raise ParseFailure("expected 'version' field")
+  let reader = @wire.Reader(source)
+  try {
+    reader.expect('{')
+    reader.key("version")
+    let version = reader.integer(signed=false).to_int()
+    reader.expect(',')
+    reader.key("entries")
+    let entries = reader.array(() => parse_entry_cache(reader))
+    reader.expect('}')
+    reader.finish()
+    { version, entries, }
+  } catch {
+    @wire.WireError(msg) => raise ParseFailure(msg)
   }
-  i = expect_char_cache(source, next_after_version_key, ':')
-  let (version, next_after_version) = parse_int_cache(source, i)
-  i = @strutil.skip_ws(source, next_after_version)
-  if i >= source.length() || @strutil.char_at(source, i) != ',' {
-    raise ParseFailure("expected ',' after version")
-  }
-  i = i + 1
-  let (entries_key, next_after_entries_key) = parse_json_string_cache(source, i)
-  if entries_key != "entries" {
-    raise ParseFailure("expected 'entries' field")
-  }
-  i = expect_char_cache(source, next_after_entries_key, ':')
-  let (entries, next_after_entries) = parse_entries_cache(source, i)
-  i = @strutil.skip_ws(source, next_after_entries)
-  if i >= source.length() || @strutil.char_at(source, i) != '}' {
-    raise ParseFailure("expected '}' at end of cache file")
-  }
-  i = @strutil.skip_ws(source, i + 1)
-  if i != source.length() {
-    raise ParseFailure("unexpected trailing characters")
-  }
-  { version, entries }
 }
 
 ///|

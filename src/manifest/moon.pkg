@@ -1,3 +1,4 @@
 import {
+  "kurisu/lattice/src/internal/json_wire" @wire,
   "kurisu/lattice/src/strutil" @strutil,
 }

@@ -1,4 +1,5 @@
 import {
+  "kurisu/lattice/src/internal/json_wire" @wire,
   "moonbitlang/x/fs" @fs,
   "kurisu/lattice/src/strutil" @strutil,
 }
