@@ -748,3 +748,118 @@ test "JSON Feed content preserves authored HTML including an empty body" {
   assert_eq(second.get("content_html"), Some(Json::string("")))
   assert_eq(second.get("summary"), None)
 }
+
+///|
+fn instant_page(title : String, date : String?) -> @graph.GraphPage {
+  {
+    slug: title,
+    title,
+    url: "/" + title + "/",
+    description: None,
+    date,
+    content_html: "",
+    outgoing: [],
+    weight: None,
+  }
+}
+
+///|
+fn assert_instant_order(
+  pages : Array[@graph.GraphPage],
+  expected : Array[String],
+  limit : Int?,
+) -> Unit raise {
+  let json = @rss.render_json_feed_from_pages(
+    "Site", "https://example.test", pages, limit, "https://example.test/feed.json",
+  )
+  guard @json.parse(json) is Object(fields) else { abort("expected feed") }
+  guard fields.get("items") is Some(Array(items)) else {
+    abort("expected items")
+  }
+  assert_eq(items.length(), expected.length())
+  for i in 0..<expected.length() {
+    guard items[i] is Object(item) else { abort("expected item") }
+    assert_eq(item.get("title"), Some(Json::string(expected[i])))
+  }
+  let atom = @rss.render_feed("Site", "https://example.test", pages, limit)
+  let entries = atom.split("<entry>").collect()
+  assert_eq(entries.length(), expected.length() + 1)
+  for i in 0..<expected.length() {
+    assert_true(entries[i + 1].contains("<title>" + expected[i] + "</title>"))
+  }
+}
+
+///|
+test "feed instant order crosses UTC day year and leap-day boundaries" {
+  // Literal UTC instants: Jan 2 01:30 > Jan 2 00:30 > Jan 1 23:00.
+  let pages = [
+    instant_page("Older", Some("2024-01-02T01:00:00+02:00")),
+    instant_page("Middle", Some("2024-01-02T00:30:00Z")),
+    instant_page("Newest", Some("2024-01-01T23:30:00-02:00")),
+  ]
+  assert_instant_order(pages, ["Newest", "Middle", "Older"], None)
+  assert_instant_order(pages, ["Newest"], Some(1))
+  // Jan 1 00:15 UTC > Dec 31 23:45 UTC; leap-day 23:30 > 23:00.
+  assert_instant_order(
+    [
+      instant_page("YearOlder", Some("2024-01-01T00:45:00+01:00")),
+      instant_page("YearNewer", Some("2023-12-31T23:15:00-01:00")),
+    ],
+    ["YearNewer", "YearOlder"],
+    None,
+  )
+  assert_instant_order(
+    [
+      instant_page("LeapOlder", Some("2024-03-01T00:00:00+01:00")),
+      instant_page("LeapNewer", Some("2024-02-29T23:30:00Z")),
+    ],
+    ["LeapNewer", "LeapOlder"],
+    None,
+  )
+}
+
+///|
+test "feed instant ties use titles and retain timestamps and undated policy" {
+  let pages = [
+    instant_page("Zulu", Some("2024-01-01T19:00:00-05:00")),
+    instant_page("Alfa", Some("2024-01-02T05:30:00+05:30")),
+    instant_page("Beta", Some("2024-01-02")),
+    instant_page("Undated", None),
+    instant_page("Invalid", Some("2024-02-30")),
+  ]
+  assert_instant_order(
+    pages,
+    ["Alfa", "Beta", "Zulu", "Invalid", "Undated"],
+    None,
+  )
+  let atom = @rss.render_feed("Site", "https://example.test", pages, None)
+  assert_true(atom.contains("<published>2024-01-02T05:30:00+05:30</published>"))
+  assert_true(atom.contains("<published>2024-01-01T19:00:00-05:00</published>"))
+  assert_true(atom.contains("<published>2024-01-02T00:00:00Z</published>"))
+  // Accepted four-digit years and offsets beyond x/time's ZoneOffset limit.
+  assert_instant_order(
+    [
+      instant_page("EarlyOlder", Some("0000-01-01T00:00:00+23:59")),
+      instant_page("EarlyNewer", Some("0000-01-01T00:00:00Z")),
+      instant_page("LateOlder", Some("9999-12-31T23:59:59Z")),
+      instant_page("LateNewer", Some("9999-12-31T23:59:59-23:59")),
+    ],
+    ["LateNewer", "LateOlder", "EarlyNewer", "EarlyOlder"],
+    None,
+  )
+}
+
+///|
+test "Atom channel updated selects latest instant while preserving its offset" {
+  let atom = @rss.render_feed(
+    "Site",
+    "https://example.test",
+    [
+      instant_page("Older", Some("2024-01-02T01:00:00+02:00")),
+      instant_page("Newest", Some("2024-01-01T23:30:00-02:00")),
+    ],
+    None,
+  )
+  let header = atom.split("<entry>").collect()[0]
+  assert_true(header.contains("<updated>2024-01-01T23:30:00-02:00</updated>"))
+}

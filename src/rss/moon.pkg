@@ -1,4 +1,6 @@
 import {
+  "moonbitlang/core/string" @string,
+  "moonbitlang/x/time" @time,
   "kurisu/lattice/src/strutil" @strutil,
   "kurisu/lattice/src/graph" @graph,
 }
