@@ -215,8 +215,15 @@ pub fn plain_text_inlines(inlines : Array[Inline]) -> String {
 }
 
 ///|
+/// Base ID for a heading's plain text. Duplicate headings use numbered suffixes.
+/// Shared by heading emission and cross-note heading wikilinks.
+pub fn heading_anchor(text : String) -> String {
+  slugify_heading_text(text)
+}
+
+///|
 fn next_heading_anchor(text : String, counts : Map[String, Int]) -> String {
-  let base = slugify_heading_text(text)
+  let base = heading_anchor(text)
   let mut next = match counts.get(base) {
     Some(n) => n + 1
     None => 1

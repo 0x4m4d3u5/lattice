@@ -16,6 +16,9 @@ collected in that order; any diagnostic suppresses HTML. Footnote shortcode
 errors use the same path. The source name is supplied by the caller and is
 preserved in diagnostics. Frontmatter must use the existing YAML/TOML delimiters.
 
+Cross-note [heading wikilinks](wikilink-headings.md) share the existing
+Markdown heading-ID rules and page lookup.
+
 This is a Markdown-fragment boundary, not a full site builder. It does not apply
 collection schemas, draft publication, templates, filesystem/vault discovery,
 URL policies, or output publication. It inherits the existing Markdown syntax
@@ -55,8 +58,9 @@ runtimes, either during compilation or the host-import check. Each call uses
 local data; the adapter reuses one module instance.
 
 `bash scripts/check-wasm-note.sh` builds the JavaScript control and WASM GC
-application with warnings denied. Both run the same 525 independent supplied-note
-comparisons: YAML/TOML, exact HTML and escaped URLs, Unicode/combining characters,
+application with warnings denied. Both run the same 528 independent supplied-note
+comparisons: YAML/TOML, exact HTML and escaped URLs, cross-note heading links,
+Unicode/combining characters,
 NUL and a lone surrogate, malformed link maps, source-preserving diagnostics,
 footnote errors, 512 changing notes/maps, a 65,536-code-unit body, and a small
 call after it. The WASM checks use one reused Node worker instance with a
@@ -93,7 +97,7 @@ port and exposes only four fixed test assets. Test-context requests outside
 that origin are rejected. The returned HTML is compared as data, never inserted
 into the DOM.
 
-A real module Web Worker loads the checked-in adapter and runs the same 525
+A real module Web Worker loads the checked-in adapter and runs the same 528
 supplied-note comparisons on one reused WASM GC instance. The harness confirms
 `DedicatedWorkerGlobalScope`, reports the worker user agent and actual browser
 version, and terminates the worker after completion or a 30-second deadline.
@@ -121,11 +125,11 @@ The default local command above still uses Playwright's downloaded Chromium.
 
 Verified locally with Chromium 153.0.8010.12, Playwright 1.63.0, and the pinned
 MoonBit toolchain on Linux x86_64. The installed Chrome channel also passed all
-525 comparisons locally with Google Chrome 155.0.8059.39 and the sandbox enabled.
+528 comparisons locally with Google Chrome 155.0.8059.39 and the sandbox enabled.
 Hosted validation of that channel remains required before merge.
-The browser wrong-URL mutation compiled with
+The earlier browser wrong-URL mutation compiled with
 warnings denied and failed the independent HTML comparison; restoring the code
-passed all 525 comparisons. This establishes Chromium browser-worker execution
+passed its original 525 comparisons. This establishes Chromium browser-worker execution
 for this surface, not Firefox/Safari coverage, a memory bound, or full WASM-suite
 certification. AI-assisted follow-up found that an official isolated Playwright
 installation was feasible despite the earlier absence of a browser executable.
