@@ -32,9 +32,32 @@ pub(all) struct ResolutionError {
 // ── helpers ───────────────────────────────────────────────────────────────────
 
 ///|
-/// Canonical lookup key for wikilink targets.
+/// Canonical page key; heading fragments do not change page ownership.
 pub fn lookup_key(target : String) -> String {
-  @slug.filename_to_slug(target)
+  let page = match target.split_once("#") {
+    Some((page, _)) => page.to_owned()
+    None => target
+  }
+  @slug.filename_to_slug(page)
+}
+
+///|
+fn with_heading_fragment(url : String, target : String) -> String {
+  match target.split_once("#") {
+    None => url
+    Some((_, heading)) => {
+      // A supplied heading replaces an existing URL fragment, retaining queries.
+      let base = match url.split_once("#") {
+        Some((base, _)) => base.to_owned()
+        None => url
+      }
+      if heading.trim().is_empty() {
+        base
+      } else {
+        base + "#" + @markdown.heading_anchor(heading.to_owned())
+      }
+    }
+  }
 }
 
 // ── public API ────────────────────────────────────────────────────────────────
@@ -71,7 +94,11 @@ pub fn resolve(
           Some(d) => d
           None => link.target
         }
-        resolved.push({ raw: link, url, title })
+        resolved.push({
+          raw: link,
+          url: with_heading_fragment(url, link.target),
+          title,
+        })
       }
       None =>
         errors.push({

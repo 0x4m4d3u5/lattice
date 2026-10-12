@@ -2921,7 +2921,7 @@ fn render_collection_index(
       let mut j = 0
       while j < p.outgoing.length() {
         let edge = p.outgoing[j]
-        let target_title = match title_by_slug.get(edge.raw.target) {
+        let target_title = match title_by_slug.get(@wikilink.lookup_key(edge.raw.target)) {
           Some(t) => t
           None => edge.title
         }

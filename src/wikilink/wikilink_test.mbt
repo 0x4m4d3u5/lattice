@@ -296,3 +296,25 @@ test "wikilink extract follows nested inline and block syntax" {
     assert_eq(@wikilink.extract(body, "guide.md").length(), 0)
   }
 }
+
+///|
+test "cross-note heading links resolve the page and use emitted heading IDs" {
+  let (resolved, errors) = @wikilink.resolve(
+    @wikilink.extract(
+      "[[Beta.md#Planting & Care|care]] [[Beta#planting-care-2]] [[Beta]] [[Beta#]] [[Beta#🌱 Planting & Care]] [[Missing#Intro]]",
+      "garden.md",
+    ),
+    Map([("beta", "/notes/beta/?view=full#old")]),
+  )
+  assert_eq(resolved.length(), 5)
+  assert_eq(resolved[0].url, "/notes/beta/?view=full#planting-care")
+  assert_eq(resolved[0].title, "care")
+  assert_eq(resolved[1].url, "/notes/beta/?view=full#planting-care-2")
+  assert_eq(errors.length(), 1)
+  assert_eq(resolved[2].url, "/notes/beta/?view=full#old")
+  assert_eq(resolved[3].url, "/notes/beta/?view=full")
+  assert_eq(resolved[4].url, "/notes/beta/?view=full#planting-care")
+  assert_eq(errors[0].message, "target 'Missing#Intro' not found in page index")
+  assert_eq(errors[0].link.source_file, "garden.md")
+  assert_eq(@wikilink.lookup_key("Beta.md#Planting & Care"), "beta")
+}

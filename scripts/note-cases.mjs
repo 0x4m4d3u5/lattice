@@ -34,6 +34,14 @@ export function runNoteCases(render, assert) {
   check(render(yaml('Text[^source].\n\n[^source]: {{< image src="/chart.png" >}}\n'), 'footnote.md', '{}'), {
     html: '', diagnostics: [issue('shortcode', 'footnote.md', "shortcode 'image' missing param 'alt'")],
   });
+  check(render(yaml('## Planting & Care\n\n## Planting & Care\n'), 'beta.md', '{}'),
+    ok('<h2 id="planting-care">Planting &amp; Care</h2>\n<h2 id="planting-care-2">Planting &amp; Care</h2>\n'));
+  check(render(yaml('Read [[Beta.md#Planting & Care|care]] and [[Beta#planting-care-2|again]].\n'), 'garden.md',
+    '{"beta":"/notes/beta/"}'),
+    ok('<p>Read <a href="/notes/beta/#planting-care">care</a> and <a href="/notes/beta/#planting-care-2">again</a>.</p>\n'));
+  check(render(yaml('[[Missing#Intro]]'), 'garden.md', '{}'), {
+    html: '', diagnostics: [issue('wikilink', 'garden.md', "target 'Missing#Intro' not found in page index")],
+  });
   // A new caller-supplied map must take effect; no prior note/map/error state leaks.
   for (let n = 0; n < 256; n++) {
     const text = `Synthetic note ${n} 🌱.`;
