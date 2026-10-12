@@ -40,6 +40,11 @@ assert.ok(beta.includes('<h2 id="planting-care-2">Planting &amp; Care</h2>'));
 assert.ok(beta.includes('href="/posts/alpha/">Garden</a>'));
 assert.deepEqual(JSON.parse(readFileSync(join(output, 'graph.json'), 'utf8')).edges,
   [{ source: 'alpha', target: 'beta' }]);
+const index = readFileSync(join(output, 'posts/index.html'), 'utf8');
+assert.ok(index.includes('<li><a href="/posts/beta/#planting-care">Beta</a> <code>Beta.md#Planting &amp; Care</code> (display: <code>care</code>)</li>'));
+assert.ok(index.includes('<li><a href="/posts/beta/#planting-care-2">Beta</a> <code>Beta#planting-care-2</code> (display: <code>again</code>)</li>'));
+const manifest = JSON.parse(readFileSync(join(output, '.lattice-manifest.json'), 'utf8'));
+assert.deepEqual(manifest.entries.find((entry) => entry.src === alpha).targets, ['beta']);
 // Removing a fragment-bearing reference must invalidate cached target backlinks.
 writeFileSync(alpha, '---\ntitle: Garden\ndate: 2026-01-02\n---\nNo references.\n');
 const incremental = run('build');
