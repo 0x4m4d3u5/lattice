@@ -3557,3 +3557,34 @@ output/cache/manifest unchanged, and an HTML parser verifies the valid footnote
 image before and after recovery. The full pinned JS baseline passes 1,371
 workspace tests, 16 dedicated clap tests, check and build with warnings denied.
 Only synthetic content was processed.
+
+### Distinguish absent weights from the largest explicit weight — 2026-10-12
+
+A synthetic paginated manual put a reference appendix after its chapters using
+an explicit terminal weight of 2147483647. Unweighted notes should follow every
+weighted page, but the comparator substituted that same Int for absent weights.
+It treated absence and the maximum explicit weight as equal, so source order
+placed Notes before Reference in the index and previous/next navigation.
+
+Match the existing optional weights directly. Compare present Int values without
+subtraction, place Some before None, and preserve equality for equal present
+weights and for two absent weights. The same comparator serves collection
+indexes and navigation; no ordering subsystem, schema restriction or sentinel
+value is introduced. All other sort modes stay on their existing comparators.
+This uses the existing typed fields and language comparisons, without a new
+utility or dependency.
+
+AI-assisted inspection led to two independently authored regressions that fail
+on unchanged main (142/144 builder tests pass). Literal expected slug order
+covers both signed Int endpoints, ordinary weights, stable equal maxima and
+stable absent weights. The authored site starts with a regular appendix weight,
+then changes it to the largest valid Int. Literal paginated links and neighbor
+URLs/titles verify the order stays Introduction → Reference → Notes across
+fresh, edited cached and forced builds; check snapshots remain read-only and
+the following build reuses all three page caches. An independent CLI/Python
+HTML parser reproduced Notes on page 1 and Reference on page 2 before the fix.
+After the fix, CLI check/build exit successfully; the independent HTML parser
+verifies the expected index order and all three neighboring links. Directory/
+hash snapshots confirm check leaves output/cache/manifest unchanged. The full
+pinned JS baseline passes 1,373 workspace tests, 16 dedicated clap tests, check
+and build with warnings denied. Only synthetic content was processed.
