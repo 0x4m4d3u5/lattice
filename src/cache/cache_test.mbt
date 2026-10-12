@@ -1,4 +1,37 @@
 ///|
+test "cache compatibility literals retain legacy framing and escapes" {
+  let parsed = @cache.parse(
+    "{\"version\":0001,\"entries\":[{\"fingerprint\":\"old\",\"slug\":\"😀/é\",\"fingerprint\":\"a\\b\\f\\n\\r\\t\\/\\\"\\\\\",}]}\r\n",
+  )
+  assert_eq(parsed.version, 1)
+  assert_eq(parsed.entries.length(), 1)
+  assert_eq(parsed.entries[0].slug, "😀/é")
+  assert_eq(parsed.entries[0].fingerprint, "a\b\u000c\n\r\t/\"\\")
+  let raw = @cache.parse(
+    "{\"version\":1,\"entries\":[{\"slug\":\"a\t\n\r\",\"fingerprint\":\"fp\"}]}",
+  )
+  assert_eq(raw.entries[0].slug, "a\t\n\r")
+  let wrapped = @cache.parse("{\"version\":4294967297,\"entries\":[]}")
+  assert_eq(wrapped.version, 1)
+  for token in ["-1", "1.0", "1e2", "+1", "\"1\""] {
+    let rejected = try {
+      ignore(@cache.parse("{\"version\":" + token + ",\"entries\":[]}"))
+      false
+    } catch {
+      ParseFailure(_) => true
+    }
+    assert_true(rejected)
+  }
+  assert_eq(
+    @cache.render({
+      version: 1,
+      entries: [{ slug: "😀/é", fingerprint: "quoted\"slash\\", }],
+    }),
+    "{\"version\":1,\"entries\":[{\"slug\":\"😀/é\",\"fingerprint\":\"quoted\\\"slash\\\\\"}]}",
+  )
+}
+
+///|
 test "cache render and parse roundtrip" {
   let source = @cache.render({
     version: 1,

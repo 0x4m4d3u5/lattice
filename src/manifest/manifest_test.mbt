@@ -545,3 +545,50 @@ test "manifest parse rejects trailing content after closing brace" {
   }
   assert_true(raised)
 }
+
+///|
+test "manifest numeric literals preserve Int64 precision and wire types" {
+  let source = "{\"version\":1,\"entries\":[{\"src\":\"😀.md\",\"mtime\":9223372036854775807,\"out\":\"max\"},{\"src\":\"min.md\",\"mtime\":-9223372036854775808,\"out\":\"min\"},{\"src\":\"exact.md\",\"mtime\":9007199254740993,\"out\":\"exact\",\"targets\":[\"é\",\"😀\"]}]}"
+  let parsed = @manifest.parse(source)
+  assert_eq(parsed.version, 1)
+  assert_eq(parsed.entries.length(), 3)
+  assert_eq(parsed.entries[0].src, "😀.md")
+  assert_eq(parsed.entries[0].mtime, 9223372036854775807L)
+  assert_eq(parsed.entries[1].mtime, -9223372036854775808L)
+  assert_eq(parsed.entries[2].mtime, 9007199254740993L)
+  assert_eq(parsed.entries[2].targets[0], "é")
+  assert_eq(parsed.entries[2].targets[1], "😀")
+  assert_eq(@manifest.render(parsed), source)
+}
+
+///|
+test "manifest compatibility literals retain duplicate and numeric grammar" {
+  let parsed = @manifest.parse(
+    "{\"version\":-1,\"entries\":[{\"out\":\"old\",\"src\":\"a\n😀\",\"mtime\":00042,\"out\":\"new\",}]}\r\n",
+  )
+  assert_eq(parsed.version, -1)
+  assert_eq(parsed.entries[0].out, "new")
+  assert_eq(parsed.entries[0].src, "a\n😀")
+  assert_eq(parsed.entries[0].mtime, 42L)
+  assert_eq(parsed.entries[0].targets.length(), 0)
+  let wrapped = @manifest.parse(
+    "{\"version\":4294967297,\"entries\":[{\"src\":\"a\",\"mtime\":9223372036854775808,\"out\":\"b\"}]}",
+  )
+  assert_eq(wrapped.version, 1)
+  assert_eq(wrapped.entries[0].mtime, -9223372036854775808L)
+  for token in ["1.0", "1e2", "+1", "\"1\""] {
+    let rejected = try {
+      ignore(
+        @manifest.parse(
+          "{\"version\":1,\"entries\":[{\"src\":\"a\",\"mtime\":" +
+          token +
+          ",\"out\":\"b\"}]}",
+        ),
+      )
+      false
+    } catch {
+      ParseError(_) => true
+    }
+    assert_true(rejected)
+  }
+}
