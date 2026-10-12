@@ -2092,3 +2092,40 @@ test "TOptional(TDateTime) invalid value produces error" {
   assert_eq(errors.length(), 1)
   assert_eq(errors[0].field, "starts_at")
 }
+
+///|
+test "reference validation follows optional wrappers within arrays and repeated optionals" {
+  let schema : @schema.Schema = {
+    name: "reading",
+    fields: [
+      {
+        name: "groups",
+        field_type: TArray(TOptional(TArray(TRef(Some("posts"))))),
+        required: true,
+      },
+      {
+        name: "featured",
+        field_type: TOptional(TOptional(TRef(None))),
+        required: false,
+      },
+    ],
+  }
+  let fm = @frontmatter.parse(
+    "---\ngroups: [[beta], [missing, about]]\nfeatured: absent\n---\n",
+  ).unwrap()
+  assert_eq(@schema.validate(fm, schema).length(), 0)
+  let errors = @schema.validate_refs(
+    fm,
+    schema,
+    Map([("beta", "posts"), ("about", "pages")]),
+  )
+  assert_eq(errors.length(), 3)
+  assert_eq(errors[0].field, "groups")
+  assert_eq(errors[0].message, "TRef: groups[1][0]: unknown slug 'missing'")
+  assert_eq(
+    errors[1].message,
+    "TRef: groups[1][1]: references slug 'about' from collection 'pages' but expected 'posts'",
+  )
+  assert_eq(errors[2].field, "featured")
+  assert_eq(errors[2].message, "TRef: references unknown slug 'absent'")
+}

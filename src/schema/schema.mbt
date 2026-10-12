@@ -574,9 +574,8 @@ pub fn validate(
 /// Cross-reference validation for TRef fields.
 ///
 /// This runs in pass 2, after the complete slug→collection page index is built.
-/// For each schema field of type TRef(coll?), checks that the field value (a slug)
-/// exists in the page index. If coll is Some(collection), also checks that the
-/// referenced slug belongs to the specified collection.
+/// Follow Array and Optional wrappers to each TRef(coll?) value. Each slug must
+/// exist in the page index and, if specified, belong to the expected collection.
 ///
 /// Returns an array of validation errors for broken references.
 pub fn validate_refs(
@@ -585,106 +584,80 @@ pub fn validate_refs(
   page_index : Map[String, String], // slug → collection name
 ) -> Array[ValidationError] {
   let errors : Array[ValidationError] = []
-  let mut i = 0
-  while i < schema.fields.length() {
-    let fdef = schema.fields[i]
-    // Extract the inner type from TOptional wrappers
-    let inner_type = match fdef.field_type {
-      TOptional(inner) => inner
-      t => t
+  for field in schema.fields {
+    if fm.fields.get(field.name) is Some(value) {
+      validate_ref_value(
+        value,
+        field.field_type,
+        field.name,
+        field.name,
+        false,
+        page_index,
+        errors,
+      )
     }
-    match inner_type {
-      TRef(expected_coll) =>
-        match fm.fields.get(fdef.name) {
-          None => () // field absent — fine for optional, handled by validate()
-          Some(val) =>
-            match val {
-              @frontmatter.FStr(slug) =>
-                match page_index.get(slug) {
-                  None =>
-                    errors.push({
-                      field: fdef.name,
-                      message: "TRef: references unknown slug '" + slug + "'",
-                    })
-                  Some(coll_name) =>
-                    match expected_coll {
-                      Some(expected) =>
-                        if coll_name != expected {
-                          errors.push({
-                            field: fdef.name,
-                            message: "TRef: references slug '" +
-                            slug +
-                            "' from collection '" +
-                            coll_name +
-                            "' but expected '" +
-                            expected +
-                            "'",
-                          })
-                        }
-                      None => () // any collection is fine
-                    }
-                }
-              _ => () // non-string values caught by type_matches in validate()
-            }
-        }
-      TArray(TRef(expected_coll)) =>
-        // Array-of-refs: each element is a slug that must exist in the page index.
-        // This is the TArray(TRef(...)) case — a field like related_posts = ["a", "b"]
-        // where each element is cross-checked against the slug→collection map.
-        match fm.fields.get(fdef.name) {
-          None => () // field absent — fine for optional, handled by validate()
-          Some(val) =>
-            match val {
-              @frontmatter.FArray(items) => {
-                let mut j = 0
-                while j < items.length() {
-                  match items[j] {
-                    @frontmatter.FStr(slug) =>
-                      match page_index.get(slug) {
-                        None =>
-                          errors.push({
-                            field: fdef.name,
-                            message: "TRef: " +
-                            fdef.name +
-                            "[" +
-                            j.to_string() +
-                            "]: unknown slug '" +
-                            slug +
-                            "'",
-                          })
-                        Some(coll_name) =>
-                          match expected_coll {
-                            Some(expected) =>
-                              if coll_name != expected {
-                                errors.push({
-                                  field: fdef.name,
-                                  message: "TRef: " +
-                                  fdef.name +
-                                  "[" +
-                                  j.to_string() +
-                                  "]: references slug '" +
-                                  slug +
-                                  "' from collection '" +
-                                  coll_name +
-                                  "' but expected '" +
-                                  expected +
-                                  "'",
-                                })
-                              }
-                            None => () // any collection is fine
-                          }
-                      }
-                    _ => () // non-string elements caught by type_matches in validate()
-                  }
-                  j = j + 1
-                }
-              }
-              _ => () // non-array values caught by type_matches in validate()
-            }
-        }
-      _ => () // not a TRef field
-    }
-    i = i + 1
   }
   errors
+}
+
+///|
+// Walk the same Array/Optional type tree accepted by structural validation.
+// Keep field identity for source locations and the full element path in messages.
+fn validate_ref_value(
+  value : @frontmatter.FrontmatterValue,
+  field_type : FieldType,
+  field : String,
+  path : String,
+  indexed : Bool,
+  page_index : Map[String, String],
+  errors : Array[ValidationError],
+) -> Unit {
+  match (field_type, value) {
+    (TOptional(inner), _) =>
+      validate_ref_value(value, inner, field, path, indexed, page_index, errors)
+    (TArray(inner), @frontmatter.FArray(items)) =>
+      for i, item in items {
+        validate_ref_value(
+          item,
+          inner,
+          field,
+          path + "[" + i.to_string() + "]",
+          true,
+          page_index,
+          errors,
+        )
+      }
+    (TRef(expected_coll), @frontmatter.FStr(slug)) => {
+      let prefix = if indexed { "TRef: " + path + ": " } else { "TRef: " }
+      match page_index.get(slug) {
+        None =>
+          errors.push({
+            field,
+            message: prefix +
+            (if indexed {
+              "unknown slug '"
+            } else {
+              "references unknown slug '"
+            }) +
+            slug +
+            "'",
+          })
+        Some(coll_name) =>
+          if expected_coll is Some(expected) && coll_name != expected {
+            errors.push({
+              field,
+              message: prefix +
+              "references slug '" +
+              slug +
+              "' from collection '" +
+              coll_name +
+              "' but expected '" +
+              expected +
+              "'",
+            })
+          }
+      }
+    }
+    _ => () // Wrong-shaped values are diagnosed by structural validation.
+  }
 }

@@ -3406,3 +3406,23 @@ image/figure decoration, descriptive text, nested/footnote contexts and retentio
 of malformed-shortcode errors. The full pinned JavaScript baseline passes 1,353
 workspace tests, 16 dedicated clap tests, check and build with warnings denied.
 Only synthetic fixtures were used; no real site data or deployment was touched.
+
+### Nested collection references — 2026-10-12
+
+A synthetic reading guide groups related posts using the already accepted
+`Optional[Array[Array[Ref[posts]]]]` schema. Structural validation accepted its
+frontmatter, but cross-reference validation inspected only a direct Ref or one
+array layer, so strict check and build accepted missing and wrong-collection
+targets within groups. Walk the existing FieldType/value tree recursively through
+Array and Optional wrappers. Keep the source field identity and existing direct
+and one-layer diagnostic wording; nested failures include the full element path.
+This is a validation correction, with no schema syntax or renderer change.
+
+AI-assisted development began with an authored-text site fixture, not a utility
+cleanup. Two regressions fail with the original validator (234/236 selected tests
+pass), including exact independently authored diagnostics. The fixture checks a
+valid guide's literal rendered link and cache reuse, then rejects invalid targets
+and deletion of a referenced post while preserving output/cache/manifest bytes.
+The schema test covers optional wrappers inside arrays and repeated optionals.
+All 1,355 workspace tests, 16 dedicated clap tests, check and build pass on the
+pinned JavaScript toolchain with warnings denied. Only synthetic content was used.
