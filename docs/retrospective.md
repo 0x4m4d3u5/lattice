@@ -3349,3 +3349,34 @@ independent datetime implementation confirms the ordinary UTC fixture values;
 year 0000/9999 and accepted extreme offsets additionally exercise Int64 bounds.
 The pinned JavaScript baseline passes all 1,342 workspace tests and 16 dedicated
 clap tests, check and build with warnings denied. Only synthetic fixtures were used.
+
+### Opt-in Markdown image alt-text policy — 2026-10-12
+
+The requested first editorial convention builds on existing field schemas and
+lint diagnostics rather than adding a rule language. `require_image_alt=true`
+rejects parsed Markdown images with empty or Unicode-whitespace-only alt text
+in both `check` and build preparation. Omission/false retains default behavior.
+An intentional decorative image uses the existing image shortcode with explicit
+`alt=""`; that shortcode already requires the alt parameter. Raw HTML,
+templates, shortcode bodies and unrecognized image syntax remain outside this
+policy, as documented in `docs/editorial-checks.md`.
+
+Reuse Markdown's existing nested AST/footnote walk for wikilink extraction and
+image checks. A private visitor avoids another source scanner and preserves
+code/math exclusions. Core character iteration and `Char::is_whitespace` provide
+Unicode blank detection. Surface a typed `MissingImageAlt` violation with stable
+JSON kind `missing_image_alt`, diagnostic `E012`, a source path and image URL;
+source spans are absent, so no line/column is guessed. `explain` uses core
+`replace_all` to recognize the new two-underscore violation name correctly.
+
+AI-assisted implementation began with two independent filesystem assertions and
+an invalid-config-value test: all three fail on unchanged main (165/168 selected
+builder/config tests pass), then pass with the feature. Literal AST expectations
+exercise headings, emphasis, nested lists/quotes, tables, definition lists,
+footnotes, Unicode blanks and repeated URLs. Positive fixtures retain code
+examples and explicit decorative images. Output-tree snapshots prove read-only
+check, rejection after enabling the setting on cached unchanged sources, and
+preservation of output/cache/manifest; a failed first build creates no output.
+All 1,350 workspace tests and 16 dedicated clap tests, check and build pass with
+the pinned JavaScript toolchain and warnings denied. Synthetic fixtures only;
+no deployed site or real content was processed.

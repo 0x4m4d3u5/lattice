@@ -982,6 +982,7 @@ pub fn list_error_codes() -> String {
   buf.write_string(
     "  E011  IOError                     — file read/write failed (permissions, missing path)\n",
   )
+  buf.write_string("  E012  MissingImageAlt             — opt-in Markdown image alt-text policy\n")
   buf.write_string("\n")
   buf.write_string(
     "Run `lattice explain <code>` for a full explanation of any code.",
@@ -993,14 +994,14 @@ pub fn list_error_codes() -> String {
 /// Return a full human-readable explanation for an error code.
 ///
 /// Accepts:
-///   - "E001" through "E011" (case-insensitive)
+///   - "E001" through "E012" (case-insensitive)
 ///   - Full enum name like "BrokenWikilink" or "broken_wikilink" (case-insensitive)
 ///
 /// Returns None if the code is not recognized.
 pub fn explain_error_code(code : String) -> String? {
   // Normalize: trim, lowercase, remove underscores so both
   // "BrokenWikilink" and "broken_wikilink" map to "brokenwikilink"
-  let normalized = code.trim().to_lower().replace(old="_", new="").to_owned()
+  let normalized = code.trim().to_lower().replace_all(old="_", new="").to_owned()
   match normalized {
     "e001" | "missingrequiredfrontmatter" =>
       Some(
@@ -1182,6 +1183,13 @@ pub fn explain_error_code(code : String) -> String? {
         "    Error: cannot write to './dist/index.html': Permission denied\n" +
         "    → E011: output directory is not writable",
       )
+    "e012" | "missingimagealt" => Some(
+      "E012  MissingImageAlt  [error]\n\n" +
+      "  With require_image_alt=true, Markdown images need nonblank descriptive alt text.\n" +
+      "  Write ![Description](url). For intentional decoration use\n" +
+      "  {{< image src=\"/image.png\" alt=\"\" >}}.\n" +
+      "  Code examples, raw HTML, templates and shortcodes are outside this policy.",
+    )
     _ => None
   }
 }

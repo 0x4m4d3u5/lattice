@@ -55,6 +55,13 @@ schema = title:String(minlen=5,maxlen=80),
 
 A project with `priority: 0` or `status: completed` fails at validation — not at render time, not at reader time.
 
+## Editorial conventions
+
+Opt in to `require_image_alt = true` to make `check` and `build` reject Markdown
+images without descriptive alt text. Intentional decorative images can use the
+existing image shortcode with explicit `alt=""`. See [editorial checks](docs/editorial-checks.md)
+for the supported scope; raw HTML and templates are not audited.
+
 ## Quick Start
 
 See [pinned installation and baseline instructions](docs/reliability-baseline.md#reproduce) for the verified durable toolchain. The default-target commands below require a working native compiler. The durable tagged compiler distribution is verified with JavaScript: use `moon build --target js` and add `--target js` before `--` in each `moon run` command. See [the backend limitation](docs/reliability-baseline.md#local-results-and-backend-limitation) for details.
