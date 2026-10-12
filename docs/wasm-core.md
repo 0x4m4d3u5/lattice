@@ -32,8 +32,9 @@ baseline remains a separate required CI step.
 Verified locally on Linux x86_64 with Node `26.10.0`, compiler
 `v0.10.14+7d59c7ec9`, and Moon CLI/Moonrun `914d7da`. Both generated targets pass
 all five fixtures; the full warning-free JS baseline also passes. A Node worker
-was tested. Browser execution is not asserted: no browser test surface was
-available in this execution environment.
+was tested. These fixed fixture exports remain Node-only. The separate
+[supplied-note browser gate](wasm-note.md#real-browser-worker-gate) now verifies
+the documented WASM GC string boundary in a real Chrome/Chromium Web Worker.
 
 ## Remaining compiler limitation
 
@@ -73,6 +74,6 @@ The additive [note-rendering proof](wasm-note.md) now accepts host-supplied
 strings using the documented WASM GC JavaScript string ABI. It has its own
 required CI gate; these five fixed fixtures and both existing target checks
 remain unchanged. The new boundary verifies arbitrary synthetic notes in a
-Node worker. Browser execution and full WASM-suite certification remain open;
-the latter still requires fixing compiler interpolation lowering and rerunning
-the normal test harness.
+Node worker and a separate Chrome/Chromium Web Worker gate. Full WASM-suite
+certification remains open and still requires fixing compiler interpolation
+lowering and rerunning the normal test harness.

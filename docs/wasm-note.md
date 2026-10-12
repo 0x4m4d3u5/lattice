@@ -68,12 +68,64 @@ API. The stress checks establish the tested workload, not a memory ceiling,
 leak proof, or quota for arbitrary note sizes. Hosts choose their own worker
 lifetime and resource budget.
 
-Verified with the repository-pinned toolchain and Node 26.10.0. No supported
-browser surface or existing browser test executable was available locally,
-so browser-worker execution is not claimed. The known compiler interpolation
-bug and the existing gates remain documented in [wasm-core.md](wasm-core.md).
+Verified with the repository-pinned toolchain and Node 26.10.0. The browser
+verification below adds a real Chromium Web Worker run. The known compiler
+interpolation bug and existing gates remain documented in [wasm-core.md](wasm-core.md).
 AI-assisted investigation chose the documented string ABI over dependence on
 unstable managed-object layouts and checked host-supplied expected results
 rather than adding more fixed exported test functions. Replacing resolved URLs
 with `/wrong/` compiled with warnings denied and failed the independent expected
 HTML comparison on both JavaScript and WASM GC; restoring the code passed.
+
+## Real browser worker gate
+
+```sh
+npm ci --prefix tests/browser --ignore-scripts
+npm exec --prefix tests/browser -- playwright install chromium --only-shell
+bash scripts/check-browser-note.sh
+```
+
+The isolated harness pins official Playwright 1.63.0 and its core package with
+registry integrity hashes. It launches a fresh headless browser profile with
+`chromiumSandbox: true`; it does not connect to existing browser sessions or
+change security settings. The test server binds to `127.0.0.1` on an ephemeral
+port and exposes only four fixed test assets. Test-context requests outside
+that origin are rejected. The returned HTML is compared as data, never inserted
+into the DOM.
+
+A real module Web Worker loads the checked-in adapter and runs the same 525
+supplied-note comparisons on one reused WASM GC instance. The harness confirms
+`DedicatedWorkerGlobalScope`, reports the worker user agent and actual browser
+version, and terminates the worker after completion or a 30-second deadline.
+Browser and server are closed on success or failure. The Node and existing
+core gates remain required.
+
+CI on Ubuntu 24.04 uses the runner's preinstalled Google Chrome through
+Playwright's [supported `chrome` channel](https://playwright.dev/docs/browsers#google-chrome--microsoft-edge):
+
+```sh
+npm ci --prefix tests/browser --ignore-scripts
+LATTICE_BROWSER_CHANNEL=chrome bash scripts/check-browser-note.sh
+```
+
+The downloaded Chromium build failed hosted startup with "No usable sandbox".
+Chromium's [AppArmor guidance](https://chromium.googlesource.com/chromium/src/+/main/docs/security/apparmor-userns-restrictions.md)
+explains Ubuntu 23.10+ restrictions on downloaded builds and the existing policy
+for installed Chrome at `/opt/google/chrome/chrome`. Using that installed browser
+keeps `chromiumSandbox: true` without modifying AppArmor, profiles, sysctls or
+sandbox helpers. There is no fallback that disables the sandbox or skips cases.
+The [Ubuntu 24.04 runner image](https://github.com/actions/runner-images/blob/main/images/ubuntu/Ubuntu2404-Readme.md)
+includes Chrome; its version follows runner-image updates and is **not pinned**
+by the Playwright lockfile. CI reports the installed and launched versions.
+The default local command above still uses Playwright's downloaded Chromium.
+
+Verified locally with Chromium 153.0.8010.12, Playwright 1.63.0, and the pinned
+MoonBit toolchain on Linux x86_64. The installed Chrome channel also passed all
+525 comparisons locally with Google Chrome 155.0.8059.39 and the sandbox enabled.
+Hosted validation of that channel remains required before merge.
+The browser wrong-URL mutation compiled with
+warnings denied and failed the independent HTML comparison; restoring the code
+passed all 525 comparisons. This establishes Chromium browser-worker execution
+for this surface, not Firefox/Safari coverage, a memory bound, or full WASM-suite
+certification. AI-assisted follow-up found that an official isolated Playwright
+installation was feasible despite the earlier absence of a browser executable.
