@@ -1260,6 +1260,15 @@ pub fn parse_template_with_includes(
   source : String,
   resolver : (String) -> Result[String, String],
 ) -> Result[Template, TemplateError] {
+  parse_template_with_layout_chain(source, resolver, [])
+}
+
+///|
+fn parse_template_with_layout_chain(
+  source : String,
+  resolver : (String) -> Result[String, String],
+  layout_chain : Array[String],
+) -> Result[Template, TemplateError] {
   // First, parse source to get initial Template
   let base_template = match parse_template(source) {
     Ok(tpl) => tpl
@@ -1424,17 +1433,27 @@ pub fn parse_template_with_includes(
 
   // Resolve layout if found
   let resolved_layout : Template? = match layout_path {
-    Some(path) =>
+    Some(path) => {
+      if layout_chain.contains(path) {
+        return Err(CycleError("layout cycle detected: " + path))
+      }
+      // Layout resolution follows one parent chain. Include ancestry remains
+      // branch-local, so shared partials do not become false-positive cycles.
+      layout_chain.push(path)
       match resolver(path) {
         Ok(layout_source) =>
           // Parse layout template (includes are flattened for layout too)
-          match parse_template_with_includes(layout_source, resolver) {
+          match
+            parse_template_with_layout_chain(
+              layout_source, resolver, layout_chain,
+            ) {
             Ok(layout_tpl) => Some(layout_tpl)
             Err(e) => return Err(e)
           }
         Err(msg) =>
           return Err(ParseError("cannot resolve layout '" + path + "': " + msg))
       }
+    }
     None => None
   }
 

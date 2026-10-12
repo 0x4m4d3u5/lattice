@@ -1514,7 +1514,7 @@ fn template_error_text(e : @template.TemplateError) -> String {
       "missing required slot '" + slot.to_string() + "'"
     @template.MissingDataSlot(path) => "missing data slot '" + path + "'"
     @template.ParseError(msg) => msg
-    @template.CycleError(msg) => "include cycle: " + msg
+    @template.CycleError(msg) => msg
     @template.UnknownFilter(msg) => msg
   }
 }

@@ -3654,3 +3654,46 @@ schedule. Directory/hash snapshots verify check is read-only, cached output
 agrees, malformed edits preserve publication artifacts and recovery succeeds.
 The full pinned JS baseline passes 1,381 workspace tests, 16 dedicated clap
 tests, check and build with warnings denied. Only synthetic content was used.
+
+### Keep layout ancestry across recursive template loading — 2026-10-12
+
+An accidental self-parenting base template, or two templates naming each other
+as layouts, caused check/build to terminate with a JavaScript stack overflow.
+Include cycles already used the typed CycleError, and the loader documented
+cycle detection, but recursive layout loading called the public entry point and
+started a new traversal every time. The layout parent was repeatedly resolved.
+
+Keep the public API and route it through a private loader carrying the active
+layout filenames. Core Array contains/push track this single parent chain;
+there is no new collection utility or dependency. Reject a repeated parent with
+CycleError before resolving it again. Include ancestry stays branch-local, so
+sharing a partial across the page and layout, or using sibling includes, remains
+valid. This only changes cyclic loading; rendering and layout composition stay
+on their existing paths.
+
+AI-assisted inspection led to two bounded-resolver regressions that fail on
+unchanged main (101/103 template tests pass). Literal resolver-call sequences
+verify self, mutual and include-provided parent cycles stop before repeated
+resolution. An independent shared-partial test verifies exact HTML and separate
+loads. A builder fixture verifies typed template diagnostics for self/mutual
+cycles, unchanged output/cache/manifest snapshots, read-only check, and cache
+reuse after restoring the valid template.
+
+An independent CLI scenario first builds a valid synthetic workshop, then edits
+its base template to refer to itself. Before the fix, check/build exit 1 with
+RangeError rather than a template diagnostic. After the fix, both exit 1 with
+the layout-cycle message and no RangeError. Directory/hash snapshots preserve
+publication artifacts, and restoration recovers the literal expected HTML.
+The local pinned JS baseline passes 1,385 workspace tests, 16 dedicated clap
+tests, check and build with warnings denied. Only synthetic content was used.
+
+### Preserve cycle categories in builder diagnostics — 2026-10-12
+
+The PR33 review caught the builder prefixing every CycleError with "include
+cycle:", contradicting a layout-cycle message. Forward the already categorized
+message unchanged, as for other parser diagnostics. Include cycles still report
+"include cycle detected" and retain their rejection behavior. Exact check/build
+message assertions for both categories fail before this one-line fix; they also
+verify error severity, E006 in check, publication preservation and recovery.
+The local pinned JS baseline passes 1,386 workspace tests, 16 dedicated clap
+tests, check and build with warnings denied. Only synthetic content was used.

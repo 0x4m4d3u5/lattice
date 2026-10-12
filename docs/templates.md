@@ -318,3 +318,15 @@ schedule and its session contacts can both depend on an optional organizer:
 When `organizer` is absent or empty, the entire section is omitted. Otherwise,
 each session shows its contact. Malformed nested blocks are rejected even when
 their predicate would hide the body.
+
+## Layout cycles
+
+Layout parents are resolved when templates load. Each parent filename may occur
+only once along that layout chain. A self-reference such as
+`{{layout: base.html}}` inside `base.html`, or mutually referencing parents,
+produces a template-cycle diagnostic during check/build. A parent directive
+provided by an included partial follows the same rule.
+
+Partials may still be shared between a page and its layout, or included multiple
+times in separate branches. Failed template loading preserves the last successful
+output, cache and manifest.
