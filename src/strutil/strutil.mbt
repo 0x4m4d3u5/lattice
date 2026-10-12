@@ -20,78 +20,25 @@ pub fn char_at(s : String, i : Int) -> Char {
 ///|
 /// Trim leading and trailing whitespace (space, tab, CR, LF).
 pub fn trim(s : String) -> String {
-  trim_end(trim_start(s))
+  s.trim(chars=" \t\r\n").to_owned()
 }
 
 ///|
 /// Trim leading whitespace (space, tab, CR, LF).
 pub fn trim_start(s : String) -> String {
-  let n = s.length()
-  let mut lo = 0
-  while lo < n &&
-        (
-          char_at(s, lo) == ' ' ||
-          char_at(s, lo) == '\t' ||
-          char_at(s, lo) == '\r' ||
-          char_at(s, lo) == '\n'
-        ) {
-    lo = lo + 1
-  }
-  if lo == 0 {
-    return s
-  }
-  substr(s, lo, n)
+  s.trim_start(chars=" \t\r\n").to_owned()
 }
 
 ///|
 /// Trim trailing whitespace (space, tab, CR, LF).
 pub fn trim_end(s : String) -> String {
-  let n = s.length()
-  let mut hi = n
-  while hi > 0 &&
-        (
-          char_at(s, hi - 1) == ' ' ||
-          char_at(s, hi - 1) == '\t' ||
-          char_at(s, hi - 1) == '\r' ||
-          char_at(s, hi - 1) == '\n'
-        ) {
-    hi = hi - 1
-  }
-  if hi == n {
-    return s
-  }
-  substr(s, 0, hi)
+  s.trim_end(chars=" \t\r\n").to_owned()
 }
 
 ///|
 /// Trim horizontal whitespace only (space, tab, CR — no LF).
 pub fn trim_h(s : String) -> String {
-  let n = s.length()
-  if n == 0 {
-    return s
-  }
-  let mut lo = 0
-  while lo < n &&
-        (
-          char_at(s, lo) == ' ' ||
-          char_at(s, lo) == '\t' ||
-          char_at(s, lo) == '\r'
-        ) {
-    lo = lo + 1
-  }
-  let mut hi = n
-  while hi > lo &&
-        (
-          char_at(s, hi - 1) == ' ' ||
-          char_at(s, hi - 1) == '\t' ||
-          char_at(s, hi - 1) == '\r'
-        ) {
-    hi = hi - 1
-  }
-  if lo == 0 && hi == n {
-    return s
-  }
-  substr(s, lo, hi)
+  s.trim(chars=" \t\r").to_owned()
 }
 
 // ── substring ─────────────────────────────────────────────────────────────────
@@ -113,36 +60,13 @@ pub fn substr(s : String, start : Int, end_pos : Int) -> String {
 ///|
 /// Split a string into lines (on `\n`). Does not include the `\n` delimiter.
 pub fn split_lines(s : String) -> Array[String] {
-  let lines : Array[String] = []
-  let n = s.length()
-  let mut i = 0
-  while i <= n {
-    let mut end = i
-    while end < n && char_at(s, end) != '\n' {
-      end = end + 1
-    }
-    lines.push(substr(s, i, end))
-    if end >= n {
-      break
-    }
-    i = end + 1
-  }
-  lines
+  s.split("\n").map(v => v.to_owned()).collect()
 }
 
 ///|
 /// Join an array of strings with newline separator.
 pub fn join_lines(lines : Array[String]) -> String {
-  let buf = StringBuilder()
-  let mut i = 0
-  while i < lines.length() {
-    if i > 0 {
-      buf.write_char('\n')
-    }
-    buf.write_string(lines[i])
-    i = i + 1
-  }
-  buf.to_string()
+  lines.join("\n")
 }
 
 // ── character classification ──────────────────────────────────────────────────
@@ -150,13 +74,13 @@ pub fn join_lines(lines : Array[String]) -> String {
 ///|
 /// Check if character is an ASCII digit (0-9).
 pub fn is_digit(c : Char) -> Bool {
-  c >= '0' && c <= '9'
+  c.is_ascii_digit()
 }
 
 ///|
 /// Check if character is an ASCII alphabetic letter.
 pub fn is_alpha(c : Char) -> Bool {
-  (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
+  c.is_ascii_alphabetic()
 }
 
 ///|
@@ -180,13 +104,13 @@ pub fn is_whitespace(c : Char) -> Bool {
 ///|
 /// Check if character is a hex digit (0-9, a-f, A-F).
 pub fn is_hex_digit(c : Char) -> Bool {
-  is_digit(c) || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')
+  c.is_ascii_hexdigit()
 }
 
 ///|
 /// Check if character is an octal digit (0-7).
 pub fn is_octal_digit(c : Char) -> Bool {
-  c >= '0' && c <= '7'
+  c.is_ascii_octdigit()
 }
 
 ///|
@@ -245,7 +169,7 @@ pub fn starts_with_at(s : String, pos : Int, prefix : String) -> Bool {
 ///|
 /// Check if string `s` starts with `prefix`.
 pub fn starts_with(s : String, prefix : String) -> Bool {
-  starts_with_at(s, 0, prefix)
+  s.has_prefix(prefix)
 }
 
 ///|
@@ -395,25 +319,13 @@ pub fn write_json_string(buf : StringBuilder, s : String) -> Unit {
 ///|
 /// Convert ASCII uppercase letters to lowercase. Non-ASCII characters are unchanged.
 pub fn to_ascii_lower(s : String) -> String {
-  let buf = StringBuilder()
-  for c in s {
-    if c >= 'A' && c <= 'Z' {
-      buf.write_char((c.to_int() + 32).unsafe_to_char())
-    } else {
-      buf.write_char(c)
-    }
-  }
-  buf.to_string()
+  s.to_lower()
 }
 
 ///|
 /// Convert a single ASCII character to lowercase if it's uppercase.
 pub fn ascii_lower_char(c : Char) -> Char {
-  if c >= 'A' && c <= 'Z' {
-    (c.to_int() + 32).unsafe_to_char()
-  } else {
-    c
-  }
+  c.to_ascii_lowercase()
 }
 
 // ── integer parsing ──────────────────────────────────────────────────────────

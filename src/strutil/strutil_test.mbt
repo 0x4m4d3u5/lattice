@@ -1,6 +1,38 @@
 ///|
 /// Tests for strutil utility functions.
 
+///|
+test "core string adapters preserve parser whitespace and line boundaries" {
+  let text = " \t\r\n😀 É ABC\r\n\t "
+  assert_eq(@strutil.trim(text), "😀 É ABC")
+  assert_eq(@strutil.trim_start(text), "😀 É ABC\r\n\t ")
+  assert_eq(@strutil.trim_end(text), " \t\r\n😀 É ABC")
+  assert_eq(@strutil.trim_h(" \t\r\na\n\r\t "), "\na\n")
+  assert_eq(
+    @strutil.trim("\u000b\u000c\u00a0 x \u00a0\u000c\u000b"),
+    "\u000b\u000c\u00a0 x \u00a0\u000c\u000b",
+  )
+  let lines = @strutil.split_lines("😀\r\n\nlast\n")
+  assert_eq(lines.length(), 4)
+  assert_eq(lines[0], "😀\r")
+  assert_eq(lines[1], "")
+  assert_eq(lines[2], "last")
+  assert_eq(lines[3], "")
+  assert_eq(@strutil.join_lines(lines), "😀\r\n\nlast\n")
+  assert_eq(@strutil.split_lines("").length(), 1)
+  assert_eq(@strutil.split_lines("")[0], "")
+  assert_eq(@strutil.join_lines([]), "")
+  assert_eq(@strutil.to_ascii_lower("ABC É İ 😀"), "abc É İ 😀")
+  assert_eq(@strutil.ascii_lower_char('É'), 'É')
+  assert_true(!@strutil.is_digit('９'))
+  assert_true(!@strutil.is_alpha('É'))
+  assert_true(@strutil.is_hex_digit('F'))
+  assert_true(!@strutil.is_octal_digit('8'))
+  assert_true(@strutil.starts_with("😀end", "😀"))
+  assert_true(@strutil.starts_with("", ""))
+  assert_true(!@strutil.starts_with("a", "ab"))
+}
+
 // ── strip_html_tags ───────────────────────────────────────────────────────────
 
 ///|
