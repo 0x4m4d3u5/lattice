@@ -210,6 +210,14 @@ The `Ref` type comes in four forms:
 - `Array[Ref[collection-name]]` — an array of cross-reference slugs, each validated
 - `Optional[Ref[collection-name]]` — an optional cross-reference
 
+Reference validation follows nested `Array` and `Optional` wrappers too. A
+reading guide can group related pages with
+`reading:Optional[Array[Array[Ref[posts]]]]` and
+`reading = [[intro, basics], [advanced]]`. Every slug must exist in `posts`;
+an invalid element is reported with its full path, such as `reading[1][0]`.
+Both `check` and `build` revalidate these references on cached sources. A
+reference error prevents publication and preserves existing output and cache.
+
 Example declarations:
 
 ```cfg
