@@ -103,8 +103,11 @@ Its wasm/wasm-gc output generated an interpolation StringBuilder size hint of
 Node 26 and Node 22 with fresh bundled core; the same source passes on JavaScript
 and with the native compiler. CI's explicit JavaScript backend establishes a
 reproducible source/behavior baseline; it does not certify WebAssembly compilation
-by this distribution. A future backend gate requires an upstream compiler fix or
-a durable native compiler distribution.
+by this distribution. A full-suite backend gate requires an upstream compiler fix or
+a durable native compiler distribution. The separate [portable core smoke gate](wasm-core.md)
+executes five real parser/validation/rendering fixtures on both generated WASM
+targets without that test driver; it does not certify the filesystem CLI or
+general interpolation.
 
 Before the compatibility fixes, the native compiler with original dependencies
 failed check with 98 errors and build with 83 errors. The full test run could not

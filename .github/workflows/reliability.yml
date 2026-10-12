@@ -30,3 +30,5 @@ jobs:
         run: moon update
       - name: Check, test, and build
         run: bash scripts/check-baseline.sh
+      - name: Portable WASM core smoke test
+        run: bash scripts/check-wasm-core.sh

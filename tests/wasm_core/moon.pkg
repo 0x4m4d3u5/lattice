@@ -1,0 +1,40 @@
+import {
+  "kurisu/lattice/src/frontmatter",
+  "kurisu/lattice/src/schema",
+  "kurisu/lattice/src/markdown",
+  "kurisu/lattice/src/wikilink",
+  "kurisu/lattice/src/template",
+}
+
+options(
+  link: {
+    "wasm": {
+      "exports": [
+        "render_note",
+        "validate_note",
+        "validate_links",
+        "template_note",
+        "parse_toml_note",
+      ],
+    },
+    "wasm-gc": {
+      "exports": [
+        "render_note",
+        "validate_note",
+        "validate_links",
+        "template_note",
+        "parse_toml_note",
+      ],
+    },
+    "js": {
+      "exports": [
+        "render_note",
+        "validate_note",
+        "validate_links",
+        "template_note",
+        "parse_toml_note",
+      ],
+      "format": "esm",
+    },
+  },
+)
