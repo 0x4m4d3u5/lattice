@@ -3380,3 +3380,29 @@ preservation of output/cache/manifest; a failed first build creates no output.
 All 1,350 workspace tests and 16 dedicated clap tests, check and build pass with
 the pinned JavaScript toolchain and warnings denied. Synthetic fixtures only;
 no deployed site or real content was processed.
+
+### Blank shortcode alt text in the opt-in policy — 2026-10-12
+
+The existing `require_image_alt` policy excluded all shortcodes, although image
+and figure shortcodes produce ordinary `<img>` elements. Their required alt
+parameter can still accidentally contain only spaces, tabs or Unicode whitespace.
+Extend the same opt-in policy to valid image/figure shortcode nodes: descriptions
+pass, explicit `alt=""` remains the decorative convention, and nonempty blank alt
+text produces `MissingImageAlt`/`E012`. A caption does not substitute for alt text.
+No configuration default, emitted string or shortcode syntax changes.
+
+Reuse the existing AST visitor and core Unicode whitespace classification. Check
+shortcode renderability before producing an editorial violation so missing,
+mistyped or otherwise invalid parameters keep their native `E008` diagnostics.
+Code examples, raw HTML, templates and other shortcode kinds/bodies remain
+excluded. Diagnostics now describe body images and the existing `explain E012`
+and documentation reflect the expanded, precise scope.
+
+AI-assisted implementation starts with two independent failures on unchanged
+main (258/260 builder/Markdown tests pass): literal rendered HTML confirms the
+blank alt attribute, while policy and filesystem assertions expect its rejection.
+Afterward all tests pass, including cached-source/output preservation, explicit
+image/figure decoration, descriptive text, nested/footnote contexts and retention
+of malformed-shortcode errors. The full pinned JavaScript baseline passes 1,353
+workspace tests, 16 dedicated clap tests, check and build with warnings denied.
+Only synthetic fixtures were used; no real site data or deployment was touched.

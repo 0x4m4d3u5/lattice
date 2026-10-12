@@ -209,7 +209,7 @@ fn hint_for_violation(kind : @lint.ViolationType) -> String? {
     @lint.IOError => Some("check file permissions and that the path exists")
     @lint.MissingImageAlt =>
       Some(
-        "add descriptive Markdown alt text; for decorative images use the image shortcode with explicit alt=\"\"",
+        "add descriptive alt text; for decorative images use an image/figure shortcode with explicit alt=\"\"",
       )
   }
 }

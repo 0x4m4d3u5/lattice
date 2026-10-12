@@ -1188,7 +1188,8 @@ pub fn explain_error_code(code : String) -> String? {
       "  With require_image_alt=true, Markdown images need nonblank descriptive alt text.\n" +
       "  Write ![Description](url). For intentional decoration use\n" +
       "  {{< image src=\"/image.png\" alt=\"\" >}}.\n" +
-      "  Code examples, raw HTML, templates and shortcodes are outside this policy.",
+      "  Image/figure shortcode alt values must be descriptive or exactly empty.\n" +
+      "  Code examples, raw HTML, templates and other shortcode bodies are outside this policy.",
     )
     _ => None
   }
