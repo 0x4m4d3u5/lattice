@@ -122,7 +122,7 @@ lattice explain <code>                                — describe an error code
 |------|-------------|
 | `-c, --config <path>` | Override site config file |
 | `--collections <path>` | Override collections config file |
-| `--drafts` | Include draft posts |
+| `--drafts` | Include draft pages and their derived entries |
 | `--watch` | Rebuild on file changes (polling) |
 | `--watch-interval <ms>` | Polling interval (default: 500) |
 | `--force` | Ignore incremental cache, rebuild everything |

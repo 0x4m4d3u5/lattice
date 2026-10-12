@@ -514,9 +514,12 @@ test "incremental deleted draft referrer invalidates targets with either draft p
       @fs.path_exists(config.output_dir + "/posts/alpha/index.html"),
       include_drafts,
     )
-    // Existing backlink indexing includes drafts, even when publication skips them.
+    // Referrers follow the same visibility policy as page emission.
     let beta_output = config.output_dir + "/posts/beta/index.html"
-    assert_true(@fs.read_file_to_string(beta_output).contains("/posts/alpha/"))
+    assert_eq(
+      @fs.read_file_to_string(beta_output).contains("/posts/alpha/"),
+      include_drafts,
+    )
     @fs.remove_file(source)
     let incremental = publication_incremental(config)
     let deleted = @builder.build(incremental, publication_load_cache(config))
@@ -639,5 +642,191 @@ test "selected 404 template parse and render failures preserve all prior output 
     )
     assert_eq(publication_snapshot(config.output_dir), before)
     assert_eq(@cache.render_store(cache), cache_before)
+  }
+}
+
+///|
+test "draft visibility covers derived collection outputs and page kinds" {
+  for include_drafts in [false, true] {
+    let fixture = publication_fixture("draft_outputs")
+    let config : @builder.BuildConfig = { ..fixture, include_drafts, }
+    let templates_dir = match config.site.templates_dir {
+      Some(path) => path
+      None => abort("missing templates")
+    }
+    @fs.remove_file(templates_dir + "/page.html")
+    @fs.write_string_to_file(
+      match config.collections_path {
+        Some(path) => path
+        None => abort("missing collections")
+      },
+      "[posts]\nschema = title:String,date:Date,tags:Optional[Array[String]]\ndir = " +
+      config.content_dir +
+      "/posts\n",
+    )
+    @fs.write_string_to_file(
+      config.content_dir + "/posts/alpha.md",
+      "---\ntitle: Secret Post\ndate: 2026-01-02\ndraft: true\ntags: [hidden-only]\nredirect_from: [/old-secret/]\n---\nSee [[beta]].\n",
+    )
+    @fs.write_string_to_file(
+      config.content_dir + "/posts/beta.md",
+      "---\ntitle: Beta\ndate: 2026-02-03\n---\nSee [[alpha]].\n",
+    )
+    for
+      (path, title, redirect_slug) in [
+        ("standalone/about.md", "Secret About", "old-about"),
+        ("index.md", "Secret Home", "old-home"),
+        ("other.md", "Secret Root", "old-root"),
+      ] {
+      @fs.write_string_to_file(
+        config.content_dir + "/" + path,
+        "---\ntitle: " +
+        title +
+        "\ndraft: true\nredirect_from: [/" +
+        redirect_slug +
+        "/]\n---\nSee [[beta]].\n",
+      )
+    }
+    @fs.write_string_to_file(
+      config.content_dir + "/404.md",
+      "---\ntitle: Secret Error\ndraft: true\n---\nSecret error body.\n",
+    )
+    let result = @builder.build(config, @cache.empty(config.output_dir))
+    assert_eq(result.errors, 0)
+    for
+      path in [
+        "/posts/alpha/index.html", "/about/index.html", "/other/index.html", "/old-secret/index.html",
+        "/old-about/index.html", "/old-home/index.html", "/old-root/index.html",
+        "/tags/hidden-only/index.html",
+      ] {
+      assert_eq(@fs.path_exists(config.output_dir + path), include_drafts)
+    }
+    let beta = @fs.read_file_to_string(
+      config.output_dir + "/posts/beta/index.html",
+    )
+    // These literal titles exercise both navigation and backlinks.
+    for title in ["Secret Post", "Secret About", "Secret Home", "Secret Root"] {
+      assert_eq(beta.contains(title), include_drafts)
+    }
+    let sitemap = @fs.read_file_to_string(config.output_dir + "/sitemap.xml")
+    for url in ["/posts/alpha/", "/about/", "/other/"] {
+      assert_eq(sitemap.contains("https://example.test" + url), include_drafts)
+    }
+    let error_page = @fs.read_file_to_string(config.output_dir + "/404.html")
+    assert_eq(error_page.contains("Secret error body."), include_drafts)
+    assert_eq(
+      error_page.contains("The page you are looking for does not exist."),
+      !include_drafts,
+    )
+    assert_eq(
+      @fs.path_exists(config.output_dir + "/index.html"),
+      include_drafts,
+    )
+    for
+      path in [
+        "/posts/index.html", "/search-index.json", "/graph.json", "/feed.xml", "/feed.json",
+        "/tags/index.html",
+      ] {
+      let contents = @fs.read_file_to_string(config.output_dir + path)
+      assert_eq(
+        contents.contains(
+          if path == "/tags/index.html" {
+            "hidden-only"
+          } else {
+            "Secret Post"
+          },
+        ),
+        include_drafts,
+      )
+    }
+  }
+}
+
+///|
+test "draft collection root alias follows publication flag" {
+  for include_drafts in [false, true] {
+    let fixture = publication_fixture("draft_root_alias")
+    let site = match
+      @config.parse(
+        @fs.read_file_to_string(fixture.config_path) + "root_page = alpha\n",
+      ) {
+      Ok(site) => site
+      Err(_) => abort("invalid root alias fixture")
+    }
+    let config : @builder.BuildConfig = { ..fixture, site, include_drafts, }
+    @fs.remove_file(config.content_dir + "/index.md")
+    @fs.write_string_to_file(
+      config.content_dir + "/posts/alpha.md",
+      "---\ntitle: Secret Alias\ndate: 2026-01-02\ndraft: true\n---\nAlias body.\n",
+    )
+    let result = @builder.build(config, @cache.empty(config.output_dir))
+    assert_eq(result.errors, 0)
+    assert_eq(
+      @fs.path_exists(config.output_dir + "/index.html"),
+      include_drafts,
+    )
+  }
+}
+
+///|
+test "draft flag and frontmatter transitions keep cached publication equal to full builds" {
+  let fixture = publication_fixture("draft_transitions")
+  let templates = match fixture.site.templates_dir {
+    Some(path) => path
+    None => abort("missing templates")
+  }
+  @fs.write_string_to_file(
+    templates + "/page.html",
+    "<html><body>{{prev_post_url}}|{{prev_post_title}}|{{next_post_url}}|{{next_post_title}}|{{backlinks}}|{{content}}</body></html>\n",
+  )
+  @fs.write_string_to_file(
+    templates + "/404.html",
+    "<html>{{content}}</html>\n",
+  )
+  for
+    (slug, title, date) in [
+      ("alpha", "Alpha", "2026-01-02"),
+      ("gamma", "Gamma", "2026-03-04"),
+    ] {
+    @fs.write_string_to_file(
+      fixture.content_dir + "/posts/" + slug + ".md",
+      "---\ntitle: " + title + "\ndate: " + date + "\n---\nSee [[beta]].\n",
+    )
+  }
+  let seed = @builder.build(fixture, @cache.empty(fixture.output_dir))
+  assert_eq(seed.errors, 0)
+  for
+    (draft, include_drafts, visible) in [
+      (true, false, false),
+      (true, true, true),
+      (true, false, false),
+      (false, false, true),
+      (true, false, false),
+    ] {
+    @fs.write_string_to_file(
+      fixture.content_dir + "/posts/alpha.md",
+      "---\ntitle: Alpha\ndate: 2026-01-02\ndraft: " +
+      draft.to_string() +
+      "\n---\nSee [[beta]].\n",
+    )
+    let config : @builder.BuildConfig = { ..fixture, include_drafts, }
+    let incremental = publication_incremental(config)
+    let result = @builder.build(incremental, publication_load_cache(config))
+    assert_eq(result.errors, 0)
+    let beta_path = config.output_dir + "/posts/beta/index.html"
+    let beta = @fs.read_file_to_string(beta_path)
+    assert_eq(beta.contains("/posts/alpha/|Alpha"), visible)
+    assert_eq(beta.contains("href=\"/posts/alpha/\""), visible)
+    assert_true(beta.contains("/posts/gamma/|Gamma"))
+    // Existing outputs are retained; hiding a page does not delete its old HTML.
+    assert_true(@fs.path_exists(config.output_dir + "/posts/alpha/index.html"))
+    let incremental_output = publication_snapshot(config.output_dir)
+    let full = @builder.build(config, publication_load_cache(config))
+    assert_eq(full.errors, 0)
+    assert_eq(@fs.read_file_to_string(beta_path), beta)
+    assert_eq(publication_snapshot(config.output_dir), incremental_output)
+    let next = @builder.build(incremental, publication_load_cache(config))
+    assert_eq(next.errors, 0)
+    assert_eq(next.unchanged_pages, if visible { 3 } else { 2 })
   }
 }

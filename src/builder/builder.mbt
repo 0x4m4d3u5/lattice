@@ -423,6 +423,16 @@ fn extract_link_targets(source : String, slug : String) -> Array[String] {
 }
 
 ///|
+fn source_is_visible(source : SourceFile, include_drafts : Bool) -> Bool {
+  include_drafts ||
+  (match @frontmatter.parse(source.content) {
+    Ok(fm) => !is_draft(fm)
+    // Keep malformed sources in validation; parsing errors must still fail builds.
+    Err(_) => true
+  })
+}
+
+///|
 /// Pre-extract wikilink targets from every source to build an inverted index:
 ///   target_slug → list of pages that link to it.
 ///
@@ -451,8 +461,11 @@ fn build_backlink_index(
       let mut k = 0
       while k < raw_links.length() {
         let target = @wikilink.lookup_key(raw_links[k].target)
-        if page_index.contains(target) {
-          let ref_entry : BacklinkRef = { url: source_url, title: source_title }
+        if source_url != "" && page_index.contains(target) {
+          let ref_entry : BacklinkRef = {
+            url: source_url,
+            title: source_title,
+          }
           match index.get(target) {
             Some(existing) => existing.push(ref_entry)
             None => index.set(target, [ref_entry])
@@ -2498,6 +2511,7 @@ pub fn truncate_to_builder(s : String, max_len : Int) -> String {
 fn collect_tag_catalog(
   collection_sources : Array[CollectionSources],
   tags_field : String,
+  include_drafts? : Bool = true,
 ) -> TagCatalog {
   let ordered_slugs : Array[String] = []
   let name_by_slug : Map[String, String] = Map([])
@@ -2510,7 +2524,7 @@ fn collect_tag_catalog(
       match @frontmatter.parse(src.content) {
         Ok(fm) => {
           let schema_errors = @schema.validate(fm, coll.definition.schema)
-          if schema_errors.length() == 0 {
+          if schema_errors.length() == 0 && (include_drafts || !is_draft(fm)) {
             match @tags.extract(fm, tags_field) {
               Ok(tag_refs) => {
                 let mut k = 0
@@ -2756,7 +2770,14 @@ fn render_404_page(
           Some(d) => d
           None => "Page not found"
         }
-        (extract_title(fm), markdown_result.html, description)
+        if is_draft(fm) && !config.include_drafts {
+          (
+            "Page Not Found", "<h1>Page Not Found</h1>\n<p>The page you are looking for does not exist.</p>\n",
+            "Page not found",
+          )
+        } else {
+          (extract_title(fm), markdown_result.html, description)
+        }
       }
     }
   } else {
@@ -4802,8 +4823,13 @@ pub fn build(
   }
 
   let tags_field = tags_field_name(config.site)
-  let tag_catalog = collect_tag_catalog(collection_sources, tags_field)
-  let known_tags = tag_catalog.name_by_slug
+  // Validation knows every authored tag, including tags unique to hidden drafts.
+  let known_tags = collect_tag_catalog(collection_sources, tags_field).name_by_slug
+  let tag_catalog = collect_tag_catalog(
+    collection_sources,
+    tags_field,
+    include_drafts=config.include_drafts,
+  )
   let page_size = page_size_for_site(config.site)
   // Include standalone pages in backlink index so wikilinks between standalone
   // and collection pages are resolved correctly in both directions.
@@ -4841,8 +4867,20 @@ pub fn build(
       sources: root_sources,
     })
   }
+  // Keep URL validation and ownership complete; derivations use published URLs.
+  let published_page_index : Map[String, String] = Map([])
+  for coll in all_sources_for_backlinks {
+    for src in coll.sources {
+      if source_is_visible(src, config.include_drafts) {
+        match page_index.get(src.slug) {
+          Some(url) => published_page_index.set(src.slug, url)
+          None => ()
+        }
+      }
+    }
+  }
   let backlink_index = build_backlink_index(
-    all_sources_for_backlinks, page_index,
+    all_sources_for_backlinks, published_page_index,
   )
   let incremental = build_incremental_state(
     config, collection_sources, collections, messages,
@@ -4976,7 +5014,9 @@ pub fn build(
 
     // Build sorted pages for prev/next navigation
     let sorted_coll_pages = build_sorted_collection_pages(
-      coll.sources,
+      coll.sources.filter(fn(src) {
+        source_is_visible(src, config.include_drafts)
+      }),
       coll.definition.name,
       coll.definition.sort_order,
     )
@@ -5104,15 +5144,19 @@ pub fn build(
               @cache.remember(next_cache_store, src.slug, page_fingerprint)
 
               // Generate redirect pages if redirect_from is specified
-              let redirects_generated = emit_redirects_for_page(
-                src.content,
-                doc.url,
-                config.output_dir,
-                config.site.base_url,
-                redirect_sources,
-                diagnostics,
-                output,
-              )
+              let redirects_generated = if should_skip_draft {
+                0
+              } else {
+                emit_redirects_for_page(
+                  src.content,
+                  doc.url,
+                  config.output_dir,
+                  config.site.base_url,
+                  redirect_sources,
+                  diagnostics,
+                  output,
+                )
+              }
               redirect_count = redirect_count + redirects_generated
 
               // Only include non-draft posts in indexes
@@ -5260,6 +5304,12 @@ pub fn build(
       match doc_outcome.document {
         None => error_count = error_count + 1
         Some(doc) => {
+          if !source_is_visible(src, config.include_drafts) {
+            skipped_drafts = skipped_drafts + 1
+            messages.push("[skip draft] standalone/" + src.slug)
+            si = si + 1
+            continue
+          }
           let page_dir = config.output_dir + "/" + src.slug
           let write_ok = try {
             output.ensure_dir(page_dir)
@@ -5389,6 +5439,12 @@ pub fn build(
       match doc_outcome.document {
         None => error_count = error_count + 1
         Some(doc) => {
+          if !source_is_visible(src, config.include_drafts) {
+            skipped_drafts = skipped_drafts + 1
+            messages.push("[skip draft] root/" + src.slug)
+            ri = ri + 1
+            continue
+          }
           // index.md writes to dist/index.html (no subdirectory)
           // everything else writes to dist/<slug>/index.html
           let write_ok = if src.slug == "index" {
