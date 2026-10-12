@@ -34,3 +34,9 @@ jobs:
         run: bash scripts/check-wasm-core.sh
       - name: Supplied-text WASM GC note renderer
         run: bash scripts/check-wasm-note.sh
+      - name: Install pinned browser test harness
+        run: |
+          npm ci --prefix tests/browser --ignore-scripts
+          npm exec --prefix tests/browser -- playwright install chromium --only-shell
+      - name: Chromium Web Worker note renderer
+        run: bash scripts/check-browser-note.sh

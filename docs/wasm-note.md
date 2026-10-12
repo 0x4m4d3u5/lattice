@@ -68,12 +68,43 @@ API. The stress checks establish the tested workload, not a memory ceiling,
 leak proof, or quota for arbitrary note sizes. Hosts choose their own worker
 lifetime and resource budget.
 
-Verified with the repository-pinned toolchain and Node 26.10.0. No supported
-browser surface or existing browser test executable was available locally,
-so browser-worker execution is not claimed. The known compiler interpolation
-bug and the existing gates remain documented in [wasm-core.md](wasm-core.md).
+Verified with the repository-pinned toolchain and Node 26.10.0. The browser
+verification below adds a real Chromium Web Worker run. The known compiler
+interpolation bug and existing gates remain documented in [wasm-core.md](wasm-core.md).
 AI-assisted investigation chose the documented string ABI over dependence on
 unstable managed-object layouts and checked host-supplied expected results
 rather than adding more fixed exported test functions. Replacing resolved URLs
 with `/wrong/` compiled with warnings denied and failed the independent expected
 HTML comparison on both JavaScript and WASM GC; restoring the code passed.
+
+## Real browser worker gate
+
+```sh
+npm ci --prefix tests/browser --ignore-scripts
+npm exec --prefix tests/browser -- playwright install chromium --only-shell
+bash scripts/check-browser-note.sh
+```
+
+The isolated harness pins official Playwright 1.63.0 and its core package with
+registry integrity hashes. It launches a fresh headless Chromium profile with
+`chromiumSandbox: true`; it does not connect to existing browser sessions or
+change security settings. The test server binds to `127.0.0.1` on an ephemeral
+port and exposes only four fixed test assets. Test-context requests outside
+that origin are rejected. The returned HTML is compared as data, never inserted
+into the DOM.
+
+A real module Web Worker loads the checked-in adapter and runs the same 525
+supplied-note comparisons on one reused WASM GC instance. The harness confirms
+`DedicatedWorkerGlobalScope`, reports the worker user agent and actual browser
+version, and terminates the worker after completion or a 30-second deadline.
+Browser and server are closed on success or failure. CI installs the pinned
+harness/browser explicitly and runs this additional gate; the Node and existing
+core gates remain required.
+
+Verified locally with Chromium 153.0.8010.12, Playwright 1.63.0, and the pinned
+MoonBit toolchain on Linux x86_64. The browser wrong-URL mutation compiled with
+warnings denied and failed the independent HTML comparison; restoring the code
+passed all 525 comparisons. This establishes Chromium browser-worker execution
+for this surface, not Firefox/Safari coverage, a memory bound, or full WASM-suite
+certification. AI-assisted follow-up found that an official isolated Playwright
+installation was feasible despite the earlier absence of a browser executable.

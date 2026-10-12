@@ -12,3 +12,6 @@ content/data/
 .choir/
 .serena/
 .ci-moon*/
+
+# Isolated browser test dependencies
+tests/browser/node_modules/
