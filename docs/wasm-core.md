@@ -67,14 +67,12 @@ Moonrun/test driver and a direct Node host. Small control functions and emitted
 WAT established the interpolation failure; independent site literals and the
 wrong-URL mutation established sensitivity of the portable-core fixtures.
 
-## Next boundary
+## Supplied-text boundary
 
-These import-free modules can be instantiated by a browser worker using the
-standard WebAssembly API; `wasm-gc` requires a runtime supporting WASM GC.
-First run the same fixtures in that browser runtime. A reusable note renderer
-then needs an explicit text-in/text-out ABI and a host adapter, with output and
-diagnostics checked on arbitrary supplied notes. The current fixture exports
-return integer test results and do not constitute that production ABI. Keep
-local vault access and output publication in a separate host layer. Full
-WASM-suite certification still requires fixing the compiler interpolation
-lowering and rerunning the normal test harness.
+The additive [note-rendering proof](wasm-note.md) now accepts host-supplied
+strings using the documented WASM GC JavaScript string ABI. It has its own
+required CI gate; these five fixed fixtures and both existing target checks
+remain unchanged. The new boundary verifies arbitrary synthetic notes in a
+Node worker. Browser execution and full WASM-suite certification remain open;
+the latter still requires fixing compiler interpolation lowering and rerunning
+the normal test harness.

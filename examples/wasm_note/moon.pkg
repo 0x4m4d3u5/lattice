@@ -1,0 +1,12 @@
+import { "kurisu/lattice/src/note" }
+
+options(
+  link: {
+    "wasm-gc": {
+      "exports": ["render_note"],
+      "use-js-builtin-string": true,
+      "imported-string-constants": "_",
+    },
+    "js": { "exports": ["render_note"], "format": "esm" },
+  },
+)

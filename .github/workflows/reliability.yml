@@ -32,3 +32,5 @@ jobs:
         run: bash scripts/check-baseline.sh
       - name: Portable WASM core smoke test
         run: bash scripts/check-wasm-core.sh
+      - name: Supplied-text WASM GC note renderer
+        run: bash scripts/check-wasm-note.sh
