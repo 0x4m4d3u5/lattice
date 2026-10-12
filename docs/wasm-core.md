@@ -34,7 +34,7 @@ Verified locally on Linux x86_64 with Node `26.10.0`, compiler
 all five fixtures; the full warning-free JS baseline also passes. A Node worker
 was tested. These fixed fixture exports remain Node-only. The separate
 [supplied-note browser gate](wasm-note.md#real-browser-worker-gate) now verifies
-the documented WASM GC string boundary in a real Chromium Web Worker.
+the documented WASM GC string boundary in a real Chrome/Chromium Web Worker.
 
 ## Remaining compiler limitation
 
@@ -74,6 +74,6 @@ The additive [note-rendering proof](wasm-note.md) now accepts host-supplied
 strings using the documented WASM GC JavaScript string ABI. It has its own
 required CI gate; these five fixed fixtures and both existing target checks
 remain unchanged. The new boundary verifies arbitrary synthetic notes in a
-Node worker and a separate Chromium Web Worker gate. Full WASM-suite
+Node worker and a separate Chrome/Chromium Web Worker gate. Full WASM-suite
 certification remains open and still requires fixing compiler interpolation
 lowering and rerunning the normal test harness.

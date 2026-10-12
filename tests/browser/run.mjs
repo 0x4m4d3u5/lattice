@@ -3,6 +3,10 @@ import { readFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { chromium } from 'playwright';
 
+const browserChannel = process.env.LATTICE_BROWSER_CHANNEL ?? 'chromium';
+assert.ok(['chromium', 'chrome'].includes(browserChannel), 'unsupported browser channel');
+const browserName = browserChannel === 'chrome' ? 'Google Chrome' : 'Chromium';
+
 // Fixed routes expose only synthetic test assets, never arbitrary workspace files.
 const assets = new Map([
   ['/tests/browser/worker.mjs', ['tests/browser/worker.mjs', 'text/javascript']],
@@ -35,7 +39,11 @@ await new Promise((resolve, reject) => {
 let browser;
 try {
   // A fresh test-only browser/profile. Do not disable the Chromium sandbox.
-  browser = await chromium.launch({ headless: true, chromiumSandbox: true });
+  browser = await chromium.launch({
+    headless: true, chromiumSandbox: true,
+    ...(browserChannel === 'chrome' ? { channel: 'chrome' } : {}),
+  });
+  console.log(`Browser: ${browserName} ${browser.version()} (${browserChannel}, sandbox enabled)`);
   const context = await browser.newContext();
   const origin = `http://127.0.0.1:${server.address().port}`;
   await context.route('**/*', (route) => {
@@ -65,7 +73,7 @@ try {
   assert.equal(result.worker, true, 'cases did not execute in a real dedicated worker');
   assert.equal(result.count, 525);
   assert.match(result.userAgent, /Chrome\//);
-  console.log(`Chromium ${browser.version()}: ${result.count} supplied-note comparisons passed in a reused Web Worker instance`);
+  console.log(`${browserName} ${browser.version()}: ${result.count} supplied-note comparisons passed in a reused Web Worker instance`);
   console.log(`Worker runtime: ${result.userAgent}`);
 } finally {
   try {
