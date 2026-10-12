@@ -72,55 +72,17 @@ pub impl Show for DataError with fn output(self, logger) {
 
 ///|
 fn starts_with_data(s : String, prefix : String) -> Bool {
-  let plen = prefix.length()
-  if plen > s.length() {
-    return false
-  }
-  let mut i = 0
-  while i < plen {
-    if @strutil.char_at(s, i) != @strutil.char_at(prefix, i) {
-      return false
-    }
-    i = i + 1
-  }
-  true
+  s.has_prefix(prefix)
 }
 
 ///|
 fn ends_with_data(s : String, suffix : String) -> Bool {
-  let slen = suffix.length()
-  let n = s.length()
-  if slen > n {
-    return false
-  }
-  let start = n - slen
-  let mut i = 0
-  while i < slen {
-    if @strutil.char_at(s, start + i) != @strutil.char_at(suffix, i) {
-      return false
-    }
-    i = i + 1
-  }
-  true
+  s.has_suffix(suffix)
 }
 
 ///|
 fn split_lines_data(s : String) -> Array[String] {
-  let lines : Array[String] = []
-  let n = s.length()
-  let mut i = 0
-  while i <= n {
-    let mut end = i
-    while end < n && @strutil.char_at(s, end) != '\n' {
-      end = end + 1
-    }
-    lines.push(@strutil.substr(s, i, end))
-    if end >= n {
-      break
-    }
-    i = end + 1
-  }
-  lines
+  @strutil.split_lines(s)
 }
 
 ///|
