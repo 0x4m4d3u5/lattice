@@ -3620,3 +3620,37 @@ Removing an outer close makes both commands exit 1 while directory/hash
 snapshots preserve publication artifacts, and recovery restores exact HTML.
 The full pinned JS baseline passes 1,377 workspace tests, 16 dedicated clap
 tests, check and build with warnings denied. Only synthetic content was used.
+
+### Match repeated conditional predicates at the enclosing boundary — 2026-10-12
+
+A synthetic workshop template gated a schedule on an optional organizer, then
+repeated that predicate around each session's contact. The parser searched for
+the first matching close, so the contact's closing tag ended the schedule early.
+Check/build rejected valid content. The same defect affected built-in predicates
+such as title and frontmatter predicates such as page.organizer.
+
+After checking the core string documentation and pinned APIs, use bounded
+StringView find to scan complete template slots. A private helper balances
+repetitions of the current predicate before the existing recursive parser
+validates its body. Core string search cannot provide this application-specific
+depth rule. Both conditional branches share the helper. Keep the exact closing
+syntax, opening whitespace rules, renderer semantics and diagnostic wording;
+different predicates and each blocks retain their existing parsing boundaries.
+
+AI-assisted inspection led to four authored regressions that fail on unchanged
+main (242/246 selected tests pass). Literal expected output covers built-in and
+frontmatter predicates, present/empty/absent values, both render entry points,
+mixed nesting through a loop and a sibling conditional. Malformed nested blocks
+retain missing-close, crossed-close and unknown-inner-slot errors. A workshop
+fixture checks exact contact HTML, optional organizer removal, fresh/cached/full
+parity, read-only check snapshots and preservation of output/cache/manifest after
+a malformed template edit, followed by recovery.
+
+The independent CLI scenario first restores the unchanged parser in this fresh
+isolated checkout and confirms check/build exit 1 without creating output.
+Restoring the fix makes both commands succeed; a Python HTML parser verifies
+Morning and Evening each show Contact Ada. Removing the organizer hides the
+schedule. Directory/hash snapshots verify check is read-only, cached output
+agrees, malformed edits preserve publication artifacts and recovery succeeds.
+The full pinned JS baseline passes 1,381 workspace tests, 16 dedicated clap
+tests, check and build with warnings denied. Only synthetic content was used.
