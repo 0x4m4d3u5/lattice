@@ -56,3 +56,24 @@ test "missing image alt excludes code math raw HTML and explicit decorative shor
     "<p><img src=\"/plain.png\" alt=\"\" /></p>\n",
   )
 }
+
+///|
+test "missing image alt rejects whitespace-only image and figure shortcode values" {
+  for name in ["image", "figure"] {
+    let body = "{{< " + name + " src=\"/blank.png\" alt=\"   \" >}}"
+    assert_true(
+      @markdown.render(body, Map([])).contains(
+        "src=\"/blank.png\" alt=\"   \"",
+      ),
+    )
+    for
+      context in [
+        body,
+        "**" + body + "**",
+        "> " + body,
+        "Note[^n]\n\n[^n]: " + body,
+      ] {
+      assert_eq(@markdown.missing_image_alt_urls(context), ["/blank.png"])
+    }
+  }
+}

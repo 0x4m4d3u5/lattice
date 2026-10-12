@@ -3196,7 +3196,7 @@ fn image_alt_violations(
     line: None,
     column: None,
     kind: @lint.MissingImageAlt,
-    message: "Markdown image '" + url + "' needs descriptive alt text",
+    message: "Body image '" + url + "' has blank alt text",
   })
 }
 

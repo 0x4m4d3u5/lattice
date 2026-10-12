@@ -2153,14 +2153,30 @@ pub fn extract_wikilink_targets(body : String) -> Array[(String, String?)] {
 
 ///|
 /// One URL per parsed Markdown image with empty or whitespace-only alt text.
-/// Shortcodes and raw HTML are outside this check's scope. A decorative image
-/// can use the existing image shortcode, which requires an explicit alt field.
+/// Image/figure shortcodes also reject nonempty whitespace-only alt values.
+/// Their explicit alt="" remains decorative. Malformed shortcodes keep their
+/// native errors; raw HTML and other shortcode bodies are outside this scope.
 pub fn missing_image_alt_urls(body : String) -> Array[String] {
   let urls : Array[String] = []
   visit_body_inlines(body, fn(inline) {
     match inline {
       Image(alt, url) =>
         if alt.iter().all(c => c.is_whitespace()) { urls.push(url) }
+      Shortcode(call) =>
+        if call.name == "image" || call.name == "figure" {
+          match (call.params.get("alt"), call.params.get("src")) {
+            (Some(@shortcode.StringParam(alt)), Some(@shortcode.StringParam(url))) =>
+              if alt.length() > 0 && alt.iter().all(c => c.is_whitespace()) {
+                // Diagnose only images the shortcode renderer can emit. Invalid
+                // params retain E008 instead of being masked by this policy.
+                match @shortcode.render(call) {
+                  Ok(_) => urls.push(url)
+                  Err(_) => ()
+                }
+              }
+            _ => ()
+          }
+        }
       _ => ()
     }
   })

@@ -34,16 +34,29 @@ using the existing image shortcode's explicit required `alt` parameter:
 This emits `alt=""` and is allowed. The shortcode's existing validation still
 rejects an omitted or non-string `alt`; no new shortcode syntax is introduced.
 
+The built-in `image` and `figure` shortcodes also participate in the opt-in check:
+nonempty whitespace-only `alt` values are rejected. Use descriptive text or the
+exact empty string for intentional decoration. A caption does not replace alt
+text. For example, this is rejected:
+
+```markdown
+{{< figure src="/chart.png" alt="   " caption="Quarterly revenue" >}}
+```
+
+Malformed shortcode parameters retain their existing `E008 ShortcodeError` rather
+than producing an alt-text violation. The policy does not trim or rewrite alt
+text; valid descriptions and explicit empty decorative strings render unchanged.
+
 ## Exact scope
 
 The check visits the same Markdown AST and footnotes used for rendering, including
 images inside headings, emphasis, lists, blockquotes, tables and definition
 lists. Code spans, fenced examples and math are excluded. Only image syntax
-recognized by Lattice's parser (`![text](url)`) is covered. Reference-style and
+recognized by Lattice's parser (`![text](url)`), plus parsed built-in `image` and
+`figure` shortcode nodes, is covered. Reference-style and
 linked-image syntax are not recognized as image nodes by the current parser.
-Raw HTML, templates,
-shortcodes (including their bodies), metadata images and CSS backgrounds are
-outside this policy. It does not assess description quality or image availability
+Raw HTML, templates, other shortcode kinds and shortcode bodies, metadata images
+and CSS backgrounds are outside this policy. It does not assess description quality or image availability
 and is not a complete accessibility audit.
 
 Collection documents, standalone pages and root pages use the same policy. Like
