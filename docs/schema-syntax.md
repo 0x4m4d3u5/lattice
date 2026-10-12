@@ -50,6 +50,12 @@ schema = title:String(minlen=5), excerpt:String(maxlen=160)
 schema = title:String(minlen=5), excerpt:String(maxlen=160), slug:String(minlen=3,maxlen=60)
 ```
 
+`DateTime` validates calendar dates, including leap years, as well as the time
+and numeric timezone offset. For example, `2028-02-29T10:30:00+05:30` is valid;
+`2026-02-30T10:30:00Z` and offsets containing non-digits are rejected. The
+existing local-time form (`2026-03-15T10:30:00`) and space separator are accepted.
+Values are preserved as authored. DateTime bounds compare the local date portion.
+
 ## Required vs optional
 
 A field is required unless it is wrapped in `Optional[...]`.
