@@ -3426,3 +3426,27 @@ and deletion of a referenced post while preserving output/cache/manifest bytes.
 The schema test covers optional wrappers inside arrays and repeated optionals.
 All 1,355 workspace tests, 16 dedicated clap tests, check and build pass on the
 pinned JavaScript toolchain with warnings denied. Only synthetic content was used.
+
+### Calendar-valid event timestamps — 2026-10-12
+
+An authored event-page fixture exposed a mismatch between DateTime schemas and
+Lattice's shared RFC 3339 validator: the schema accepted February 30 and offset
+characters such as `+/0:00`. Its private implementation checked only day <= 31
+and subtracted ASCII zero from offset characters without verifying they were
+digits. Reuse `strutil.is_rfc3339_datetime`, already used by feed emitters, instead
+of maintaining a weaker second calendar/offset validator. Adapt the existing
+space separator and timezone-free syntax only for validation; keep authored
+values, accepted numeric offset limits, and local-date bound semantics unchanged.
+No new date arithmetic or schema language is introduced.
+
+AI-assisted development began with a synthetic workshop page, a DateTime field,
+and a template that renders the authored timestamp. Three regressions fail with
+the original validator (236/239 selected tests pass): the build accepts an
+impossible event date, the schema accepts invalid Gregorian days, and non-digit
+offsets pass independently. Literal diagnostics and rendered timestamps provide
+independent expectations. The site fixture verifies cached valid output, strict
+check rejection, and unchanged output/cache/manifest after invalid edits. Positive
+cases cover valid leap days, century rules, month ends, local/space syntax and
+both signs at the existing offset limits. All 1,358 workspace tests and 16
+dedicated clap tests, check and build pass with warnings denied on the pinned
+JavaScript profile. Only synthetic content was used; no deployment was performed.

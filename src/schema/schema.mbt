@@ -267,108 +267,22 @@ fn type_matches(val : @frontmatter.FrontmatterValue, ft : FieldType) -> Bool {
 /// - `2026-03-15T10:30` (missing seconds)
 /// - `not-a-datetime`
 fn is_valid_iso8601_datetime(s : String) -> Bool {
-  // Minimum length: "YYYY-MM-DDTHH:MM:SS" = 19 characters
   if s.length() < 19 {
     return false
   }
-  // Check date part: YYYY-MM-DD (positions 0-9)
-  if @strutil.char_at(s, 4) != '-' || @strutil.char_at(s, 7) != '-' {
+  let separator = @strutil.char_at(s, 10)
+  if separator != 'T' && separator != ' ' {
     return false
   }
-  // Check separator T (or space, some frontmatter uses space)
-  let sep = @strutil.char_at(s, 10)
-  if sep != 'T' && sep != ' ' {
-    return false
+  // Adapt the schema's existing space separator and local-time syntax only for
+  // format validation. Keep the authored value and local-date bounds unchanged.
+  let normalized = s[:10].to_owned() + "T" + s[11:].to_owned()
+  let with_timezone = if s.length() == 19 {
+    normalized + "Z"
+  } else {
+    normalized
   }
-  // Check time part: HH:MM:SS (positions 11-18)
-  if @strutil.char_at(s, 13) != ':' || @strutil.char_at(s, 16) != ':' {
-    return false
-  }
-  // Validate digits in each position
-  let digit_positions = [0, 1, 2, 3, 5, 6, 8, 9, 11, 12, 14, 15, 17, 18]
-  let mut i = 0
-  while i < digit_positions.length() {
-    let pos = digit_positions[i]
-    if pos >= s.length() {
-      return false
-    }
-    let c = @strutil.char_at(s, pos)
-    if c < '0' || c > '9' {
-      return false
-    }
-    i = i + 1
-  }
-  // Validate month range (1-12)
-  let month_1 = @strutil.char_at(s, 5).to_int() - '0'.to_int()
-  let month_2 = @strutil.char_at(s, 6).to_int() - '0'.to_int()
-  let month = month_1 * 10 + month_2
-  if month < 1 || month > 12 {
-    return false
-  }
-  // Validate day range (1-31, same as TDate)
-  let day_1 = @strutil.char_at(s, 8).to_int() - '0'.to_int()
-  let day_2 = @strutil.char_at(s, 9).to_int() - '0'.to_int()
-  let day = day_1 * 10 + day_2
-  if day < 1 || day > 31 {
-    return false
-  }
-  // Validate hour range (0-23)
-  let hour_1 = @strutil.char_at(s, 11).to_int() - '0'.to_int()
-  let hour_2 = @strutil.char_at(s, 12).to_int() - '0'.to_int()
-  let hour = hour_1 * 10 + hour_2
-  if hour > 23 {
-    return false
-  }
-  // Validate minute range (0-59)
-  let min_1 = @strutil.char_at(s, 14).to_int() - '0'.to_int()
-  let min_2 = @strutil.char_at(s, 15).to_int() - '0'.to_int()
-  let minute = min_1 * 10 + min_2
-  if minute > 59 {
-    return false
-  }
-  // Validate second range (0-59)
-  let sec_1 = @strutil.char_at(s, 17).to_int() - '0'.to_int()
-  let sec_2 = @strutil.char_at(s, 18).to_int() - '0'.to_int()
-  let second = sec_1 * 10 + sec_2
-  if second > 59 {
-    return false
-  }
-  // Validate optional timezone suffix
-  if s.length() == 19 {
-    return true // No timezone — valid local time
-  }
-  let tz_start = 19
-  let tz_char = @strutil.char_at(s, tz_start)
-  if tz_char == 'Z' {
-    // Zulu time — must be the last character
-    return s.length() == 20
-  }
-  if tz_char == '+' || tz_char == '-' {
-    // Offset: +HH:MM or -HH:MM (total length = 25)
-    if s.length() != 25 {
-      return false
-    }
-    if @strutil.char_at(s, 22) != ':' {
-      return false
-    }
-    // Validate offset hour digits (0-23)
-    let off_h1 = @strutil.char_at(s, 20).to_int() - '0'.to_int()
-    let off_h2 = @strutil.char_at(s, 21).to_int() - '0'.to_int()
-    let off_hour = off_h1 * 10 + off_h2
-    if off_hour > 23 {
-      return false
-    }
-    // Validate offset minute digits (0-59)
-    let off_m1 = @strutil.char_at(s, 23).to_int() - '0'.to_int()
-    let off_m2 = @strutil.char_at(s, 24).to_int() - '0'.to_int()
-    let off_min = off_m1 * 10 + off_m2
-    if off_min > 59 {
-      return false
-    }
-    return true
-  }
-  // Unknown suffix
-  false
+  @strutil.is_rfc3339_datetime(with_timezone)
 }
 
 ///|
