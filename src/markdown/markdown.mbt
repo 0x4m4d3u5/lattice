@@ -1550,8 +1550,9 @@ fn render_footnotes_section(
   footnotes : Array[FootnoteDef],
   wl : Map[String, String],
   fn_map : Map[String, Int],
-) -> String {
+) -> RenderResult {
   let buf = StringBuilder()
+  let issues : Array[ShortcodeIssue] = []
   buf.write_string("\n<section class=\"footnotes\">\n<ol>\n")
   let mut i = 0
   while i < footnotes.length() {
@@ -1561,8 +1562,9 @@ fn render_footnotes_section(
     buf.write_string("\">")
     // Render inline markdown in footnote text (e.g. **bold**, `code`)
     let inlines = parse_inlines(footnote.text, 0, footnote.text.length())
-    let rendered_text = render_inlines_with_issues(inlines, wl, fn_map).html
-    buf.write_string(rendered_text)
+    let rendered_text = render_inlines_with_issues(inlines, wl, fn_map)
+    merge_shortcode_errors(issues, rendered_text.shortcode_errors)
+    buf.write_string(rendered_text.html)
     buf.write_string(" <a href=\"#fnref-")
     buf.write_string(@strutil.escape_html_body(footnote.label))
     buf.write_string("\" class=\"footnote-backref\">↩</a>")
@@ -1570,7 +1572,7 @@ fn render_footnotes_section(
     i = i + 1
   }
   buf.write_string("</ol>\n</section>\n")
-  buf.to_string()
+  { html: buf.to_string(), shortcode_errors: issues, toc: [], footnotes: [], }
 }
 
 ///|
@@ -2217,7 +2219,14 @@ pub fn render_with_diagnostics(
     blocks, wikilinks, heading_counts, fn_map,
   )
   let html_with_footnotes = if footnotes.length() > 0 {
-    rendered.html + render_footnotes_section(footnotes, wikilinks, fn_map)
+    let rendered_footnotes = render_footnotes_section(
+      footnotes, wikilinks, fn_map,
+    )
+    merge_shortcode_errors(
+      rendered.shortcode_errors,
+      rendered_footnotes.shortcode_errors,
+    )
+    rendered.html + rendered_footnotes.html
   } else {
     rendered.html
   }

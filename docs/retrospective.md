@@ -3524,3 +3524,36 @@ The fixed CLI check/build exit successfully; Python verifies every TOC target
 has exactly one matching heading and check preserves output bytes. The full
 pinned JS baseline passes 1,367 workspace tests, 16 dedicated clap tests, check
 and build with warnings denied. Only synthetic content was processed.
+
+### Preserve shortcode errors from rendered footnotes — 2026-10-12
+
+A synthetic research article used the existing image shortcode in a footnote.
+Removing its required alt parameter still passed check and build, and the image
+silently disappeared from the published note. Inline footnote rendering already
+returned typed shortcode errors, but the footnote section discarded them when
+returning only its HTML. This bypassed the existing shortcode contract.
+
+Return the existing RenderResult from the private footnote section and merge its
+shortcode issues into the main result with the existing merge helper. Preserve
+body-first, footnote-declaration error order and the original ShortcodeIssue
+values. Existing check/build callers now reject these errors through their
+normal diagnostic and preparation paths. Valid footnote HTML, code examples,
+reference/definition behavior and shortcode validation rules do not change.
+No new utility, schema policy or dependency is needed.
+
+AI-assisted source inspection led to three independently authored regressions
+that fail on unchanged main (272/275 selected tests pass). Literal diagnostics
+cover unknown names, missing parameters and mistyped parameters, including
+nested inline formatting and unreferenced definitions that are still rendered.
+A seeded article checks E008, complete output/cache/manifest preservation after
+a failed cached edit, and recovery. First-build fixtures verify no output is
+created for failures in collection, standalone, root and custom 404 pages. An
+additional literal-HTML regression preserves valid images and inline code
+examples. The unfixed CLI independently reproduced successful check/build with
+a silently omitted image.
+The fixed CLI check reports E008 and exits 1; build exits 1 with the existing
+shortcode error. Independent Python directory/hash snapshots verify both leave
+output/cache/manifest unchanged, and an HTML parser verifies the valid footnote
+image before and after recovery. The full pinned JS baseline passes 1,371
+workspace tests, 16 dedicated clap tests, check and build with warnings denied.
+Only synthetic content was processed.
