@@ -274,3 +274,23 @@ The new date component slots enable date-based archive organization:
 ```
 
 When rendering a specific archive page, lattice populates these with date components extracted from the page's frontmatter date field.
+
+## Nested array loops
+
+`{{#each data.workshops.locations}}` iterates a data-file array, and
+`{{#each page.sessions}}` iterates a frontmatter string array. Either loop can
+contain another loop, using one `{{/each}}` per opening block:
+
+```html
+{{#each data.workshops.locations}}
+<section>
+  <h2>{{item}}</h2>
+  <ul>{{#each page.sessions}}<li>{{item}}</li>{{/each}}</ul>
+  <footer>{{item}}</footer>
+</section>
+{{/each}}
+```
+
+`{{item}}` refers to the innermost active loop. After an inner loop finishes,
+the enclosing item is available again, so this footer repeats the location.
+Missing closing tags and invalid inner slots remain template errors.
