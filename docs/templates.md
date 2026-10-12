@@ -294,3 +294,27 @@ contain another loop, using one `{{/each}}` per opening block:
 `{{item}}` refers to the innermost active loop. After an inner loop finishes,
 the enclosing item is available again, so this footer repeats the location.
 Missing closing tags and invalid inner slots remain template errors.
+
+## Nested conditionals
+
+Built-in and frontmatter conditionals may repeat the same predicate at nested
+levels. Each opening block needs its own matching closing tag. For example, a
+schedule and its session contacts can both depend on an optional organizer:
+
+```html
+{{?page.organizer}}
+<section>
+  <h2>Schedule</h2>
+  {{#each page.sessions}}
+  <article>
+    <h3>{{item}}</h3>
+    {{?page.organizer}}<p>Contact {{page.organizer}}</p>{{/?page.organizer}}
+  </article>
+  {{/each}}
+</section>
+{{/?page.organizer}}
+```
+
+When `organizer` is absent or empty, the entire section is omitted. Otherwise,
+each session shows its contact. Malformed nested blocks are rejected even when
+their predicate would hide the body.

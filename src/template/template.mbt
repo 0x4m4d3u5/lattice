@@ -532,6 +532,42 @@ fn find_each_close(input : String, start : Int, end : Int) -> Int {
 }
 
 ///|
+// Balance repetitions of this predicate before recursively validating the body.
+// Different predicates and each blocks keep their own parser boundaries.
+fn find_conditional_close(
+  input : String,
+  start : Int,
+  end : Int,
+  predicate : String,
+) -> Int {
+  let mut depth = 1
+  let mut cursor = start
+  while cursor < end {
+    let open = match input[cursor:end].find("{{") {
+      Some(offset) => cursor + offset
+      None => return -1
+    }
+    let close = match input[open + 2:end].find("}}") {
+      Some(offset) => open + 2 + offset
+      None => return -1
+    }
+    let raw = input[open + 2:close].to_owned()
+    let name = @strutil.trim(raw)
+    if raw == "/?" + predicate {
+      depth = depth - 1
+      if depth == 0 {
+        return open
+      }
+    } else if name.has_prefix("?") &&
+      @strutil.trim(name[1:].to_owned()) == predicate {
+      depth = depth + 1
+    }
+    cursor = close + 2
+  }
+  -1
+}
+
+///|
 /// Recursive helper to parse template with conditional block support.
 /// Returns (parts, end_position) where end_position is the index after parsing.
 fn parse_template_recursive(
@@ -704,26 +740,9 @@ fn parse_template_recursive(
           let closing_prefix = "{{/?" + cond_slot_name + "}}"
           let closing_len = closing_prefix.length()
 
-          // Find closing tag
-          let mut body_end = -1
-          let mut k = body_start
-          while k <= end - closing_len {
-            let mut found = true
-            let mut l = 0
-            while l < closing_len {
-              if @strutil.char_at(input, k + l) !=
-                @strutil.char_at(closing_prefix, l) {
-                found = false
-                break
-              }
-              l = l + 1
-            }
-            if found {
-              body_end = k
-              break
-            }
-            k = k + 1
-          }
+          let body_end = find_conditional_close(
+            input, body_start, end, cond_slot_name,
+          )
 
           if body_end < 0 {
             return Err(
@@ -757,26 +776,9 @@ fn parse_template_recursive(
         let closing_prefix = "{{/?" + cond_slot_name + "}}"
         let closing_len = closing_prefix.length()
 
-        // Find closing tag
-        let mut body_end = -1
-        let mut k = body_start
-        while k <= end - closing_len {
-          let mut found = true
-          let mut l = 0
-          while l < closing_len {
-            if @strutil.char_at(input, k + l) !=
-              @strutil.char_at(closing_prefix, l) {
-              found = false
-              break
-            }
-            l = l + 1
-          }
-          if found {
-            body_end = k
-            break
-          }
-          k = k + 1
-        }
+        let body_end = find_conditional_close(
+          input, body_start, end, cond_slot_name,
+        )
 
         if body_end < 0 {
           return Err(
