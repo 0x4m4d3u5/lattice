@@ -1408,6 +1408,12 @@ fn collect_toc_entries_into(
       }
       BlockQuote(inner) =>
         collect_toc_entries_into(inner, max_depth, counts, entries)
+      UnorderedList(items) | OrderedList(items) =>
+        for item in items {
+          // Match rendering order, including headings excluded by depth,
+          // so later duplicate headings keep their actual rendered anchors.
+          collect_toc_entries_into(item.children, max_depth, counts, entries)
+        }
       _ => ()
     }
     i = i + 1
