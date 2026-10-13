@@ -32,8 +32,10 @@ Library consumers can opt into the same field using
 `render_content_index_with_headings(entries, headings_by_url)`; the ordinary
 `render_content_index` function and `ContentEntry` constructor stay unchanged.
 
-Built entries include `links`, resolved outgoing wikilinks in authored order,
-including repeated references. Each record has the authored `target`, the
+Built entries include `links`, resolved outgoing wikilinks in parser traversal
+order: body links (including nested blocks) first, then links in parsed footnote
+definitions in definition order, regardless of where those definitions occur
+in source. Repeated references are retained. Each record has the authored `target`, the
 resolved `url` (including heading fragments) and rendered label `text`.
 Same-note links include the owning page's URL, so a retrieval tool can follow
 them without the original page as its browser context. Code examples and
