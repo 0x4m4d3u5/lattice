@@ -22,7 +22,9 @@ pub fn render_note() -> Int {
   if html ==
     "<h2 id=\"planting\">Planting</h2>\n<p>Read <a href=\"/notes/soil/\">the soil guide</a>.</p>\n" &&
     @strutil.strip_html_tags("<div title=\"a > b\">10&#176;C. <!-- 🌱 > annotation -->&#x1F331;. A&#32;&#9;B.</div>") ==
-    "10°C. 🌱. A B." {
+    "10°C. 🌱. A B." &&
+    @strutil.strip_html_tags("<textarea><!-- visible</textarea><p>After</p>") ==
+    "<!-- visible After" {
     1
   } else {
     0

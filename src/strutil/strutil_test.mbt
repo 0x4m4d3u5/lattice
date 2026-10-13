@@ -191,6 +191,34 @@ test "content text excludes quoted tag attributes and complete HTML comments" {
 }
 
 ///|
+test "text elements preserve literal markup and do not consume following prose" {
+  assert_eq(
+    @strutil.strip_html_tags("<textarea><!-- visible</textarea><p>After</p>"),
+    "<!-- visible After",
+  )
+  assert_eq(
+    @strutil.strip_html_tags("<TITLE>A <b>B</b> &amp; C</TiTlE><p>After</p>"),
+    "A <b>B</b> & C After",
+  )
+  assert_eq(
+    @strutil.strip_html_tags("<script><!-- literal <x></script><p>After</p>"),
+    "<!-- literal <x> After",
+  )
+  assert_eq(
+    @strutil.strip_html_tags("<style>a<!-- literal </stylex>tail</STYLE><p>After</p>"),
+    "a<!-- literal </stylex>tail After",
+  )
+  assert_eq(
+    @strutil.strip_html_tags("<xmp><b>example</b></xmp><iframe><!-- fallback</iframe><noembed><!-- legacy</noembed><noframes>old <b>frame</b></noframes><p>After</p>"),
+    "<b>example</b> <!-- fallback <!-- legacy old <b>frame</b> After",
+  )
+  assert_eq(
+    @strutil.strip_html_tags("<textarea><!-- visible<p>literal"),
+    "<!-- visible<p>literal",
+  )
+}
+
+///|
 test "count_words_text empty string" {
   assert_eq(@strutil.count_words_text(""), 0)
 }
