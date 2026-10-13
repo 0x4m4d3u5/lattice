@@ -118,6 +118,22 @@ test "strip_html_tags collapses multiple internal spaces" {
 }
 
 ///|
+test "content text preserves words and punctuation across inline markup" {
+  assert_eq(
+    @strutil.strip_html_tags("<p>photo<strong>syn</strong>thesis uses H<sub>2</sub>O.</p><p>Read <a href=\"/note/\">notes</a>, then <code>x</code>.</p>"),
+    "photosynthesis uses H2O. Read notes, then x.",
+  )
+  assert_eq(
+    @strutil.strip_html_tags("<p><EM>A</EM><span class=\"token\">B</span><del>C</del><sup>2</sup></p><p>D<br>E</p>"),
+    "ABC2 D E",
+  )
+  assert_eq(
+    @strutil.strip_html_tags("<stronger>A</stronger><custom>B</custom><hr>C"),
+    "A B C",
+  )
+}
+
+///|
 test "count_words_text empty string" {
   assert_eq(@strutil.count_words_text(""), 0)
 }

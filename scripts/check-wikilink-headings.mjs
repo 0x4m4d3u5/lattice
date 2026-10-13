@@ -16,13 +16,13 @@ mkdirSync(templates);
 mkdirSync(join(content, "data"));
 const alpha = join(posts, 'alpha.md');
 writeFileSync(alpha, '---\ntitle: Garden\ndate: 2026-01-02\n---\nRead [[Beta.md#Planting & Care|care]] and [[Beta#planting-care-2|again]].\n\nExample ``[[missing]] ` literal``.\n');
-writeFileSync(join(posts, 'beta.md'), '---\ntitle: Beta\ndate: 2026-01-03\n---\n## Planting & Care\n\n## Planting & Care\n');
+writeFileSync(join(posts, 'beta.md'), '---\ntitle: Beta\ndate: 2026-01-03\n---\n## Planting & Care\n\n## Planting & Care\n\nphoto**syn**thesis uses H<sub>2</sub>O. Read [notes](/notes/), then `x`.\n');
 writeFileSync(join(templates, 'page.html'), '<article>{{content}}{{backlinks}}</article>');
 writeFileSync(join(templates, '404.html'), '{{content}}');
 const collections = join(root, 'collections.cfg');
 writeFileSync(collections, `[posts]\nschema = title:String,date:Date\ndir = ${posts}\n`);
 const config = join(root, 'site.cfg');
-writeFileSync(config, `title = Wiki Test\nbase_url = https://example.test\ntemplates_dir = ${templates}\ncollections_file = ${collections}\noutput_dir = ${output}\n`);
+writeFileSync(config, `title = Wiki Test\ncontent_index_file = content-index.json\nbase_url = https://example.test\ntemplates_dir = ${templates}\ncollections_file = ${collections}\noutput_dir = ${output}\n`);
 const cli = fileURLToPath(new URL('../_build/js/debug/build/kurisu/lattice/cmd/main/main.js', import.meta.url));
 const run = (command, extra = []) => spawnSync(process.execPath,
   [cli, command, content, '-c', config, '--collections', collections, ...extra],
@@ -37,6 +37,15 @@ assert.ok(readFileSync(join(output, 'posts/alpha/index.html'), 'utf8').includes(
 assert.ok(readFileSync(join(output, 'posts/alpha/index.html'), 'utf8').includes(
   '<p>Example <code>[[missing]] ` literal</code>.</p>\n'));
 const beta = readFileSync(join(output, 'posts/beta/index.html'), 'utf8');
+const expectedBody = 'Planting & Care Planting & Care photosynthesis uses H2O. Read notes, then x.';
+const contentBody = () => JSON.parse(readFileSync(join(output, 'content-index.json'), 'utf8'))
+  .find((entry) => entry.slug === 'beta').body;
+assert.equal(contentBody(), expectedBody);
+const cached = run('build');
+assert.equal(cached.status, 0, cached.stdout + cached.stderr);
+assert.ok(cached.stdout.includes('[2 unchanged]'), cached.stdout);
+assert.equal(contentBody(), expectedBody);
+
 assert.ok(beta.includes('<h2 id="planting-care">Planting &amp; Care</h2>'));
 assert.ok(beta.includes('<h2 id="planting-care-2">Planting &amp; Care</h2>'));
 assert.ok(beta.includes('href="/posts/alpha/">Garden</a>'));
@@ -58,6 +67,7 @@ assert.deepEqual(JSON.parse(readFileSync(join(output, 'graph.json'), 'utf8')).ed
 const full = run('build', ['--force']);
 assert.equal(full.status, 0, full.stdout + full.stderr);
 assert.equal(readFileSync(join(output, 'posts/beta/index.html'), 'utf8'), updatedBeta);
+assert.equal(contentBody(), expectedBody);
 // Missing pages still produce a strict check diagnostic using the authored target.
 writeFileSync(alpha, '---\ntitle: Garden\ndate: 2026-01-02\n---\n[[Missing#Intro]]\n');
 const invalid = run('check', ['--format', 'json']);
@@ -66,4 +76,4 @@ assert.deepEqual(JSON.parse(invalid.stdout.slice(invalid.stdout.indexOf('{\n  "v
   path: alpha, line: 5, column: 1, kind: 'broken_wikilink',
   message: "[[Missing#Intro]]: target 'Missing#Intro' not found in page index",
 }]);
-console.log(`CLI cross-note heading URLs, target IDs, backlinks, graph and diagnostic passed (${root})`);
+console.log(`CLI cross-note headings, backlinks, graph, content text and diagnostic passed (${root})`);

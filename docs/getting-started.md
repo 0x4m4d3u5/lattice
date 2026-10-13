@@ -257,6 +257,9 @@ dist/
 
 If `static_dir` exists, lattice also copies those files into `dist/static/`.
 
+For full-text knowledge retrieval, enable the optional
+[content index](content-index.md) with `content_index_file = content-index.json`.
+
 ## robots.txt and sitemap
 
 Lattice automatically generates `robots.txt` during build. By default, it allows all crawlers and includes a sitemap reference:

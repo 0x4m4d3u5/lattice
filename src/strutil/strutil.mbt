@@ -713,22 +713,35 @@ pub fn find_str(s : String, from : Int, needle : String, limit : Int) -> Int {
 ///|
 /// Strip HTML tags from a string, decode basic entities (&amp; &lt; &gt; &quot;
 /// &#39; &apos;), and collapse whitespace into single spaces. Returns clean
-/// plaintext suitable for content indexing or LLM/agent consumption.
+/// plaintext for content indexing. Supported inline tags preserve adjacency;
+/// other tags separate text. This is not a complete HTML parser or sanitizer.
 pub fn strip_html_tags(s : String) -> String {
-  // Pass 1: remove tags — replace each <...> with a space
+  // Pass 1: preserve text adjacency across supported inline tags; separate
+  // blocks and unknown tags. This is a text extractor, not an HTML parser.
   let buf = StringBuilder()
   let n = s.length()
   let mut i = 0
   let mut in_tag = false
+  let mut inline_tag = false
   while i < n {
     let c = char_at(s, i)
     if in_tag {
       if c == '>' {
         in_tag = false
-        buf.write_char(' ')
+        if !inline_tag { buf.write_char(' ') }
       }
     } else if c == '<' {
       in_tag = true
+      let start = if i + 1 < n && char_at(s, i + 1) == '/' { i + 2 } else { i + 1 }
+      let mut end = start
+      while end < n && !char_at(s, end).is_whitespace() &&
+        char_at(s, end) != '/' && char_at(s, end) != '>' {
+        end = end + 1
+      }
+      inline_tag = match substr(s, start, end).to_lower() {
+        "a" | "strong" | "em" | "del" | "code" | "span" | "sub" | "sup" => true
+        _ => false
+      }
     } else {
       buf.write_char(c)
     }
