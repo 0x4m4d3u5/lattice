@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, unlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -78,3 +78,77 @@ for (const field of ['tags', 'topics']) {
   }
 }
 console.log('Root and standalone tag metadata matches rendered badges across tag fields and rebuilds');
+
+// Expected titles come from surviving authored pages, not from the JSON index.
+for (const mode of ['root', 'standalone']) for (const indexed of [false, true]) {
+  for (const collision of ['collection', 'asset', 'search', 'tag', 'redirect', ...(indexed ? ['content'] : [])]) {
+    const root = mkdtempSync(join(tmpdir(), 'lattice-tag-ownership-'));
+    const content = join(root, 'content'), posts = join(content, 'posts');
+    const standalone = join(content, 'standalone'), templates = join(root, 'templates'), output = join(root, 'dist');
+    for (const directory of [posts, standalone, templates, join(content, 'data')]) mkdirSync(directory, { recursive: true });
+    const note = (title, extra = '') => `---\ntitle: ${title}\ntags: [Knowledge]\n${extra}---\n## Authored ${title}\n`;
+    writeFileSync(join(posts, 'catalog.md'), note('Catalog'));
+    writeFileSync(join(standalone, 'survivor.md'), note('Survivor'));
+    writeFileSync(join(standalone, 'hidden.md'), note('Hidden', 'draft: true\n'));
+    const slug = collision === 'collection' ? 'posts' : collision === 'tag' ? 'tags' : collision === 'asset' ? 'static' : 'masked';
+    writeFileSync(join(mode === 'root' ? content : standalone, `${slug}.md`), note('Masked'));
+    const asset = join(content, slug, 'index.html');
+    if (collision === 'asset') { mkdirSync(join(content, slug)); writeFileSync(asset, 'Copied replacement'); }
+    const sender = join(content, 'sender.md');
+    if (collision === 'redirect') writeFileSync(sender, `---\ntitle: Sender\nredirect_from: [/${slug}/]\n---\nSender.\n`);
+    writeFileSync(join(templates, 'page.html'), '{{content}}');
+    writeFileSync(join(templates, 'index.html'), 'Generated collection {{content}}');
+    writeFileSync(join(templates, 'tag.html'), '{{content}}');
+    writeFileSync(join(templates, 'tags.html'), '{{content}}');
+    writeFileSync(join(templates, '404.html'), '{{content}}');
+    const collections = join(root, 'collections.cfg'), config = join(root, 'site.cfg');
+    const configure = (masked) => {
+      writeFileSync(collections, `[${collision === 'collection' && !masked ? 'other' : 'posts'}]\nschema = title:String,tags:Array[String]\ndir = ${posts}\n`);
+      writeFileSync(config, `title = Ownership\nbase_url = https://example.test\npage_size = 1\ntemplates_dir = ${templates}\ncollections_file = ${collections}\noutput_dir = ${output}\n` +
+        (indexed ? `content_index_file = ${collision === 'content' && masked ? `${slug}/index.html` : 'content-index.json'}\n` : '') +
+        (collision === 'search' && masked ? `search_index_file = ${slug}/index.html\n` : ''));
+    };
+    const run = (flags = []) => {
+      const result = spawnSync(process.execPath, [cli, 'build', content, '-c', config, '--collections', collections, ...flags], { encoding: 'utf8', timeout: 30_000 });
+      assert.equal(result.status, 0, result.stdout + result.stderr);
+      return result.stdout;
+    };
+    const verify = (masked, drafts) => {
+      const expected = ['Catalog', ...(drafts ? ['Hidden'] : []), ...(!masked && mode === 'standalone' ? ['Masked'] : []), 'Survivor', ...(!masked && mode === 'root' ? ['Masked'] : [])];
+      const titles = expected.flatMap((_, i) => {
+        const path = i === 0 ? 'tags/knowledge/index.html' : `tags/knowledge/page/${i + 1}/index.html`;
+        const html = readFileSync(join(output, path), 'utf8');
+        assert.equal(html.includes('>Next</a>'), i + 1 < expected.length, `${mode}/${indexed}/${collision}: pagination`);
+        return [...html.matchAll(/<li><a href="[^"]+">([^<]+)<\/a> <code>[^<]+<\/code><\/li>/g)].map((match) => match[1]);
+      });
+      assert.deepEqual(titles, expected, `${mode}/${indexed}/${collision}: surviving tag members`);
+      if (collision !== 'tag' || masked) assert.ok(readFileSync(join(output, 'tags/index.html'), 'utf8').includes(`Knowledge</a> (${expected.length})`));
+      const published = readFileSync(join(output, slug, 'index.html'), 'utf8');
+      assert.equal(published.includes('<h2 id="authored-masked">'), !masked);
+    };
+    configure(true);
+    for (const [round, flags] of [[], [], ['--force'], ['--drafts'], []].entries()) {
+      const log = run(flags);
+      if (round === 1) assert.ok(log.includes('[skip] posts/catalog'), log);
+      verify(true, flags.includes('--drafts'));
+    }
+    // The tags index always owns /tags/; removing that collision would change routing.
+    if (collision === 'tag') continue;
+    if (collision === 'asset') unlinkSync(asset);
+    if (collision === 'redirect') writeFileSync(sender, '---\ntitle: Sender\n---\nSender.\n');
+    configure(false);
+    for (const flags of [[], [], ['--force'], ['--drafts']]) { run(flags); verify(false, flags.includes('--drafts')); }
+    if (mode === 'root' && !indexed && collision === 'collection') {
+      for (const template of ['tag', 'tags']) {
+        const before = readFileSync(join(output, 'tags/knowledge/index.html'), 'utf8');
+        const original = readFileSync(join(templates, `${template}.html`), 'utf8');
+        writeFileSync(join(templates, `${template}.html`), '{{unknown_required_slot}}');
+        const rejected = spawnSync(process.execPath, [cli, 'build', content, '-c', config, '--collections', collections, '--force'], { encoding: 'utf8', timeout: 30_000 });
+        assert.equal(rejected.status, 1, rejected.stdout + rejected.stderr);
+        assert.equal(readFileSync(join(output, 'tags/knowledge/index.html'), 'utf8'), before);
+        writeFileSync(join(templates, `${template}.html`), original);
+      }
+    }
+  }
+}
+console.log('Tag membership follows final output ownership with and without a content index');
