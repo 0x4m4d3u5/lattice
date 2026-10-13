@@ -137,3 +137,20 @@ sitemap, graph, root aliases, and the `--drafts` control. Cache regressions togg
 both frontmatter and the flag and compare rendered output with forced builds,
 while explicitly checking retained old files. Existing rendered-HTML
 fingerprints invalidate affected pages without a cache-format change.
+
+## Unique referring-note backlinks
+
+A backlink lists each visible referring note once per destination page. Repeated
+citations, aliases, filename/case variants and different heading fragments in
+the same destination do not repeat the referring note. Distinct referring notes
+remain separate even when their titles match. Outgoing links in the source HTML
+and collection-index graph remain unchanged.
+
+AI-assisted inspection reproduced two identical Garden backlinks from two
+heading links to Beta in the existing CLI fixture. The backlink index now
+records canonical destination keys already seen within each source, preserving
+first-seen ordering and the existing visible-source/target filter. A literal
+rendered-section regression covers distinct same-title notes, and the real CLI
+fixture asserts exactly one backlink for its two heading citations. Both fail
+before the fix. Existing incremental and forced-build comparisons still verify
+removal of backlinks when the referring note stops linking to the destination.
