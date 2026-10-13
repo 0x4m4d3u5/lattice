@@ -6,6 +6,11 @@ export function runNoteCases(render, assert) {
   const ok = (html) => ({ html, diagnostics: [] });
   const issue = (kind, source, message) => ({ kind, source, message });
   const yaml = (body) => `---\ntitle: Garden\n---\n${body}`;
+  check(render(yaml('## Planting & Care\n\n## Planting & Care\n\nJump [[#Planting & Care|here]] or [[#planting-care-2]]. `[[#sample]]`.\n'), 'local.md', '{}'),
+    ok('<h2 id="planting-care">Planting &amp; Care</h2>\n<h2 id="planting-care-2">Planting &amp; Care</h2>\n<p>Jump <a href="#planting-care">here</a> or <a href="#planting-care-2">#planting-care-2</a>. <code>[[#sample]]</code>.</p>\n'));
+  check(render(yaml('[[#]]\n'), 'local.md', '{}'), {
+    html: '', diagnostics: [issue('wikilink', 'local.md', "target '#' not found in page index")],
+  });
   check(render(yaml('Hello 世界 🌱.\n'), '庭/🌱.md', '{}'), ok('<p>Hello 世界 🌱.</p>\n'));
   check(render('+++\ntitle = "庭 🌱"\n+++\n## Garden\n', 'toml.md', '{}'),
     ok('<h2 id="garden">Garden</h2>\n'));

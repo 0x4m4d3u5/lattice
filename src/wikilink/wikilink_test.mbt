@@ -330,3 +330,19 @@ test "multibacktick code examples are excluded while unmatched runs remain text"
   assert_eq(unmatched.length(), 1)
   assert_eq(unmatched[0].target, "missing")
 }
+
+///|
+test "local heading links resolve without a page index and reject empty headings" {
+  let (resolved, errors) = @wikilink.resolve(
+    @wikilink.extract("[[#Planting & Care|here]] [[#planting-care-2]] [[#🌱 Garden]] [[#]] [[Missing#Intro]]", "note.md"),
+    Map([]),
+  )
+  assert_eq(resolved.length(), 3)
+  assert_eq(resolved[0].url, "#planting-care")
+  assert_eq(resolved[0].title, "here")
+  assert_eq(resolved[1].url, "#planting-care-2")
+  assert_eq(resolved[2].url, "#garden")
+  assert_eq(errors.length(), 2)
+  assert_eq(errors[0].message, "target '#' not found in page index")
+  assert_eq(errors[1].message, "target 'Missing#Intro' not found in page index")
+}
