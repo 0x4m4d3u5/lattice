@@ -4964,6 +4964,9 @@ pub fn build(
   let collect_content_navigation = content_index_file_name(config.site) is Some(_)
   let content_headings_by_url : Map[String, Array[@markdown.TocEntry]] = Map([])
   let content_links_by_url : Map[String, Array[@wikilink.ResolvedWikilink]] = Map([])
+  let content_output_marks : Map[String, (String, Int)] = Map([])
+  let mut content_index_slot : Int? = None
+  let mut cache_slot : Int? = None
   let tag_pages_by_slug : Map[String, Array[@tags.TaggedPage]] = Map([])
   let rendered_collections : Array[CollectionRenderResult] = []
   i = 0
@@ -5112,6 +5115,7 @@ pub fn build(
           }
           let should_skip_draft = is_draft_post && !config.include_drafts
 
+          let mut source_mark = 0 // cached output has no new source write
           let write_result = if should_skip_draft || !should_rebuild {
             // Skip output for drafts (unless --drafts flag is set)
             if should_skip_draft {
@@ -5126,6 +5130,7 @@ pub fn build(
             try {
               output.ensure_dir(page_dir)
               output.write_text(out_path, doc.html)
+              source_mark = output.files.length()
               if is_root_page_for_site(config.site, src.slug) {
                 match doc.root_html {
                   Some(root_html) => output.write_text(root_out_path, root_html)
@@ -5238,6 +5243,7 @@ pub fn build(
                 if collect_content_navigation {
                   content_headings_by_url.set(doc.url, doc.headings)
                   content_links_by_url.set(doc.url, doc.resolved_links)
+                  content_output_marks.set(doc.url, (output_path_key(out_path), source_mark))
                 }
                 content_entries.push(
                   @search.new_content_entry(
@@ -5333,9 +5339,11 @@ pub fn build(
             continue
           }
           let page_dir = config.output_dir + "/" + src.slug
+          let mut source_mark = 0
           let write_ok = try {
             output.ensure_dir(page_dir)
             output.write_text(out_path, doc.html)
+            source_mark = output.files.length()
             messages.push("[lattice] wrote " + out_path)
             true
           } catch {
@@ -5390,6 +5398,7 @@ pub fn build(
             if collect_content_navigation {
               content_headings_by_url.set(doc.url, doc.headings)
               content_links_by_url.set(doc.url, doc.resolved_links)
+              content_output_marks.set(doc.url, (output_path_key(out_path), source_mark))
             }
             content_entries.push(
               @search.new_content_entry(
@@ -5473,9 +5482,11 @@ pub fn build(
           }
           // index.md writes to dist/index.html (no subdirectory)
           // everything else writes to dist/<slug>/index.html
+          let mut source_mark = 0
           let write_ok = if src.slug == "index" {
             try {
               output.write_text(out_path, doc.html)
+              source_mark = output.files.length()
               messages.push("[lattice] wrote " + out_path + " (root homepage)")
               true
             } catch {
@@ -5496,6 +5507,7 @@ pub fn build(
             try {
               output.ensure_dir(page_dir)
               output.write_text(out_path, doc.html)
+              source_mark = output.files.length()
               messages.push("[lattice] wrote " + out_path)
               true
             } catch {
@@ -5550,6 +5562,7 @@ pub fn build(
             if collect_content_navigation {
               content_headings_by_url.set(doc.url, doc.headings)
               content_links_by_url.set(doc.url, doc.resolved_links)
+              content_output_marks.set(doc.url, (output_path_key(out_path), source_mark))
             }
             content_entries.push(
               @search.new_content_entry(
@@ -6202,12 +6215,13 @@ pub fn build(
       match content_index_file_name(config.site) {
         Some(fname) => {
           let content_write_ok = try {
-            let content_json = @search.render_content_index_with_navigation(
-              content_entries, content_headings_by_url, content_links_by_url,
-            )
             let out_path = config.output_dir + "/" + fname
             output.ensure_parent_dirs(out_path)
-            output.write_text(out_path, content_json)
+            // Reserve the existing write position; fill metadata after all
+            // later generated pages and assets have been prepared.
+            let slot = output.files.length()
+            output.write_text(out_path, "")
+            content_index_slot = Some(slot)
             messages.push("[lattice] wrote " + out_path)
             true
           } catch {
@@ -6324,6 +6338,7 @@ pub fn build(
       }
     }
     if error_count == 0 {
+      let slot = output.files.length()
       output.write_text(
         @cache.cache_path(config.output_dir),
         @cache.render_store(next_cache_store),
@@ -6335,6 +6350,7 @@ pub fn build(
           error_count = error_count + 1
         }
       }
+      cache_slot = Some(slot)
     }
   } else {
     diagnostics.push(
@@ -6349,6 +6365,40 @@ pub fn build(
 
   error_count = @diagnostic.count_errors(diagnostics)
   if error_count == 0 {
+    if content_index_slot is Some(slot) {
+      let last_write : Map[String, Int] = Map([])
+      let overwritten : Map[String, Bool] = Map([])
+      for i = 0; i < output.files.length(); i = i + 1 {
+        let (path, _) = output.files[i]
+        last_write.set(path, i)
+      }
+      for (url, mark) in content_output_marks {
+        let (path, after_source) = mark
+        if last_write.get(path) is Some(index) && index >= after_source {
+          content_headings_by_url.remove(url)
+          content_links_by_url.remove(url)
+          overwritten.set(url, true)
+        }
+      }
+      // A cached authored page must be republished if its generator later
+      // disappears; the currently published file is not the cached source HTML.
+      let mut cache_invalidated = false
+      for entry in content_entries {
+        if entry.kind != "collection_index" && overwritten.contains(entry.url) &&
+          @cache.lookup(next_cache_store, entry.slug) is Some(_) {
+          @cache.remember(next_cache_store, entry.slug, "")
+          cache_invalidated = true
+        }
+      }
+      if cache_invalidated && cache_slot is Some(index) {
+        let (path, _) = output.files[index]
+        output.files[index] = (path, Text(@cache.render_store(next_cache_store)))
+      }
+      let (path, _) = output.files[slot]
+      output.files[slot] = (path, Text(@search.render_content_index_with_navigation(
+        content_entries, content_headings_by_url, content_links_by_url,
+      )))
+    }
     output.publish(diagnostics, messages) catch {
       @fs.IOError(msg) => {
         diagnostics.push(

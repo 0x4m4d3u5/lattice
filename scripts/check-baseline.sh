@@ -13,4 +13,6 @@ echo "Running vendored clap tests --target js --deny-warn"
 moon -C vendor/clap test --target js --deny-warn -p TheWaWaR/clap || status=1
 echo "Running CLI cross-note heading fixture"
 node scripts/check-wikilink-headings.mjs || status=1
+echo "Running generated-output navigation fixture"
+node scripts/check-navigation-overwrites.mjs || status=1
 exit "$status"

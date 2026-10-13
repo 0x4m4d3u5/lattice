@@ -41,6 +41,12 @@ Same-note links include the owning page's URL, so a retrieval tool can follow
 them without the original page as its browser context. Code examples and
 unresolved references are excluded. Generated indexes and entries overwritten
 at their URLs have empty link arrays, matching heading-catalog suppression.
+Built indexes also suppress both catalogs when later prepared output replaces
+an authored page, including tag pages, archive pages and copied assets. Source
+body text and duplicate records remain present; only navigation is suppressed.
+An overwritten collection page is republished if the generator disappears,
+so restored catalogs describe the restored authored HTML. Routing and existing
+overwrite policy stay unchanged.
 
 These records describe authored wikilinks, not ordinary Markdown links, raw
 HTML anchors or template navigation. Resolution checks the existing page index;
