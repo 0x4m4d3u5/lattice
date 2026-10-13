@@ -17,6 +17,9 @@ export function runNoteCases(render, assert) {
   check(render(yaml('Read [[soil|土壌 🌱]] and `[[sample]]`.\n'), 'garden.md',
     '{"soil":"/notes/soil/?q=\\u571f&x=1"}'),
     ok('<p>Read <a href="/notes/soil/?q=土&amp;x=1">土壌 🌱</a> and <code>[[sample]]</code>.</p>\n'));
+  check(render(yaml('| Note | Detail |\n| --- | --- |\n| [[soil\\|Soil guide]] | `a\\|b` |\n| a\\\\|b | `a\\\\\\\\|b` |\n'), 'table.md',
+    '{"soil":"/notes/soil/"}'),
+    ok('<table>\n<thead>\n<tr>\n<th>Note</th>\n<th>Detail</th>\n</tr>\n</thead>\n<tbody>\n<tr>\n<td><a href="/notes/soil/">Soil guide</a></td>\n<td><code>a|b</code></td>\n</tr>\n<tr>\n<td>a|b</td>\n<td><code>a\\\\\\|b</code></td>\n</tr>\n</tbody>\n</table>\n'));
   check(render(yaml('A & B < C.\n'), 'escaping.md', '{}'),
     ok('<p>A &amp; B &lt; C.</p>\n'));
   check(render(yaml('e\u0301 \u0000 \ud800 🌱.\n'), 'units.md', '{}'),

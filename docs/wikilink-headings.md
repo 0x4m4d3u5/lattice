@@ -28,6 +28,18 @@ An empty local heading such as `[[#]]` is unresolved. Local references do not
 add cross-note graph edges, backlinks or cached page dependencies. When listed
 on a collection index, their URLs include the owning note's path.
 
+Inside a Markdown table, escape the display separator as `\|` so it stays
+inside the cell:
+
+```md
+| Note | Details |
+| --- | --- |
+| [[Beta#Planting & Care\|care]] | Planting guide |
+```
+
+Escape literal pipes in table text and code spans the same way, such as
+`a\|b` or `` `a\|b` ``.
+
 Graph edges, backlinks and cached reference targets use the canonical page key,
 so different headings in one note still refer to that same page. Missing pages
 retain the authored target and source in diagnostics: `[[Missing#Intro]]` fails
