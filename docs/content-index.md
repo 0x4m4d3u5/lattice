@@ -13,6 +13,25 @@ The body covers the rendered content, while `search-index.json` carries an
 excerpt. These files supply data for a retrieval tool; they do not implement a
 search engine or embeddings.
 
+Built content entries also include `headings`, an array of Markdown section
+headings (levels 2–6) in document order. Each object contains `level`, `id` and plain `text`. Form a
+section citation by appending `#` and `id` to the entry's `url`; use the supplied
+ID rather than regenerating it from text, because duplicate headings receive
+numbered IDs. The catalog includes nested list and blockquote headings and is
+independent of the page's `toc` and `toc_depth` settings.
+
+These headings describe the Markdown body, including on cache-hit rebuilds.
+Level-1 headings reserve IDs but are omitted, matching the renderer's TOC.
+Raw HTML headings and template-generated headings are outside the catalog;
+templates may omit body headings from the final page. Generated collection
+indexes have an empty catalog. Authored entries sharing a generated index's URL
+also have an empty catalog, because the index overwrites that page's HTML.
+This suppresses heading metadata only; duplicate entries and the existing
+collision policy remain unchanged. This metadata does not validate heading links.
+Library consumers can opt into the same field using
+`render_content_index_with_headings(entries, headings_by_url)`; the ordinary
+`render_content_index` function and `ContentEntry` constructor stay unchanged.
+
 Body extraction removes tags, decodes basic entities and collapses whitespace.
 Decimal and hexadecimal numeric references in raw HTML text decode to Unicode:
 `<div>10&#176;C and &#x1F331;</div>` contributes `10°C and 🌱`. References require
