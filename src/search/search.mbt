@@ -153,6 +153,24 @@ fn write_common_fields(
 /// Includes `kind` (page type classification) and `reading_time` (integer
 /// minutes or null) for agent-first programmatic consumption.
 pub fn render_content_index(entries : Array[ContentEntry]) -> String {
+  render_content_entries(entries, None)
+}
+
+///|
+/// Include Markdown heading IDs for section citations, keyed by canonical URL.
+/// The ordinary renderer and ContentEntry constructor retain their existing API.
+pub fn render_content_index_with_headings(
+  entries : Array[ContentEntry],
+  headings : Map[String, Array[@markdown.TocEntry]],
+) -> String {
+  render_content_entries(entries, Some(headings))
+}
+
+///|
+fn render_content_entries(
+  entries : Array[ContentEntry],
+  headings : Map[String, Array[@markdown.TocEntry]]?,
+) -> String {
   render_json_array(entries, fn(buf, entry) {
     write_common_fields(
       buf,
@@ -179,6 +197,22 @@ pub fn render_content_index(entries : Array[ContentEntry]) -> String {
     buf.write_string(",\n")
     buf.write_string("    \"body\": ")
     @strutil.write_json_string(buf, entry.body)
+    if headings is Some(catalog) {
+      buf.write_string(",\n    \"headings\": [")
+      let page_headings = catalog.get(entry.url).unwrap_or([])
+      for i = 0; i < page_headings.length(); i = i + 1 {
+        if i > 0 { buf.write_string(", ") }
+        let heading = page_headings[i]
+        buf.write_string("{\"level\": ")
+        buf.write_string(heading.level.to_string())
+        buf.write_string(", \"id\": ")
+        @strutil.write_json_string(buf, heading.anchor)
+        buf.write_string(", \"text\": ")
+        @strutil.write_json_string(buf, heading.text)
+        buf.write_char('}')
+      }
+      buf.write_char(']')
+    }
     buf.write_string("\n")
   })
 }

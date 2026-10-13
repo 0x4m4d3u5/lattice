@@ -401,3 +401,16 @@ test "render_content_index deterministic field ordering" {
     content="true",
   )
 }
+
+///|
+test "heading catalogs use URLs and preserve legacy content rendering" {
+  let first = @search.new_content_entry("A", "same", "/a/", [], "", "", "", "page", None, "body")
+  let second = @search.new_content_entry("B", "same", "/b/", [], "", "", "", "page", None, "body")
+  let catalog : Map[String, Array[@markdown.TocEntry]] = Map([
+    ("/a/", @markdown.extract_table_of_contents("## A & \"B\"\n", 6)),
+  ])
+  let result = @search.render_content_index_with_headings([first, second], catalog)
+  assert_true(result.contains("\"headings\": [{\"level\": 2, \"id\": \"a-b\", \"text\": \"A & \\\"B\\\"\"}]"))
+  assert_true(result.contains("\"body\": \"body\",\n    \"headings\": []"))
+  assert_false(@search.render_content_index([first]).contains("\"headings\""))
+}

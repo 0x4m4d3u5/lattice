@@ -536,6 +536,7 @@ priv struct ProcessedDocument {
   excerpt : String
   content_html : String
   body_text : String
+  headings : Array[@markdown.TocEntry]
   resolved_links : Array[@wikilink.ResolvedWikilink]
   tags : Array[@tags.TagRef]
 }
@@ -3474,6 +3475,7 @@ fn process_document(
         excerpt,
         content_html: cache_markdown.html,
         body_text: cache_body_text,
+        headings: cache_markdown.toc,
         resolved_links: resolved,
         tags: page_tags,
       }),
@@ -3697,6 +3699,7 @@ fn process_document(
       excerpt,
       content_html: markdown_result.html,
       body_text: @strutil.strip_html_tags(body_html),
+      headings: markdown_result.toc,
       resolved_links: resolved,
       tags: page_tags,
     }),
@@ -4209,6 +4212,7 @@ fn process_document_for_lint(
       excerpt,
       content_html: markdown_result.html,
       body_text: @strutil.strip_html_tags(body_html),
+      headings: markdown_result.toc,
       resolved_links: resolved,
       tags: page_tags,
     }),
@@ -4957,6 +4961,8 @@ pub fn build(
   let graph_pages : Array[@graph.GraphPage] = []
   let search_entries : Array[@search.SearchEntry] = []
   let content_entries : Array[@search.ContentEntry] = []
+  let collect_content_headings = content_index_file_name(config.site) is Some(_)
+  let content_headings_by_url : Map[String, Array[@markdown.TocEntry]] = Map([])
   let tag_pages_by_slug : Map[String, Array[@tags.TaggedPage]] = Map([])
   let rendered_collections : Array[CollectionRenderResult] = []
   i = 0
@@ -5228,6 +5234,9 @@ pub fn build(
                   Some(_) => "post"
                   None => "page"
                 }
+                if collect_content_headings {
+                  content_headings_by_url.set(doc.url, doc.headings)
+                }
                 content_entries.push(
                   @search.new_content_entry(
                     doc.title,
@@ -5376,6 +5385,9 @@ pub fn build(
                 doc.excerpt,
               ),
             )
+            if collect_content_headings {
+              content_headings_by_url.set(doc.url, doc.headings)
+            }
             content_entries.push(
               @search.new_content_entry(
                 doc.title,
@@ -5532,6 +5544,9 @@ pub fn build(
                 doc.excerpt,
               ),
             )
+            if collect_content_headings {
+              content_headings_by_url.set(doc.url, doc.headings)
+            }
             content_entries.push(
               @search.new_content_entry(
                 doc.title,
@@ -6183,7 +6198,9 @@ pub fn build(
       match content_index_file_name(config.site) {
         Some(fname) => {
           let content_write_ok = try {
-            let content_json = @search.render_content_index(content_entries)
+            let content_json = @search.render_content_index_with_headings(
+              content_entries, content_headings_by_url,
+            )
             let out_path = config.output_dir + "/" + fname
             output.ensure_parent_dirs(out_path)
             output.write_text(out_path, content_json)

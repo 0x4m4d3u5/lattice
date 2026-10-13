@@ -13,11 +13,14 @@ const output = join(root, 'dist');
 const templates = join(root, 'templates');
 mkdirSync(posts, { recursive: true });
 mkdirSync(templates);
+mkdirSync(join(content, 'standalone'));
+writeFileSync(join(content, 'index.md'), '---\ntitle: Wiki\n---\n# Wiki\n\n## Wiki\n');
+writeFileSync(join(content, 'standalone/manual.md'), '---\ntitle: Manual\ntoc: true\ntoc_depth: 2\n---\n- Install\n  ## Setup\n\n## Setup\n\n> ### Quoted\n\n###### Deep\n\n<h2 id="raw">Raw</h2>\n');
 mkdirSync(join(content, "data"));
 const alpha = join(posts, 'alpha.md');
 writeFileSync(alpha, '---\ntitle: Garden\ndate: 2026-01-02\n---\n## Overview\n\nJump [[#Overview|here]].\n\nRead [[Beta.md#Planting & Care|care]] and [[Beta#planting-care-2|again]].\n\nExample ``[[missing]] ` literal``.\n');
 writeFileSync(join(posts, 'beta.md'), '---\ntitle: Beta\ndate: 2026-01-03\n---\n## Planting & Care\n\n## Planting & Care\n\nphoto**syn**thesis uses H<sub>2</sub>O. Read [notes](/notes/), then `x`.\n\nphoto<mark>syn</mark>thesis. <abbr title="HyperText Markup Language">HTML</abbr>-based. <kbd>Ctrl</kbd>+<kbd>C</kbd>.\n\n<div>Temperature 10&#176;C. Plant &#x1F331;. A&#32;&#9;B.</div>\n');
-writeFileSync(join(templates, 'page.html'), '<article>{{content}}{{backlinks}}</article>');
+writeFileSync(join(templates, 'page.html'), '<article>{{table_of_contents}}{{content}}{{backlinks}}</article>');
 writeFileSync(join(templates, '404.html'), '{{content}}');
 const collections = join(root, 'collections.cfg');
 writeFileSync(collections, `[posts]\nschema = title:String,date:Date\ndir = ${posts}\n`);
@@ -42,10 +45,36 @@ const beta = readFileSync(join(output, 'posts/beta/index.html'), 'utf8');
 const expectedBody = 'Planting & Care Planting & Care photosynthesis uses H2O. Read notes, then x. photosynthesis. HTML-based. Ctrl+C. Temperature 10°C. Plant 🌱. A B.';
 const contentBody = () => JSON.parse(readFileSync(join(output, 'content-index.json'), 'utf8'))
   .find((entry) => entry.slug === 'beta').body;
+const contentHeadings = () => JSON.parse(readFileSync(join(output, 'content-index.json'), 'utf8'))
+  .find((entry) => entry.url === '/posts/beta/').headings;
+const expectedHeadings = [
+  { level: 2, id: 'planting-care', text: 'Planting & Care' },
+  { level: 2, id: 'planting-care-2', text: 'Planting & Care' },
+];
+const assertCatalogs = () => {
+  const entries = JSON.parse(readFileSync(join(output, 'content-index.json'), 'utf8'));
+  assert.deepEqual(entries.find((e) => e.url === '/').headings,
+    [{ level: 2, id: 'wiki-2', text: 'Wiki' }]);
+  assert.deepEqual(entries.find((e) => e.url === '/manual/').headings, [
+    { level: 2, id: 'setup', text: 'Setup' },
+    { level: 2, id: 'setup-2', text: 'Setup' },
+    { level: 3, id: 'quoted', text: 'Quoted' },
+    { level: 6, id: 'deep', text: 'Deep' },
+  ]);
+  assert.deepEqual(entries.find((e) => e.url === '/posts/').headings, []);
+  assert.ok(readFileSync(join(output, 'index.html'), 'utf8').includes('id="wiki-2"'));
+  const manual = readFileSync(join(output, 'manual/index.html'), 'utf8');
+  assert.ok(manual.includes('href="#setup"') && !manual.includes('href="#deep"'));
+  assert.ok(manual.includes('id="setup"') && manual.includes('id="setup-2"') && manual.includes('id="raw"'));
+};
+assertCatalogs();
+assert.deepEqual(contentHeadings(), expectedHeadings);
 assert.equal(contentBody(), expectedBody);
 const cached = run('build');
 assert.equal(cached.status, 0, cached.stdout + cached.stderr);
 assert.ok(cached.stdout.includes('[2 unchanged]'), cached.stdout);
+assertCatalogs();
+assert.deepEqual(contentHeadings(), expectedHeadings);
 assert.equal(contentBody(), expectedBody);
 
 assert.ok(beta.includes('<h2 id="planting-care">Planting &amp; Care</h2>'));
@@ -69,6 +98,8 @@ assert.ok(!updatedBeta.includes('href="/posts/alpha/">Garden</a>'));
 assert.deepEqual(JSON.parse(readFileSync(join(output, 'graph.json'), 'utf8')).edges, []);
 const full = run('build', ['--force']);
 assert.equal(full.status, 0, full.stdout + full.stderr);
+assertCatalogs();
+assert.deepEqual(contentHeadings(), expectedHeadings);
 assert.equal(readFileSync(join(output, 'posts/beta/index.html'), 'utf8'), updatedBeta);
 assert.equal(contentBody(), expectedBody);
 // Missing pages still produce a strict check diagnostic using the authored target.
