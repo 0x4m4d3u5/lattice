@@ -17,8 +17,8 @@ The `tags` arrays in both JSON indexes include validated frontmatter tags for
 collection members, root pages and standalone pages. The configured
 `tags_field` applies to all of them. Values follow the existing tag extractor's
 trimming and deduplication rules, preserving display spelling and order. A
-retrieval tool can filter either index by those values. This does not change
-generated tag-page membership, which currently lists collection members only.
+retrieval tool can filter either index by those values. Generated tag pages include
+published collection members, root pages and standalone pages.
 
 Built content entries also include `headings`, an array of Markdown section
 headings (levels 2–6) in document order. Each object contains `level`, `id` and plain `text`. Form a

@@ -43,8 +43,10 @@ for (const field of ['tags', 'topics']) {
     const manual = readFileSync(join(output, 'manual/index.html'), 'utf8');
     assert.equal(manual.includes('href="/tags/ai/">AI</a>'), manualTags.includes('AI'));
     assert.ok(manual.includes('href="/tags/knowledge/">Knowledge</a>'));
-    // Tag navigation still lists collection members, not standalone/root pages.
-    assert.ok(!readFileSync(join(output, 'tags/knowledge/index.html'), 'utf8').includes('href="/manual/"'));
+    const knowledge = readFileSync(join(output, 'tags/knowledge/index.html'), 'utf8');
+    for (const row of ['<li><a href="/">Wiki</a> <code>index</code></li>', '<li><a href="/manual/">Manual</a> <code>manual</code></li>', '<li><a href="/posts/catalog/">Catalog</a> <code>catalog</code></li>']) {
+      assert.equal(knowledge.split(row).length - 1, 1);
+    }
   };
   run('check', ['--format', 'json']);
   run('build'); verify();
@@ -53,6 +55,20 @@ for (const field of ['tags', 'topics']) {
   writeFileSync(join(standalone, 'manual.md'), tagged('Manual', '[Knowledge]'));
   run('build'); verify(['Knowledge']);
   run('build', ['--force']); verify(['Knowledge']);
+  writeFileSync(join(content, 'index.md'), tagged('Wiki', '[RootOnly]'));
+  writeFileSync(join(standalone, 'manual.md'), tagged('Manual', '[ManualOnly]'));
+  writeFileSync(join(standalone, 'hidden.md'), `---\ntitle: Hidden\ndraft: true\n${field}: [Secret]\n---\nHidden knowledge.\n`);
+  run('check', ['--format', 'json']);
+  for (const flags of [[], [], ['--force'], ['--drafts'], [], ['--force']]) {
+    run('build', flags);
+    assert.ok(readFileSync(join(output, 'tags/rootonly/index.html'), 'utf8').includes('<li><a href="/">Wiki</a> <code>index</code></li>'));
+    assert.ok(readFileSync(join(output, 'tags/manualonly/index.html'), 'utf8').includes('<li><a href="/manual/">Manual</a> <code>manual</code></li>'));
+    const entries = JSON.parse(readFileSync(join(output, 'content-index.json'), 'utf8'));
+    assert.equal(entries.some((entry) => entry.url === '/hidden/'), flags.includes('--drafts'));
+    const index = readFileSync(join(output, 'tags/index.html'), 'utf8');
+    assert.equal(index.includes('href="/tags/secret/"'), flags.includes('--drafts'));
+    if (flags.includes('--drafts')) assert.ok(readFileSync(join(output, 'tags/secret/index.html'), 'utf8').includes('<li><a href="/hidden/">Hidden</a> <code>hidden</code></li>'));
+  }
   for (const extra of [`${field}: Knowledge`, `${field}: [Knowledge]\nsurprise: extra`]) {
     writeFileSync(join(content, 'index.md'), `---\ntitle: Wiki\n${extra}\n---\nGuide.\n`);
     const rejected = spawnSync(process.execPath, [cli, 'check', content, '-c', config, '--collections', collections, '--format', 'json'], { encoding: 'utf8', timeout: 30_000 });

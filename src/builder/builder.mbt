@@ -2522,6 +2522,21 @@ pub fn truncate_to_builder(s : String, max_len : Int) -> String {
 }
 
 ///|
+fn add_tagged_page(
+  doc : ProcessedDocument,
+  slug : String,
+  pages_by_slug : Map[String, Array[@tags.TaggedPage]],
+) -> Unit {
+  let page : @tags.TaggedPage = { title: doc.title, url: doc.url, slug }
+  for tag in doc.tags {
+    match pages_by_slug.get(tag.slug) {
+      Some(pages) => pages.push(page)
+      None => pages_by_slug.set(tag.slug, [page])
+    }
+  }
+}
+
+///|
 fn collect_tag_catalog(
   collection_sources : Array[CollectionSources],
   tags_field : String,
@@ -4846,13 +4861,6 @@ pub fn build(
   }
 
   let tags_field = tags_field_name(config.site)
-  // Validation knows every authored tag, including tags unique to hidden drafts.
-  let known_tags = collect_tag_catalog(collection_sources, tags_field).name_by_slug
-  let tag_catalog = collect_tag_catalog(
-    collection_sources,
-    tags_field,
-    include_drafts=config.include_drafts,
-  )
   let page_size = page_size_for_site(config.site)
   // Include standalone pages in backlink index so wikilinks between standalone
   // and collection pages are resolved correctly in both directions.
@@ -4890,6 +4898,13 @@ pub fn build(
       sources: root_sources,
     })
   }
+  // Validation knows every authored tag, including tags unique to hidden drafts.
+  let known_tags = collect_tag_catalog(all_sources_for_backlinks, tags_field).name_by_slug
+  let tag_catalog = collect_tag_catalog(
+    all_sources_for_backlinks,
+    tags_field,
+    include_drafts=config.include_drafts,
+  )
   // Keep URL validation and ownership complete; derivations use published URLs.
   let published_page_index : Map[String, String] = Map([])
   for coll in all_sources_for_backlinks {
@@ -5204,31 +5219,8 @@ pub fn build(
                 }
                 coll_pages.push(page)
                 graph_pages.push(page)
-                let mut k = 0
-                while k < doc.tags.length() {
-                  let tag = doc.tags[k]
-                  match tag_pages_by_slug.get(tag.slug) {
-                    Some(existing) => {
-                      existing.push({
-                        title: doc.title,
-                        url: doc.url,
-                        slug: src.slug,
-                      })
-                      tag_pages_by_slug.set(tag.slug, existing)
-                    }
-                    None =>
-                      tag_pages_by_slug.set(tag.slug, [
-                        { title: doc.title, url: doc.url, slug: src.slug, },
-                      ])
-                  }
-                  k = k + 1
-                }
-                let search_tags : Array[String] = []
-                k = 0
-                while k < doc.tags.length() {
-                  search_tags.push(doc.tags[k].value)
-                  k = k + 1
-                }
+                add_tagged_page(doc, src.slug, tag_pages_by_slug)
+                let search_tags = doc.tags.map(fn(tag) { tag.value })
                 let collection_name = if coll.definition.name.length() == 0 {
                   "default"
                 } else {
@@ -5392,6 +5384,7 @@ pub fn build(
               outgoing: doc.resolved_links,
             }
             graph_pages.push(page)
+            add_tagged_page(doc, src.slug, tag_pages_by_slug)
             let search_tags = doc.tags.map(fn(tag) { tag.value })
             search_entries.push(
               @search.new_entry(
@@ -5556,6 +5549,7 @@ pub fn build(
               outgoing: doc.resolved_links,
             }
             graph_pages.push(page)
+            add_tagged_page(doc, src.slug, tag_pages_by_slug)
             let search_tags = doc.tags.map(fn(tag) { tag.value })
             search_entries.push(
               @search.new_entry(
@@ -6649,8 +6643,6 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
   }
 
   let tags_field = tags_field_name(config.site)
-  let tag_catalog = collect_tag_catalog(collection_sources, tags_field)
-  let known_tags = tag_catalog.name_by_slug
   let page_size = page_size_for_site(config.site)
   // Include standalone pages in backlink validation
   let all_sources_for_backlinks : Array[CollectionSources] = []
@@ -6687,6 +6679,8 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
       sources: root_sources,
     })
   }
+  let tag_catalog = collect_tag_catalog(all_sources_for_backlinks, tags_field)
+  let known_tags = tag_catalog.name_by_slug
   let backlink_index = build_backlink_index(
     all_sources_for_backlinks, page_index,
   )
@@ -6806,21 +6800,7 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
           }
           coll_pages.push(page)
           graph_pages.push(page)
-          k = 0
-          while k < doc.tags.length() {
-            let tag = doc.tags[k]
-            match tag_pages_by_slug.get(tag.slug) {
-              Some(existing) => {
-                existing.push({ title: doc.title, url: doc.url, slug: src.slug })
-                tag_pages_by_slug.set(tag.slug, existing)
-              }
-              None =>
-                tag_pages_by_slug.set(tag.slug, [
-                  { title: doc.title, url: doc.url, slug: src.slug },
-                ])
-            }
-            k = k + 1
-          }
+          add_tagged_page(doc, src.slug, tag_pages_by_slug)
         }
         None => ()
       }
@@ -6875,7 +6855,8 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
         k = k + 1
       }
       match lint_outcome.document {
-        Some(doc) =>
+        Some(doc) => {
+          add_tagged_page(doc, src.slug, tag_pages_by_slug)
           graph_pages.push({
             slug: src.slug,
             title: doc.title,
@@ -6886,6 +6867,7 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
             content_html: doc.content_html,
             outgoing: doc.resolved_links,
           })
+        }
         None => ()
       }
       si = si + 1
@@ -6932,7 +6914,8 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
         k = k + 1
       }
       match lint_outcome.document {
-        Some(doc) =>
+        Some(doc) => {
+          add_tagged_page(doc, src.slug, tag_pages_by_slug)
           graph_pages.push({
             slug: src.slug,
             title: doc.title,
@@ -6943,6 +6926,7 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
             content_html: doc.content_html,
             outgoing: doc.resolved_links,
           })
+        }
         None => ()
       }
       ri = ri + 1

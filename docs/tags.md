@@ -30,7 +30,16 @@ tags_field = "tags"
 
 ## Tag Pages
 
-Lattice automatically generates tag pages for each tag used across your content.
+Lattice automatically generates tag pages for validated tags on collection members,
+root pages and standalone pages. Root and standalone pages accept the configured
+`tags_field` as an optional `Array[String]`; a tag used only by one of these pages
+still gets its own tag page. Member links use each page's canonical URL, including
+`/` for the root `index.md`.
+
+Draft pages and tags used only by drafts are omitted from generated navigation
+unless you build with `--drafts`. `check` still validates draft tags. Builds do not
+remove old output files, so clean the output directory before publishing if a
+previous build included drafts.
 
 ### Per-Tag Pages
 
@@ -43,7 +52,7 @@ Example: For tag `lattice`, the URL is `/tags/lattice/`.
 ### Tags Index Page
 
 A top-level index page listing all tags:
-- `/tags/index.html` — shows all tags with post counts
+- `/tags/index.html` — shows all tags with page counts
 - Pagination support when many tags exist
 
 ## Tag Page Templates
