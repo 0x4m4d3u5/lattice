@@ -14,6 +14,15 @@ excerpt. These files supply data for a retrieval tool; they do not implement a
 search engine or embeddings.
 
 Body extraction removes tags, decodes basic entities and collapses whitespace.
+Decimal and hexadecimal numeric references in raw HTML text decode to Unicode:
+`<div>10&#176;C and &#x1F331;</div>` contributes `10°C and 🌱`. References require
+a semicolon and a nonzero Unicode scalar value. Malformed, zero, surrogate,
+out-of-range and overflowing references remain literal. Decoding happens once:
+`&amp;#176;` contributes the literal text `&#176;`. Decoded angle brackets remain
+text, and decoded ASCII spaces, tabs and line breaks collapse like authored
+whitespace. Named decoding is limited to `amp`, `lt`, `gt`, `quot` and `apos`;
+this does not implement the full HTML entity table or browser error recovery.
+
 Text-bearing phrasing tags preserve adjacency: `a`, `strong`, `em`, `del`,
 `code`, `span`, `sub`, `sup`, `mark`, `abbr`, `kbd`, `b`, `i`, `u`, `s`, `small`,
 `cite`, `q`, `dfn`, `data`, `time`, `var`, `samp`, `bdi`, `bdo`, `ruby`, `rt`,
