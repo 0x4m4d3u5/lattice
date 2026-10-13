@@ -413,7 +413,7 @@ fn extract_link_targets(source : String, slug : String) -> Array[String] {
   let mut i = 0
   while i < raw_links.length() {
     let target = @wikilink.lookup_key(raw_links[i].target)
-    if !unique.contains(target) {
+    if target != "" && !unique.contains(target) {
       unique.set(target, true)
       targets.push(target)
     }
@@ -463,7 +463,7 @@ fn build_backlink_index(
       let mut k = 0
       while k < raw_links.length() {
         let target = @wikilink.lookup_key(raw_links[k].target)
-        if source_url != "" &&
+        if target != "" && source_url != "" &&
           page_index.contains(target) &&
           !seen_targets.contains(target) {
           seen_targets.set(target, true)
@@ -2936,7 +2936,13 @@ fn render_collection_index(
           None => ""
         }
         body.write_string("<li>")
-        body.write_string(@html.anchor(edge.url, target_title))
+        // This list is on the collection index, not the owning note.
+        let target_url = if edge.raw.target.has_prefix("#") {
+          p.url + edge.url
+        } else {
+          edge.url
+        }
+        body.write_string(@html.anchor(target_url, target_title))
         body.write_string(" <code>")
         body.write_string(@strutil.escape_html_attr(edge.raw.target))
         body.write_string("</code>")

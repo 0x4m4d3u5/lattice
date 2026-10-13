@@ -88,7 +88,13 @@ pub fn resolve(
   let mut i = 0
   while i < links.length() {
     let link = links[i]
-    match index.get(lookup_key(link.target)) {
+    // Same-note fragments need no page lookup; heading existence is not checked.
+    let destination = if link.target.has_prefix("#") {
+      if link.target[1:].trim().is_empty() { None } else { Some("") }
+    } else {
+      index.get(lookup_key(link.target))
+    }
+    match destination {
       Some(url) => {
         let title = match link.display {
           Some(d) => d
