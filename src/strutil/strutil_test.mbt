@@ -150,6 +150,19 @@ test "content text preserves raw HTML phrasing markup" {
 }
 
 ///|
+test "content text decodes numeric references once and collapses encoded spaces" {
+  assert_eq(
+    @strutil.strip_html_tags("<div>10&#176;C. &#x1F331; &#127793; &#X3B1;. A&#32;&#9;&#10;B. &#60;em&#62; &amp;#176;</div>"),
+    "10°C. 🌱 🌱 α. A B. <em> &#176;",
+  )
+  assert_eq(
+    @strutil.strip_html_tags("&#; &#x; &#12z; &#-1; &#0; &#xD800; &#1114112; &#999999999999999999999; &#65"),
+    "&#; &#x; &#12z; &#-1; &#0; &#xD800; &#1114112; &#999999999999999999999; &#65",
+  )
+  assert_eq(@strutil.strip_html_tags("&#0000065;&#x000042;"), "AB")
+}
+
+///|
 test "count_words_text empty string" {
   assert_eq(@strutil.count_words_text(""), 0)
 }

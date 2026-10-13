@@ -711,8 +711,28 @@ pub fn find_str(s : String, from : Int, needle : String, limit : Int) -> Int {
 }
 
 ///|
-/// Strip HTML tags from a string, decode basic entities (&amp; &lt; &gt; &quot;
-/// &#39; &apos;), and collapse whitespace into single spaces. Returns clean
+/// Decode a semicolon-terminated numeric reference at `pos`, if valid.
+fn numeric_reference(s : String, pos : Int) -> (Char, Int)? {
+  let n = s.length()
+  let mut start = pos + 2 // caller has matched "&#"
+  let mut base = 10
+  if start < n && (char_at(s, start) == 'x' || char_at(s, start) == 'X') {
+    base = 16
+    start = start + 1
+  }
+  let mut end = start
+  while end < n && (if base == 16 { is_hex_digit(char_at(s, end)) } else { is_digit(char_at(s, end)) }) {
+    end = end + 1
+  }
+  if end == start || end >= n || char_at(s, end) != ';' { return None }
+  let value = @string.parse_int(s[start:end], base~) catch { _ => return None }
+  if value == 0 { return None }
+  value.to_char().map(c => (c, end + 1 - pos))
+}
+
+///|
+/// Strip HTML tags from a string, decode basic named and valid numeric entities,
+/// and collapse whitespace into single spaces. Returns clean
 /// plaintext for content indexing. Supported inline tags preserve adjacency;
 /// other tags separate text. This is not a complete HTML parser or sanitizer.
 pub fn strip_html_tags(s : String) -> String {
@@ -751,7 +771,7 @@ pub fn strip_html_tags(s : String) -> String {
     }
     i = i + 1
   }
-  // Pass 2: decode basic entities and collapse runs of whitespace
+  // Pass 2: decode entities once, then collapse runs of ASCII whitespace.
   let stripped = buf.to_string()
   let out = StringBuilder()
   let m = stripped.length()
@@ -778,12 +798,18 @@ pub fn strip_html_tags(s : String) -> String {
       } else if starts_with_at(stripped, j, "&apos;") {
         decoded_char = '\''
         skip = 6
-      } else if starts_with_at(stripped, j, "&#39;") {
-        decoded_char = '\''
-        skip = 5
+      } else if starts_with_at(stripped, j, "&#") {
+        match numeric_reference(stripped, j) {
+          Some((c, width)) => { decoded_char = c; skip = width }
+          None => ()
+        }
       }
-      out.write_char(decoded_char)
-      prev_ws = false
+      if decoded_char == ' ' || decoded_char == '\n' || decoded_char == '\t' || decoded_char == '\r' {
+        if !prev_ws { out.write_char(' '); prev_ws = true }
+      } else {
+        out.write_char(decoded_char)
+        prev_ws = false
+      }
       j = j + skip
     } else if c == ' ' || c == '\n' || c == '\t' || c == '\r' {
       if !prev_ws {

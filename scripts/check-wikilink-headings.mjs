@@ -16,7 +16,7 @@ mkdirSync(templates);
 mkdirSync(join(content, "data"));
 const alpha = join(posts, 'alpha.md');
 writeFileSync(alpha, '---\ntitle: Garden\ndate: 2026-01-02\n---\nRead [[Beta.md#Planting & Care|care]] and [[Beta#planting-care-2|again]].\n\nExample ``[[missing]] ` literal``.\n');
-writeFileSync(join(posts, 'beta.md'), '---\ntitle: Beta\ndate: 2026-01-03\n---\n## Planting & Care\n\n## Planting & Care\n\nphoto**syn**thesis uses H<sub>2</sub>O. Read [notes](/notes/), then `x`.\n\nphoto<mark>syn</mark>thesis. <abbr title="HyperText Markup Language">HTML</abbr>-based. <kbd>Ctrl</kbd>+<kbd>C</kbd>.\n');
+writeFileSync(join(posts, 'beta.md'), '---\ntitle: Beta\ndate: 2026-01-03\n---\n## Planting & Care\n\n## Planting & Care\n\nphoto**syn**thesis uses H<sub>2</sub>O. Read [notes](/notes/), then `x`.\n\nphoto<mark>syn</mark>thesis. <abbr title="HyperText Markup Language">HTML</abbr>-based. <kbd>Ctrl</kbd>+<kbd>C</kbd>.\n\n<div>Temperature 10&#176;C. Plant &#x1F331;. A&#32;&#9;B.</div>\n');
 writeFileSync(join(templates, 'page.html'), '<article>{{content}}{{backlinks}}</article>');
 writeFileSync(join(templates, '404.html'), '{{content}}');
 const collections = join(root, 'collections.cfg');
@@ -37,7 +37,7 @@ assert.ok(readFileSync(join(output, 'posts/alpha/index.html'), 'utf8').includes(
 assert.ok(readFileSync(join(output, 'posts/alpha/index.html'), 'utf8').includes(
   '<p>Example <code>[[missing]] ` literal</code>.</p>\n'));
 const beta = readFileSync(join(output, 'posts/beta/index.html'), 'utf8');
-const expectedBody = 'Planting & Care Planting & Care photosynthesis uses H2O. Read notes, then x. photosynthesis. HTML-based. Ctrl+C.';
+const expectedBody = 'Planting & Care Planting & Care photosynthesis uses H2O. Read notes, then x. photosynthesis. HTML-based. Ctrl+C. Temperature 10°C. Plant 🌱. A B.';
 const contentBody = () => JSON.parse(readFileSync(join(output, 'content-index.json'), 'utf8'))
   .find((entry) => entry.slug === 'beta').body;
 assert.equal(contentBody(), expectedBody);
