@@ -458,10 +458,15 @@ fn build_backlink_index(
         Err(_) => (src.slug, src.content)
       }
       let raw_links = @wikilink.extract(body, src.slug)
+      // Backlinks identify referring notes, not individual link occurrences.
+      let seen_targets : Map[String, Bool] = Map([])
       let mut k = 0
       while k < raw_links.length() {
         let target = @wikilink.lookup_key(raw_links[k].target)
-        if source_url != "" && page_index.contains(target) {
+        if source_url != "" &&
+          page_index.contains(target) &&
+          !seen_targets.contains(target) {
+          seen_targets.set(target, true)
           let ref_entry : BacklinkRef = {
             url: source_url,
             title: source_title,

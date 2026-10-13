@@ -38,6 +38,7 @@ const beta = readFileSync(join(output, 'posts/beta/index.html'), 'utf8');
 assert.ok(beta.includes('<h2 id="planting-care">Planting &amp; Care</h2>'));
 assert.ok(beta.includes('<h2 id="planting-care-2">Planting &amp; Care</h2>'));
 assert.ok(beta.includes('href="/posts/alpha/">Garden</a>'));
+assert.equal(beta.split('href="/posts/alpha/">Garden</a>').length - 1, 1);
 assert.deepEqual(JSON.parse(readFileSync(join(output, 'graph.json'), 'utf8')).edges,
   [{ source: 'alpha', target: 'beta' }]);
 const index = readFileSync(join(output, 'posts/index.html'), 'utf8');
