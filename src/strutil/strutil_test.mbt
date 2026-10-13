@@ -163,6 +163,34 @@ test "content text decodes numeric references once and collapses encoded spaces"
 }
 
 ///|
+test "content text excludes quoted tag attributes and complete HTML comments" {
+  assert_eq(
+    @strutil.strip_html_tags("<div title=\"a > b\">Visible <span title='c > d'>text</span>.</div>"),
+    "Visible text.",
+  )
+  assert_eq(
+    @strutil.strip_html_tags("<p>photo<!-- 🌱 > hidden annotation -->syn<!-- next -->thesis.</p>"),
+    "photosynthesis.",
+  )
+  assert_eq(
+    @strutil.strip_html_tags("Before <!-- unclosed > hidden text"),
+    "Before",
+  )
+  assert_eq(
+    @strutil.strip_html_tags("&lt;!-- literal &gt; --&gt;"),
+    "<!-- literal > -->",
+  )
+  assert_eq(
+    @strutil.strip_html_tags("<p title=\"<!-- > --> and ' > '\">Shown.</p>"),
+    "Shown.",
+  )
+  assert_eq(
+    @strutil.strip_html_tags("Before <span title=\"unclosed > omitted"),
+    "Before",
+  )
+}
+
+///|
 test "count_words_text empty string" {
   assert_eq(@strutil.count_words_text(""), 0)
 }

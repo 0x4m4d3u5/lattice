@@ -33,6 +33,12 @@ Library consumers can opt into the same field using
 `render_content_index` function and `ContentEntry` constructor stay unchanged.
 
 Body extraction removes tags, decodes basic entities and collapses whitespace.
+Tag boundaries respect single- and double-quoted attributes, so an attribute's
+`>` does not introduce metadata into body text. Standard `<!-- ... -->`
+comments are omitted without separating adjacent words. An unclosed comment
+omits the remaining text; an unclosed quoted tag also omits its remaining text.
+Escaped comment markup stays literal because entity decoding follows stripping.
+
 Decimal and hexadecimal numeric references in raw HTML text decode to Unicode:
 `<div>10&#176;C and &#x1F331;</div>` contributes `10°C and 🌱`. References require
 a semicolon and a nonzero Unicode scalar value. Malformed, zero, surrogate,

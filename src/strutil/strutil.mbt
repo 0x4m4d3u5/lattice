@@ -743,12 +743,24 @@ pub fn strip_html_tags(s : String) -> String {
   let mut i = 0
   let mut in_tag = false
   let mut inline_tag = false
+  let mut quote : Char? = None
   while i < n {
     let c = char_at(s, i)
     if in_tag {
-      if c == '>' {
+      if quote is Some(q) {
+        if c == q { quote = None }
+      } else if c == '"' || c == '\'' {
+        quote = Some(c)
+      } else if c == '>' {
         in_tag = false
         if !inline_tag { buf.write_char(' ') }
+      }
+    } else if c == '<' && starts_with_at(s, i, "<!--") {
+      // Comments do not separate adjacent visible text. An unclosed comment
+      // hides the remaining suffix, without scanning it again as prose.
+      match s[i + 4:n].find("-->") {
+        Some(end) => { i = i + 4 + end + 3; continue }
+        None => break
       }
     } else if c == '<' {
       in_tag = true
