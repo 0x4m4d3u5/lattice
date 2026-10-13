@@ -72,3 +72,36 @@ test "optional output write failure warns and continues publication" {
   assert_eq(diagnostics[0].severity, @diagnostic.Warning)
   assert_eq(messages.length(), 0)
 }
+
+///|
+test "pruned file parents release conflicts and preserve explicit empty directories" {
+  let root = "./_tmp_output_plan_pruning"
+  let output = OutputPlan::new(root)
+  output.ensure_dir(root + "/keep/empty")
+  output.write_text(root + "/page/3/index.html", "reservation")
+  output.write_text(root + "/page/3", "final file")
+  output.prune_files(Map([(0, true)]))
+  output.preflight()
+  assert_false(output.directory_index.contains(output_path_key(root + "/page/3")))
+  assert_true(output.directory_index.contains(output_path_key(root + "/keep/empty")))
+  assert_eq(output.files.length(), 1)
+  assert_false(@fs.path_exists(root))
+}
+
+///|
+test "pruning preserves real explicitly requested directory conflicts" {
+  let root = "./_tmp_output_plan_pruning_conflict"
+  let output = OutputPlan::new(root)
+  output.ensure_dir(root + "/clash")
+  output.write_text(root + "/discarded/index.html", "reservation")
+  output.write_text(root + "/clash", "file")
+  output.prune_files(Map([(0, true)]))
+  let rejected = try {
+    output.preflight()
+    false
+  } catch {
+    @fs.IOError(msg) => msg.contains("both a file and a directory")
+  }
+  assert_true(rejected)
+  assert_false(@fs.path_exists(root))
+}

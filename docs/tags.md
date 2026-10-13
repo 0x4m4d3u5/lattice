@@ -30,7 +30,25 @@ tags_field = "tags"
 
 ## Tag Pages
 
-Lattice automatically generates tag pages for each tag used across your content.
+Lattice automatically generates tag pages for validated tags on collection members,
+root pages and standalone pages. Root and standalone pages accept the configured
+`tags_field` as an optional `Array[String]`; a tag used only by one of these pages
+still gets its own tag page. Member links use each page's canonical URL, including
+`/` for the root `index.md`. Authored pages whose output is replaced by a later
+collection index, redirect, asset or configured index file are excluded from tag
+members and counts. Pagination preserves the remaining authored-page order.
+This rule also applies when the content JSON index is disabled. Tags with no
+surviving members are omitted from the tags index. Their primary tag destination
+remains as an empty page to preserve existing generated-output precedence.
+Surplus planned pagination pages are omitted unless removing their last generated
+write would expose an authored page at the same destination. Such destinations
+remain empty generated pages, with their own canonical URL and no pagination
+links or page numbering. Existing output files are not deleted.
+
+Draft pages and tags used only by drafts are omitted from generated navigation
+unless you build with `--drafts`. `check` still validates draft tags. Builds do not
+remove old output files, so clean the output directory before publishing if a
+previous build included drafts.
 
 ### Per-Tag Pages
 
@@ -43,7 +61,7 @@ Example: For tag `lattice`, the URL is `/tags/lattice/`.
 ### Tags Index Page
 
 A top-level index page listing all tags:
-- `/tags/index.html` — shows all tags with post counts
+- `/tags/index.html` — shows all tags with page counts
 - Pagination support when many tags exist
 
 ## Tag Page Templates
@@ -165,6 +183,13 @@ Lattice enforces structural guarantees for tags:
 - Tags must be an `Array[String]` in frontmatter
 - Non-array values cause build errors
 - Non-string array elements cause build errors
+
+### Path Components
+
+After existing slug normalization (including `.md` extension removal), tags must
+not contain a `.` or `..` path component. Both slash and backslash separators are
+checked. `check` and `build` reject these tags before publication. Ordinary
+punctuation, display spelling and benign nested tags retain their existing behavior.
 
 ### Deduplication
 

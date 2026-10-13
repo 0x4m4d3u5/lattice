@@ -62,6 +62,13 @@ pub fn extract(
                 let tag_value = @strutil.trim(raw)
                 if tag_value.length() > 0 {
                   let tag_slug = @slug.filename_to_slug(tag_value)
+                  // Validate after extension stripping and normalization. Treat
+                  // both path separators consistently without rewriting the slug.
+                  if tag_slug.replace_all(old="\\", new="/").split("/").any(fn(part) {
+                    part == "." || part == ".."
+                  }) {
+                    return Err("tag '" + tag_value + "' has a dot path component")
+                  }
                   if !seen.contains(tag_slug) {
                     seen.set(tag_slug, true)
                     tags.push({ value: tag_value, slug: tag_slug })

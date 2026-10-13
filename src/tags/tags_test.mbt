@@ -274,3 +274,22 @@ test "render_tag_index HTML escaping" {
   inspect(!html.contains("test & demo"), content="true")
   inspect(html.contains("&amp;"), content="true")
 }
+
+///|
+test "tag extraction rejects normalized dot path components" {
+  for tag in [".", "..", "./Guide", "Guide/../Other", "Guide\\..\\Other", "..md", "...MD", "Guides/..MD", "Guides/...MD"] {
+    let fm = @frontmatter.parse("---\ntags: [" + tag.to_json().stringify() + "]\n---\n").unwrap()
+    match @tags.extract(fm, "tags") {
+      Err(message) => assert_true(message.contains("dot path component"))
+      Ok(_) => fail("accepted traversal tag: " + tag)
+    }
+  }
+}
+
+///|
+test "ordinary punctuation and nested tags keep spelling and slugs" {
+  let fm = @frontmatter.parse("---\ntags: [C#, C++, Guides/Getting Started, a..b, safe/.hidden, safe/...]\n---\n").unwrap()
+  let tags = @tags.extract(fm, "tags").unwrap()
+  assert_eq(tags.map(fn(tag) { tag.value }), ["C#", "C++", "Guides/Getting Started", "a..b", "safe/.hidden", "safe/..."])
+  assert_eq(tags.map(fn(tag) { tag.slug }), ["c#", "c++", "guides/getting-started", "a..b", "safe/.hidden", "safe/..."])
+}

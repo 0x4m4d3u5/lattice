@@ -17,4 +17,6 @@ echo "Running generated-output navigation fixture"
 node scripts/check-navigation-overwrites.mjs || status=1
 echo "Running root and standalone tag-index fixture"
 node scripts/check-page-tags.mjs || status=1
+echo "Running final tag-plan fixture"
+node scripts/check-tag-final-plan.mjs || status=1
 exit "$status"

@@ -11,6 +11,7 @@ priv enum OutputContents {
 priv struct OutputPlan {
   root : String
   directories : Array[String]
+  requested_directories : Array[String]
   directory_index : Map[String, Bool]
   files : Array[(String, OutputContents)]
 }
@@ -26,6 +27,7 @@ fn OutputPlan::new(root : String) -> OutputPlan {
   {
     root: output_path_key(root),
     directories: [],
+    requested_directories: [],
     directory_index: Map([]),
     files: [],
   }
@@ -69,7 +71,9 @@ fn OutputPlan::ensure_dir(
   self : OutputPlan,
   path : String,
 ) -> Unit raise @fs.IOError {
-  self.add_directory(self.contained_path(path, true))
+  let key = self.contained_path(path, true)
+  self.requested_directories.push(key)
+  self.add_directory(key)
 }
 
 ///|
@@ -77,7 +81,9 @@ fn OutputPlan::ensure_parent_dirs(
   self : OutputPlan,
   path : String,
 ) -> Unit raise @fs.IOError {
-  self.ensure_dir(@path.Path(path).dirname().to_string())
+  self.add_directory(
+    self.contained_path(@path.Path(path).dirname().to_string(), true),
+  )
 }
 
 ///|
@@ -115,6 +121,28 @@ fn OutputPlan::write_bytes(
   content : Bytes,
 ) -> Unit raise @fs.IOError {
   self.files.push((self.file_path(path), Binary(content)))
+}
+
+///|
+fn OutputPlan::prune_files(self : OutputPlan, dropped : Map[Int, Bool]) -> Unit {
+  let retained = self.files.iter2().iter().filter_map(fn(pair) {
+    let (index, file) = pair
+    if dropped.contains(index) { None } else { Some(file) }
+  }).to_array()
+  self.files.clear()
+  for file in retained {
+    self.files.push(file)
+  }
+  // Preserve explicit requests (including empty static directories), but derive
+  // file parents again so removed reservations cannot conflict with final files.
+  self.directories.clear()
+  self.directory_index.clear()
+  for path in self.requested_directories {
+    self.add_directory(path)
+  }
+  for (path, _) in self.files {
+    self.add_directory(@path.Path(path).dirname().to_string())
+  }
 }
 
 ///|

@@ -2522,6 +2522,77 @@ pub fn truncate_to_builder(s : String, max_len : Int) -> String {
 }
 
 ///|
+fn superseded_source_urls(
+  output : OutputPlan,
+  source_marks : Map[String, (String, Int)],
+  dropped : Map[Int, Bool],
+) -> Map[String, Bool] {
+  let last_write : Map[String, Int] = Map([])
+  for index = 0; index < output.files.length(); index = index + 1 {
+    if !dropped.contains(index) {
+      let (path, _) = output.files[index]
+      last_write.set(path, index)
+    }
+  }
+  let overwritten : Map[String, Bool] = Map([])
+  for (url, mark) in source_marks {
+    let (path, after_source) = mark
+    if last_write.get(path) is Some(index) && index >= after_source {
+      overwritten.set(url, true)
+    }
+  }
+  overwritten
+}
+
+///|
+fn retain_authored_overwrites(
+  output : OutputPlan,
+  source_marks : Map[String, (String, Int)],
+  dropped : Map[Int, Bool],
+) -> Map[Int, Bool] {
+  let last_write : Map[String, Int] = Map([])
+  let last_retained : Map[String, Int] = Map([])
+  for index = 0; index < output.files.length(); index = index + 1 {
+    let (path, _) = output.files[index]
+    last_write.set(path, index)
+    if !dropped.contains(index) {
+      last_retained.set(path, index)
+    }
+  }
+  let retained : Map[Int, Bool] = Map([])
+  for (_, mark) in source_marks {
+    let (path, after_source) = mark
+    let unmasked = match last_retained.get(path) {
+      Some(index) => index < after_source
+      None => true
+    }
+    if unmasked && last_write.get(path) is Some(index) &&
+      index >= after_source && dropped.contains(index) {
+      // Each normalized path is independent: retain its original last writer
+      // once, without revisiting membership or iterating ownership decisions.
+      dropped.remove(index)
+      retained.set(index, true)
+    }
+  }
+  retained
+}
+
+///|
+fn add_tagged_page(
+  doc : ProcessedDocument,
+  slug : String,
+  pages_by_slug : Map[String, Array[@tags.TaggedPage]],
+) -> Unit {
+  let page : @tags.TaggedPage = { title: doc.title, url: doc.url, slug }
+  for tag in doc.tags {
+    match pages_by_slug.get(tag.slug) {
+      Some(pages) => pages.push(page)
+      None => pages_by_slug.set(tag.slug, [page])
+    }
+  }
+}
+
+///|
 fn collect_tag_catalog(
   collection_sources : Array[CollectionSources],
   tags_field : String,
@@ -2574,6 +2645,7 @@ fn render_tag_page_html(
   nav_links_html : String,
   custom_css : String,
   data_store : @data.DataStore,
+  empty_destination? : String? = None,
 ) -> Result[String, String] {
   let nav = render_pagination_nav(
     pagination.page_number,
@@ -2596,7 +2668,10 @@ fn render_tag_page_html(
     "' in " +
     site.title +
     "."
-  let url = tag_page_url(page.slug, pagination.page_number)
+  let url = match empty_destination {
+    Some(url) => url
+    None => tag_page_url(page.slug, pagination.page_number)
+  }
   let effective_template = match tag_template {
     Some(t) => Some(t)
     None => fallback_template
@@ -2624,6 +2699,11 @@ fn render_tag_page_html(
         pagination.next_url,
         url,
       )
+      if empty_destination is Some(_) {
+        for slot in [@template.PageNum, @template.TotalPages, @template.IsFirstPage, @template.IsLastPage] {
+          slots.set(slot, "")
+        }
+      }
       match
         @template.render_template_with_data(
           tpl,
@@ -2639,7 +2719,7 @@ fn render_tag_page_html(
     None => {
       let canonical = @strutil.absolute_url(
         site.base_url,
-        tag_page_url(page.slug, pagination.page_number),
+        url,
       )
       let meta : @html.PageMeta = {
         title: full_title,
@@ -2667,6 +2747,7 @@ fn render_tags_index_html(
   nav_links_html : String,
   custom_css : String,
   data_store : @data.DataStore,
+  empty_destination? : String? = None,
 ) -> Result[String, String] {
   let nav = render_pagination_nav(
     pagination.page_number,
@@ -2682,6 +2763,10 @@ fn render_tags_index_html(
   }
   let full_title = page_title_builder("tags" + title_suffix, site.title)
   let description = "All tags in " + site.title + "."
+  let url = match empty_destination {
+    Some(url) => url
+    None => tags_index_page_url(pagination.page_number)
+  }
   let effective_template = match index_template {
     Some(t) => Some(t)
     None => fallback_template
@@ -2693,7 +2778,7 @@ fn render_tags_index_html(
         body,
         "",
         description,
-        tags_index_page_url(pagination.page_number),
+        url,
         site.title,
         nav_links_html,
         custom_css,
@@ -2708,8 +2793,13 @@ fn render_tags_index_html(
         pagination.total_pages,
         pagination.prev_url,
         pagination.next_url,
-        tags_index_page_url(pagination.page_number),
+        url,
       )
+      if empty_destination is Some(_) {
+        for slot in [@template.PageNum, @template.TotalPages, @template.IsFirstPage, @template.IsLastPage] {
+          slots.set(slot, "")
+        }
+      }
       match
         @template.render_template_with_data(
           tpl,
@@ -2725,7 +2815,7 @@ fn render_tags_index_html(
     None => {
       let canonical = @strutil.absolute_url(
         site.base_url,
-        tags_index_page_url(pagination.page_number),
+        url,
       )
       let meta : @html.PageMeta = {
         title: full_title,
@@ -4846,13 +4936,6 @@ pub fn build(
   }
 
   let tags_field = tags_field_name(config.site)
-  // Validation knows every authored tag, including tags unique to hidden drafts.
-  let known_tags = collect_tag_catalog(collection_sources, tags_field).name_by_slug
-  let tag_catalog = collect_tag_catalog(
-    collection_sources,
-    tags_field,
-    include_drafts=config.include_drafts,
-  )
   let page_size = page_size_for_site(config.site)
   // Include standalone pages in backlink index so wikilinks between standalone
   // and collection pages are resolved correctly in both directions.
@@ -4890,6 +4973,13 @@ pub fn build(
       sources: root_sources,
     })
   }
+  // Validation knows every authored tag, including tags unique to hidden drafts.
+  let known_tags = collect_tag_catalog(all_sources_for_backlinks, tags_field).name_by_slug
+  let tag_catalog = collect_tag_catalog(
+    all_sources_for_backlinks,
+    tags_field,
+    include_drafts=config.include_drafts,
+  )
   // Keep URL validation and ownership complete; derivations use published URLs.
   let published_page_index : Map[String, String] = Map([])
   for coll in all_sources_for_backlinks {
@@ -4972,7 +5062,11 @@ pub fn build(
   let collect_content_navigation = content_index_file_name(config.site) is Some(_)
   let content_headings_by_url : Map[String, Array[@markdown.TocEntry]] = Map([])
   let content_links_by_url : Map[String, Array[@wikilink.ResolvedWikilink]] = Map([])
-  let content_output_marks : Map[String, (String, Int)] = Map([])
+  let source_output_marks : Map[String, (String, Int)] = Map([])
+  // Reserve tag routes in their original write order; render once after ownership
+  // is complete, including assets and configurable index destinations.
+  let tag_output_groups : Array[(String, String, Array[Int])] = []
+  let tags_index_slots : Array[Int] = []
   let mut content_index_slot : Int? = None
   let mut cache_slot : Int? = None
   let tag_pages_by_slug : Map[String, Array[@tags.TaggedPage]] = Map([])
@@ -5204,31 +5298,8 @@ pub fn build(
                 }
                 coll_pages.push(page)
                 graph_pages.push(page)
-                let mut k = 0
-                while k < doc.tags.length() {
-                  let tag = doc.tags[k]
-                  match tag_pages_by_slug.get(tag.slug) {
-                    Some(existing) => {
-                      existing.push({
-                        title: doc.title,
-                        url: doc.url,
-                        slug: src.slug,
-                      })
-                      tag_pages_by_slug.set(tag.slug, existing)
-                    }
-                    None =>
-                      tag_pages_by_slug.set(tag.slug, [
-                        { title: doc.title, url: doc.url, slug: src.slug, },
-                      ])
-                  }
-                  k = k + 1
-                }
-                let search_tags : Array[String] = []
-                k = 0
-                while k < doc.tags.length() {
-                  search_tags.push(doc.tags[k].value)
-                  k = k + 1
-                }
+                add_tagged_page(doc, src.slug, tag_pages_by_slug)
+                let search_tags = doc.tags.map(fn(tag) { tag.value })
                 let collection_name = if coll.definition.name.length() == 0 {
                   "default"
                 } else {
@@ -5248,10 +5319,10 @@ pub fn build(
                   Some(_) => "post"
                   None => "page"
                 }
+                source_output_marks.set(doc.url, (output_path_key(out_path), source_mark))
                 if collect_content_navigation {
                   content_headings_by_url.set(doc.url, doc.headings)
                   content_links_by_url.set(doc.url, doc.resolved_links)
-                  content_output_marks.set(doc.url, (output_path_key(out_path), source_mark))
                 }
                 content_entries.push(
                   @search.new_content_entry(
@@ -5392,6 +5463,7 @@ pub fn build(
               outgoing: doc.resolved_links,
             }
             graph_pages.push(page)
+            add_tagged_page(doc, src.slug, tag_pages_by_slug)
             let search_tags = doc.tags.map(fn(tag) { tag.value })
             search_entries.push(
               @search.new_entry(
@@ -5403,10 +5475,10 @@ pub fn build(
                 doc.excerpt,
               ),
             )
+            source_output_marks.set(doc.url, (output_path_key(out_path), source_mark))
             if collect_content_navigation {
               content_headings_by_url.set(doc.url, doc.headings)
               content_links_by_url.set(doc.url, doc.resolved_links)
-              content_output_marks.set(doc.url, (output_path_key(out_path), source_mark))
             }
             content_entries.push(
               @search.new_content_entry(
@@ -5556,6 +5628,7 @@ pub fn build(
               outgoing: doc.resolved_links,
             }
             graph_pages.push(page)
+            add_tagged_page(doc, src.slug, tag_pages_by_slug)
             let search_tags = doc.tags.map(fn(tag) { tag.value })
             search_entries.push(
               @search.new_entry(
@@ -5567,10 +5640,10 @@ pub fn build(
                 doc.excerpt,
               ),
             )
+            source_output_marks.set(doc.url, (output_path_key(out_path), source_mark))
             if collect_content_navigation {
               content_headings_by_url.set(doc.url, doc.headings)
               content_links_by_url.set(doc.url, doc.resolved_links)
-              content_output_marks.set(doc.url, (output_path_key(out_path), source_mark))
             }
             content_entries.push(
               @search.new_content_entry(
@@ -5845,6 +5918,8 @@ pub fn build(
             Some(items) => items
             None => []
           }
+          let slots : Array[Int] = []
+          tag_output_groups.push((tag_slug, tag_name, slots))
           let tag_dir = tags_root + "/" + tag_slug
           let tag_dir_ok = try {
             output.ensure_dir(tag_dir)
@@ -5871,87 +5946,48 @@ pub fn build(
             let mut page_idx = 0
             while page_idx < paginated_tag_pages.length() {
               let pagination = paginated_tag_pages[page_idx]
-              let tag_page : @tags.TagPage = {
-                tag: tag_name,
-                slug: tag_slug,
-                pages: pagination.documents,
-              }
-              let tag_html = match
-                render_tag_page_html(
-                  tag_page,
-                  pagination,
-                  config.site,
-                  templates.tag_page,
-                  templates.index,
-                  nav_links_html,
-                  custom_css,
-                  data_store,
-                ) {
-                Ok(html) => Some(html)
-                Err(msg) => {
+              let tag_write_ok = try {
+                let out_path = if pagination.page_number == 1 {
+                  tag_dir + "/index.html"
+                } else {
+                  tag_dir +
+                  "/page/" +
+                  pagination.page_number.to_string() +
+                  "/index.html"
+                }
+                output.ensure_parent_dirs(out_path)
+                slots.push(output.files.length())
+                output.write_text(out_path, "")
+                true
+              } catch {
+                @fs.IOError(msg) => {
                   diagnostics.push(
                     build_error(
-                      Some(tag_dir + "/index.html"),
+                      Some(
+                        if pagination.page_number == 1 {
+                          tag_dir + "/index.html"
+                        } else {
+                          tag_dir +
+                          "/page/" +
+                          pagination.page_number.to_string() +
+                          "/index.html"
+                        },
+                      ),
                       None,
                       None,
                       "tags/" +
                       tag_slug +
                       " page " +
                       pagination.page_number.to_string() +
-                      ": " +
+                      ": write failed: " +
                       msg,
                     ),
                   )
-                  None
+                  false
                 }
               }
-              match tag_html {
-                Some(html) => {
-                  let tag_write_ok = try {
-                    let out_path = if pagination.page_number == 1 {
-                      tag_dir + "/index.html"
-                    } else {
-                      tag_dir +
-                      "/page/" +
-                      pagination.page_number.to_string() +
-                      "/index.html"
-                    }
-                    output.ensure_parent_dirs(out_path)
-                    output.write_text(out_path, html)
-                    messages.push("[lattice] wrote " + out_path)
-                    true
-                  } catch {
-                    @fs.IOError(msg) => {
-                      diagnostics.push(
-                        build_error(
-                          Some(
-                            if pagination.page_number == 1 {
-                              tag_dir + "/index.html"
-                            } else {
-                              tag_dir +
-                              "/page/" +
-                              pagination.page_number.to_string() +
-                              "/index.html"
-                            },
-                          ),
-                          None,
-                          None,
-                          "tags/" +
-                          tag_slug +
-                          " page " +
-                          pagination.page_number.to_string() +
-                          ": write failed: " +
-                          msg,
-                        ),
-                      )
-                      false
-                    }
-                  }
-                  if !tag_write_ok {
-                    error_count = error_count + 1
-                  }
-                }
-                None => error_count = error_count + 1
+              if !tag_write_ok {
+                error_count = error_count + 1
               }
               page_idx = page_idx + 1
             }
@@ -5975,75 +6011,43 @@ pub fn build(
           let mut page_idx = 0
           while page_idx < paginated_tags_index.length() {
             let pagination = paginated_tags_index[page_idx]
-            let tags_index : @tags.TagIndex = { tags: pagination.documents, }
-            let tags_index_html = match
-              render_tags_index_html(
-                tags_index,
-                pagination,
-                config.site,
-                templates.tag_index,
-                templates.index,
-                nav_links_html,
-                custom_css,
-                data_store,
-              ) {
-              Ok(html) => Some(html)
-              Err(msg) => {
+            let tags_index_ok = try {
+              let out_path = if pagination.page_number == 1 {
+                tags_root + "/index.html"
+              } else {
+                tags_root +
+                "/page/" +
+                pagination.page_number.to_string() +
+                "/index.html"
+              }
+              output.ensure_parent_dirs(out_path)
+              tags_index_slots.push(output.files.length())
+              output.write_text(out_path, "")
+              true
+            } catch {
+              @fs.IOError(msg) => {
                 diagnostics.push(
                   build_error(
-                    Some(tags_root + "/index.html"),
+                    Some(
+                      if pagination.page_number == 1 {
+                        tags_root + "/index.html"
+                      } else {
+                        tags_root +
+                        "/page/" +
+                        pagination.page_number.to_string() +
+                        "/index.html"
+                      },
+                    ),
                     None,
                     None,
                     "tags index page " +
                     pagination.page_number.to_string() +
-                    ": " +
+                    ": write failed: " +
                     msg,
                   ),
                 )
-                None
+                false
               }
-            }
-            let tags_index_ok = match tags_index_html {
-              Some(html) =>
-                try {
-                  let out_path = if pagination.page_number == 1 {
-                    tags_root + "/index.html"
-                  } else {
-                    tags_root +
-                    "/page/" +
-                    pagination.page_number.to_string() +
-                    "/index.html"
-                  }
-                  output.ensure_parent_dirs(out_path)
-                  output.write_text(out_path, html)
-                  messages.push("[lattice] wrote " + out_path)
-                  true
-                } catch {
-                  @fs.IOError(msg) => {
-                    diagnostics.push(
-                      build_error(
-                        Some(
-                          if pagination.page_number == 1 {
-                            tags_root + "/index.html"
-                          } else {
-                            tags_root +
-                            "/page/" +
-                            pagination.page_number.to_string() +
-                            "/index.html"
-                          },
-                        ),
-                        None,
-                        None,
-                        "tags index page " +
-                        pagination.page_number.to_string() +
-                        ": write failed: " +
-                        msg,
-                      ),
-                    )
-                    false
-                  }
-                }
-              None => false
             }
             if !tags_index_ok {
               error_count = error_count + 1
@@ -6373,51 +6377,194 @@ pub fn build(
 
   error_count = @diagnostic.count_errors(diagnostics)
   if error_count == 0 {
+    let dropped_slots : Map[Int, Bool] = Map([])
+    let provisional = superseded_source_urls(output, source_output_marks, dropped_slots)
+    let navigation_tags : Array[@tags.TagSummary] = []
+    for (tag_slug, tag_name, slots) in tag_output_groups {
+      let pages = match tag_pages_by_slug.get(tag_slug) {
+        Some(items) => items.filter(fn(page) { !provisional.contains(page.url) })
+        None => []
+      }
+      if pages.length() > 0 {
+        navigation_tags.push({ tag: tag_name, slug: tag_slug, count: pages.length() })
+      }
+      // Keep the primary destination, including an empty one, so authored pages
+      // at tag URLs do not acquire precedence when their last member disappears.
+      let paginated = paginate_with_optional_size(pages, page_size, fn(number) {
+        tag_page_url(tag_slug, number)
+      })
+      for index = paginated.length(); index < slots.length(); index = index + 1 {
+        dropped_slots.set(slots[index], true)
+      }
+    }
+    let index_pages = paginate_with_optional_size(navigation_tags, page_size, fn(number) {
+      tags_index_page_url(number)
+    })
+    for index = index_pages.length(); index < tags_index_slots.length(); index = index + 1 {
+      dropped_slots.set(tags_index_slots[index], true)
+    }
+    let retained_empty = retain_authored_overwrites(output, source_output_marks, dropped_slots)
+    // Evaluate retained normalized writes before final navigation and cache
+    // decisions; surplus aliases of authored pages keep their original owner.
+    let overwritten = superseded_source_urls(output, source_output_marks, dropped_slots)
+    for (url, _) in overwritten {
+      content_headings_by_url.remove(url)
+      content_links_by_url.remove(url)
+    }
+    // A cached authored page must be republished if its generator later
+    // disappears; the currently published file is not the cached source HTML.
+    let mut cache_invalidated = false
+    for entry in content_entries {
+      if entry.kind != "collection_index" && overwritten.contains(entry.url) &&
+        @cache.lookup(next_cache_store, entry.slug) is Some(_) {
+        @cache.remember(next_cache_store, entry.slug, "")
+        cache_invalidated = true
+      }
+    }
+    if cache_invalidated && cache_slot is Some(index) {
+      let (path, _) = output.files[index]
+      output.files[index] = (path, Text(@cache.render_store(next_cache_store)))
+    }
+    let tag_summaries : Array[@tags.TagSummary] = []
+    for (tag_slug, tag_name, slots) in tag_output_groups {
+      let pages = match tag_pages_by_slug.get(tag_slug) {
+        Some(items) => items.filter(fn(page) { !overwritten.contains(page.url) })
+        None => []
+      }
+      if pages.length() > 0 {
+        tag_summaries.push({ tag: tag_name, slug: tag_slug, count: pages.length(), })
+      }
+      let paginated = paginate_with_optional_size(pages, page_size, fn(
+        page_number,
+      ) {
+        tag_page_url(tag_slug, page_number)
+      })
+      for page_idx = 0; page_idx < slots.length(); page_idx = page_idx + 1 {
+        let slot = slots[page_idx]
+        if dropped_slots.contains(slot) {
+          continue
+        }
+        let destination = if retained_empty.contains(slot) {
+          Some(tag_page_url(tag_slug, page_idx + 1))
+        } else {
+          None
+        }
+        let pagination : @pagination.PaginatedIndex[@tags.TaggedPage] = if destination is Some(url) {
+          @pagination.paginate([], 1, fn(_) { url })[0]
+        } else {
+          paginated[page_idx]
+        }
+        let tag_page : @tags.TagPage = {
+          tag: tag_name,
+          slug: tag_slug,
+          pages: pagination.documents,
+        }
+        let (path, _) = output.files[slot]
+        match
+          render_tag_page_html(
+            tag_page,
+            pagination,
+            config.site,
+            templates.tag_page,
+            templates.index,
+            nav_links_html,
+            custom_css,
+            data_store,
+            empty_destination=destination,
+          ) {
+          Ok(html) => {
+            output.files[slot] = (path, Text(html))
+            messages.push("[lattice] wrote " + path)
+          }
+          Err(msg) =>
+            diagnostics.push(
+              build_error(
+                Some(path),
+                None,
+                None,
+                "tags/" +
+                tag_slug +
+                " page " +
+                pagination.page_number.to_string() +
+                ": " +
+                msg,
+              ),
+            )
+        }
+      }
+    }
+    let paginated_tags = paginate_with_optional_size(tag_summaries, page_size, fn(
+      page_number,
+    ) {
+      tags_index_page_url(page_number)
+    })
+    for page_idx = 0
+        page_idx < tags_index_slots.length()
+        page_idx = page_idx + 1 {
+      let slot = tags_index_slots[page_idx]
+      if dropped_slots.contains(slot) {
+        continue
+      }
+      let destination = if retained_empty.contains(slot) {
+        Some(tags_index_page_url(page_idx + 1))
+      } else {
+        None
+      }
+      let pagination : @pagination.PaginatedIndex[@tags.TagSummary] = if destination is Some(url) {
+        @pagination.paginate([], 1, fn(_) { url })[0]
+      } else {
+        paginated_tags[page_idx]
+      }
+      let tags_index : @tags.TagIndex = { tags: pagination.documents, }
+      let (path, _) = output.files[slot]
+      match
+        render_tags_index_html(
+          tags_index,
+          pagination,
+          config.site,
+          templates.tag_index,
+          templates.index,
+          nav_links_html,
+          custom_css,
+          data_store,
+          empty_destination=destination,
+        ) {
+        Ok(html) => {
+          output.files[slot] = (path, Text(html))
+          messages.push("[lattice] wrote " + path)
+        }
+        Err(msg) =>
+          diagnostics.push(
+            build_error(
+              Some(path),
+              None,
+              None,
+              "tags index page " + pagination.page_number.to_string() + ": " + msg,
+            ),
+          )
+      }
+    }
     if content_index_slot is Some(slot) {
-      let last_write : Map[String, Int] = Map([])
-      let overwritten : Map[String, Bool] = Map([])
-      for i = 0; i < output.files.length(); i = i + 1 {
-        let (path, _) = output.files[i]
-        last_write.set(path, i)
-      }
-      for (url, mark) in content_output_marks {
-        let (path, after_source) = mark
-        if last_write.get(path) is Some(index) && index >= after_source {
-          content_headings_by_url.remove(url)
-          content_links_by_url.remove(url)
-          overwritten.set(url, true)
-        }
-      }
-      // A cached authored page must be republished if its generator later
-      // disappears; the currently published file is not the cached source HTML.
-      let mut cache_invalidated = false
-      for entry in content_entries {
-        if entry.kind != "collection_index" && overwritten.contains(entry.url) &&
-          @cache.lookup(next_cache_store, entry.slug) is Some(_) {
-          @cache.remember(next_cache_store, entry.slug, "")
-          cache_invalidated = true
-        }
-      }
-      if cache_invalidated && cache_slot is Some(index) {
-        let (path, _) = output.files[index]
-        output.files[index] = (path, Text(@cache.render_store(next_cache_store)))
-      }
       let (path, _) = output.files[slot]
       output.files[slot] = (path, Text(@search.render_content_index_with_navigation(
         content_entries, content_headings_by_url, content_links_by_url,
       )))
     }
-    output.publish(diagnostics, messages) catch {
-      @fs.IOError(msg) => {
-        diagnostics.push(
-          build_error(
-            Some(config.output_dir),
-            None,
-            None,
-            "output publication failed: " + msg,
-          ),
-        )
-        error_count = error_count + 1
+    output.prune_files(dropped_slots)
+    error_count = @diagnostic.count_errors(diagnostics)
+    if error_count == 0 {
+      output.publish(diagnostics, messages) catch {
+        @fs.IOError(msg) => {
+          diagnostics.push(
+            build_error(
+              Some(config.output_dir),
+              None,
+              None,
+              "output publication failed: " + msg,
+            ),
+          )
+          error_count = error_count + 1
+        }
       }
     }
   }
@@ -6649,8 +6796,6 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
   }
 
   let tags_field = tags_field_name(config.site)
-  let tag_catalog = collect_tag_catalog(collection_sources, tags_field)
-  let known_tags = tag_catalog.name_by_slug
   let page_size = page_size_for_site(config.site)
   // Include standalone pages in backlink validation
   let all_sources_for_backlinks : Array[CollectionSources] = []
@@ -6687,6 +6832,8 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
       sources: root_sources,
     })
   }
+  let tag_catalog = collect_tag_catalog(all_sources_for_backlinks, tags_field)
+  let known_tags = tag_catalog.name_by_slug
   let backlink_index = build_backlink_index(
     all_sources_for_backlinks, page_index,
   )
@@ -6806,21 +6953,7 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
           }
           coll_pages.push(page)
           graph_pages.push(page)
-          k = 0
-          while k < doc.tags.length() {
-            let tag = doc.tags[k]
-            match tag_pages_by_slug.get(tag.slug) {
-              Some(existing) => {
-                existing.push({ title: doc.title, url: doc.url, slug: src.slug })
-                tag_pages_by_slug.set(tag.slug, existing)
-              }
-              None =>
-                tag_pages_by_slug.set(tag.slug, [
-                  { title: doc.title, url: doc.url, slug: src.slug },
-                ])
-            }
-            k = k + 1
-          }
+          add_tagged_page(doc, src.slug, tag_pages_by_slug)
         }
         None => ()
       }
@@ -6875,7 +7008,8 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
         k = k + 1
       }
       match lint_outcome.document {
-        Some(doc) =>
+        Some(doc) => {
+          add_tagged_page(doc, src.slug, tag_pages_by_slug)
           graph_pages.push({
             slug: src.slug,
             title: doc.title,
@@ -6886,6 +7020,7 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
             content_html: doc.content_html,
             outgoing: doc.resolved_links,
           })
+        }
         None => ()
       }
       si = si + 1
@@ -6932,7 +7067,8 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
         k = k + 1
       }
       match lint_outcome.document {
-        Some(doc) =>
+        Some(doc) => {
+          add_tagged_page(doc, src.slug, tag_pages_by_slug)
           graph_pages.push({
             slug: src.slug,
             title: doc.title,
@@ -6943,6 +7079,7 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
             content_html: doc.content_html,
             outgoing: doc.resolved_links,
           })
+        }
         None => ()
       }
       ri = ri + 1
