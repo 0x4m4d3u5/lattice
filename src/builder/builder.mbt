@@ -4961,8 +4961,9 @@ pub fn build(
   let graph_pages : Array[@graph.GraphPage] = []
   let search_entries : Array[@search.SearchEntry] = []
   let content_entries : Array[@search.ContentEntry] = []
-  let collect_content_headings = content_index_file_name(config.site) is Some(_)
+  let collect_content_navigation = content_index_file_name(config.site) is Some(_)
   let content_headings_by_url : Map[String, Array[@markdown.TocEntry]] = Map([])
+  let content_links_by_url : Map[String, Array[@wikilink.ResolvedWikilink]] = Map([])
   let tag_pages_by_slug : Map[String, Array[@tags.TaggedPage]] = Map([])
   let rendered_collections : Array[CollectionRenderResult] = []
   i = 0
@@ -5234,8 +5235,9 @@ pub fn build(
                   Some(_) => "post"
                   None => "page"
                 }
-                if collect_content_headings {
+                if collect_content_navigation {
                   content_headings_by_url.set(doc.url, doc.headings)
+                  content_links_by_url.set(doc.url, doc.resolved_links)
                 }
                 content_entries.push(
                   @search.new_content_entry(
@@ -5385,8 +5387,9 @@ pub fn build(
                 doc.excerpt,
               ),
             )
-            if collect_content_headings {
+            if collect_content_navigation {
               content_headings_by_url.set(doc.url, doc.headings)
+              content_links_by_url.set(doc.url, doc.resolved_links)
             }
             content_entries.push(
               @search.new_content_entry(
@@ -5544,8 +5547,9 @@ pub fn build(
                 doc.excerpt,
               ),
             )
-            if collect_content_headings {
+            if collect_content_navigation {
               content_headings_by_url.set(doc.url, doc.headings)
+              content_links_by_url.set(doc.url, doc.resolved_links)
             }
             content_entries.push(
               @search.new_content_entry(
@@ -6198,8 +6202,8 @@ pub fn build(
       match content_index_file_name(config.site) {
         Some(fname) => {
           let content_write_ok = try {
-            let content_json = @search.render_content_index_with_headings(
-              content_entries, content_headings_by_url,
+            let content_json = @search.render_content_index_with_navigation(
+              content_entries, content_headings_by_url, content_links_by_url,
             )
             let out_path = config.output_dir + "/" + fname
             output.ensure_parent_dirs(out_path)

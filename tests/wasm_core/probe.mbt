@@ -19,12 +19,18 @@ pub fn render_note() -> Int {
     links.set(link.raw.target, link.url)
   }
   let html = @markdown.render(fm.body, links)
+  let navigation = @search.render_content_index_with_navigation(
+    [@search.new_content_entry("Garden", "garden", "/garden/", [], "", "", "", "page", None, "body")],
+    Map([]),
+    Map([("/garden/", resolved)]),
+  )
   if html ==
     "<h2 id=\"planting\">Planting</h2>\n<p>Read <a href=\"/notes/soil/\">the soil guide</a>.</p>\n" &&
     @strutil.strip_html_tags("<div title=\"a > b\">10&#176;C. <!-- 🌱 > annotation -->&#x1F331;. A&#32;&#9;B.</div>") ==
     "10°C. 🌱. A B." &&
     @strutil.strip_html_tags("<textarea><!-- visible</textarea><p>After</p>") ==
-    "<!-- visible After" {
+    "<!-- visible After" &&
+    navigation.contains("\"links\": [{\"target\": \"soil\", \"url\": \"/notes/soil/\", \"text\": \"the soil guide\"}]") {
     1
   } else {
     0

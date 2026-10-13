@@ -419,3 +419,24 @@ test "heading catalogs use URLs and preserve legacy content rendering" {
   assert_true(shared.contains("\"body\": \"body\",\n    \"headings\": []"))
   assert_true(shared.contains("\"body\": \"generated body\",\n    \"headings\": []"))
 }
+
+///|
+test "navigation exports fragment URLs, escaped labels and repeated references" {
+  let page = @search.new_content_entry("A", "a", "/a/?view=full#old", [], "", "", "", "page", None, "body")
+  let (references, errors) = @wikilink.resolve(
+    @wikilink.extract("[[#Local|here]] [[Beta#Intro|B & \"Q\"]] [[Beta#Intro|again]] `[[missing]]`", "a.md"),
+    Map([("beta", "/beta/?q=1&x=2")]),
+  )
+  assert_eq(errors.length(), 0)
+  let links = Map([(page.url, references)])
+  let result = @search.render_content_index_with_navigation([page], Map([]), links)
+  assert_true(result.contains("{\"target\": \"#Local\", \"url\": \"/a/?view=full#local\", \"text\": \"here\"}"))
+  assert_true(result.contains("{\"target\": \"Beta#Intro\", \"url\": \"/beta/?q=1&x=2#intro\", \"text\": \"B & \\\"Q\\\"\"}"))
+  assert_true(result.contains("\"text\": \"again\""))
+  assert_false(result.contains("missing"))
+  assert_false(@search.render_content_index_with_headings([page], Map([])).contains("\"links\""))
+  let generated = @search.new_content_entry("Index", "a", page.url, [], "", "", "", "collection_index", None, "generated body")
+  let masked = @search.render_content_index_with_navigation([page, generated], Map([]), links)
+  assert_false(masked.contains("#local"))
+  assert_false(masked.contains("Beta#Intro"))
+}

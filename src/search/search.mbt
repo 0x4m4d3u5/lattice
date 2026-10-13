@@ -153,7 +153,7 @@ fn write_common_fields(
 /// Includes `kind` (page type classification) and `reading_time` (integer
 /// minutes or null) for agent-first programmatic consumption.
 pub fn render_content_index(entries : Array[ContentEntry]) -> String {
-  render_content_entries(entries, None)
+  render_content_entries(entries, None, None)
 }
 
 ///|
@@ -163,18 +163,29 @@ pub fn render_content_index_with_headings(
   entries : Array[ContentEntry],
   headings : Map[String, Array[@markdown.TocEntry]],
 ) -> String {
-  render_content_entries(entries, Some(headings))
+  render_content_entries(entries, Some(headings), None)
+}
+
+///|
+/// Include resolved outgoing references alongside section citations.
+pub fn render_content_index_with_navigation(
+  entries : Array[ContentEntry],
+  headings : Map[String, Array[@markdown.TocEntry]],
+  links : Map[String, Array[@wikilink.ResolvedWikilink]],
+) -> String {
+  render_content_entries(entries, Some(headings), Some(links))
 }
 
 ///|
 fn render_content_entries(
   entries : Array[ContentEntry],
   headings : Map[String, Array[@markdown.TocEntry]]?,
+  links : Map[String, Array[@wikilink.ResolvedWikilink]]?,
 ) -> String {
   // Generated indexes overwrite authored pages at shared URLs. Do not advertise
-  // authored heading IDs for any entry whose URL is occupied by such an index.
+  // authored navigation for any entry whose URL is occupied by such an index.
   let generated_urls : Map[String, Bool] = Map([])
-  if headings is Some(_) {
+  if headings is Some(_) || links is Some(_) {
     for entry in entries {
       if entry.kind == "collection_index" { generated_urls.set(entry.url, true) }
     }
@@ -221,6 +232,31 @@ fn render_content_entries(
         @strutil.write_json_string(buf, heading.anchor)
         buf.write_string(", \"text\": ")
         @strutil.write_json_string(buf, heading.text)
+        buf.write_char('}')
+      }
+      buf.write_char(']')
+    }
+    if links is Some(catalog) {
+      buf.write_string(",\n    \"links\": [")
+      let page_links = if generated_urls.contains(entry.url) { [] } else {
+        catalog.get(entry.url).unwrap_or([])
+      }
+      let source_url = match entry.url.split_once("#") {
+        Some((base, _)) => base.to_owned()
+        None => entry.url
+      }
+      for i = 0; i < page_links.length(); i = i + 1 {
+        if i > 0 { buf.write_string(", ") }
+        let link = page_links[i]
+        let url = if link.raw.target.has_prefix("#") {
+          source_url + link.url
+        } else { link.url }
+        buf.write_string("{\"target\": ")
+        @strutil.write_json_string(buf, link.raw.target)
+        buf.write_string(", \"url\": ")
+        @strutil.write_json_string(buf, url)
+        buf.write_string(", \"text\": ")
+        @strutil.write_json_string(buf, link.title)
         buf.write_char('}')
       }
       buf.write_char(']')
