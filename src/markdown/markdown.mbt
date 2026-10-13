@@ -1131,24 +1131,44 @@ fn split_table_row(line : String) -> Array[String] {
   let n = t.length()
   // strip leading pipe
   let start = if n > 0 && @strutil.char_at(t, 0) == '|' { 1 } else { 0 }
-  // strip trailing pipe
-  let end_pos = if n > 0 && @strutil.char_at(t, n - 1) == '|' {
-    n - 1
-  } else {
-    n
-  }
-  let inner = @strutil.substr(t, start, end_pos)
-  // split on '|'
+  // Split only unescaped pipes. Decode \| at the table layer so code spans
+  // and wikilink aliases receive the literal pipe before inline parsing.
   let cells : Array[String] = []
-  let inner_n = inner.length()
-  let mut i = 0
-  let mut cell_start = 0
-  while i <= inner_n {
-    if i == inner_n || @strutil.char_at(inner, i) == '|' {
-      cells.push(@strutil.trim(@strutil.substr(inner, cell_start, i)))
-      cell_start = i + 1
+  let mut cell = StringBuilder()
+  let mut i = start
+  let mut trailing_separator = false
+  while i < n {
+    let c = @strutil.char_at(t, i)
+    if c == '\\' {
+      let run_start = i
+      while i < n && @strutil.char_at(t, i) == '\\' {
+        i = i + 1
+      }
+      // GFM treats any backslash run before a pipe as cell content. Remove
+      // exactly one backslash; preserve the rest for subsequent inline parsing.
+      let escaped_pipe = i < n && @strutil.char_at(t, i) == '|'
+      let run_end = if escaped_pipe { i - 1 } else { i }
+      for _ in run_start..<run_end {
+        cell.write_char('\\')
+      }
+      if escaped_pipe {
+        cell.write_char('|')
+        i = i + 1
+      }
+      trailing_separator = false
+    } else if c == '|' {
+      cells.push(@strutil.trim(cell.to_string()))
+      cell = StringBuilder()
+      trailing_separator = true
+      i = i + 1
+    } else {
+      cell.write_char(c)
+      trailing_separator = false
+      i = i + 1
     }
-    i = i + 1
+  }
+  if !trailing_separator || cells.is_empty() {
+    cells.push(@strutil.trim(cell.to_string()))
   }
   cells
 }
