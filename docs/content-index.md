@@ -33,6 +33,19 @@ Library consumers can opt into the same field using
 `render_content_index` function and `ContentEntry` constructor stay unchanged.
 
 Body extraction removes tags, decodes basic entities and collapses whitespace.
+Tag boundaries respect single- and double-quoted attributes, so an attribute's
+`>` does not introduce metadata into body text. Outside text elements,
+standard `<!-- ... -->` comments are omitted without separating adjacent words.
+An unclosed comment
+omits the remaining text; an unclosed quoted tag also omits its remaining text.
+Escaped comment markup stays literal because entity decoding follows stripping.
+Inside `textarea`, `title`, `script`, `style`, `xmp`, `iframe`, `noembed` and
+`noframes`, markup and comment markers stay literal until a matching closing
+tag. Closing names are case-insensitive and require a tag-name boundary, so
+`</stylex>` does not close `style`. Following page text resumes after the close.
+Basic entity decoding still applies to all collected text; this is not full
+HTML tokenizer or script parsing behavior. Script/style text remains indexed.
+
 Decimal and hexadecimal numeric references in raw HTML text decode to Unicode:
 `<div>10&#176;C and &#x1F331;</div>` contributes `10°C and 🌱`. References require
 a semicolon and a nonzero Unicode scalar value. Malformed, zero, surrogate,

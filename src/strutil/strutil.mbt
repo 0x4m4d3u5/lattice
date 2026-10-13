@@ -743,12 +743,35 @@ pub fn strip_html_tags(s : String) -> String {
   let mut i = 0
   let mut in_tag = false
   let mut inline_tag = false
+  let mut quote : Char? = None
+  let mut text_element : String? = None
   while i < n {
     let c = char_at(s, i)
     if in_tag {
-      if c == '>' {
+      if quote is Some(q) {
+        if c == q { quote = None }
+      } else if c == '"' || c == '\'' {
+        quote = Some(c)
+      } else if c == '>' {
         in_tag = false
         if !inline_tag { buf.write_char(' ') }
+      }
+    } else if text_element is Some(name) {
+      let end = i + 2 + name.length()
+      if c == '<' && end < n && starts_with_at(s, i, "</") &&
+        substr(s, i + 2, end).to_lower() == name &&
+        (is_whitespace(char_at(s, end)) || char_at(s, end).to_int() == 12 ||
+          char_at(s, end) == '/' || char_at(s, end) == '>') {
+        text_element = None
+        continue // process the matching closing tag normally at the same offset
+      }
+      buf.write_char(c)
+    } else if c == '<' && starts_with_at(s, i, "<!--") {
+      // Comments do not separate adjacent visible text. An unclosed comment
+      // hides the remaining suffix, without scanning it again as prose.
+      match s[i + 4:n].find("-->") {
+        Some(end) => { i = i + 4 + end + 3; continue }
+        None => break
       }
     } else if c == '<' {
       in_tag = true
@@ -758,7 +781,15 @@ pub fn strip_html_tags(s : String) -> String {
         char_at(s, end) != '/' && char_at(s, end) != '>' {
         end = end + 1
       }
-      inline_tag = match substr(s, start, end).to_lower() {
+      let name = substr(s, start, end).to_lower()
+      if start == i + 1 {
+        match name {
+          "textarea" | "title" | "script" | "style" | "xmp" | "iframe"
+          | "noembed" | "noframes" => text_element = Some(name)
+          _ => ()
+        }
+      }
+      inline_tag = match name {
         "a" | "strong" | "em" | "del" | "code" | "span" | "sub" | "sup"
         | "mark" | "abbr" | "kbd" | "b" | "i" | "u" | "s" | "small"
         | "cite" | "q" | "dfn" | "data" | "time" | "var" | "samp"
