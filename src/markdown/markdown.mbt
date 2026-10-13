@@ -245,6 +245,24 @@ fn next_heading_anchor(text : String, counts : Map[String, Int]) -> String {
 // ── inline parsing helpers ────────────────────────────────────────────────────
 
 ///|
+fn backtick_run_end(s : String, pos : Int, limit : Int) -> Int {
+  pos + s[pos:limit].iter().take_while(c => c == '`').count()
+}
+
+///|
+fn find_code_span_close(s : String, from : Int, limit : Int, width : Int) -> Int {
+  let mut pos = from
+  while pos < limit {
+    let candidate = @strutil.find_char(s, pos, '`', limit)
+    if candidate < 0 { return -1 }
+    let end = backtick_run_end(s, candidate, limit)
+    if end - candidate == width { return candidate }
+    pos = end
+  }
+  -1
+}
+
+///|
 /// Count consecutive occurrences of `c` starting at `pos`.
 fn count_char(s : String, pos : Int, c : Char) -> Int {
   let n = s.length()
@@ -337,18 +355,20 @@ pub fn parse_inlines(s : String, from : Int, to : Int) -> Array[Inline] {
       i = i + 2
       text_start = i
     } else if c == '`' {
-      // inline code: `code`
+      // Match the complete delimiter run; shorter/longer runs stay code text.
       if text_start < i {
         result.push(Text(@strutil.substr(s, text_start, i)))
       }
-      let close = @strutil.find_char(s, i + 1, '`', to)
+      let content_start = backtick_run_end(s, i, to)
+      let width = content_start - i
+      let close = find_code_span_close(s, content_start, to, width)
       if close >= 0 {
-        result.push(InlineCode(@strutil.substr(s, i + 1, close)))
-        i = close + 1
+        result.push(InlineCode(@strutil.substr(s, content_start, close)))
+        i = close + width
       } else {
-        // unterminated — treat backtick as literal text
-        result.push(Text("`"))
-        i = i + 1
+        // An unmatched run is literal; following Markdown still gets parsed.
+        result.push(Text(@strutil.substr(s, i, content_start)))
+        i = content_start
       }
       text_start = i
     } else if c == '$' {

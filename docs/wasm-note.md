@@ -58,8 +58,9 @@ runtimes, either during compilation or the host-import check. Each call uses
 local data; the adapter reuses one module instance.
 
 `bash scripts/check-wasm-note.sh` builds the JavaScript control and WASM GC
-application with warnings denied. Both run the same 528 independent supplied-note
+application with warnings denied. Both run the same 531 independent supplied-note
 comparisons: YAML/TOML, exact HTML and escaped URLs, cross-note heading links,
+[matching-run inline code spans](inline-code.md),
 Unicode/combining characters,
 NUL and a lone surrogate, malformed link maps, source-preserving diagnostics,
 footnote errors, 512 changing notes/maps, a 65,536-code-unit body, and a small
@@ -97,7 +98,7 @@ port and exposes only four fixed test assets. Test-context requests outside
 that origin are rejected. The returned HTML is compared as data, never inserted
 into the DOM.
 
-A real module Web Worker loads the checked-in adapter and runs the same 528
+A real module Web Worker loads the checked-in adapter and runs the same 531
 supplied-note comparisons on one reused WASM GC instance. The harness confirms
 `DedicatedWorkerGlobalScope`, reports the worker user agent and actual browser
 version, and terminates the worker after completion or a 30-second deadline.
@@ -125,7 +126,7 @@ The default local command above still uses Playwright's downloaded Chromium.
 
 Verified locally with Chromium 153.0.8010.12, Playwright 1.63.0, and the pinned
 MoonBit toolchain on Linux x86_64. The installed Chrome channel also passed all
-528 comparisons locally with Google Chrome 155.0.8059.39 and the sandbox enabled.
+531 comparisons locally with Google Chrome 155.0.8059.39 and the sandbox enabled.
 Hosted validation of that channel remains required before merge.
 The earlier browser wrong-URL mutation compiled with
 warnings denied and failed the independent HTML comparison; restoring the code

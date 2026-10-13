@@ -42,6 +42,13 @@ export function runNoteCases(render, assert) {
   check(render(yaml('[[Missing#Intro]]'), 'garden.md', '{}'), {
     html: '', diagnostics: [issue('wikilink', 'garden.md', "target 'Missing#Intro' not found in page index")],
   });
+  check(render(yaml('Use ``[[missing]] ` literal`` and [[Beta|real]].\n'), 'code.md', '{"beta":"/notes/beta/"}'),
+    ok('<p>Use <code>[[missing]] ` literal</code> and <a href="/notes/beta/">real</a>.</p>\n'));
+  check(render(yaml('Example ```{{< unknown >}} `` ticks```.\n'), 'code.md', '{}'),
+    ok('<p>Example <code>{{&lt; unknown &gt;}} `` ticks</code>.</p>\n'));
+  check(render(yaml('Use ``open and [[missing]].\n'), 'code.md', '{}'), {
+    html: '', diagnostics: [issue('wikilink', 'code.md', "target 'missing' not found in page index")],
+  });
   // A new caller-supplied map must take effect; no prior note/map/error state leaks.
   for (let n = 0; n < 256; n++) {
     const text = `Synthetic note ${n} 🌱.`;
