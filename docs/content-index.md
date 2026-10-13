@@ -32,6 +32,29 @@ Library consumers can opt into the same field using
 `render_content_index_with_headings(entries, headings_by_url)`; the ordinary
 `render_content_index` function and `ContentEntry` constructor stay unchanged.
 
+Built entries include `links`, resolved outgoing wikilinks in parser traversal
+order: body links (including nested blocks) first, then links in parsed footnote
+definitions in definition order, regardless of where those definitions occur
+in source. Repeated references are retained. Each record has the authored `target`, the
+resolved `url` (including heading fragments) and rendered label `text`.
+Same-note links include the owning page's URL, so a retrieval tool can follow
+them without the original page as its browser context. Code examples and
+unresolved references are excluded. Generated indexes and entries overwritten
+at their URLs have empty link arrays, matching heading-catalog suppression.
+Built indexes also suppress both catalogs when later prepared output replaces
+an authored page, including tag pages, archive pages and copied assets. Source
+body text and duplicate records remain present; only navigation is suppressed.
+An overwritten collection page is republished if the generator disappears,
+so restored catalogs describe the restored authored HTML. Routing and existing
+overwrite policy stay unchanged.
+
+These records describe authored wikilinks, not ordinary Markdown links, raw
+HTML anchors or template navigation. Resolution checks the existing page index;
+it does not validate heading existence or guarantee the target is published
+(for example, a link may resolve to a hidden draft). Existing publication and
+trust policies remain unchanged. Library consumers can opt into both catalogs
+with `render_content_index_with_navigation(entries, headings_by_url, links_by_url)`.
+
 Body extraction removes tags, decodes basic entities and collapses whitespace.
 Tag boundaries respect single- and double-quoted attributes, so an attribute's
 `>` does not introduce metadata into body text. Outside text elements,

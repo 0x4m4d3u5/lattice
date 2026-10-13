@@ -51,6 +51,14 @@ const expectedHeadings = [
   { level: 2, id: 'planting-care', text: 'Planting & Care' },
   { level: 2, id: 'planting-care-2', text: 'Planting & Care' },
 ];
+const contentLinks = (url) => JSON.parse(readFileSync(join(output, 'content-index.json'), 'utf8'))
+  .find((entry) => entry.url === url).links;
+const expectedLinks = [
+  { target: '#Overview', url: '/posts/alpha/#overview', text: 'here' },
+  { target: 'Beta.md#Planting & Care', url: '/posts/beta/#planting-care', text: 'care' },
+  { target: 'Beta#planting-care-2', url: '/posts/beta/#planting-care-2', text: 'again' },
+];
+assert.deepEqual(contentLinks('/posts/alpha/'), expectedLinks);
 const assertCatalogs = () => {
   const entries = JSON.parse(readFileSync(join(output, 'content-index.json'), 'utf8'));
   assert.deepEqual(entries.find((e) => e.url === '/').headings,
@@ -73,6 +81,7 @@ assert.equal(contentBody(), expectedBody);
 const cached = run('build');
 assert.equal(cached.status, 0, cached.stdout + cached.stderr);
 assert.ok(cached.stdout.includes('[2 unchanged]'), cached.stdout);
+assert.deepEqual(contentLinks('/posts/alpha/'), expectedLinks);
 assertCatalogs();
 assert.deepEqual(contentHeadings(), expectedHeadings);
 assert.equal(contentBody(), expectedBody);
@@ -93,11 +102,13 @@ assert.deepEqual(manifest.entries.find((entry) => entry.src === alpha).targets, 
 writeFileSync(alpha, '---\ntitle: Garden\ndate: 2026-01-02\n---\nNo references.\n');
 const incremental = run('build');
 assert.equal(incremental.status, 0, incremental.stdout + incremental.stderr);
+assert.deepEqual(contentLinks('/posts/alpha/'), []);
 const updatedBeta = readFileSync(join(output, 'posts/beta/index.html'), 'utf8');
 assert.ok(!updatedBeta.includes('href="/posts/alpha/">Garden</a>'));
 assert.deepEqual(JSON.parse(readFileSync(join(output, 'graph.json'), 'utf8')).edges, []);
 const full = run('build', ['--force']);
 assert.equal(full.status, 0, full.stdout + full.stderr);
+assert.deepEqual(contentLinks('/posts/alpha/'), []);
 assertCatalogs();
 assert.deepEqual(contentHeadings(), expectedHeadings);
 assert.equal(readFileSync(join(output, 'posts/beta/index.html'), 'utf8'), updatedBeta);
@@ -105,7 +116,7 @@ assert.equal(contentBody(), expectedBody);
 // Existing guards allow authored and generated entries to share this URL.
 for (const directory of [content, join(content, 'standalone')]) {
   const source = join(directory, 'posts.md');
-  writeFileSync(source, '---\ntitle: Authored Posts\n---\n## Authored Section\n');
+  writeFileSync(source, '---\ntitle: Authored Posts\n---\n## Authored Section\n[[Beta|Reference]]\n');
   const collisionCheck = run('check', ['--format', 'json']);
   assert.equal(collisionCheck.status, 0, collisionCheck.stdout + collisionCheck.stderr);
   const collisionBuild = run('build', ['--force']);
@@ -114,6 +125,7 @@ for (const directory of [content, join(content, 'standalone')]) {
     .filter((entry) => entry.url === '/posts/');
   assert.equal(shared.length, 2);
   assert.deepEqual(shared.map((entry) => entry.headings), [[], []]);
+  assert.deepEqual(shared.map((entry) => entry.links), [[], []]);
   const finalHtml = readFileSync(join(output, 'posts/index.html'), 'utf8');
   assert.ok(finalHtml.includes('<h2>Wikilink Graph</h2>'));
   assert.ok(!finalHtml.includes('id="authored-section"'));

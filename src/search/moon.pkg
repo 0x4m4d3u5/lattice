@@ -1,4 +1,5 @@
 import {
   "kurisu/lattice/src/strutil" @strutil,
   "kurisu/lattice/src/markdown" @markdown,
+  "kurisu/lattice/src/wikilink" @wikilink,
 }
