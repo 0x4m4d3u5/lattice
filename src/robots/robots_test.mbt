@@ -96,3 +96,12 @@ test "render_robots_txt handles base_url with path" {
     content="true",
   )
 }
+
+///|
+test "robots sitemap URL removes repeated trailing base slashes" {
+  assert_eq(
+    @robots.render_robots_txt("https://example.test/wiki///", true),
+    "User-agent: *\nAllow: /\nSitemap: https://example.test/wiki/sitemap.xml\n",
+  )
+  assert_eq(@robots.render_robots_txt("///", true), "User-agent: *\nAllow: /\n")
+}

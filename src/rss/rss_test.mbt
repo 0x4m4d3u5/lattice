@@ -863,3 +863,17 @@ test "Atom channel updated selects latest instant while preserving its offset" {
   let header = atom.split("<entry>").collect()[0]
   assert_true(header.contains("<updated>2024-01-01T23:30:00-02:00</updated>"))
 }
+
+///|
+test "Atom entry URLs remove repeated trailing base slashes" {
+  let feed = @rss.render_feed(
+    "Wiki",
+    "https://example.test/wiki///",
+    test_pages(),
+    None,
+  )
+  assert_true(
+    feed.contains("<id>https://example.test/wiki/posts/first-post/</id>"),
+  )
+  assert_false(feed.contains("https://example.test/wiki//"))
+}
