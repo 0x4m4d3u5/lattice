@@ -71,7 +71,7 @@ try {
   }));
   assert.equal(result.ok, true, result.error);
   assert.equal(result.worker, true, 'cases did not execute in a real dedicated worker');
-  assert.equal(result.count, 531);
+  assert.equal(result.count, 535);
   assert.match(result.userAgent, /Chrome\//);
   console.log(`${browserName} ${browser.version()}: ${result.count} supplied-note comparisons passed in a reused Web Worker instance`);
   console.log(`Worker runtime: ${result.userAgent}`);

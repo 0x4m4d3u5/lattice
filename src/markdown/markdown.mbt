@@ -305,9 +305,37 @@ fn shortcode_inner_text_from_line(line : String) -> String {
 }
 
 ///|
+fn mark_code_callout_restores(
+  planned : Array[String],
+  origins : Array[Int],
+  expanded : Array[Bool],
+  source : Array[String],
+  restore : Map[Int, Bool],
+) -> Unit {
+  ignore(parse_blocks_with_code_lines(planned, Some(fn(start, end, prefix) {
+    let mut row = start + 1
+    while row <= end && row < planned.length() {
+      if expanded[row] {
+        let next = source[origins[row] + 1]
+        if next.length() >= prefix && next[0:prefix].iter().all(c => c == ' ') &&
+          !is_block_starter(next[prefix:next.length()].to_owned()) {
+          restore.set(origins[row], true)
+        }
+      }
+      row = row + 1
+    }
+  })))
+}
+
+///|
 fn preprocess_callout_next_line(body : String) -> String {
   let ls = lines_of(body)
-  let out : Array[String] = []
+  let planned : Array[String] = []
+  let indented : Array[String] = []
+  let origins : Array[Int] = []
+  let expanded : Array[Bool] = []
+  let mut has_expansions = false
+  let mut has_indented_expansions = false
   let mut i = 0
   while i < ls.length() {
     let line = ls[i]
@@ -315,21 +343,70 @@ fn preprocess_callout_next_line(body : String) -> String {
       let raw = shortcode_inner_text_from_line(line)
       match @shortcode.parse(raw) {
         Ok(call) =>
-          if call.name == "callout" &&
-            i + 1 < ls.length() &&
-            !is_blank(ls[i + 1]) {
-            let merged = @strutil.trim(line) +
-              " " +
-              @strutil.trim(ls[i + 1]) +
-              " {{< /callout >}}"
-            out.push(merged)
+          if call.name == "callout" && i + 1 < ls.length() && !is_blank(ls[i + 1]) {
+            let merged = @strutil.trim(line) + " " + @strutil.trim(ls[i + 1]) + " {{< /callout >}}"
+            let indent = line.iter().take_while(c => c.is_whitespace()).count()
+            planned.push(merged)
+            indented.push(@strutil.substr(line, 0, indent) + merged)
+            if indent > 0 { has_indented_expansions = true }
+            origins.push(i)
+            expanded.push(true)
+            has_expansions = true
             i = i + 2
             continue
           }
         Err(_) => ()
       }
     }
-    out.push(line)
+    planned.push(line)
+    indented.push(line)
+    origins.push(i)
+    expanded.push(false)
+    i = i + 1
+  }
+  if !has_expansions || !body.contains("`") {
+    return @strutil.join_lines(planned)
+  }
+  // Preserve nesting while identifying literal spans. Active expansions still
+  // retain their legacy output; a second bounded pass accounts for that context.
+  let mut restore : Map[Int, Bool] = Map([])
+  mark_code_callout_restores(indented, origins, expanded, ls, restore)
+  if has_indented_expansions {
+    let adjusted : Array[String] = []
+    let adjusted_origins : Array[Int] = []
+    let adjusted_expanded : Array[Bool] = []
+    i = 0
+    while i < planned.length() {
+      let origin = origins[i]
+      if restore.contains(origin) {
+        adjusted.push(ls[origin])
+        adjusted_origins.push(origin)
+        adjusted_expanded.push(true)
+        adjusted.push(ls[origin + 1])
+        adjusted_origins.push(origin + 1)
+        adjusted_expanded.push(false)
+      } else {
+        adjusted.push(planned[i])
+        adjusted_origins.push(origin)
+        adjusted_expanded.push(expanded[i])
+      }
+      i = i + 1
+    }
+    // Reassess restored openings too: a retained legacy expansion can dedent
+    // the paragraph and invalidate a code span from the indentation-only plan.
+    let reassessed : Map[Int, Bool] = Map([])
+    mark_code_callout_restores(adjusted, adjusted_origins, adjusted_expanded, ls, reassessed)
+    restore = reassessed
+  }
+  let out : Array[String] = []
+  i = 0
+  while i < planned.length() {
+    if restore.contains(origins[i]) {
+      out.push(ls[origins[i]])
+      out.push(ls[origins[i] + 1])
+    } else {
+      out.push(planned[i])
+    }
     i = i + 1
   }
   @strutil.join_lines(out)
@@ -341,6 +418,16 @@ fn preprocess_callout_next_line(body : String) -> String {
 /// Parse inline elements from s[from..to]. Handles bold, italic, inline code,
 /// links, wikilinks, escape sequences, and hard line breaks.
 pub fn parse_inlines(s : String, from : Int, to : Int) -> Array[Inline] {
+  parse_inlines_with_code_ranges(s, from, to, None)
+}
+
+///|
+fn parse_inlines_with_code_ranges(
+  s : String,
+  from : Int,
+  to : Int,
+  on_code : ((Int, Int) -> Unit)?,
+) -> Array[Inline] {
   let result : Array[Inline] = []
   let mut i = from
   let mut text_start = from
@@ -363,6 +450,10 @@ pub fn parse_inlines(s : String, from : Int, to : Int) -> Array[Inline] {
       let width = content_start - i
       let close = find_code_span_close(s, content_start, to, width)
       if close >= 0 {
+        match on_code {
+          Some(report) => report(i, close + width)
+          None => ()
+        }
         result.push(InlineCode(@strutil.substr(s, content_start, close)))
         i = close + width
       } else {
@@ -436,7 +527,7 @@ pub fn parse_inlines(s : String, from : Int, to : Int) -> Array[Inline] {
         if text_start < i {
           result.push(Text(@strutil.substr(s, text_start, i)))
         }
-        let inner = parse_inlines(s, inner_start, close)
+        let inner = parse_inlines_with_code_ranges(s, inner_start, close, on_code)
         if star_count >= 3 {
           result.push(BoldItalic(inner))
           i = close + 3
@@ -460,7 +551,7 @@ pub fn parse_inlines(s : String, from : Int, to : Int) -> Array[Inline] {
         if text_start < i {
           result.push(Text(@strutil.substr(s, text_start, i)))
         }
-        let inner = parse_inlines(s, inner_start, close)
+        let inner = parse_inlines_with_code_ranges(s, inner_start, close, on_code)
         result.push(Strikethrough(inner))
         i = close + 2
         text_start = i
@@ -518,7 +609,7 @@ pub fn parse_inlines(s : String, from : Int, to : Int) -> Array[Inline] {
                 if text_start < i {
                   result.push(Text(@strutil.substr(s, text_start, i)))
                 }
-                let inner = parse_inlines(s, inner_start, next_close)
+                let inner = parse_inlines_with_code_ranges(s, inner_start, next_close, on_code)
                 if under_count >= 3 {
                   result.push(BoldItalic(inner))
                 } else if under_count == 2 {
@@ -537,7 +628,7 @@ pub fn parse_inlines(s : String, from : Int, to : Int) -> Array[Inline] {
             if text_start < i {
               result.push(Text(@strutil.substr(s, text_start, i)))
             }
-            let inner = parse_inlines(s, inner_start, close)
+            let inner = parse_inlines_with_code_ranges(s, inner_start, close, on_code)
             if under_count >= 3 {
               result.push(BoldItalic(inner))
             } else if under_count == 2 {
@@ -778,9 +869,12 @@ pub fn parse_inlines(s : String, from : Int, to : Int) -> Array[Inline] {
               result.push(Text(@strutil.substr(s, text_start, i)))
             }
             let link_text = @strutil.substr(s, i + 1, bracket_close)
+            let link_start = i + 1
             let url = @strutil.substr(s, bracket_close + 2, paren_close)
             result.push(
-              Link(parse_inlines(link_text, 0, link_text.length()), url),
+              Link(parse_inlines_with_code_ranges(link_text, 0, link_text.length(),
+                on_code.map(fn(report) { fn(start, end) { report(start + link_start, end + link_start) } }),
+              ), url),
             )
             i = paren_close + 1
             text_start = i
@@ -1207,6 +1301,14 @@ fn is_block_starter(line : String) -> Bool {
 pub fn parse_blocks_with_footnotes(
   ls : Array[String],
 ) -> (Array[Block], Array[FootnoteDef]) {
+  parse_blocks_with_code_lines(ls, None)
+}
+
+///|
+fn parse_blocks_with_code_lines(
+  ls : Array[String],
+  on_code : ((Int, Int, Int) -> Unit)?,
+) -> (Array[Block], Array[FootnoteDef]) {
   let result : Array[Block] = []
   let footnotes : Array[FootnoteDef] = []
   let mut i = 0
@@ -1244,12 +1346,16 @@ pub fn parse_blocks_with_footnotes(
       result.push(FencedCode(lang, @strutil.join_lines(code_lines)))
     } else if is_blockquote_line(line) {
       let bq_lines : Array[String] = []
+      let bq_start = i
       while i < n && is_blockquote_line(ls[i]) {
         bq_lines.push(strip_blockquote_marker(ls[i]))
         i = i + 1
       }
       // blockquotes recurse: the stripped lines form their own block structure
-      result.push(BlockQuote(parse_blocks(bq_lines)))
+      let (bq_blocks, _) = parse_blocks_with_code_lines(bq_lines,
+        on_code.map(fn(report) { fn(start, end, prefix) { report(start + bq_start, end + bq_start, prefix + 2) } }),
+      )
+      result.push(BlockQuote(bq_blocks))
     } else if is_unordered_item(line) {
       let items : Array[ListItem] = []
       // Single-pass: consume each item line then immediately consume its
@@ -1259,12 +1365,15 @@ pub fn parse_blocks_with_footnotes(
         i = i + 1
         // Collect indented continuation lines belonging to this item.
         let nested_lines : Array[String] = []
+        let nested_start = i
         while i < n && is_nested_indent(ls[i]) {
           nested_lines.push(@strutil.substr(ls[i], 2, ls[i].length()))
           i = i + 1
         }
         let children : Array[Block] = if nested_lines.length() > 0 {
-          let (nested_blocks, _) = parse_blocks_with_footnotes(nested_lines)
+          let (nested_blocks, _) = parse_blocks_with_code_lines(nested_lines,
+            on_code.map(fn(report) { fn(start, end, prefix) { report(start + nested_start, end + nested_start, prefix + 2) } }),
+          )
           nested_blocks
         } else {
           []
@@ -1281,12 +1390,15 @@ pub fn parse_blocks_with_footnotes(
         i = i + 1
         // Collect indented continuation lines belonging to this item.
         let nested_lines : Array[String] = []
+        let nested_start = i
         while i < n && is_nested_indent(ls[i]) {
           nested_lines.push(@strutil.substr(ls[i], 2, ls[i].length()))
           i = i + 1
         }
         let children : Array[Block] = if nested_lines.length() > 0 {
-          let (nested_blocks, _) = parse_blocks_with_footnotes(nested_lines)
+          let (nested_blocks, _) = parse_blocks_with_code_lines(nested_lines,
+            on_code.map(fn(report) { fn(start, end, prefix) { report(start + nested_start, end + nested_start, prefix + 2) } }),
+          )
           nested_blocks
         } else {
           []
@@ -1397,12 +1509,27 @@ pub fn parse_blocks_with_footnotes(
     } else {
       // paragraph: accumulate non-blank, non-block-starter lines
       let para_lines : Array[String] = []
+      let para_start = i
       while i < n && !is_blank(ls[i]) && !is_block_starter(ls[i]) {
         para_lines.push(ls[i])
         i = i + 1
       }
       let para_text = @strutil.join_lines(para_lines)
-      result.push(Paragraph(parse_inlines(para_text, 0, para_text.length())))
+      // Code ranges arrive in source order. Count newlines only in the newly
+      // visited slices rather than rescanning each range's paragraph prefix.
+      let code_ranges = on_code.map(fn(report) {
+        let mut scanned = 0
+        let mut row = para_start
+        fn(start, end) {
+          row = row + @strutil.substr(para_text, scanned, start).split("\n").count() - 1
+          let first = row
+          row = row + @strutil.substr(para_text, start, end).split("\n").count() - 1
+          scanned = end
+          report(first, row, 0)
+        }
+      })
+      let inlines = parse_inlines_with_code_ranges(para_text, 0, para_text.length(), code_ranges)
+      result.push(Paragraph(inlines))
     }
   }
   (result, footnotes)

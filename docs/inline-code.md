@@ -14,11 +14,23 @@ opening run stays text, and following Markdown still gets parsed. Code-content
 whitespace retains the existing behavior; public AST and renderer signatures,
 block-fence parsing and HTML/URL trust policies are unchanged.
 
-AI-assisted inspection reproduced the single-backtick closer splitting a
-multi-backtick example into empty code and an unintended missing-note link.
-The fix uses bounded run counting through core iterators and scans for a closer
-of the same width. Independent literal HTML/extraction regressions and the
-portable renderer fail before the fix. The real CLI fixture also fails with
-the original parser, then verifies a clean check, exact code HTML and unchanged
-canonical graph/manifest targets after the fix. Three added supplied-note cases
-run on JS, WASM GC in Node and a real browser worker.
+Standalone callout openers inside multiline code spans retain their literal
+source lines. Callouts outside a recognized code span keep their next-line
+expansion behavior. Nested indentation and block boundaries determine whether
+backticks form a span; an active callout whose body starts a heading can end
+that nested context.
+
+Callout preprocessing uses at most two parser passes to reconcile literal code
+with active expansions. It does not reparse the document per callout, and
+ordinary parsing keeps code-range collection disabled.
+
+A manual scaling probe is available after building the JS note renderer:
+
+```sh
+node scripts/measure-callout-scaling.mjs \
+  _build/js/debug/build/kurisu/lattice/examples/wasm_note/wasm_note.js
+```
+
+The probe measures synthetic notes with separated and adjacent active callouts,
+code-containing bodies and a literal code footer. It reports median timings;
+there are no timing thresholds in CI.
