@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, unlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -102,6 +102,23 @@ assertCatalogs();
 assert.deepEqual(contentHeadings(), expectedHeadings);
 assert.equal(readFileSync(join(output, 'posts/beta/index.html'), 'utf8'), updatedBeta);
 assert.equal(contentBody(), expectedBody);
+// Existing guards allow authored and generated entries to share this URL.
+for (const directory of [content, join(content, 'standalone')]) {
+  const source = join(directory, 'posts.md');
+  writeFileSync(source, '---\ntitle: Authored Posts\n---\n## Authored Section\n');
+  const collisionCheck = run('check', ['--format', 'json']);
+  assert.equal(collisionCheck.status, 0, collisionCheck.stdout + collisionCheck.stderr);
+  const collisionBuild = run('build', ['--force']);
+  assert.equal(collisionBuild.status, 0, collisionBuild.stdout + collisionBuild.stderr);
+  const shared = JSON.parse(readFileSync(join(output, 'content-index.json'), 'utf8'))
+    .filter((entry) => entry.url === '/posts/');
+  assert.equal(shared.length, 2);
+  assert.deepEqual(shared.map((entry) => entry.headings), [[], []]);
+  const finalHtml = readFileSync(join(output, 'posts/index.html'), 'utf8');
+  assert.ok(finalHtml.includes('<h2>Wikilink Graph</h2>'));
+  assert.ok(!finalHtml.includes('id="authored-section"'));
+  unlinkSync(source);
+}
 // Missing pages still produce a strict check diagnostic using the authored target.
 writeFileSync(alpha, '---\ntitle: Garden\ndate: 2026-01-02\n---\n[[Missing#Intro]]\n');
 const invalid = run('check', ['--format', 'json']);

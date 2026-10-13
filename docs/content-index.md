@@ -24,7 +24,10 @@ These headings describe the Markdown body, including on cache-hit rebuilds.
 Level-1 headings reserve IDs but are omitted, matching the renderer's TOC.
 Raw HTML headings and template-generated headings are outside the catalog;
 templates may omit body headings from the final page. Generated collection
-indexes have an empty catalog. This metadata does not validate heading links.
+indexes have an empty catalog. Authored entries sharing a generated index's URL
+also have an empty catalog, because the index overwrites that page's HTML.
+This suppresses heading metadata only; duplicate entries and the existing
+collision policy remain unchanged. This metadata does not validate heading links.
 Library consumers can opt into the same field using
 `render_content_index_with_headings(entries, headings_by_url)`; the ordinary
 `render_content_index` function and `ContentEntry` constructor stay unchanged.

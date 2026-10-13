@@ -171,6 +171,14 @@ fn render_content_entries(
   entries : Array[ContentEntry],
   headings : Map[String, Array[@markdown.TocEntry]]?,
 ) -> String {
+  // Generated indexes overwrite authored pages at shared URLs. Do not advertise
+  // authored heading IDs for any entry whose URL is occupied by such an index.
+  let generated_urls : Map[String, Bool] = Map([])
+  if headings is Some(_) {
+    for entry in entries {
+      if entry.kind == "collection_index" { generated_urls.set(entry.url, true) }
+    }
+  }
   render_json_array(entries, fn(buf, entry) {
     write_common_fields(
       buf,
@@ -199,7 +207,11 @@ fn render_content_entries(
     @strutil.write_json_string(buf, entry.body)
     if headings is Some(catalog) {
       buf.write_string(",\n    \"headings\": [")
-      let page_headings = catalog.get(entry.url).unwrap_or([])
+      let page_headings = if generated_urls.contains(entry.url) {
+        []
+      } else {
+        catalog.get(entry.url).unwrap_or([])
+      }
       for i = 0; i < page_headings.length(); i = i + 1 {
         if i > 0 { buf.write_string(", ") }
         let heading = page_headings[i]
