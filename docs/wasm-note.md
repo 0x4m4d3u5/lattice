@@ -58,28 +58,22 @@ runtimes, either during compilation or the host-import check. Each call uses
 local data; the adapter reuses one module instance.
 
 `bash scripts/check-wasm-note.sh` builds the JavaScript control and WASM GC
-application with warnings denied. Both run the same 528 independent supplied-note
-comparisons: YAML/TOML, exact HTML and escaped URLs, cross-note heading links,
-Unicode/combining characters,
-NUL and a lone surrogate, malformed link maps, source-preserving diagnostics,
-footnote errors, 512 changing notes/maps, a 65,536-code-unit body, and a small
-call after it. The WASM checks use one reused Node worker instance with a
-30-second test deadline. An argument-type control rejects non-string host input.
+application with warnings denied. Both run independent supplied-note
+comparisons covering YAML/TOML, exact HTML and escaped URLs, cross-note heading
+links, [matching-run inline code spans](inline-code.md), Unicode/combining
+characters, NUL and a lone surrogate, malformed link maps, source-preserving
+diagnostics, footnote errors, changing notes/maps, and large and small bodies.
+The WASM checks use one reused Node worker instance with a 30-second test
+deadline. An argument-type control rejects non-string host input.
 
 Calls allocate managed data and execute synchronously. The worker and runtime
 own reclamation; no linear-memory handles or note state are retained by this
-API. The stress checks establish the tested workload, not a memory ceiling,
-leak proof, or quota for arbitrary note sizes. Hosts choose their own worker
-lifetime and resource budget.
+API. This API provides no memory ceiling, leak guarantee, or quota for arbitrary
+note sizes. Hosts choose their own worker lifetime and resource budget.
 
-Verified with the repository-pinned toolchain and Node 26.10.0. The browser
-verification below adds a real Chromium Web Worker run. The known compiler
-interpolation bug and existing gates remain documented in [wasm-core.md](wasm-core.md).
-AI-assisted investigation chose the documented string ABI over dependence on
-unstable managed-object layouts and checked host-supplied expected results
-rather than adding more fixed exported test functions. Replacing resolved URLs
-with `/wrong/` compiled with warnings denied and failed the independent expected
-HTML comparison on both JavaScript and WASM GC; restoring the code passed.
+Use the repository-pinned toolchain for the checks. The known compiler
+interpolation limitation and existing core gates are documented in
+[wasm-core.md](wasm-core.md).
 
 ## Real browser worker gate
 
@@ -97,7 +91,7 @@ port and exposes only four fixed test assets. Test-context requests outside
 that origin are rejected. The returned HTML is compared as data, never inserted
 into the DOM.
 
-A real module Web Worker loads the checked-in adapter and runs the same 528
+A real module Web Worker loads the checked-in adapter and runs the same
 supplied-note comparisons on one reused WASM GC instance. The harness confirms
 `DedicatedWorkerGlobalScope`, reports the worker user agent and actual browser
 version, and terminates the worker after completion or a 30-second deadline.
@@ -112,7 +106,6 @@ npm ci --prefix tests/browser --ignore-scripts
 LATTICE_BROWSER_CHANNEL=chrome bash scripts/check-browser-note.sh
 ```
 
-The downloaded Chromium build failed hosted startup with "No usable sandbox".
 Chromium's [AppArmor guidance](https://chromium.googlesource.com/chromium/src/+/main/docs/security/apparmor-userns-restrictions.md)
 explains Ubuntu 23.10+ restrictions on downloaded builds and the existing policy
 for installed Chrome at `/opt/google/chrome/chrome`. Using that installed browser
@@ -123,13 +116,6 @@ includes Chrome; its version follows runner-image updates and is **not pinned**
 by the Playwright lockfile. CI reports the installed and launched versions.
 The default local command above still uses Playwright's downloaded Chromium.
 
-Verified locally with Chromium 153.0.8010.12, Playwright 1.63.0, and the pinned
-MoonBit toolchain on Linux x86_64. The installed Chrome channel also passed all
-528 comparisons locally with Google Chrome 155.0.8059.39 and the sandbox enabled.
-Hosted validation of that channel remains required before merge.
-The earlier browser wrong-URL mutation compiled with
-warnings denied and failed the independent HTML comparison; restoring the code
-passed its original 525 comparisons. This establishes Chromium browser-worker execution
-for this surface, not Firefox/Safari coverage, a memory bound, or full WASM-suite
-certification. AI-assisted follow-up found that an official isolated Playwright
-installation was feasible despite the earlier absence of a browser executable.
+The browser gate covers Chromium Web Worker execution for this renderer.
+It does not establish Firefox/Safari compatibility, a memory bound, or full
+WASM-suite certification.

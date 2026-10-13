@@ -318,3 +318,15 @@ test "cross-note heading links resolve the page and use emitted heading IDs" {
   assert_eq(errors[0].link.source_file, "garden.md")
   assert_eq(@wikilink.lookup_key("Beta.md#Planting & Care"), "beta")
 }
+
+///|
+test "multibacktick code examples are excluded while unmatched runs remain text" {
+  let links = @wikilink.extract(
+    "Use ``[[missing]] ` literal`` and [[beta]].", "guide.md",
+  )
+  assert_eq(links.length(), 1)
+  assert_eq(links[0].target, "beta")
+  let unmatched = @wikilink.extract("Use ``open and [[missing]].", "guide.md")
+  assert_eq(unmatched.length(), 1)
+  assert_eq(unmatched[0].target, "missing")
+}

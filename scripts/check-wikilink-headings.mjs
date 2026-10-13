@@ -15,7 +15,7 @@ mkdirSync(posts, { recursive: true });
 mkdirSync(templates);
 mkdirSync(join(content, "data"));
 const alpha = join(posts, 'alpha.md');
-writeFileSync(alpha, '---\ntitle: Garden\ndate: 2026-01-02\n---\nRead [[Beta.md#Planting & Care|care]] and [[Beta#planting-care-2|again]].\n');
+writeFileSync(alpha, '---\ntitle: Garden\ndate: 2026-01-02\n---\nRead [[Beta.md#Planting & Care|care]] and [[Beta#planting-care-2|again]].\n\nExample ``[[missing]] ` literal``.\n');
 writeFileSync(join(posts, 'beta.md'), '---\ntitle: Beta\ndate: 2026-01-03\n---\n## Planting & Care\n\n## Planting & Care\n');
 writeFileSync(join(templates, 'page.html'), '<article>{{content}}{{backlinks}}</article>');
 writeFileSync(join(templates, '404.html'), '{{content}}');
@@ -34,6 +34,8 @@ const build = run('build');
 assert.equal(build.status, 0, build.stdout + build.stderr);
 assert.ok(readFileSync(join(output, 'posts/alpha/index.html'), 'utf8').includes(
   '<p>Read <a href="/posts/beta/#planting-care">care</a> and <a href="/posts/beta/#planting-care-2">again</a>.</p>\n'));
+assert.ok(readFileSync(join(output, 'posts/alpha/index.html'), 'utf8').includes(
+  '<p>Example <code>[[missing]] ` literal</code>.</p>\n'));
 const beta = readFileSync(join(output, 'posts/beta/index.html'), 'utf8');
 assert.ok(beta.includes('<h2 id="planting-care">Planting &amp; Care</h2>'));
 assert.ok(beta.includes('<h2 id="planting-care-2">Planting &amp; Care</h2>'));

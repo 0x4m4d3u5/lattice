@@ -42,6 +42,21 @@ export function runNoteCases(render, assert) {
   check(render(yaml('[[Missing#Intro]]'), 'garden.md', '{}'), {
     html: '', diagnostics: [issue('wikilink', 'garden.md', "target 'Missing#Intro' not found in page index")],
   });
+  check(render(yaml('Use ``[[missing]] ` literal`` and [[Beta|real]].\n'), 'code.md', '{"beta":"/notes/beta/"}'),
+    ok('<p>Use <code>[[missing]] ` literal</code> and <a href="/notes/beta/">real</a>.</p>\n'));
+  check(render(yaml('Example ```{{< unknown >}} `` ticks```.\n'), 'code.md', '{}'),
+    ok('<p>Example <code>{{&lt; unknown &gt;}} `` ticks</code>.</p>\n'));
+  check(render(yaml('Use ``open and [[missing]].\n'), 'code.md', '{}'), {
+    html: '', diagnostics: [issue('wikilink', 'code.md', "target 'missing' not found in page index")],
+  });
+  check(render(yaml('Example ``\n{{< callout type="note" >}}\nLiteral body.\n``.\n\n{{< callout type="note" >}}\nLive body.\n'), 'callout-code.md', '{}'),
+    ok('<p>Example <code>\n{{&lt; callout type="note" &gt;}}\nLiteral body.\n</code>.</p>\n<aside class="callout callout-note"><p>Live body.</p></aside>\n'));
+  check(render(yaml('**Example ``\n{{< callout type="note" >}}\nLiteral body.\n``**.\n'), 'callout-code.md', '{}'),
+    ok('<p><strong>Example <code>\n{{&lt; callout type="note" &gt;}}\nLiteral body.\n</code></strong>.</p>\n'));
+  check(render(yaml('Unmatched `` opener.\n\n{{< callout type="note" >}}\nLive body.\n'), 'callout-code.md', '{}'),
+    ok('<p>Unmatched `` opener.</p>\n<aside class="callout callout-note"><p>Live body.</p></aside>\n'));
+  check(render(yaml('- Item\n  Example ``\n  {{< callout type="note" >}}\n  # Heading\n  {{< callout type="note" >}}\n  Live body.\n  ``.\n'), 'callout-code.md', '{}'),
+    ok('<ul>\n<li>Item<p>Example ``</p>\n</li>\n</ul>\n<p><aside class="callout callout-note"><p># Heading</p></aside> <aside class="callout callout-note"><p>Live body.</p></aside>   ``.</p>\n'));
   // A new caller-supplied map must take effect; no prior note/map/error state leaks.
   for (let n = 0; n < 256; n++) {
     const text = `Synthetic note ${n} 🌱.`;
