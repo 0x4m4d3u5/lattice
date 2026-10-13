@@ -370,3 +370,15 @@ test "render_sitemap accepts RFC3339 with timezone offset" {
     content="true",
   )
 }
+
+///|
+test "sitemap locations remove repeated trailing base slashes" {
+  let xml = @sitemap.render_sitemap(
+    "https://example.test/wiki///",
+    test_pages(),
+  )
+  assert_true(
+    xml.contains("<loc>https://example.test/wiki/posts/first-post/</loc>"),
+  )
+  assert_false(xml.contains("https://example.test/wiki//"))
+}

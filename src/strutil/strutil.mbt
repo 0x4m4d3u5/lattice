@@ -218,14 +218,7 @@ pub fn escape_html_attr(s : String) -> String {
 ///
 /// "/" becomes "" (root-relative site).
 pub fn normalize_base_url(base_url : String) -> String {
-  let trimmed = trim_h(base_url)
-  if trimmed == "/" {
-    return ""
-  }
-  if trimmed.has_suffix("/") {
-    return substr(trimmed, 0, trimmed.length() - 1)
-  }
-  trimmed
+  trim_h(base_url).trim_end(chars="/").to_owned()
 }
 
 ///|

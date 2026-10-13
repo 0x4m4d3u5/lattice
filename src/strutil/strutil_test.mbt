@@ -945,3 +945,17 @@ test "parse_positive_int checks the Int boundary before arithmetic" {
     assert_eq(@strutil.parse_positive_int(value), None)
   }
 }
+
+///|
+test "base URL normalization removes every trailing slash" {
+  assert_eq(
+    @strutil.normalize_base_url(" \thttps://example.test/wiki///\r "),
+    "https://example.test/wiki",
+  )
+  assert_eq(@strutil.normalize_base_url("///"), "")
+  assert_eq(@strutil.absolute_url("///", "/notes/topic/"), "/notes/topic/")
+  assert_eq(
+    @strutil.absolute_url("https://example.test/wiki///", "notes/topic/"),
+    "https://example.test/wiki/notes/topic/",
+  )
+}
