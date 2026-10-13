@@ -1965,10 +1965,10 @@ fn collection_index_url(collection_name : String) -> String {
 ///
 /// Standalone pages are not part of any collection so they have no
 /// user-defined schema. The minimal contract is that every page has a title
-/// for HTML output and the sitemap. All other frontmatter fields are
-/// silently accepted.
-fn standalone_default_schema() -> @schema.Schema {
-  {
+/// for HTML output and the sitemap. Supported optional fields remain typed;
+/// the configured tag field is also an optional string array.
+fn standalone_default_schema(tag_field? : String = "tags") -> @schema.Schema {
+  let schema : @schema.Schema = {
     name: "_standalone",
     fields: [
       { name: "title", field_type: @schema.TString(None, None), required: true },
@@ -2008,6 +2008,14 @@ fn standalone_default_schema() -> @schema.Schema {
       },
     ],
   }
+  if !schema.fields.any(fn(field) { field.name == tag_field }) {
+    schema.fields.push({
+      name: tag_field,
+      field_type: @schema.TOptional(@schema.TArray(@schema.TString(None, None))),
+      required: false,
+    })
+  }
+  schema
 }
 
 ///|
@@ -4858,7 +4866,7 @@ pub fn build(
     all_sources_for_backlinks.push({
       definition: {
         name: "_standalone",
-        schema: standalone_default_schema(),
+        schema: standalone_default_schema(tag_field=tags_field_name(config.site)),
         content_dir: standalone_dir,
         template: None,
         page_size: None,
@@ -4872,7 +4880,7 @@ pub fn build(
     all_sources_for_backlinks.push({
       definition: {
         name: "_root",
-        schema: standalone_default_schema(),
+        schema: standalone_default_schema(tag_field=tags_field_name(config.site)),
         content_dir: config.content_dir,
         template: None,
         page_size: None,
@@ -5290,7 +5298,7 @@ pub fn build(
   // Always run validation even when prior errors exist, so users see ALL
   // violations in one pass rather than fixing them incrementally.
   if standalone_sources.length() > 0 {
-    let standalone_schema = standalone_default_schema()
+    let standalone_schema = standalone_default_schema(tag_field=tags_field_name(config.site))
     let mut si = 0
     while si < standalone_sources.length() {
       let src = standalone_sources[si]
@@ -5384,7 +5392,7 @@ pub fn build(
               outgoing: doc.resolved_links,
             }
             graph_pages.push(page)
-            let search_tags : Array[String] = []
+            let search_tags = doc.tags.map(fn(tag) { tag.value })
             search_entries.push(
               @search.new_entry(
                 doc.title,
@@ -5432,7 +5440,7 @@ pub fn build(
   // Validate and render root-level pages (content/index.md, etc.).
   // Always run validation so all file-level errors are accumulated.
   if root_sources.length() > 0 {
-    let root_schema = standalone_default_schema()
+    let root_schema = standalone_default_schema(tag_field=tags_field_name(config.site))
     let mut ri = 0
     while ri < root_sources.length() {
       let src = root_sources[ri]
@@ -5548,7 +5556,7 @@ pub fn build(
               outgoing: doc.resolved_links,
             }
             graph_pages.push(page)
-            let search_tags : Array[String] = []
+            let search_tags = doc.tags.map(fn(tag) { tag.value })
             search_entries.push(
               @search.new_entry(
                 doc.title,
@@ -6655,7 +6663,7 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
     all_sources_for_backlinks.push({
       definition: {
         name: "_standalone",
-        schema: standalone_default_schema(),
+        schema: standalone_default_schema(tag_field=tags_field_name(config.site)),
         content_dir: standalone_dir,
         template: None,
         page_size: None,
@@ -6669,7 +6677,7 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
     all_sources_for_backlinks.push({
       definition: {
         name: "_root",
-        schema: standalone_default_schema(),
+        schema: standalone_default_schema(tag_field=tags_field_name(config.site)),
         content_dir: config.content_dir,
         template: None,
         page_size: None,
@@ -6829,7 +6837,7 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
 
   // Lint standalone pages
   if standalone_sources.length() > 0 {
-    let standalone_schema = standalone_default_schema()
+    let standalone_schema = standalone_default_schema(tag_field=tags_field_name(config.site))
     let mut si = 0
     while si < standalone_sources.length() {
       let src = standalone_sources[si]
@@ -6886,7 +6894,7 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
 
   // Lint root-level pages
   if root_sources.length() > 0 {
-    let root_schema = standalone_default_schema()
+    let root_schema = standalone_default_schema(tag_field=tags_field_name(config.site))
     let mut ri = 0
     while ri < root_sources.length() {
       let src = root_sources[ri]
