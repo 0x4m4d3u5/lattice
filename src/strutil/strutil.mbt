@@ -739,7 +739,11 @@ pub fn strip_html_tags(s : String) -> String {
         end = end + 1
       }
       inline_tag = match substr(s, start, end).to_lower() {
-        "a" | "strong" | "em" | "del" | "code" | "span" | "sub" | "sup" => true
+        "a" | "strong" | "em" | "del" | "code" | "span" | "sub" | "sup"
+        | "mark" | "abbr" | "kbd" | "b" | "i" | "u" | "s" | "small"
+        | "cite" | "q" | "dfn" | "data" | "time" | "var" | "samp"
+        | "bdi" | "bdo" | "ruby" | "rt" | "rp" | "ins" | "label"
+        | "output" | "wbr" => true
         _ => false
       }
     } else {

@@ -14,11 +14,15 @@ excerpt. These files supply data for a retrieval tool; they do not implement a
 search engine or embeddings.
 
 Body extraction removes tags, decodes basic entities and collapses whitespace.
-Inline `a`, `strong`, `em`, `del`, `code`, `span`, `sub` and `sup` tags preserve
-text adjacency: `photo**syn**thesis` becomes `photosynthesis`, and
-`H<sub>2</sub>O` becomes `H2O`. Other tags create separators, including paragraph,
-list, table and line-break boundaries. Authored spaces around inline markup
-remain spaces. The same extraction applies when a page is reused from cache.
+Text-bearing phrasing tags preserve adjacency: `a`, `strong`, `em`, `del`,
+`code`, `span`, `sub`, `sup`, `mark`, `abbr`, `kbd`, `b`, `i`, `u`, `s`, `small`,
+`cite`, `q`, `dfn`, `data`, `time`, `var`, `samp`, `bdi`, `bdo`, `ruby`, `rt`,
+`rp`, `ins`, `label` and `output`. The optional word-break tag `wbr` also
+preserves adjacency. For example, `photo**syn**thesis` becomes `photosynthesis`,
+`H<sub>2</sub>O` becomes `H2O`, and `<kbd>Ctrl</kbd>+<kbd>C</kbd>` becomes
+`Ctrl+C`. Other tags create separators, including paragraph, list, table and
+line-break boundaries. Authored spaces around inline markup remain spaces.
+The same extraction applies when a page is reused from cache.
 
 This is a simple text extractor, not a complete HTML parser or sanitizer.
 Unknown tags create separators, image attributes are not body text, and raw

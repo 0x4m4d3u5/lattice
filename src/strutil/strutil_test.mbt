@@ -134,6 +134,22 @@ test "content text preserves words and punctuation across inline markup" {
 }
 
 ///|
+test "content text preserves raw HTML phrasing markup" {
+  assert_eq(
+    @strutil.strip_html_tags("<p>photo<mark>syn</mark>thesis. <abbr title=\"HyperText Markup Language\">HTML</abbr>-based. <kbd>Ctrl</kbd>+<kbd>C</kbd>.</p>"),
+    "photosynthesis. HTML-based. Ctrl+C.",
+  )
+  assert_eq(
+    @strutil.strip_html_tags("<p><b>B</b><i>I</i><u>U</u><s>S</s><small>small</small><cite>cite</cite><q>q</q><dfn>dfn</dfn><data value=\"1\">data</data><time>time</time><var>var</var><samp>samp</samp>.</p>"),
+    "BIUSsmallciteqdfndatatimevarsamp.",
+  )
+  assert_eq(
+    @strutil.strip_html_tags("<p><bdi>B</bdi><bdo dir=\"ltr\">D</bdo><ruby>R<rt>T</rt><rp>P</rp></ruby><ins>I</ins><label>L</label><output>O</output>word<wbr>break.</p><div>Block</div><unknown>Other</unknown>"),
+    "BDRTPILOwordbreak. Block Other",
+  )
+}
+
+///|
 test "count_words_text empty string" {
   assert_eq(@strutil.count_words_text(""), 0)
 }
