@@ -118,6 +118,38 @@ test "strip_html_tags collapses multiple internal spaces" {
 }
 
 ///|
+test "content text preserves words and punctuation across inline markup" {
+  assert_eq(
+    @strutil.strip_html_tags("<p>photo<strong>syn</strong>thesis uses H<sub>2</sub>O.</p><p>Read <a href=\"/note/\">notes</a>, then <code>x</code>.</p>"),
+    "photosynthesis uses H2O. Read notes, then x.",
+  )
+  assert_eq(
+    @strutil.strip_html_tags("<p><EM>A</EM><span class=\"token\">B</span><del>C</del><sup>2</sup></p><p>D<br>E</p>"),
+    "ABC2 D E",
+  )
+  assert_eq(
+    @strutil.strip_html_tags("<stronger>A</stronger><custom>B</custom><hr>C"),
+    "A B C",
+  )
+}
+
+///|
+test "content text preserves raw HTML phrasing markup" {
+  assert_eq(
+    @strutil.strip_html_tags("<p>photo<mark>syn</mark>thesis. <abbr title=\"HyperText Markup Language\">HTML</abbr>-based. <kbd>Ctrl</kbd>+<kbd>C</kbd>.</p>"),
+    "photosynthesis. HTML-based. Ctrl+C.",
+  )
+  assert_eq(
+    @strutil.strip_html_tags("<p><b>B</b><i>I</i><u>U</u><s>S</s><small>small</small><cite>cite</cite><q>q</q><dfn>dfn</dfn><data value=\"1\">data</data><time>time</time><var>var</var><samp>samp</samp>.</p>"),
+    "BIUSsmallciteqdfndatatimevarsamp.",
+  )
+  assert_eq(
+    @strutil.strip_html_tags("<p><bdi>B</bdi><bdo dir=\"ltr\">D</bdo><ruby>R<rt>T</rt><rp>P</rp></ruby><ins>I</ins><label>L</label><output>O</output>word<wbr>break.</p><div>Block</div><unknown>Other</unknown>"),
+    "BDRTPILOwordbreak. Block Other",
+  )
+}
+
+///|
 test "count_words_text empty string" {
   assert_eq(@strutil.count_words_text(""), 0)
 }
