@@ -747,13 +747,19 @@ fn render_archive_page(
   } else {
     "Archive for " + collection_name + " — " + year + "-" + month
   }
-  let archive_url = site.base_url + "/" + collection_name
+  let archive_path = "/" +
+    collection_name +
+    "/" +
+    year +
+    "/" +
+    (if month == "" { "" } else { month + "/" })
+  let archive_url = @strutil.absolute_url(site.base_url, archive_path)
   let slots = build_template_slots(
     title,
     content,
     "",
     description,
-    archive_url,
+    archive_path,
     site.title,
     nav_links_html,
     custom_css,
@@ -790,12 +796,6 @@ fn render_archive_page(
   slots.set(@template.Description, description)
 
   // Archives are single pages even when they reuse a paginated index template.
-  let archive_path = "/" +
-    collection_name +
-    "/" +
-    year +
-    "/" +
-    (if month == "" { "" } else { month + "/" })
   set_pagination_slots(slots, 1, 1, None, None, archive_path)
 
   match archive_template {
