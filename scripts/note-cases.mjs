@@ -26,6 +26,8 @@ export function runNoteCases(render, assert) {
     ok('<p>First<br />\nSecond.</p>\n<p>Third<br />\nFourth.</p>\n<p><code>Literal\\\r\ncode</code></p>\n'));
   check(render(yaml('```\nfirst\n```still code\n[[missing]]\nlast\n```\n\nVisible paragraph.\n'), 'fence.md', '{}'),
     ok('<pre><code>first\n```still code\n[[missing]]\nlast</code></pre>\n<p>Visible paragraph.</p>\n'));
+  check(render(yaml('Text[^source].\n\n> [^source]: Read [[soil|Soil guide]].\n'), 'nested-footnote.md', '{"soil":"/notes/soil/"}'),
+    ok('<p>Text<sup><a href="#fn-source" id="fnref-source">[1]</a></sup>.</p>\n<blockquote>\n</blockquote>\n\n<section class="footnotes">\n<ol>\n<li id="fn-source">Read <a href="/notes/soil/">Soil guide</a>. <a href="#fnref-source" class="footnote-backref">↩</a></li>\n</ol>\n</section>\n'));
   check(render(yaml('A & B < C.\n'), 'escaping.md', '{}'),
     ok('<p>A &amp; B &lt; C.</p>\n'));
   check(render(yaml('e\u0301 \u0000 \ud800 🌱.\n'), 'units.md', '{}'),

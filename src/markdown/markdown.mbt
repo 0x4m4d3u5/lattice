@@ -1388,9 +1388,12 @@ fn parse_blocks_with_code_lines(
         i = i + 1
       }
       // blockquotes recurse: the stripped lines form their own block structure
-      let (bq_blocks, _) = parse_blocks_with_code_lines(bq_lines,
+      let (bq_blocks, nested_footnotes) = parse_blocks_with_code_lines(bq_lines,
         on_code.map(fn(report) { fn(start, end, prefix) { report(start + bq_start, end + bq_start, prefix + 2) } }),
       )
+      for note in nested_footnotes {
+        footnotes.push(note)
+      }
       result.push(BlockQuote(bq_blocks))
     } else if is_unordered_item(line) {
       let items : Array[ListItem] = []
@@ -1407,9 +1410,12 @@ fn parse_blocks_with_code_lines(
           i = i + 1
         }
         let children : Array[Block] = if nested_lines.length() > 0 {
-          let (nested_blocks, _) = parse_blocks_with_code_lines(nested_lines,
+          let (nested_blocks, nested_footnotes) = parse_blocks_with_code_lines(nested_lines,
             on_code.map(fn(report) { fn(start, end, prefix) { report(start + nested_start, end + nested_start, prefix + 2) } }),
           )
+          for note in nested_footnotes {
+            footnotes.push(note)
+          }
           nested_blocks
         } else {
           []
@@ -1432,9 +1438,12 @@ fn parse_blocks_with_code_lines(
           i = i + 1
         }
         let children : Array[Block] = if nested_lines.length() > 0 {
-          let (nested_blocks, _) = parse_blocks_with_code_lines(nested_lines,
+          let (nested_blocks, nested_footnotes) = parse_blocks_with_code_lines(nested_lines,
             on_code.map(fn(report) { fn(start, end, prefix) { report(start + nested_start, end + nested_start, prefix + 2) } }),
           )
+          for note in nested_footnotes {
+            footnotes.push(note)
+          }
           nested_blocks
         } else {
           []
