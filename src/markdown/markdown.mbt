@@ -966,12 +966,12 @@ pub fn is_fence_start(line : String) -> Bool {
 }
 
 ///|
-fn fence_lang_tag(line : String) -> String? {
+fn fence_lang_tag(line : String, width : Int) -> String? {
   let n = line.length()
   if n < 3 {
     return None
   }
-  let lang = @strutil.trim(@strutil.substr(line, 3, n))
+  let lang = @strutil.trim(@strutil.substr(line, width, n))
   if lang.length() == 0 {
     None
   } else {
@@ -990,15 +990,25 @@ pub fn fence_char_of(line : String) -> Char {
 
 ///|
 pub fn is_fence_end(line : String, fence_char : Char) -> Bool {
+  is_fence_end_with_width(line, fence_char, 3)
+}
+
+///|
+/// Check a candidate using the character and width cached from its opener.
+pub fn is_fence_end_with_width(
+  line : String,
+  fence_char : Char,
+  minimum_width : Int,
+) -> Bool {
   let n = line.length()
-  if n < 3 ||
+  if n < 3 || n < minimum_width ||
     @strutil.char_at(line, 0) != fence_char ||
     @strutil.char_at(line, 1) != fence_char ||
     @strutil.char_at(line, 2) != fence_char {
     return false
   }
   let end = line.iter().take_while(c => c == fence_char).count()
-  line[end:].trim(chars=" \t\r").is_empty()
+  end >= minimum_width && line[end:].trim(chars=" \t\r").is_empty()
 }
 
 ///|
@@ -1369,10 +1379,11 @@ fn parse_blocks_with_code_lines(
       i = i + 1
     } else if is_fence_start(line) {
       let fence_char = fence_char_of(line)
-      let lang = fence_lang_tag(line)
+      let width = line.iter().take_while(c => c == fence_char).count()
+      let lang = fence_lang_tag(line, width)
       let code_lines : Array[String] = []
       i = i + 1
-      while i < n && !is_fence_end(ls[i], fence_char) {
+      while i < n && !is_fence_end_with_width(ls[i], fence_char, width) {
         code_lines.push(ls[i])
         i = i + 1
       }
