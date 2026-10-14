@@ -20,3 +20,33 @@ test "literal backslashes match cmark-gfm outside punctuation escapes" {
     assert_eq(@markdown.render(source, Map([])), expected)
   }
 }
+
+///|
+test "backslash CRLF and lone CR produce oracle hard breaks" {
+  // Literal cmark-gfm 0.29.0.gfm.13 output for both line-ending forms.
+  for source in ["First\\\r\nSecond", "First\\\rSecond"] {
+    assert_eq(@markdown.render(source, Map([])), "<p>First<br />\nSecond</p>\n")
+  }
+}
+
+///|
+test "backslash line-ending lookahead stays inside inline slices" {
+  let source = "xxFirst\\\r\nSecond"
+  let render_slice = fn(to) {
+    @markdown.parse_inlines(source, 2, to).map(fn(inline) {
+      @markdown.render_inline(inline, Map([]))
+    })
+  }
+  // The CR and LF both fall outside this slice: keep the trailing backslash.
+  assert_eq(render_slice(8), ["First\\"])
+  // The slice includes the CR but excludes LF: consume only CR.
+  assert_eq(render_slice(9), ["First", "<br />\n"])
+  assert_eq(render_slice(10), ["First", "<br />\n"])
+  let code = "`First\\\r\nSecond`"
+  let inlines = @markdown.parse_inlines(code, 0, code.length())
+  assert_eq(inlines.length(), 1)
+  guard inlines[0] is @markdown.InlineCode(text) else {
+    abort("expected a literal code span")
+  }
+  assert_eq(text, "First\\\r\nSecond")
+}
