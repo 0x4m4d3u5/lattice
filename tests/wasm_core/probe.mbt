@@ -111,7 +111,24 @@ pub fn template_note() -> Int {
     Ok(html) => html
     Err(_) => return -3
   }
-  if absent == "<article><h1>Garden &amp; Tools</h1><p>A note.</p></article>" &&
+  let date_tpl = match @template.parse_template(
+    "{{page.stamp | date_part day | default \"Undated\"}}",
+  ) {
+    Ok(tpl) => tpl
+    Err(_) => return -4
+  }
+  fields.set("stamp", "2024-02-29 12:34:56")
+  let local_date = match @template.render_template(date_tpl, slots, fields) {
+    Ok(html) => html
+    Err(_) => return -5
+  }
+  fields.set("stamp", "2026-02-30")
+  let invalid_date = match @template.render_template(date_tpl, slots, fields) {
+    Ok(html) => html
+    Err(_) => return -6
+  }
+  if local_date == "29" && invalid_date == "Undated" &&
+    absent == "<article><h1>Garden &amp; Tools</h1><p>A note.</p></article>" &&
     present ==
     "<article><h1>Garden &amp; Tools</h1><p>Grow &lt;well&gt;</p><p>A note.</p></article>" {
     1

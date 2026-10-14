@@ -264,51 +264,33 @@ fn parse_single_filter(seg : String) -> Result[Filter, String] {
 }
 
 ///|
-/// Extract a date component from a date string (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS).
+/// Extract a calendar component from a valid date or schema-supported datetime.
 /// Returns empty string if the part name is unrecognised or the date is malformed.
 fn extract_date_part(value : String, part : String) -> String {
-  // Split on '-' to get [year, month, rest...]
-  let components : Array[String] = []
-  let mut start = 0
-  let n = value.length()
-  let mut i = 0
-  while i <= n {
-    if i == n || @strutil.char_at(value, i) == '-' {
-      components.push(@strutil.substr(value, start, i))
-      start = i + 1
-    }
-    i = i + 1
-  }
-  if part == "year" {
-    if components.length() > 0 {
-      components[0]
+  let valid = if @strutil.is_valid_iso8601_date(value) {
+    true
+  } else if value.length() >= 19 &&
+    (value[10] == 'T' || value[10] == ' ') {
+    // Match schema-supported local datetime and space-separated forms without
+    // changing the authored calendar date when an offset is present.
+    let normalized = value[:10].to_owned() + "T" + value[11:].to_owned()
+    let with_timezone = if value.length() == 19 {
+      normalized + "Z"
     } else {
-      ""
+      normalized
     }
-  } else if part == "month" {
-    if components.length() > 1 {
-      components[1]
-    } else {
-      ""
-    }
-  } else if part == "day" {
-    if components.length() > 2 {
-      // day might have "T..." suffix (ISO datetime)
-      let day_str = components[2]
-      let mut end = day_str.length()
-      let mut j = 0
-      while j < end {
-        if @strutil.char_at(day_str, j) == 'T' {
-          end = j
-        }
-        j = j + 1
-      }
-      @strutil.substr(day_str, 0, end)
-    } else {
-      ""
-    }
+    @strutil.is_rfc3339_datetime(with_timezone)
   } else {
-    ""
+    false
+  }
+  if !valid {
+    return ""
+  }
+  match part {
+    "year" => value[:4].to_owned()
+    "month" => value[5:7].to_owned()
+    "day" => value[8:10].to_owned()
+    _ => ""
   }
 }
 
