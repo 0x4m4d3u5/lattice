@@ -151,7 +151,9 @@ fn parse_filters(slot_expr : String) -> Result[(String, Array[Filter]), String] 
   let mut pipe_pos = -1
   while i < n {
     let c = @strutil.char_at(slot_expr, i)
-    if c == '"' {
+    if c == '\\' && in_quotes && i + 1 < n {
+      i = i + 1 // the escaped character cannot end a quoted argument
+    } else if c == '"' {
       in_quotes = !in_quotes
     } else if c == '|' && !in_quotes {
       pipe_pos = i
@@ -178,7 +180,9 @@ fn parse_filters(slot_expr : String) -> Result[(String, Array[Filter]), String] 
       }
     } else {
       let c = @strutil.char_at(rest, i)
-      if c == '"' {
+      if c == '\\' && in_quotes && i + 1 < rest.length() {
+        i = i + 1 // preserve escape pairs for parse_quoted to decode later
+      } else if c == '"' {
         in_quotes = !in_quotes
       } else if c == '|' && !in_quotes {
         let seg = @strutil.trim(@strutil.substr(rest, seg_start, i))

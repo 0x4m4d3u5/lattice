@@ -127,7 +127,18 @@ pub fn template_note() -> Int {
     Ok(html) => html
     Err(_) => return -6
   }
-  if local_date == "29" && invalid_date == "Undated" &&
+  let quoted_tpl = match @template.parse_template(
+    "{{page.optional | default \"Read \\\"A|B\\\"\" | upper}}",
+  ) {
+    Ok(tpl) => tpl
+    Err(_) => return -7
+  }
+  let quoted_fallback = match @template.render_template(quoted_tpl, slots, fields) {
+    Ok(html) => html
+    Err(_) => return -8
+  }
+  if quoted_fallback == "READ \"A|B\"" &&
+    local_date == "29" && invalid_date == "Undated" &&
     absent == "<article><h1>Garden &amp; Tools</h1><p>A note.</p></article>" &&
     present ==
     "<article><h1>Garden &amp; Tools</h1><p>Grow &lt;well&gt;</p><p>A note.</p></article>" {
