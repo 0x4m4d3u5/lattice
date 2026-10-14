@@ -2386,9 +2386,10 @@ fn extract_excerpt_builder(markdown_body : String) -> String {
     } else if is_block_starter_builder(line) {
       if @markdown.is_fence_start(line) {
         let fence_char = @markdown.fence_char_of(line)
+        let width = line.iter().take_while(c => c == fence_char).count()
         i = i + 1
         while i < lines.length() &&
-              !@markdown.is_fence_end(lines[i], fence_char) {
+              !@markdown.is_fence_end_with_width(lines[i], fence_char, width) {
           i = i + 1
         }
         if i < lines.length() {
@@ -2445,8 +2446,10 @@ pub fn count_words_markdown(body : String) -> Int {
     let line = ls[i]
     if @markdown.is_fence_start(line) {
       let fence_char = @markdown.fence_char_of(line)
+      let width = line.iter().take_while(c => c == fence_char).count()
       i = i + 1
-      while i < ls.length() && !@markdown.is_fence_end(ls[i], fence_char) {
+      while i < ls.length() &&
+            !@markdown.is_fence_end_with_width(ls[i], fence_char, width) {
         i = i + 1
       }
       if i < ls.length() {
