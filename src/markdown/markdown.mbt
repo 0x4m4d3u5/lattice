@@ -433,13 +433,25 @@ fn parse_inlines_with_code_ranges(
   let mut text_start = from
   while i < to {
     let c = @strutil.char_at(s, i)
-    if c == '\\' && i + 1 < to {
-      // backslash escape: emit accumulated text then the escaped char
+    if c == '\\' && i + 1 < to &&
+      (@strutil.char_at(s, i + 1).is_ascii_punctuation() ||
+        @strutil.char_at(s, i + 1) == '\n' ||
+        @strutil.char_at(s, i + 1) == '\r') {
+      // Only ASCII punctuation can be escaped; other backslashes stay literal.
       if text_start < i {
         result.push(Text(@strutil.substr(s, text_start, i)))
       }
-      result.push(Text(@strutil.char_at(s, i + 1).to_string()))
+      let next = @strutil.char_at(s, i + 1)
+      if next == '\n' || next == '\r' {
+        result.push(HardBreak)
+      } else {
+        result.push(Text(next.to_string()))
+      }
       i = i + 2
+      // CRLF is one line ending; do not consume LF outside the current slice.
+      if next == '\r' && i < to && @strutil.char_at(s, i) == '\n' {
+        i = i + 1
+      }
       text_start = i
     } else if c == '`' {
       // Match the complete delimiter run; shorter/longer runs stay code text.
