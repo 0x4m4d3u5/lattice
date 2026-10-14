@@ -943,14 +943,30 @@ pub fn is_heading_line(line : String) -> Bool {
     return false
   }
   let n = line.length()
-  hashes < n && @strutil.char_at(line, hashes) == ' '
+  hashes == n ||
+  (hashes + 1 == n && @strutil.char_at(line, hashes) == '\r') ||
+  @strutil.char_at(line, hashes) == ' ' ||
+  @strutil.char_at(line, hashes) == '\t'
 }
 
 ///|
 fn heading_level_and_text(line : String) -> (Int, String) {
   let level = count_leading_hashes(line)
-  let text = @strutil.trim(@strutil.substr(line, level + 1, line.length()))
-  (level, text)
+  let raw = line[level:].trim_end(chars=" \t\r").to_owned()
+  let mut end = raw.length()
+  while end > 0 && raw[end - 1] == '#' {
+    end = end - 1
+  }
+  // Closing hashes are syntax only when preceded by horizontal whitespace.
+  // Keep that whitespace until this check so escaped/attached hashes stay text.
+  let text = if end < raw.length() &&
+    end > 0 &&
+    (raw[end - 1] == ' ' || raw[end - 1] == '\t') {
+    raw[:end].to_owned()
+  } else {
+    raw
+  }
+  (level, @strutil.trim(text))
 }
 
 ///|

@@ -77,6 +77,10 @@ export function runNoteCases(render, assert) {
     ok('<p>| Note | | --- | --- | | Alpha | <a href="/notes/soil/">soil</a> |</p>\n'));
   check(render(yaml('````\n```\n[[missing]]\n````\n\nVisible paragraph.\n'), 'long-fence.md', '{}'),
     ok('<pre><code>```\n[[missing]]</code></pre>\n<p>Visible paragraph.</p>\n'));
+  check(render(yaml('##\tGuide ###\n\nRead [[#Guide|Guide]].\n'), 'heading.md', '{}'),
+    ok('<h2 id="guide">Guide</h2>\n<p>Read <a href="#guide">Guide</a>.</p>\n'));
+  check(render(yaml('##\r\n\r\nVisible paragraph.\n'), 'empty-heading.md', '{}'),
+    ok('<h2 id="section"></h2>\n<p>Visible paragraph.</p>\n'));
   // A new caller-supplied map must take effect; no prior note/map/error state leaks.
   for (let n = 0; n < 256; n++) {
     const text = `Synthetic note ${n} 🌱.`;
