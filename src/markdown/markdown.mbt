@@ -433,12 +433,19 @@ fn parse_inlines_with_code_ranges(
   let mut text_start = from
   while i < to {
     let c = @strutil.char_at(s, i)
-    if c == '\\' && i + 1 < to {
-      // backslash escape: emit accumulated text then the escaped char
+    if c == '\\' && i + 1 < to &&
+      (@strutil.char_at(s, i + 1).is_ascii_punctuation() ||
+        @strutil.char_at(s, i + 1) == '\n') {
+      // Only ASCII punctuation can be escaped; other backslashes stay literal.
       if text_start < i {
         result.push(Text(@strutil.substr(s, text_start, i)))
       }
-      result.push(Text(@strutil.char_at(s, i + 1).to_string()))
+      let next = @strutil.char_at(s, i + 1)
+      if next == '\n' {
+        result.push(HardBreak)
+      } else {
+        result.push(Text(next.to_string()))
+      }
       i = i + 2
       text_start = i
     } else if c == '`' {
