@@ -34,6 +34,12 @@ The current implementation supports these built-in slots:
 - `{{url}}` - canonical page URL
 - `{{site_name}}` - site title from config
 
+The `date_part` filter extracts `year`, `month`, or `day` from a valid date or
+supported datetime, including local times, UTC/offset timestamps, and a space
+instead of `T`. It preserves the authored calendar date. Malformed dates or
+times yield an empty string, so `{{page.stamp | date_part year | default "Undated"}}`
+uses the fallback for an invalid string date.
+
 ### Content collection slots
 
 - `{{collection}}` - name of the current collection (e.g., "posts", "projects")
