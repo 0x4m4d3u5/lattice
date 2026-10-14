@@ -24,6 +24,8 @@ export function runNoteCases(render, assert) {
     ok('<p>Paths C:\\Users\\notes and \\🌱.</p>\n<p>First<br />\nSecond.</p>\n'));
   check(render(yaml('First\\\r\nSecond.\n\nThird\\\rFourth.\n\n`Literal\\\r\ncode`\n'), 'crlf.md', '{}'),
     ok('<p>First<br />\nSecond.</p>\n<p>Third<br />\nFourth.</p>\n<p><code>Literal\\\r\ncode</code></p>\n'));
+  check(render(yaml('```\nfirst\n```still code\n[[missing]]\nlast\n```\n\nVisible paragraph.\n'), 'fence.md', '{}'),
+    ok('<pre><code>first\n```still code\n[[missing]]\nlast</code></pre>\n<p>Visible paragraph.</p>\n'));
   check(render(yaml('A & B < C.\n'), 'escaping.md', '{}'),
     ok('<p>A &amp; B &lt; C.</p>\n'));
   check(render(yaml('e\u0301 \u0000 \ud800 🌱.\n'), 'units.md', '{}'),

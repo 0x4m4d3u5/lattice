@@ -991,10 +991,14 @@ pub fn fence_char_of(line : String) -> Char {
 ///|
 pub fn is_fence_end(line : String, fence_char : Char) -> Bool {
   let n = line.length()
-  n >= 3 &&
-  @strutil.char_at(line, 0) == fence_char &&
-  @strutil.char_at(line, 1) == fence_char &&
-  @strutil.char_at(line, 2) == fence_char
+  if n < 3 ||
+    @strutil.char_at(line, 0) != fence_char ||
+    @strutil.char_at(line, 1) != fence_char ||
+    @strutil.char_at(line, 2) != fence_char {
+    return false
+  }
+  let end = line.iter().take_while(c => c == fence_char).count()
+  line[end:].trim(chars=" \t\r").is_empty()
 }
 
 ///|
