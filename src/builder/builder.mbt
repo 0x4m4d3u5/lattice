@@ -2517,7 +2517,11 @@ pub fn truncate_to_builder(s : String, max_len : Int) -> String {
   if s.length() <= max_len {
     s
   } else {
-    @strutil.substr(s, 0, max_len)
+    let buf = StringBuilder()
+    for c in s.iter().take(max_len) {
+      buf.write_char(c)
+    }
+    buf.to_string()
   }
 }
 
