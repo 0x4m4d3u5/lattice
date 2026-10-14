@@ -73,6 +73,8 @@ export function runNoteCases(render, assert) {
     ok('<p>Unmatched `` opener.</p>\n<aside class="callout callout-note"><p>Live body.</p></aside>\n'));
   check(render(yaml('- Item\n  Example ``\n  {{< callout type="note" >}}\n  # Heading\n  {{< callout type="note" >}}\n  Live body.\n  ``.\n'), 'callout-code.md', '{}'),
     ok('<ul>\n<li>Item<p>Example ``</p>\n</li>\n</ul>\n<p><aside class="callout callout-note"><p># Heading</p></aside> <aside class="callout callout-note"><p>Live body.</p></aside>   ``.</p>\n'));
+  check(render(yaml('| Note |\n| --- | --- |\n| Alpha | [[soil]] |\n'), 'table.md', '{"soil":"/notes/soil/"}'),
+    ok('<p>| Note | | --- | --- | | Alpha | <a href="/notes/soil/">soil</a> |</p>\n'));
   // A new caller-supplied map must take effect; no prior note/map/error state leaks.
   for (let n = 0; n < 256; n++) {
     const text = `Synthetic note ${n} 🌱.`;

@@ -1475,8 +1475,9 @@ fn parse_blocks_with_code_lines(
       result.push(DefinitionList(items))
     } else if is_table_row_line(line) &&
       i + 1 < n &&
-      is_separator_row(ls[i + 1]) {
-      // GFM table: header row followed by a separator row.
+      is_separator_row(ls[i + 1]) &&
+      split_table_row(line).length() == split_table_row(ls[i + 1]).length() {
+      // GFM tables require matching header and separator column counts.
       let header_cells = split_table_row(line)
       let sep_cells = split_table_row(ls[i + 1])
       let num_cols = header_cells.length()
