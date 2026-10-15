@@ -137,7 +137,22 @@ pub fn template_note() -> Int {
     Ok(html) => html
     Err(_) => return -8
   }
-  if quoted_fallback == "READ \"A|B\"" &&
+  let unicode_tpl = match @template.parse_template("{{page.title | truncate 1}}") {
+    Ok(tpl) => tpl
+    Err(_) => return -9
+  }
+  fields.set("title", "🌱x")
+  let unicode_truncated = match @template.render_template(unicode_tpl, slots, fields) {
+    Ok(html) => html
+    Err(_) => return -10
+  }
+  fields.set("title", "🌱")
+  let unicode_intact = match @template.render_template(unicode_tpl, slots, fields) {
+    Ok(html) => html
+    Err(_) => return -11
+  }
+  if unicode_truncated == "🌱..." && unicode_intact == "🌱" &&
+    quoted_fallback == "READ \"A|B\"" &&
     local_date == "29" && invalid_date == "Undated" &&
     absent == "<article><h1>Garden &amp; Tools</h1><p>A note.</p></article>" &&
     present ==
