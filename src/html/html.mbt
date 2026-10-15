@@ -57,7 +57,7 @@ pub(all) enum StructuredData {
 // ── helpers ───────────────────────────────────────────────────────────────────
 
 ///|
-/// Strip the first `<h1>...</h1>` block from an HTML string if the body
+/// Strip the first `<h1 ...>...</h1>` block from an HTML string if the body
 /// starts with it (after optional whitespace). Returns the body with the
 /// leading H1 removed and trailing whitespace trimmed.
 ///
@@ -76,21 +76,32 @@ pub fn strip_leading_h1(html : String) -> String {
         ) {
     i = i + 1
   }
-  // Check for "<h1>"
-  let h1_open = "<h1>"
-  let h1_open_len = h1_open.length()
-  if i + h1_open_len > n {
+  // Recognize the tag name without confusing h1 with h10 or h1-custom.
+  let after_name = i + 3
+  if after_name >= n || !@strutil.starts_with_at(html, i, "<h1") {
     return html
   }
-  let mut j = 0
-  while j < h1_open_len {
-    if @strutil.char_at(html, i + j) != @strutil.char_at(h1_open, j) {
-      return html
-    }
-    j = j + 1
+  let boundary = @strutil.char_at(html, after_name)
+  if boundary != '>' && !@strutil.is_whitespace(boundary) &&
+    boundary.to_int() != 12 {
+    return html
   }
-  // Found "<h1>" at position i. Now find "</h1>"
-  let after_open = i + h1_open_len
+  // A quoted attribute may contain both '>' and a literal closing-tag string.
+  let mut tag_end = after_name
+  let mut quote : Char? = None
+  while tag_end < n {
+    let c = @strutil.char_at(html, tag_end)
+    if quote is Some(q) {
+      if c == q { quote = None }
+    } else if c == '"' || c == '\'' {
+      quote = Some(c)
+    } else if c == '>' {
+      break
+    }
+    tag_end = tag_end + 1
+  }
+  if tag_end == n { return html }
+  let after_open = tag_end + 1
   let h1_close = "</h1>"
   let h1_close_len = h1_close.length()
   let mut k = after_open

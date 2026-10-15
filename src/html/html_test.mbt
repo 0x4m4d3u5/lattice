@@ -395,9 +395,7 @@ test "strip_leading_h1 returns empty when h1 and whitespace" {
 }
 
 ///|
-test "strip_leading_h1 preserves h1 with attributes in body" {
-  // The stripping only handles plain <h1>...</h1>, not <h1 class="...">
-  // This test verifies that a body with only a non-matching start is unchanged
+test "strip_leading_h1 preserves other heading levels" {
   let html = "<h2>Subtitle</h2>\n<p>Content</p>"
   let result = @html.strip_leading_h1(html)
   assert_eq(result, "<h2>Subtitle</h2>\n<p>Content</p>")

@@ -151,7 +151,11 @@ pub fn template_note() -> Int {
     Ok(html) => html
     Err(_) => return -11
   }
-  if unicode_truncated == "🌱..." && unicode_intact == "🌱" &&
+  let without_h1 = @html.strip_leading_h1(
+    @markdown.render("# Garden\n\nBody.", Map([])),
+  )
+  if without_h1 == "<p>Body.</p>\n" &&
+    unicode_truncated == "🌱..." && unicode_intact == "🌱" &&
     quoted_fallback == "READ \"A|B\"" &&
     local_date == "29" && invalid_date == "Undated" &&
     absent == "<article><h1>Garden &amp; Tools</h1><p>A note.</p></article>" &&
