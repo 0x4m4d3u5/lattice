@@ -2009,7 +2009,7 @@ fn render_inline_with_issues(
         html: "<img src=\"" +
         @strutil.escape_html_body(url) +
         "\" alt=\"" +
-        @strutil.escape_html_body(alt) +
+        @strutil.escape_html_attr(alt) +
         "\" />",
         shortcode_errors: [],
         toc: [],

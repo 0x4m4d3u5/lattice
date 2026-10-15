@@ -109,6 +109,10 @@ export function runNoteCases(render, assert) {
   const malformedTags = "<span title='".repeat(128);
   check(render(yaml('Before ' + malformedTags), 'html-attribute.md', '{}'),
     ok('<p>Before ' + "&lt;span title='".repeat(128) + '</p>\n'));
+  check(render(yaml('![He said "hello" & waved](/plot.png)'), 'image-alt.md', '{}'),
+    ok('<p><img src="/plot.png" alt="He said &quot;hello&quot; &amp; waved" /></p>\n'));
+  check(render(yaml('![A < B & "C" 🌱](/plot.png)'), 'image-alt.md', '{}'),
+    ok('<p><img src="/plot.png" alt="A &lt; B &amp; &quot;C&quot; 🌱" /></p>\n'));
   // A new caller-supplied map must take effect; no prior note/map/error state leaks.
   for (let n = 0; n < 256; n++) {
     const text = `Synthetic note ${n} 🌱.`;

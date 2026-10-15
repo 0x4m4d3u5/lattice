@@ -24,6 +24,7 @@ try {
   self.postMessage({
     ok: true, count, worker: self instanceof DedicatedWorkerGlobalScope,
     userAgent: navigator.userAgent,
+    imageAltHtml: render('---\ntitle: Image\n---\n![He said "hello" & waved](/plot.png)', 'image-alt.md', '{}').html,
   });
 } catch (error) {
   self.postMessage({ ok: false, error: String(error), stack: error.stack });
