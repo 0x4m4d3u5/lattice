@@ -113,6 +113,14 @@ export function runNoteCases(render, assert) {
     ok('<p><img src="/plot.png" alt="He said &quot;hello&quot; &amp; waved" /></p>\n'));
   check(render(yaml('![A < B & "C" 🌱](/plot.png)'), 'image-alt.md', '{}'),
     ok('<p><img src="/plot.png" alt="A &lt; B &amp; &quot;C&quot; 🌱" /></p>\n'));
+  check(render(yaml("[x](/doc\"data-probe=\"yes?x=%22&plus=a+b#frag)\n\n![x](/img.png\"data-probe=\"yes?x=%2F&plus=a+b#frag)"), 'destinations.md', "{}"),
+    ok("<p><a href=\"/doc%22data-probe=%22yes?x=%22&amp;plus=a+b#frag\">x</a></p>\n<p><img src=\"/img.png%22data-probe=%22yes?x=%2F&amp;plus=a+b#frag\" alt=\"x\" /></p>\n"));
+  check(render(yaml("[x](/doc\\\"data-probe=\\\"yes?x=%22&plus=a+b#frag)\n\n![x](/img.png\\\"data-probe=\\\"yes?x=%2F&plus=a+b#frag)"), 'destinations.md', "{}"),
+    ok("<p><a href=\"/doc%22data-probe=%22yes?x=%22&amp;plus=a+b#frag\">x</a></p>\n<p><img src=\"/img.png%22data-probe=%22yes?x=%2F&amp;plus=a+b#frag\" alt=\"x\" /></p>\n"));
+  check(render(yaml("[[soil|Guide]]"), 'destinations.md', "{\"soil\":\"/wiki\\\"data-probe=\\\"yes?x=%2f&plus=a+b#frag\"}"),
+    ok("<p><a href=\"/wiki%22data-probe=%22yes?x=%2f&amp;plus=a+b#frag\">Guide</a></p>\n"));
+  check(render(yaml("<https://example.test/a\"b?x=%22&plus=a+b#frag>"), 'destinations.md', "{}"),
+    ok("<p><a href=\"https://example.test/a%22b?x=%22&amp;plus=a+b#frag\">https://example.test/a\"b?x=%22&amp;plus=a+b#frag</a></p>\n"));
   // A new caller-supplied map must take effect; no prior note/map/error state leaks.
   for (let n = 0; n < 256; n++) {
     const text = `Synthetic note ${n} 🌱.`;

@@ -1935,6 +1935,13 @@ pub fn render_inline(inline : Inline, wl : Map[String, String]) -> String {
 }
 
 ///|
+/// Normalize literal URI quotes before HTML attribute escaping. Preserve existing
+/// percent escapes, URI delimiters and the renderer's Unicode URL spelling.
+fn escape_destination_attr(url : String) -> String {
+  @strutil.escape_html_attr(url.replace_all(old="\"", new="%22"))
+}
+
+///|
 fn render_inline_with_issues(
   inline : Inline,
   wl : Map[String, String],
@@ -1995,7 +2002,7 @@ fn render_inline_with_issues(
       let rendered = render_inlines_with_issues(inlines, wl, fn_map)
       {
         html: "<a href=\"" +
-        @strutil.escape_html_body(url) +
+        escape_destination_attr(url) +
         "\">" +
         rendered.html +
         "</a>",
@@ -2007,7 +2014,7 @@ fn render_inline_with_issues(
     Image(alt, url) =>
       {
         html: "<img src=\"" +
-        @strutil.escape_html_body(url) +
+        escape_destination_attr(url) +
         "\" alt=\"" +
         @strutil.escape_html_attr(alt) +
         "\" />",
@@ -2024,7 +2031,7 @@ fn render_inline_with_issues(
         Some(url) =>
           {
             html: "<a href=\"" +
-            @strutil.escape_html_body(url) +
+            escape_destination_attr(url) +
             "\">" +
             @strutil.escape_html_body(text) +
             "</a>",
