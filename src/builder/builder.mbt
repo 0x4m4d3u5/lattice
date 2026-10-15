@@ -2468,18 +2468,12 @@ pub fn count_words_markdown(body : String) -> Int {
     let n = line.length()
     let mut j = 0
     while j < n {
-      while j < n &&
-            (
-              @strutil.char_at(line, j) == ' ' ||
-              @strutil.char_at(line, j) == '\t'
-            ) {
+      while j < n && @strutil.is_whitespace(@strutil.char_at(line, j)) {
         j = j + 1
       }
       if j < n {
         count = count + 1
-        while j < n &&
-              @strutil.char_at(line, j) != ' ' &&
-              @strutil.char_at(line, j) != '\t' {
+        while j < n && !@strutil.is_whitespace(@strutil.char_at(line, j)) {
           j = j + 1
         }
       }
