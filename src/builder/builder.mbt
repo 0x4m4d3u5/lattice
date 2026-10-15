@@ -1869,6 +1869,14 @@ fn load_collection_page_template_for_lint(
 }
 
 ///|
+fn rendered_body_no_h1(body_html : String, leading_h1_end : Int?) -> String {
+  match leading_h1_end {
+    Some(end) => body_html[end:].to_owned()
+    None => @html.strip_leading_h1(body_html)
+  }
+}
+
+///|
 fn build_template_slots(
   title : String,
   content : String,
@@ -2862,7 +2870,7 @@ fn render_404_page(
   let has_custom_404 = @fs.path_exists(page_path)
   let url = "/404.html"
 
-  let (title, body_html, description) = if has_custom_404 {
+  let (title, body_html, description, leading_h1_end) = if has_custom_404 {
     let source = @fs.read_file_to_string(page_path) catch {
       @fs.IOError(msg) => return Err("cannot read 404.md: " + msg)
     }
@@ -2870,7 +2878,8 @@ fn render_404_page(
       Err(e) => return Err("404.md frontmatter: " + e)
       Ok(fm) => {
         let wl_map = build_wikilink_map([])
-        let markdown_result = @markdown.render_with_diagnostics(fm.body, wl_map)
+        let (markdown_result, leading_h1_end) =
+          @markdown.render_with_leading_h1_boundary(fm.body, wl_map)
         if markdown_result.shortcode_errors.length() > 0 {
           return Err(
             "404.md shortcode error: " +
@@ -2884,17 +2893,17 @@ fn render_404_page(
         if is_draft(fm) && !config.include_drafts {
           (
             "Page Not Found", "<h1>Page Not Found</h1>\n<p>The page you are looking for does not exist.</p>\n",
-            "Page not found",
+            "Page not found", None,
           )
         } else {
-          (extract_title(fm), markdown_result.html, description)
+          (extract_title(fm), markdown_result.html, description, leading_h1_end)
         }
       }
     }
   } else {
     (
       "Page Not Found", "<h1>Page Not Found</h1>\n<p>The page you are looking for does not exist.</p>\n",
-      "Page not found",
+      "Page not found", None,
     )
   }
 
@@ -2922,6 +2931,10 @@ fn render_404_page(
         "",
         config.site.base_url,
         og_type="website",
+      )
+      slots.set(
+        @template.BodyNoH1,
+        rendered_body_no_h1(body_html, leading_h1_end),
       )
       // 404 pages have no tags, collection, date, or prev/next components
       slots.set(@template.Tags, "")
@@ -3589,7 +3602,8 @@ fn process_document(
   }
   let wl_map = build_wikilink_map(resolved)
   // Step 5: render markdown body to HTML fragment
-  let markdown_result = @markdown.render_with_diagnostics(fm.body, wl_map)
+  let (markdown_result, leading_h1_end) =
+    @markdown.render_with_leading_h1_boundary(fm.body, wl_map)
   if markdown_result.shortcode_errors.length() > 0 {
     let mut si = 0
     while si < markdown_result.shortcode_errors.length() {
@@ -3606,7 +3620,10 @@ fn process_document(
     }
     return { document: None, diagnostics }
   }
-  let body_html = markdown_result.html + @tags.render_page_tags(page_tags)
+  let tag_badges = @tags.render_page_tags(page_tags)
+  let body_html = markdown_result.html + tag_badges
+  let body_no_h1 = rendered_body_no_h1(markdown_result.html, leading_h1_end) +
+    tag_badges
   let toc_html = if extract_toc_enabled(fm) {
     @markdown.render_table_of_contents(
       filter_toc_entries(markdown_result.toc, extract_toc_depth(fm)),
@@ -3655,6 +3672,7 @@ fn process_document(
           site.base_url,
           og_type="website",
         )
+        slots.set(@template.BodyNoH1, body_no_h1)
         slots.set(@template.Backlinks, backlinks_html)
         slots.set(@template.TableOfContents, toc_html)
         slots.set(@template.WordCount, wc.to_string())
@@ -4152,7 +4170,8 @@ fn process_document_for_lint(
   }
 
   let wl_map = build_wikilink_map(resolved)
-  let markdown_result = @markdown.render_with_diagnostics(fm.body, wl_map)
+  let (markdown_result, leading_h1_end) =
+    @markdown.render_with_leading_h1_boundary(fm.body, wl_map)
   i = 0
   while i < markdown_result.shortcode_errors.length() {
     violations.push({
@@ -4169,7 +4188,10 @@ fn process_document_for_lint(
     return { document: None, violations }
   }
 
-  let body_html = markdown_result.html + @tags.render_page_tags(page_tags)
+  let tag_badges = @tags.render_page_tags(page_tags)
+  let body_html = markdown_result.html + tag_badges
+  let body_no_h1 = rendered_body_no_h1(markdown_result.html, leading_h1_end) +
+    tag_badges
   let toc_html = if extract_toc_enabled(fm) {
     @markdown.render_table_of_contents(
       filter_toc_entries(markdown_result.toc, extract_toc_depth(fm)),
@@ -4209,6 +4231,7 @@ fn process_document_for_lint(
         "",
         site.base_url,
       )
+      slots.set(@template.BodyNoH1, body_no_h1)
       slots.set(@template.Backlinks, backlinks_html)
       slots.set(@template.TableOfContents, toc_html)
       let wc = count_words_markdown(fm.body)
