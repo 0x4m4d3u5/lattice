@@ -33,7 +33,9 @@ not add a sanitizer or change existing rendering behavior.
 
 ## Host ABI and verification
 
-`examples/wasm_note` exports only `render_note`. Its WASM GC configuration uses
+`examples/wasm_note` exports `render_note` and `search_content`. The latter
+provides [local section retrieval](section-search.md) over a supplied content
+index. Its WASM GC configuration uses
 MoonBit's documented [JavaScript string ABI](https://docs.moonbitlang.com/en/latest/language/ffi.html)
 and [string builtin link options](https://docs.moonbitlang.com/en/latest/toolchain/moon/package.html#wasm-gc-backend-link-options).
 This experimental host surface requires WASM GC **and** JavaScript string
@@ -51,7 +53,11 @@ const result = render('---\ntitle: Garden\n---\nRead [[soil]].',
 
 The adapter compiles with `builtins: ['js-string']` and the configured `_`
 string-constant namespace, checks that the runtime-recognized module needs no
-host imports and has exactly the expected export, and decodes response JSON.
+host imports and has exactly the two expected function exports, and decodes
+response JSON. Pair this adapter with a binary built from the same version:
+it rejects older render-only binaries. `createNoteRenderer` retains its callable
+rendering API; `createContentSearcher` provides search, and `createNoteRuntime`
+returns `{renderNote, searchContent}` sharing one instance.
 Strings cross directly as JavaScript strings, including UTF-16 code units;
 there is no buffer allocation/free protocol. Initialization rejects unsupported
 runtimes, either during compilation or the host-import check. Each call uses
@@ -87,12 +93,13 @@ The isolated harness pins official Playwright 1.63.0 and its core package with
 registry integrity hashes. It launches a fresh headless browser profile with
 `chromiumSandbox: true`; it does not connect to existing browser sessions or
 change security settings. The test server binds to `127.0.0.1` on an ephemeral
-port and exposes only four fixed test assets. Test-context requests outside
-that origin are rejected. The returned HTML is compared as data, never inserted
+port and exposes only the fixed synthetic test assets. Test-context requests
+outside that origin are rejected. The returned HTML is compared as data, never inserted
 into the DOM.
 
 A real module Web Worker loads the checked-in adapter and runs the same
-supplied-note comparisons on one reused WASM GC instance. The harness confirms
+supplied-note and retrieval comparisons on one reused WASM GC instance. The
+Node gate also compares complete JS/WASM retrieval responses. The harness confirms
 `DedicatedWorkerGlobalScope`, reports the worker user agent and actual browser
 version, and terminates the worker after completion or a 30-second deadline.
 Browser and server are closed on success or failure. The Node and existing

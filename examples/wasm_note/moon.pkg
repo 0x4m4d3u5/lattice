@@ -1,12 +1,15 @@
-import { "kurisu/lattice/src/note" }
+import {
+  "kurisu/lattice/src/note",
+  "kurisu/lattice/src/search",
+}
 
 options(
   link: {
     "wasm-gc": {
-      "exports": ["render_note"],
+      "exports": ["render_note", "search_content"],
       "use-js-builtin-string": true,
       "imported-string-constants": "_",
     },
-    "js": { "exports": ["render_note"], "format": "esm" },
+    "js": { "exports": ["render_note", "search_content"], "format": "esm" },
   },
 )

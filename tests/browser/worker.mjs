@@ -1,5 +1,6 @@
-import { createNoteRenderer } from '../../examples/wasm_note/host.mjs';
+import { createNoteRuntime } from '../../examples/wasm_note/host.mjs';
 import { runNoteCases } from '../../scripts/note-cases.mjs';
+import { runSearchCases } from '../../scripts/search-cases.mjs';
 
 // Compare JSON values without depending on object property order.
 const normalize = (value) => {
@@ -19,8 +20,9 @@ const assert = {
 try {
   const response = await fetch('/renderer.wasm');
   if (!response.ok) throw new Error(`renderer fetch failed: ${response.status}`);
-  const render = await createNoteRenderer(await response.arrayBuffer());
+  const { renderNote: render, searchContent: search } = await createNoteRuntime(await response.arrayBuffer());
   const count = runNoteCases(render, assert);
+  const searchCount = runSearchCases(search, assert);
   const destinationHtml = render(
     '---\ntitle: Destinations\n---\n' + [
       "[x](/doc\"data-probe=\"yes?x=%22&plus=a+b#frag)",
@@ -35,7 +37,7 @@ try {
   ).html;
   self.postMessage({
     destinationHtml,
-    ok: true, count, worker: self instanceof DedicatedWorkerGlobalScope,
+    ok: true, count, searchCount, worker: self instanceof DedicatedWorkerGlobalScope,
     userAgent: navigator.userAgent,
     imageAltHtml: render('---\ntitle: Image\n---\n![He said "hello" & waved](/plot.png)', 'image-alt.md', '{}').html,
   });

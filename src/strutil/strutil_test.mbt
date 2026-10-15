@@ -959,3 +959,36 @@ test "base URL normalization removes every trailing slash" {
     "https://example.test/wiki/notes/topic/",
   )
 }
+
+///|
+test "whole HTML extraction reports boundaries without resetting raw states" {
+  for prefix in ["<!--", "<textarea>", "<script>", "<div title=\""] {
+    let closing = match prefix {
+      "<!--" => "-->"
+      "<textarea>" => "</textarea>"
+      "<script>" => "</script>"
+      _ => "\">"
+    }
+    let html = prefix +
+      "<h2>Hidden boundary</h2>" +
+      closing +
+      "<h2>Public</h2>visible"
+    let private_offset = prefix.length()
+    let public_offset = prefix.length() +
+      "<h2>Hidden boundary</h2>".length() +
+      closing.length()
+    let (text, boundaries) = @strutil.strip_html_tags_with_boundaries(html, [
+      private_offset,
+      public_offset,
+      html.length(),
+    ])
+    assert_eq(text, @strutil.strip_html_tags(html))
+    assert_eq(boundaries, [false, true, true])
+  }
+  let (text, boundaries) = @strutil.strip_html_tags_with_boundaries(
+    "<!-- hidden",
+    [0, 5, 11],
+  )
+  assert_eq(text, "")
+  assert_eq(boundaries, [true, false, false])
+}
