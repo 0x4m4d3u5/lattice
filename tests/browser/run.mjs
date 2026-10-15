@@ -71,7 +71,12 @@ try {
   }));
   assert.equal(result.ok, true, result.error);
   assert.equal(result.worker, true, 'cases did not execute in a real dedicated worker');
-  assert.equal(result.count, 558);
+  assert.equal(result.count, 560);
+  const image = await page.evaluate((html) => {
+    const element = new DOMParser().parseFromString(html, 'text/html').querySelector('img');
+    return { alt: element?.getAttribute('alt'), attributes: element?.getAttributeNames().sort() };
+  }, result.imageAltHtml);
+  assert.deepEqual(image, { alt: 'He said "hello" & waved', attributes: ['alt', 'src'] });
   assert.match(result.userAgent, /Chrome\//);
   console.log(`${browserName} ${browser.version()}: ${result.count} supplied-note comparisons passed in a reused Web Worker instance`);
   console.log(`Worker runtime: ${result.userAgent}`);
