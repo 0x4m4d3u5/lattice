@@ -57,9 +57,33 @@ pub(all) enum StructuredData {
 // ── helpers ───────────────────────────────────────────────────────────────────
 
 ///|
+/// Exclusive end of a complete tag or comment, using the quote/comment rules
+/// from strutil's HTML text scanner. Incomplete markup has no safe boundary.
+fn heading_markup_end(html : String, start : Int) -> Int? {
+  if @strutil.starts_with_at(html, start, "<!--") {
+    return html[start + 4:].find("-->").map(end => start + 4 + end + 3)
+  }
+  let mut i = start + 1
+  let mut quote : Char? = None
+  while i < html.length() {
+    let c = @strutil.char_at(html, i)
+    if quote is Some(q) {
+      if c == q { quote = None }
+    } else if c == '"' || c == '\'' {
+      quote = Some(c)
+    } else if c == '>' {
+      return Some(i + 1)
+    }
+    i = i + 1
+  }
+  None
+}
+
+///|
 /// Strip the first `<h1 ...>...</h1>` block from an HTML string if the body
 /// starts with it (after optional whitespace). Returns the body with the
 /// leading H1 removed and trailing whitespace trimmed.
+/// Incomplete child markup and raw-text children leave the input unchanged.
 ///
 /// Used by the `body_no_h1` template slot to avoid duplicate H1 elements
 /// when the template already renders the title as an H1.
@@ -86,41 +110,43 @@ pub fn strip_leading_h1(html : String) -> String {
     boundary.to_int() != 12 {
     return html
   }
-  // A quoted attribute may contain both '>' and a literal closing-tag string.
-  let mut tag_end = after_name
-  let mut quote : Char? = None
-  while tag_end < n {
-    let c = @strutil.char_at(html, tag_end)
-    if quote is Some(q) {
-      if c == q { quote = None }
-    } else if c == '"' || c == '\'' {
-      quote = Some(c)
-    } else if c == '>' {
-      break
-    }
-    tag_end = tag_end + 1
+  let after_open = match heading_markup_end(html, i) {
+    Some(end) => end
+    None => return html
   }
-  if tag_end == n { return html }
-  let after_open = tag_end + 1
   let h1_close = "</h1>"
   let h1_close_len = h1_close.length()
   let mut k = after_open
   let mut found_close = -1
-  while k + h1_close_len <= n {
-    let mut matched = true
-    let mut l = 0
-    while l < h1_close_len {
-      if @strutil.char_at(html, k + l) != @strutil.char_at(h1_close, l) {
-        matched = false
-        break
-      }
-      l = l + 1
+  while k < n {
+    if @strutil.char_at(html, k) != '<' {
+      k = k + 1
+      continue
     }
-    if matched {
+    if @strutil.starts_with_at(html, k, h1_close) {
       found_close = k
       break
     }
-    k = k + 1
+    // Raw-text contents need different tokenization. Retain the original
+    // heading rather than mistake script strings or textarea text for tags.
+    let mut name_end = k + 1
+    while name_end < n &&
+          !@strutil.is_whitespace(@strutil.char_at(html, name_end)) &&
+          @strutil.char_at(html, name_end).to_int() != 12 &&
+          @strutil.char_at(html, name_end) != '/' &&
+          @strutil.char_at(html, name_end) != '>' {
+      name_end = name_end + 1
+    }
+    match html[k + 1:name_end].to_owned().to_lower() {
+      "script" | "style" | "textarea" | "title" | "xmp" | "iframe"
+      | "noembed" | "noframes" | "plaintext" => return html
+      _ => ()
+    }
+    // Advance past the entire child tag or comment, including quoted values.
+    k = match heading_markup_end(html, k) {
+      Some(end) => end
+      None => return html
+    }
   }
   if found_close < 0 {
     return html

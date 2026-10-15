@@ -152,9 +152,11 @@ pub fn template_note() -> Int {
     Err(_) => return -11
   }
   let without_h1 = @html.strip_leading_h1(
-    @markdown.render("# Garden\n\nBody.", Map([])),
+    @markdown.render("# Garden <!-- > </h1> -->\n\nBody.", Map([])),
   )
-  if without_h1 == "<p>Body.</p>\n" &&
+  let raw_heading = "<h1 id=\"title\"><script>const text = \"</h1>\";</script></h1><p>Body</p>"
+  if @html.strip_leading_h1(raw_heading) == raw_heading &&
+    without_h1 == "<p>Body.</p>\n" &&
     unicode_truncated == "🌱..." && unicode_intact == "🌱" &&
     quoted_fallback == "READ \"A|B\"" &&
     local_date == "29" && invalid_date == "Undated" &&
