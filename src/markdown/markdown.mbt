@@ -1039,8 +1039,11 @@ pub fn is_hrule(line : String) -> Bool {
 
 ///|
 pub fn is_fence_start(line : String) -> Bool {
-  @strutil.starts_with_at(line, 0, "```") ||
-  @strutil.starts_with_at(line, 0, "~~~")
+  if @strutil.starts_with_at(line, 0, "~~~") { return true }
+  if !@strutil.starts_with_at(line, 0, "```") { return false }
+  // A backtick fence's info string cannot contain backticks, even escaped ones.
+  let width = line.iter().take_while(c => c == '`').count()
+  line[width:].find("`") is None
 }
 
 ///|

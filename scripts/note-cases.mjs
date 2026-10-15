@@ -91,6 +91,15 @@ export function runNoteCases(render, assert) {
   const deepDestination = '/a' + '('.repeat(1024) + 'b' + ')'.repeat(1024);
   check(render(yaml('[Deep](' + deepDestination + ')'), 'destinations.md', '{}'),
     ok('<p><a href="' + deepDestination + '">Deep</a></p>\n'));
+  check(render(yaml('```bad`info [Guide](/guide/)\n\nVisible paragraph.\n'), 'fence-info.md', '{}'),
+    ok('<p>```bad`info <a href="/guide/">Guide</a></p>\n<p>Visible paragraph.</p>\n'));
+  check(render(yaml('```bad`info\n[[soil|Guide]]\n'), 'fence-info.md', '{"soil":"/notes/soil/"}'),
+    ok('<p>```bad`info <a href="/notes/soil/">Guide</a></p>\n'));
+  check(render(yaml('```bad`info\n[[missing]]\n'), 'fence-info.md', '{}'), {
+    html: '', diagnostics: [issue('wikilink', 'fence-info.md', "target 'missing' not found in page index")],
+  });
+  check(render(yaml('~~~bad`info\n[[missing]]\n~~~'), 'fence-info.md', '{}'),
+    ok('<pre><code class="language-bad`info">[[missing]]</code></pre>\n'));
   // A new caller-supplied map must take effect; no prior note/map/error state leaks.
   for (let n = 0; n < 256; n++) {
     const text = `Synthetic note ${n} 🌱.`;
