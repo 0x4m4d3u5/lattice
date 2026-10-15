@@ -12,6 +12,7 @@ const assets = new Map([
   ['/tests/browser/worker.mjs', ['tests/browser/worker.mjs', 'text/javascript']],
   ['/examples/wasm_note/host.mjs', ['examples/wasm_note/host.mjs', 'text/javascript']],
   ['/scripts/note-cases.mjs', ['scripts/note-cases.mjs', 'text/javascript']],
+  ['/scripts/search-cases.mjs', ['scripts/search-cases.mjs', 'text/javascript']],
   ['/renderer.wasm', ['_build/wasm-gc/debug/build/kurisu/lattice/examples/wasm_note/wasm_note.wasm', 'application/wasm']],
 ]);
 const root = new URL('../../', import.meta.url);
@@ -72,6 +73,7 @@ try {
   assert.equal(result.ok, true, result.error);
   assert.equal(result.worker, true, 'cases did not execute in a real dedicated worker');
   assert.equal(result.count, 564);
+  assert.equal(result.searchCount, 120);
   // DOM inspection needs no network, including image requests.
   await context.route('**/*', route => route.abort());
   const destinations = await page.evaluate((html) => {
@@ -96,7 +98,7 @@ try {
   }, result.imageAltHtml);
   assert.deepEqual(image, { alt: 'He said "hello" & waved', attributes: ['alt', 'src'] });
   assert.match(result.userAgent, /Chrome\//);
-  console.log(`${browserName} ${browser.version()}: ${result.count} supplied-note comparisons passed in a reused Web Worker instance`);
+  console.log(`${browserName} ${browser.version()}: ${result.count} supplied-note and ${result.searchCount} retrieval comparisons passed in a reused Web Worker instance`);
   console.log(`Worker runtime: ${result.userAgent}`);
 } finally {
   try {

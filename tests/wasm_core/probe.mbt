@@ -24,6 +24,15 @@ pub fn render_note() -> Int {
     Map([]),
     Map([("/garden/", resolved)]),
   )
+  let (_, _, hidden) = @markdown.render_with_text_sections(
+    "<!--\n\n## Private heading\n\nprivate marker\n\n-->\n\n## Public\n\nvisible", Map([]),
+  )
+  let (_, _, references) = @markdown.render_with_text_sections(
+    "## Recovery\nSee procedure[^1].\n\n[^1]: Restore encrypted snapshots.", Map([]),
+  )
+  if !hidden.is_empty() || references.length() != 2 { return -3 }
+  if references[1].heading != "Footnotes" ||
+    !references[1].body.contains("Restore encrypted snapshots.") { return -4 }
   if html ==
     "<h2 id=\"planting\">Planting</h2>\n<p>Read <a href=\"/notes/soil/\">the soil guide</a>.</p>\n" &&
     @strutil.strip_html_tags("<div title=\"a > b\">10&#176;C. <!-- 🌱 > annotation -->&#x1F331;. A&#32;&#9;B.</div>") ==

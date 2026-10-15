@@ -729,6 +729,21 @@ fn numeric_reference(s : String, pos : Int) -> (Char, Int)? {
 /// plaintext for content indexing. Supported inline tags preserve adjacency;
 /// other tags separate text. This is not a complete HTML parser or sanitizer.
 pub fn strip_html_tags(s : String) -> String {
+  let (text, _) = strip_html_tags_with_boundaries(s, [])
+  text
+}
+
+///|
+/// Extract the same whole-document text and report safe markup boundaries.
+/// Offsets must be sorted UTF-16 positions in the input. A boundary is false
+/// inside a comment, tag/quoted attribute or raw/RCDATA text element. This
+/// exposes the existing extractor's state; it is not an HTML visibility policy.
+pub fn strip_html_tags_with_boundaries(
+  s : String,
+  offsets : Array[Int],
+) -> (String, Array[Bool]) {
+  let boundaries : Array[Bool] = []
+  let mut next_boundary = 0
   // Pass 1: preserve text adjacency across supported inline tags; separate
   // blocks and unknown tags. This is a text extractor, not an HTML parser.
   let buf = StringBuilder()
@@ -739,6 +754,12 @@ pub fn strip_html_tags(s : String) -> String {
   let mut quote : Char? = None
   let mut text_element : String? = None
   while i < n {
+    while next_boundary < offsets.length() && offsets[next_boundary] <= i {
+      boundaries.push(
+        offsets[next_boundary] == i && !in_tag && text_element is None,
+      )
+      next_boundary = next_boundary + 1
+    }
     let c = char_at(s, i)
     if in_tag {
       if quote is Some(q) {
@@ -795,6 +816,12 @@ pub fn strip_html_tags(s : String) -> String {
     }
     i = i + 1
   }
+  while next_boundary < offsets.length() {
+    boundaries.push(
+      offsets[next_boundary] == n && i == n && !in_tag && text_element is None,
+    )
+    next_boundary = next_boundary + 1
+  }
   // Pass 2: decode entities once, then collapse runs of ASCII whitespace.
   let stripped = buf.to_string()
   let out = StringBuilder()
@@ -847,7 +874,7 @@ pub fn strip_html_tags(s : String) -> String {
       j = j + 1
     }
   }
-  trim(out.to_string())
+  (trim(out.to_string()), boundaries)
 }
 
 ///|

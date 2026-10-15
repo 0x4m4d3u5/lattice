@@ -537,6 +537,7 @@ priv struct ProcessedDocument {
   content_html : String
   body_text : String
   headings : Array[@markdown.TocEntry]
+  sections : Array[@markdown.TextSection]
   resolved_links : Array[@wikilink.ResolvedWikilink]
   tags : Array[@tags.TagRef]
 }
@@ -3571,7 +3572,7 @@ fn process_document(
   }
   if !render_page_html {
     // Body artifacts are needed even when page HTML is not requested.
-    let cache_markdown = @markdown.render_with_diagnostics(
+    let (cache_markdown, _, cache_sections) = @markdown.render_with_text_sections(
       fm.body, build_wikilink_map(resolved),
     )
     let cache_body_text = @strutil.strip_html_tags(cache_markdown.html)
@@ -3588,6 +3589,7 @@ fn process_document(
         content_html: cache_markdown.html,
         body_text: cache_body_text,
         headings: cache_markdown.toc,
+        sections: cache_sections,
         resolved_links: resolved,
         tags: page_tags,
       }),
@@ -3596,8 +3598,8 @@ fn process_document(
   }
   let wl_map = build_wikilink_map(resolved)
   // Step 5: render markdown body to HTML fragment
-  let (markdown_result, leading_h1_end) =
-    @markdown.render_with_leading_h1_boundary(fm.body, wl_map)
+  let (markdown_result, leading_h1_end, sections) =
+    @markdown.render_with_text_sections(fm.body, wl_map)
   if markdown_result.shortcode_errors.length() > 0 {
     let mut si = 0
     while si < markdown_result.shortcode_errors.length() {
@@ -3817,6 +3819,7 @@ fn process_document(
       content_html: markdown_result.html,
       body_text: @strutil.strip_html_tags(body_html),
       headings: markdown_result.toc,
+      sections,
       resolved_links: resolved,
       tags: page_tags,
     }),
@@ -4164,8 +4167,8 @@ fn process_document_for_lint(
   }
 
   let wl_map = build_wikilink_map(resolved)
-  let (markdown_result, leading_h1_end) =
-    @markdown.render_with_leading_h1_boundary(fm.body, wl_map)
+  let (markdown_result, leading_h1_end, sections) =
+    @markdown.render_with_text_sections(fm.body, wl_map)
   i = 0
   while i < markdown_result.shortcode_errors.length() {
     violations.push({
@@ -4335,6 +4338,7 @@ fn process_document_for_lint(
       content_html: markdown_result.html,
       body_text: @strutil.strip_html_tags(body_html),
       headings: markdown_result.toc,
+      sections,
       resolved_links: resolved,
       tags: page_tags,
     }),
@@ -5085,6 +5089,7 @@ pub fn build(
   let content_entries : Array[@search.ContentEntry] = []
   let collect_content_navigation = content_index_file_name(config.site) is Some(_)
   let content_headings_by_url : Map[String, Array[@markdown.TocEntry]] = Map([])
+  let content_sections_by_url : Map[String, Array[@markdown.TextSection]] = Map([])
   let content_links_by_url : Map[String, Array[@wikilink.ResolvedWikilink]] = Map([])
   let source_output_marks : Map[String, (String, Int)] = Map([])
   // Reserve tag routes in their original write order; render once after ownership
@@ -5345,6 +5350,7 @@ pub fn build(
                 }
                 source_output_marks.set(doc.url, (output_path_key(out_path), source_mark))
                 if collect_content_navigation {
+                  content_sections_by_url.set(doc.url, doc.sections)
                   content_headings_by_url.set(doc.url, doc.headings)
                   content_links_by_url.set(doc.url, doc.resolved_links)
                 }
@@ -5501,6 +5507,7 @@ pub fn build(
             )
             source_output_marks.set(doc.url, (output_path_key(out_path), source_mark))
             if collect_content_navigation {
+              content_sections_by_url.set(doc.url, doc.sections)
               content_headings_by_url.set(doc.url, doc.headings)
               content_links_by_url.set(doc.url, doc.resolved_links)
             }
@@ -5666,6 +5673,7 @@ pub fn build(
             )
             source_output_marks.set(doc.url, (output_path_key(out_path), source_mark))
             if collect_content_navigation {
+              content_sections_by_url.set(doc.url, doc.sections)
               content_headings_by_url.set(doc.url, doc.headings)
               content_links_by_url.set(doc.url, doc.resolved_links)
             }
@@ -6432,6 +6440,7 @@ pub fn build(
     // decisions; surplus aliases of authored pages keep their original owner.
     let overwritten = superseded_source_urls(output, source_output_marks, dropped_slots)
     for (url, _) in overwritten {
+      content_sections_by_url.remove(url)
       content_headings_by_url.remove(url)
       content_links_by_url.remove(url)
     }
@@ -6570,8 +6579,8 @@ pub fn build(
     }
     if content_index_slot is Some(slot) {
       let (path, _) = output.files[slot]
-      output.files[slot] = (path, Text(@search.render_content_index_with_navigation(
-        content_entries, content_headings_by_url, content_links_by_url,
+      output.files[slot] = (path, Text(@search.render_content_index_with_sections(
+        content_entries, content_headings_by_url, content_links_by_url, content_sections_by_url,
       )))
     }
     output.prune_files(dropped_slots)

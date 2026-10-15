@@ -26,6 +26,8 @@ The builder performs a two-pass build:
 
 The index supports forward references. Build validation, rendering, and static asset reads finish before output publication starts. Validation or generation failures preserve existing output, cache, and manifest. Publication I/O is not atomic, and stale files can remain. See [build safety](docs/build-safety.md) and [the reliability baseline](docs/reliability-baseline.md).
 
+The opt-in content index supports [local section search](docs/section-search.md) with tag filters, plaintext snippets and page citations on JS and WASM GC.
+
 ## Project structure
 
 - `cmd/main/` - CLI entrypoint.

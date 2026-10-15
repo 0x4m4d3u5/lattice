@@ -1810,6 +1810,7 @@ fn render_blocks_with_issues(
   heading_counts : Map[String, Int],
   fn_map : Map[String, Int],
   on_leading_h1 : ((Int) -> Unit)?,
+  on_block : ((Block, String) -> Unit)?,
 ) -> RenderResult {
   let buf = StringBuilder()
   let issues : Array[ShortcodeIssue] = []
@@ -1843,6 +1844,7 @@ fn render_blocks_with_issues(
           heading_counts,
           fn_map,
         )
+        if on_block is Some(record) { record(OrderedList(merged), rendered.html) }
         buf.write_string(rendered.html)
         merge_shortcode_errors(issues, rendered.shortcode_errors)
       }
@@ -1853,6 +1855,7 @@ fn render_blocks_with_issues(
           heading_counts,
           fn_map,
         )
+        if on_block is Some(record) { record(blocks[i], rendered.html) }
         buf.write_string(rendered.html)
         merge_shortcode_errors(issues, rendered.shortcode_errors)
         if i == 0 {
@@ -2176,7 +2179,7 @@ fn render_block_with_issues(
       }
     BlockQuote(inner_blocks) => {
       let rendered = render_blocks_with_issues(
-        inner_blocks, wl, heading_counts, fn_map, None,
+        inner_blocks, wl, heading_counts, fn_map, None, None,
       )
       {
         html: "<blockquote>\n" + rendered.html + "</blockquote>\n",
@@ -2248,6 +2251,7 @@ fn render_block_with_issues(
             heading_counts,
             fn_map,
             None,
+            None,
           )
           merge_shortcode_errors(issues, rendered_children.shortcode_errors)
           buf.write_string(rendered_children.html)
@@ -2281,6 +2285,7 @@ fn render_block_with_issues(
             wl,
             heading_counts,
             fn_map,
+            None,
             None,
           )
           merge_shortcode_errors(issues, rendered_children.shortcode_errors)
@@ -2570,6 +2575,34 @@ pub fn render_with_leading_h1_boundary(
   body : String,
   wikilinks : Map[String, String],
 ) -> (RenderResult, Int?) {
+  render_document(body, wikilinks, None)
+}
+
+///|
+/// Plain text grouped by top-level Markdown headings. Nested headings stay in
+/// their enclosing section; heading labels are separate from section bodies.
+pub(all) struct TextSection {
+  heading : String
+  body : String
+}
+
+///|
+/// Collect sections in the same rendering pass, preserving normal HTML and IDs.
+pub fn render_with_text_sections(
+  body : String,
+  wikilinks : Map[String, String],
+) -> (RenderResult, Int?, Array[TextSection]) {
+  let sections : Array[TextSection] = []
+  let (rendered, boundary) = render_document(body, wikilinks, Some(sections))
+  (rendered, boundary, sections)
+}
+
+///|
+fn render_document(
+  body : String,
+  wikilinks : Map[String, String],
+  sections : Array[TextSection]?,
+) -> (RenderResult, Int?) {
   let preprocessed = preprocess_callout_next_line(body)
   let ls = lines_of(preprocessed)
   let (blocks, footnotes) = parse_blocks_with_footnotes(ls)
@@ -2584,9 +2617,20 @@ pub fn render_with_leading_h1_boundary(
   }
 
   let mut leading_h1_end : Int? = None
+  let heading_ranges : Array[(Int, Int)] = []
+  let mut html_offset = 0
+  let on_block = match sections {
+    None => None
+    Some(_) => Some(fn(block : Block, html : String) {
+      let end = html_offset + html.length()
+      if block is Heading(_, _) { heading_ranges.push((html_offset, end)) }
+      html_offset = end
+    })
+  }
   let rendered = render_blocks_with_issues(
     blocks, wikilinks, heading_counts, fn_map,
     Some(fn(end) { leading_h1_end = Some(end) }),
+    on_block,
   )
   let html_with_footnotes = if footnotes.length() > 0 {
     let rendered_footnotes = render_footnotes_section(
@@ -2596,9 +2640,14 @@ pub fn render_with_leading_h1_boundary(
       rendered.shortcode_errors,
       rendered_footnotes.shortcode_errors,
     )
+    // A zero-width heading range labels the renderer's appended reference list.
+    heading_ranges.push((rendered.html.length(), rendered.html.length()))
     rendered.html + rendered_footnotes.html
   } else {
     rendered.html
+  }
+  if sections is Some(items) {
+    collect_text_sections(html_with_footnotes, heading_ranges, items)
   }
   (
     {
@@ -2609,6 +2658,64 @@ pub fn render_with_leading_h1_boundary(
     },
     leading_h1_end,
   )
+}
+
+///|
+// Split only at headings that the whole-document extractor sees as markup.
+// Keeping hidden or raw-text headings inside their enclosing slice preserves
+// comment, quoted-tag and text-element state across apparent Markdown sections.
+fn collect_text_sections(
+  html : String,
+  ranges : Array[(Int, Int)],
+  sections : Array[TextSection],
+) -> Unit {
+  let offsets : Array[Int] = []
+  for (start, end) in ranges {
+    offsets.push(start)
+    offsets.push(end)
+  }
+  let (whole_text, boundaries) = @strutil.strip_html_tags_with_boundaries(
+    html, offsets,
+  )
+  let visible : Array[(Int, Int)] = []
+  for i = 0; i < ranges.length(); i = i + 1 {
+    if boundaries[2 * i] && boundaries[2 * i + 1] {
+      visible.push(ranges[i])
+    }
+  }
+  if visible.is_empty() {
+    if whole_text != "" {
+      sections.push({ heading: "", body: whole_text, })
+    }
+    return
+  }
+  let preamble = @strutil.strip_html_tags(html[:visible[0].0].to_owned())
+  if preamble != "" {
+    sections.push({ heading: "", body: preamble, })
+  }
+  for i = 0; i < visible.length(); i = i + 1 {
+    let (start, heading_end) = visible[i]
+    let end = if i + 1 < visible.length() {
+      visible[i + 1].0
+    } else {
+      html.length()
+    }
+    let text = @strutil.strip_html_tags(html[start:end].to_owned())
+    let generated = start == heading_end
+    let heading = if generated {
+      "Footnotes"
+    } else {
+      @strutil.strip_html_tags(html[start:heading_end].to_owned())
+    }
+    let body = if !generated && text.has_prefix(heading) {
+      text[heading.length():].trim().to_owned()
+    } else {
+      text
+    }
+    if heading != "" || body != "" {
+      sections.push({ heading, body, })
+    }
+  }
 }
 
 ///|

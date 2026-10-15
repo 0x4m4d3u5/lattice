@@ -153,7 +153,7 @@ fn write_common_fields(
 /// Includes `kind` (page type classification) and `reading_time` (integer
 /// minutes or null) for agent-first programmatic consumption.
 pub fn render_content_index(entries : Array[ContentEntry]) -> String {
-  render_content_entries(entries, None, None)
+  render_content_entries(entries, None, None, None)
 }
 
 ///|
@@ -163,7 +163,7 @@ pub fn render_content_index_with_headings(
   entries : Array[ContentEntry],
   headings : Map[String, Array[@markdown.TocEntry]],
 ) -> String {
-  render_content_entries(entries, Some(headings), None)
+  render_content_entries(entries, Some(headings), None, None)
 }
 
 ///|
@@ -173,7 +173,18 @@ pub fn render_content_index_with_navigation(
   headings : Map[String, Array[@markdown.TocEntry]],
   links : Map[String, Array[@wikilink.ResolvedWikilink]],
 ) -> String {
-  render_content_entries(entries, Some(headings), Some(links))
+  render_content_entries(entries, Some(headings), Some(links), None)
+}
+
+///|
+/// Add retrieval text without changing existing constructors or serializers.
+pub fn render_content_index_with_sections(
+  entries : Array[ContentEntry],
+  headings : Map[String, Array[@markdown.TocEntry]],
+  links : Map[String, Array[@wikilink.ResolvedWikilink]],
+  sections : Map[String, Array[@markdown.TextSection]],
+) -> String {
+  render_content_entries(entries, Some(headings), Some(links), Some(sections))
 }
 
 ///|
@@ -181,11 +192,12 @@ fn render_content_entries(
   entries : Array[ContentEntry],
   headings : Map[String, Array[@markdown.TocEntry]]?,
   links : Map[String, Array[@wikilink.ResolvedWikilink]]?,
+  sections : Map[String, Array[@markdown.TextSection]]?,
 ) -> String {
   // Generated indexes overwrite authored pages at shared URLs. Do not advertise
   // authored navigation for any entry whose URL is occupied by such an index.
   let generated_urls : Map[String, Bool] = Map([])
-  if headings is Some(_) || links is Some(_) {
+  if headings is Some(_) || links is Some(_) || sections is Some(_) {
     for entry in entries {
       if entry.kind == "collection_index" { generated_urls.set(entry.url, true) }
     }
@@ -257,6 +269,22 @@ fn render_content_entries(
         @strutil.write_json_string(buf, url)
         buf.write_string(", \"text\": ")
         @strutil.write_json_string(buf, link.title)
+        buf.write_char('}')
+      }
+      buf.write_char(']')
+    }
+    if sections is Some(catalog) {
+      let page_sections = if generated_urls.contains(entry.url) { [] } else {
+        catalog.get(entry.url).unwrap_or([])
+      }
+      buf.write_string(",\n    \"sections\": [")
+      for i = 0; i < page_sections.length(); i = i + 1 {
+        if i > 0 { buf.write_string(", ") }
+        let section = page_sections[i]
+        buf.write_string("{\"heading\": ")
+        @strutil.write_json_string(buf, section.heading)
+        buf.write_string(", \"body\": ")
+        @strutil.write_json_string(buf, section.body)
         buf.write_char('}')
       }
       buf.write_char(']')
