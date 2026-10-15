@@ -71,7 +71,25 @@ try {
   }));
   assert.equal(result.ok, true, result.error);
   assert.equal(result.worker, true, 'cases did not execute in a real dedicated worker');
-  assert.equal(result.count, 560);
+  assert.equal(result.count, 564);
+  // DOM inspection needs no network, including image requests.
+  await context.route('**/*', route => route.abort());
+  const destinations = await page.evaluate((html) => {
+    const document = new DOMParser().parseFromString(html, 'text/html');
+    return [...document.querySelectorAll('a, img')].map(element => ({
+      tag: element.localName,
+      url: element.getAttribute(element.localName === 'a' ? 'href' : 'src'),
+      attributes: element.getAttributeNames().sort(),
+    }));
+  }, result.destinationHtml);
+  assert.deepEqual(destinations, [
+    { tag: 'a', url: '/doc%22data-probe=%22yes?x=%22&plus=a+b#frag', attributes: ['href'] },
+    { tag: 'img', url: '/img.png%22data-probe=%22yes?x=%2F&plus=a+b#frag', attributes: ['alt', 'src'] },
+    { tag: 'a', url: '/doc%22data-probe=%22yes?x=%22&plus=a+b#frag', attributes: ['href'] },
+    { tag: 'img', url: '/img.png%22data-probe=%22yes?x=%2F&plus=a+b#frag', attributes: ['alt', 'src'] },
+    { tag: 'a', url: 'https://example.test/a%22b?x=%22&plus=a+b#frag', attributes: ['href'] },
+    { tag: 'a', url: '/wiki%22data-probe=%22yes?x=%2f&plus=a+b#frag', attributes: ['href'] },
+  ]);
   const image = await page.evaluate((html) => {
     const element = new DOMParser().parseFromString(html, 'text/html').querySelector('img');
     return { alt: element?.getAttribute('alt'), attributes: element?.getAttributeNames().sort() };

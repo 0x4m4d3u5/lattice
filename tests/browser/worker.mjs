@@ -21,7 +21,20 @@ try {
   if (!response.ok) throw new Error(`renderer fetch failed: ${response.status}`);
   const render = await createNoteRenderer(await response.arrayBuffer());
   const count = runNoteCases(render, assert);
+  const destinationHtml = render(
+    '---\ntitle: Destinations\n---\n' + [
+      "[x](/doc\"data-probe=\"yes?x=%22&plus=a+b#frag)",
+      "![x](/img.png\"data-probe=\"yes?x=%2F&plus=a+b#frag)",
+      "[x](/doc\\\"data-probe=\\\"yes?x=%22&plus=a+b#frag)",
+      "![x](/img.png\\\"data-probe=\\\"yes?x=%2F&plus=a+b#frag)",
+      "<https://example.test/a\"b?x=%22&plus=a+b#frag>",
+      "[[soil|Guide]]",
+    ].join('\n\n'),
+    'destinations.md',
+    "{\"soil\":\"/wiki\\\"data-probe=\\\"yes?x=%2f&plus=a+b#frag\"}",
+  ).html;
   self.postMessage({
+    destinationHtml,
     ok: true, count, worker: self instanceof DedicatedWorkerGlobalScope,
     userAgent: navigator.userAgent,
     imageAltHtml: render('---\ntitle: Image\n---\n![He said "hello" & waved](/plot.png)', 'image-alt.md', '{}').html,
