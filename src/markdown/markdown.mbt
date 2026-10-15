@@ -1696,6 +1696,7 @@ fn render_blocks_with_issues(
   wl : Map[String, String],
   heading_counts : Map[String, Int],
   fn_map : Map[String, Int],
+  on_leading_h1 : ((Int) -> Unit)?,
 ) -> RenderResult {
   let buf = StringBuilder()
   let issues : Array[ShortcodeIssue] = []
@@ -1741,6 +1742,12 @@ fn render_blocks_with_issues(
         )
         buf.write_string(rendered.html)
         merge_shortcode_errors(issues, rendered.shortcode_errors)
+        if i == 0 {
+          match (blocks[i], on_leading_h1) {
+            (Heading(1, _), Some(record)) => record(rendered.html.length())
+            _ => ()
+          }
+        }
         i = i + 1
       }
     }
@@ -2049,7 +2056,7 @@ fn render_block_with_issues(
       }
     BlockQuote(inner_blocks) => {
       let rendered = render_blocks_with_issues(
-        inner_blocks, wl, heading_counts, fn_map,
+        inner_blocks, wl, heading_counts, fn_map, None,
       )
       {
         html: "<blockquote>\n" + rendered.html + "</blockquote>\n",
@@ -2120,6 +2127,7 @@ fn render_block_with_issues(
             wl,
             heading_counts,
             fn_map,
+            None,
           )
           merge_shortcode_errors(issues, rendered_children.shortcode_errors)
           buf.write_string(rendered_children.html)
@@ -2153,6 +2161,7 @@ fn render_block_with_issues(
             wl,
             heading_counts,
             fn_map,
+            None,
           )
           merge_shortcode_errors(issues, rendered_children.shortcode_errors)
           buf.write_string(rendered_children.html)
@@ -2429,6 +2438,18 @@ pub fn render_with_diagnostics(
   body : String,
   wikilinks : Map[String, String],
 ) -> RenderResult {
+  let (result, _) = render_with_leading_h1_boundary(body, wikilinks)
+  result
+}
+
+///|
+/// Render once and report the exclusive end of the first block when it is H1.
+/// The optional offset uses String's UTF-16 code units and indexes result.html.
+/// IDs, diagnostics, TOC entries, and footnotes include the entire document.
+pub fn render_with_leading_h1_boundary(
+  body : String,
+  wikilinks : Map[String, String],
+) -> (RenderResult, Int?) {
   let preprocessed = preprocess_callout_next_line(body)
   let ls = lines_of(preprocessed)
   let (blocks, footnotes) = parse_blocks_with_footnotes(ls)
@@ -2442,8 +2463,10 @@ pub fn render_with_diagnostics(
     i = i + 1
   }
 
+  let mut leading_h1_end : Int? = None
   let rendered = render_blocks_with_issues(
     blocks, wikilinks, heading_counts, fn_map,
+    Some(fn(end) { leading_h1_end = Some(end) }),
   )
   let html_with_footnotes = if footnotes.length() > 0 {
     let rendered_footnotes = render_footnotes_section(
@@ -2457,12 +2480,15 @@ pub fn render_with_diagnostics(
   } else {
     rendered.html
   }
-  {
-    html: html_with_footnotes,
-    shortcode_errors: rendered.shortcode_errors,
-    toc: collect_toc_entries(blocks, 6),
-    footnotes,
-  }
+  (
+    {
+      html: html_with_footnotes,
+      shortcode_errors: rendered.shortcode_errors,
+      toc: collect_toc_entries(blocks, 6),
+      footnotes,
+    },
+    leading_h1_end,
+  )
 }
 
 ///|

@@ -2,7 +2,6 @@ import {
   "kurisu/lattice/src/frontmatter",
   "kurisu/lattice/src/schema",
   "kurisu/lattice/src/markdown",
-  "kurisu/lattice/src/html",
   "kurisu/lattice/src/wikilink",
   "kurisu/lattice/src/template",
   "kurisu/lattice/src/strutil",

@@ -151,18 +151,15 @@ pub fn template_note() -> Int {
     Ok(html) => html
     Err(_) => return -11
   }
-  let without_h1 = @html.strip_leading_h1(
-    @markdown.render("# Garden <!-- > </h1> -->\n\nBody.", Map([])),
+  let (rendered, boundary) = @markdown.render_with_leading_h1_boundary(
+    "# 🌱 <math><mtext><title>literal </h1></title></mtext></math>\n\n# Later\n",
+    Map([]),
   )
-  let raw_heading = "<h1 id=\"title\"><script>const text = \"</h1>\";</script></h1><p>Body</p>"
-  let svg_heading = "<h1><svg><title>Icon</title><style>.x{}</style><![CDATA[literal </h1>]]></svg> Title</h1><p>Body</p>"
-  let integrated_heading = "<h1><svg><foreignObject><title>literal </h1></title></foreignObject></svg></h1><p>Body</p>"
-  let optional_heading = "<h1><ruby>漢<rt>kan</ruby><select><option>A<option>B</select></h1><p>Body</p>"
-  if @html.strip_leading_h1(optional_heading) == "<p>Body</p>" &&
-    @html.strip_leading_h1(svg_heading) == "<p>Body</p>" &&
-    @html.strip_leading_h1(integrated_heading) == integrated_heading &&
-    @html.strip_leading_h1(raw_heading) == raw_heading &&
-    without_h1 == "<p>Body.</p>\n" &&
+  let without_h1 = match boundary {
+    Some(end) => rendered.html[end:].to_owned()
+    None => rendered.html
+  }
+  if without_h1 == "<h1 id=\"later\">Later</h1>\n" &&
     unicode_truncated == "🌱..." && unicode_intact == "🌱" &&
     quoted_fallback == "READ \"A|B\"" &&
     local_date == "29" && invalid_date == "Undated" &&

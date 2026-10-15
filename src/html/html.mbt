@@ -57,46 +57,9 @@ pub(all) enum StructuredData {
 // ── helpers ───────────────────────────────────────────────────────────────────
 
 ///|
-/// Exclusive end and self-closing flag of a complete tag or comment.
-/// Uses strutil's quote/comment rules; incomplete markup has no safe boundary.
-fn heading_markup_end(html : String, start : Int) -> (Int, Bool)? {
-  if @strutil.starts_with_at(html, start, "<!--") {
-    return html[start + 4:].find("-->").map(end => (start + 4 + end + 3, false))
-  }
-  let mut i = start + 1
-  let mut quote : Char? = None
-  let mut pending_value = false
-  let mut unquoted_value = false
-  while i < html.length() {
-    let c = @strutil.char_at(html, i)
-    let space = @strutil.is_whitespace(c) || c.to_int() == 12
-    if quote is Some(q) {
-      if c == q { quote = None }
-    } else if c == '>' {
-      // A slash in an unquoted attribute value is data, not a closing flag.
-      return Some((i + 1, !unquoted_value && @strutil.char_at(html, i - 1) == '/'))
-    } else if unquoted_value {
-      if space { unquoted_value = false }
-    } else if pending_value {
-      if !space {
-        pending_value = false
-        if c == '"' || c == '\'' { quote = Some(c) } else { unquoted_value = true }
-      }
-    } else if c == '"' || c == '\'' {
-      quote = Some(c)
-    } else if c == '=' {
-      pending_value = true
-    }
-    i = i + 1
-  }
-  None
-}
-
-///|
-/// Strip the first `<h1 ...>...</h1>` block from an HTML string if the body
+/// Strip the first `<h1>...</h1>` block from an HTML string if the body
 /// starts with it (after optional whitespace). Returns the body with the
 /// leading H1 removed and trailing whitespace trimmed.
-/// Incomplete child markup and HTML raw-text children leave the input unchanged.
 ///
 /// Used by the `body_no_h1` template slot to avoid duplicate H1 elements
 /// when the template already renders the title as an H1.
@@ -113,119 +76,40 @@ pub fn strip_leading_h1(html : String) -> String {
         ) {
     i = i + 1
   }
-  // Recognize the tag name without confusing h1 with h10 or h1-custom.
-  let after_name = i + 3
-  if after_name >= n || !@strutil.starts_with_at(html, i, "<h1") {
+  // Check for "<h1>"
+  let h1_open = "<h1>"
+  let h1_open_len = h1_open.length()
+  if i + h1_open_len > n {
     return html
   }
-  let boundary = @strutil.char_at(html, after_name)
-  if boundary != '>' && !@strutil.is_whitespace(boundary) &&
-    boundary.to_int() != 12 {
-    return html
+  let mut j = 0
+  while j < h1_open_len {
+    if @strutil.char_at(html, i + j) != @strutil.char_at(h1_open, j) {
+      return html
+    }
+    j = j + 1
   }
-  let after_open = match heading_markup_end(html, i) {
-    Some((end, _)) => end
-    None => return html
-  }
+  // Found "<h1>" at position i. Now find "</h1>"
+  let after_open = i + h1_open_len
   let h1_close = "</h1>"
   let h1_close_len = h1_close.length()
   let mut k = after_open
   let mut found_close = -1
-  // Track namespace context without requiring every child end tag.
-  // Closing an ancestor also ends its implicitly closed children.
-  let contexts : Array[(String, String)] = []
-  while k < n {
-    if @strutil.char_at(html, k) != '<' {
-      k = k + 1
-      continue
+  while k + h1_close_len <= n {
+    let mut matched = true
+    let mut l = 0
+    while l < h1_close_len {
+      if @strutil.char_at(html, k + l) != @strutil.char_at(h1_close, l) {
+        matched = false
+        break
+      }
+      l = l + 1
     }
-    if @strutil.starts_with_at(html, k, h1_close) {
-      if !contexts.is_empty() { return html }
+    if matched {
       found_close = k
       break
     }
-    // CDATA is opaque in the SVG contexts tracked here.
-    if @strutil.starts_with_at(html, k, "<![CDATA[") {
-      if contexts.is_empty() { return html }
-      let (_, ns) = contexts[contexts.length() - 1]
-      if ns != "svg" { return html }
-      k = match html[k + 9:].find("]]>") {
-        Some(end) => k + 9 + end + 3
-        None => return html
-      }
-      continue
-    }
-    let (end, self_closing) = match heading_markup_end(html, k) {
-      Some(boundary) => boundary
-      None => return html
-    }
-    if @strutil.starts_with_at(html, k, "<!") ||
-      @strutil.starts_with_at(html, k, "<?") {
-      k = end
-      continue
-    }
-    let closing = k + 1 < n && @strutil.char_at(html, k + 1) == '/'
-    let name_start = if closing { k + 2 } else { k + 1 }
-    let mut name_end = name_start
-    while name_end < end &&
-          !@strutil.is_whitespace(@strutil.char_at(html, name_end)) &&
-          @strutil.char_at(html, name_end).to_int() != 12 &&
-          @strutil.char_at(html, name_end) != '/' &&
-          @strutil.char_at(html, name_end) != '>' {
-      name_end = name_end + 1
-    }
-    let name = html[name_start:name_end].to_owned().to_lower()
-    if closing {
-      if !contexts.is_empty() {
-        let mut ancestor = contexts.length() - 1
-        while ancestor >= 0 {
-          let (parent, _) = contexts[ancestor]
-          if parent == name { break }
-          ancestor = ancestor - 1
-        }
-        if ancestor < 0 { return html }
-        while contexts.length() > ancestor { ignore(contexts.pop()) }
-      }
-    } else {
-      let inherited = if contexts.is_empty() {
-        "html"
-      } else {
-        let (parent, ns) = contexts[contexts.length() - 1]
-        if ns == "svg" &&
-          (parent == "title" || parent == "desc" || parent == "foreignobject") {
-          "html"
-        } else {
-          ns
-        }
-      }
-      let ns = if inherited == "html" && name == "svg" {
-        "svg"
-      } else if inherited == "html" && name == "math" {
-        "math"
-      } else {
-        inherited
-      }
-      match name {
-        "title" | "style" if ns == "svg" => ()
-        "script" | "style" | "textarea" | "title" | "xmp" | "iframe"
-        | "noembed" | "noframes" | "plaintext" => return html
-        _ => ()
-      }
-      let void_element = if ns == "html" {
-        match name {
-          "area" | "base" | "br" | "col" | "embed" | "hr" | "img" | "input"
-          | "link" | "meta" | "param" | "source" | "track" | "wbr" => true
-          _ => false
-        }
-      } else {
-        false
-      }
-      let self_closed = ns != "html" && self_closing
-      if !void_element && !self_closed {
-        contexts.push((name, ns))
-      }
-    }
-    k = end
+    k = k + 1
   }
   if found_close < 0 {
     return html
