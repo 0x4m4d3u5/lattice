@@ -305,10 +305,19 @@ fn apply_filter(value : String, filter : Filter) -> String {
     Upper => value.to_upper()
     Lower => value.to_lower()
     Truncate(n) =>
-      if value.length() > n {
-        @strutil.substr(value, 0, n) + "..."
-      } else {
+      if value.length() <= n {
         value
+      } else {
+        let buf = StringBuilder()
+        for c in value.iter().take(n) {
+          buf.write_char(c)
+        }
+        let prefix = buf.to_string()
+        if prefix.length() < value.length() {
+          prefix + "..."
+        } else {
+          prefix
+        }
       }
     DatePart(part) => extract_date_part(value, part)
     Default(fallback) => if value.is_empty() { fallback } else { value }
