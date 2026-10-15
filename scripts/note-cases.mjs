@@ -100,6 +100,15 @@ export function runNoteCases(render, assert) {
   });
   check(render(yaml('~~~bad`info\n[[missing]]\n~~~'), 'fence-info.md', '{}'),
     ok('<pre><code class="language-bad`info">[[missing]]</code></pre>\n'));
+  check(render(yaml("Before <span title=\"1 > 0\">after</span>."), 'html-attribute.md', "{}"),
+    ok("<p>Before <span title=\"1 > 0\">after</span>.</p>\n"));
+  check(render(yaml("Before <span title='1 > \"[[missing]]\"'>after</span> [[soil|Guide]]."), 'html-attribute.md', "{\"soil\":\"/notes/soil/\"}"),
+    ok("<p>Before <span title='1 > \"[[missing]]\"'>after</span> <a href=\"/notes/soil/\">Guide</a>.</p>\n"));
+  check(render(yaml("Before <span title=\"x\\\">after</span>."), 'html-attribute.md', "{}"),
+    ok("<p>Before <span title=\"x\\\">after</span>.</p>\n"));
+  const malformedTags = "<span title='".repeat(128);
+  check(render(yaml('Before ' + malformedTags), 'html-attribute.md', '{}'),
+    ok('<p>Before ' + "&lt;span title='".repeat(128) + '</p>\n'));
   // A new caller-supplied map must take effect; no prior note/map/error state leaks.
   for (let n = 0; n < 256; n++) {
     const text = `Synthetic note ${n} 🌱.`;

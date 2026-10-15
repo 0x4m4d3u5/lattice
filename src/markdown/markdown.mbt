@@ -314,6 +314,42 @@ fn decode_link_destination(s : String, start : Int, end : Int) -> String {
 }
 
 ///|
+/// Compute quote-aware tag ends once per inline slice. Reverse scanning keeps
+/// the next end for unquoted, single-quoted and double-quoted suffixes, so even
+/// malformed candidates need only a lookup rather than another suffix scan.
+fn inline_html_tag_ends(s : String, from : Int, to : Int) -> Map[Int, Int] {
+  let ends : Map[Int, Int] = Map([])
+  let mut unquoted = -1
+  let mut single_quoted = -1
+  let mut double_quoted = -1
+  let mut i = to
+  while i > from {
+    i = i - 1
+    let c = @strutil.char_at(s, i)
+    let next_unquoted = unquoted
+    unquoted = if c == '>' {
+      i
+    } else if c == '\'' {
+      single_quoted
+    } else if c == '"' {
+      double_quoted
+    } else {
+      unquoted
+    }
+    if c == '\'' {
+      single_quoted = next_unquoted
+    }
+    if c == '"' {
+      double_quoted = next_unquoted
+    }
+    if c == '<' {
+      ends.set(i, unquoted)
+    }
+  }
+  ends
+}
+
+///|
 /// Count consecutive occurrences of `c` starting at `pos`.
 fn count_char(s : String, pos : Int, c : Char) -> Int {
   let n = s.length()
@@ -480,6 +516,18 @@ fn parse_inlines_with_code_ranges(
   on_code : ((Int, Int) -> Unit)?,
 ) -> Array[Inline] {
   let result : Array[Inline] = []
+  let mut html_tag_ends : Map[Int, Int]? = None
+  fn html_tag_end_at(start : Int) -> Int {
+    let ends = match html_tag_ends {
+      Some(ends) => ends
+      None => {
+        let ends = inline_html_tag_ends(s, from, to)
+        html_tag_ends = Some(ends)
+        ends
+      }
+    }
+    ends.get(start).unwrap_or(-1)
+  }
   let mut destination_closes : Map[Int, Int]? = None
   fn destination_at(open : Int) -> (String, Int)? {
     let closes = match destination_closes {
@@ -746,7 +794,7 @@ fn parse_inlines_with_code_ranges(
         } else if (next_c >= 'a' && next_c <= 'z') ||
           (next_c >= 'A' && next_c <= 'Z') {
           // inline open tag: <tagname ...> or <br/> etc.
-          let close_gt = @strutil.find_char(s, rest_start, '>', to)
+          let close_gt = html_tag_end_at(i)
           if close_gt > i {
             if text_start < i {
               result.push(Text(@strutil.substr(s, text_start, i)))
@@ -760,7 +808,7 @@ fn parse_inlines_with_code_ranges(
           let next2 = @strutil.char_at(s, rest_start + 1)
           if (next2 >= 'a' && next2 <= 'z') || (next2 >= 'A' && next2 <= 'Z') {
             // inline close tag: </tagname>
-            let close_gt = @strutil.find_char(s, rest_start + 1, '>', to)
+            let close_gt = html_tag_end_at(i)
             if close_gt > i {
               if text_start < i {
                 result.push(Text(@strutil.substr(s, text_start, i)))
