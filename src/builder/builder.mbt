@@ -2208,7 +2208,7 @@ fn collect_root_sources(
   let mut i = 0
   while i < entries.length() {
     let filename = entries[i]
-    if filename.has_suffix(".md") && !is_non_content_file(filename) {
+    if filename.to_lower().has_suffix(".md") && !is_non_content_file(filename) {
       let file_slug = @slug.filename_to_slug(filename)
       // Only include if no collection or standalone page has claimed this slug
       match slug_owner.get(file_slug) {
@@ -4358,7 +4358,7 @@ pub fn collect_sources(
   let mut i = 0
   while i < entries.length() {
     let filename = entries[i]
-    if filename.has_suffix(".md") {
+    if filename.to_lower().has_suffix(".md") {
       let path = content_dir + "/" + filename
       let content = @fs.read_file_to_string(path)
       let file_slug = @slug.filename_to_slug(filename)

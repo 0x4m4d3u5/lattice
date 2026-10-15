@@ -138,6 +138,8 @@ This demo site exists to exercise the full lattice pipeline in one place.
 
 Place it at `content/posts/welcome-lattice.md`.
 
+Ordinary collection, standalone, and root content pages accept `.md` in any letter case (`.MD`, `.Md`, `.mD`). Their URLs use the same normalized slugs.
+
 Frontmatter is fenced with `---` and uses TOML-style `key = value` assignments. In the current implementation, dates are plain strings, so `"2024-01-15"` is validated as `String`.
 
 ## 5. Add templates
