@@ -155,7 +155,13 @@ pub fn template_note() -> Int {
     @markdown.render("# Garden <!-- > </h1> -->\n\nBody.", Map([])),
   )
   let raw_heading = "<h1 id=\"title\"><script>const text = \"</h1>\";</script></h1><p>Body</p>"
-  if @html.strip_leading_h1(raw_heading) == raw_heading &&
+  let svg_heading = "<h1><svg><title>Icon</title><style>.x{}</style><![CDATA[literal </h1>]]></svg> Title</h1><p>Body</p>"
+  let integrated_heading = "<h1><svg><foreignObject><title>literal </h1></title></foreignObject></svg></h1><p>Body</p>"
+  let optional_heading = "<h1><ruby>漢<rt>kan</ruby><select><option>A<option>B</select></h1><p>Body</p>"
+  if @html.strip_leading_h1(optional_heading) == "<p>Body</p>" &&
+    @html.strip_leading_h1(svg_heading) == "<p>Body</p>" &&
+    @html.strip_leading_h1(integrated_heading) == integrated_heading &&
+    @html.strip_leading_h1(raw_heading) == raw_heading &&
     without_h1 == "<p>Body.</p>\n" &&
     unicode_truncated == "🌱..." && unicode_intact == "🌱" &&
     quoted_fallback == "READ \"A|B\"" &&
