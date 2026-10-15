@@ -81,6 +81,16 @@ export function runNoteCases(render, assert) {
     ok('<h2 id="guide">Guide</h2>\n<p>Read <a href="#guide">Guide</a>.</p>\n'));
   check(render(yaml('##\r\n\r\nVisible paragraph.\n'), 'empty-heading.md', '{}'),
     ok('<h2 id="section"></h2>\n<p>Visible paragraph.</p>\n'));
+  check(render(yaml('See [AI](https://en.wikipedia.org/wiki/Artificial_intelligence_(disambiguation)).\n\n![Chart](/figures/loss_(train).png)\n'), 'destinations.md', '{}'),
+    ok('<p>See <a href="https://en.wikipedia.org/wiki/Artificial_intelligence_(disambiguation)">AI</a>.</p>\n<p><img src="/figures/loss_(train).png" alt="Chart" /></p>\n'));
+  check(render(yaml('[x](/a\\)b). [y](/a(b(c))).\n'), 'destinations.md', '{}'),
+    ok('<p><a href="/a)b">x</a>. <a href="/a(b(c))">y</a>.</p>\n'));
+  const malformedDestinations = '[x](()![x](()'.repeat(128);
+  check(render(yaml(malformedDestinations + ' [Guide](/a(b)).'), 'destinations.md', '{}'),
+    ok('<p>' + malformedDestinations + ' <a href="/a(b)">Guide</a>.</p>\n'));
+  const deepDestination = '/a' + '('.repeat(1024) + 'b' + ')'.repeat(1024);
+  check(render(yaml('[Deep](' + deepDestination + ')'), 'destinations.md', '{}'),
+    ok('<p><a href="' + deepDestination + '">Deep</a></p>\n'));
   // A new caller-supplied map must take effect; no prior note/map/error state leaks.
   for (let n = 0; n < 256; n++) {
     const text = `Synthetic note ${n} 🌱.`;

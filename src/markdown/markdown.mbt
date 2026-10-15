@@ -263,6 +263,57 @@ fn find_code_span_close(s : String, from : Int, limit : Int, width : Int) -> Int
 }
 
 ///|
+/// Pair destination delimiters once per inline slice, including unmatched opens.
+/// A failed candidate then needs only a lookup, not another suffix scan.
+fn link_destination_closes(s : String, from : Int, to : Int) -> Map[Int, Int] {
+  let closes : Map[Int, Int] = Map([])
+  let opens : Array[Int] = []
+  let mut i = from
+  while i < to {
+    let c = @strutil.char_at(s, i)
+    if c == '\\' &&
+      i + 1 < to &&
+      @strutil.char_at(s, i + 1).is_ascii_punctuation() {
+      i = i + 2
+    } else {
+      if c == '(' {
+        opens.push(i)
+      }
+      if c == ')' {
+        match opens.pop() {
+          Some(open) => closes.set(open, i)
+          None => ()
+        }
+      }
+      i = i + 1
+    }
+  }
+  closes
+}
+
+///|
+/// Decode only a matched destination; its caller will consume the whole range.
+fn decode_link_destination(s : String, start : Int, end : Int) -> String {
+  let buf = StringBuilder()
+  let mut i = start
+  let mut text_start = start
+  while i < end {
+    if @strutil.char_at(s, i) == '\\' &&
+      i + 1 < end &&
+      @strutil.char_at(s, i + 1).is_ascii_punctuation() {
+      buf.write_string(s[text_start:i].to_owned())
+      buf.write_char(@strutil.char_at(s, i + 1))
+      i = i + 2
+      text_start = i
+    } else {
+      i = i + 1
+    }
+  }
+  buf.write_string(s[text_start:end].to_owned())
+  buf.to_string()
+}
+
+///|
 /// Count consecutive occurrences of `c` starting at `pos`.
 fn count_char(s : String, pos : Int, c : Char) -> Int {
   let n = s.length()
@@ -429,6 +480,21 @@ fn parse_inlines_with_code_ranges(
   on_code : ((Int, Int) -> Unit)?,
 ) -> Array[Inline] {
   let result : Array[Inline] = []
+  let mut destination_closes : Map[Int, Int]? = None
+  fn destination_at(open : Int) -> (String, Int)? {
+    let closes = match destination_closes {
+      Some(closes) => closes
+      None => {
+        let closes = link_destination_closes(s, from, to)
+        destination_closes = Some(closes)
+        closes
+      }
+    }
+    match closes.get(open) {
+      Some(end) => Some((decode_link_destination(s, open + 1, end), end))
+      None => None
+    }
+  }
   let mut i = from
   let mut text_start = from
   while i < to {
@@ -787,13 +853,11 @@ fn parse_inlines_with_code_ranges(
       if bracket_close >= 0 &&
         bracket_close + 1 < to &&
         @strutil.char_at(s, bracket_close + 1) == '(' {
-        let paren_close = @strutil.find_char(s, bracket_close + 2, ')', to)
-        if paren_close >= 0 {
+        if destination_at(bracket_close + 1) is Some((url, paren_close)) {
           if text_start < i {
             result.push(Text(@strutil.substr(s, text_start, i)))
           }
           let alt = @strutil.substr(s, i + 2, bracket_close)
-          let url = @strutil.substr(s, bracket_close + 2, paren_close)
           result.push(Image(alt, url))
           i = paren_close + 1
           text_start = i
@@ -875,14 +939,12 @@ fn parse_inlines_with_code_ranges(
         if bracket_close >= 0 &&
           bracket_close + 1 < to &&
           @strutil.char_at(s, bracket_close + 1) == '(' {
-          let paren_close = @strutil.find_char(s, bracket_close + 2, ')', to)
-          if paren_close >= 0 {
+          if destination_at(bracket_close + 1) is Some((url, paren_close)) {
             if text_start < i {
               result.push(Text(@strutil.substr(s, text_start, i)))
             }
             let link_text = @strutil.substr(s, i + 1, bracket_close)
             let link_start = i + 1
-            let url = @strutil.substr(s, bracket_close + 2, paren_close)
             result.push(
               Link(parse_inlines_with_code_ranges(link_text, 0, link_text.length(),
                 on_code.map(fn(report) { fn(start, end) { report(start + link_start, end + link_start) } }),
