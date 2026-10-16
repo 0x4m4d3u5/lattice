@@ -25,6 +25,9 @@ writeFileSync(join(notes, 'ops.md'), '---\ntitle: Operations\ntags: [Database, R
 writeFileSync(join(notes, 'guide.md'), '---\ntitle: Recovery checklist\ntags: [Reliability]\n---\n## Preparation\nAssign a commander.\n');
 writeFileSync(join(notes, 'model.md'), '---\ntitle: Recovery index\ntags: [Data]\n---\n## Catalog\nKeep a catalog.\n');
 writeFileSync(join(notes, 'literal.md'), '---\ntitle: Literal <img src=x>\n---\n## Display examples\n`<img src=x onerror="window.hacked=true">` is literal markup.\n');
+for (const [name, tags] of [['case-a', '[Database, Équipe]'], ['case-b', '[database, équipe]'], ['case-c', '[DATABASE, ÉQUIPE]']]) {
+  writeFileSync(join(notes, `${name}.md`), `---\ntitle: ${name}\ntags: ${tags}\n---\n## Tag probe\ntagprobe\n`);
+}
 writeFileSync(join(templates, 'page.html'), '<!doctype html><title>{{title}}</title><article>{{content}}</article>');
 writeFileSync(join(templates, '404.html'), '{{content}}');
 const collections = join(root, 'collections.cfg');
@@ -119,6 +122,22 @@ try {
   await page.getByRole('button', { name: 'Retry loading search' }).click();
   await ready();
   assert.equal(indexRequests, 4);
+  assert.deepEqual(await page.locator('#tags input').evaluateAll(inputs => inputs.map(input => input.value)),
+    ['Data', 'Database', 'Reliability', 'Équipe', 'équipe']);
+  await page.getByLabel('Database', { exact: true }).check();
+  await query('tagprobe'); await complete();
+  assert.deepEqual(await urls(), ['/notes/case-a/', '/notes/case-b/', '/notes/case-c/']);
+  await page.getByLabel('Database', { exact: true }).uncheck();
+  await page.getByLabel('Équipe', { exact: true }).check();
+  await query('tagprobe'); await complete();
+  assert.deepEqual(await urls(), ['/notes/case-a/', '/notes/case-c/']);
+  await page.getByLabel('équipe', { exact: true }).check();
+  await query('tagprobe'); await complete(); await status('No matching sections.');
+  await page.getByLabel('Équipe', { exact: true }).uncheck();
+  await query('tagprobe'); await complete();
+  assert.deepEqual(await urls(), ['/notes/case-b/']);
+  await page.getByLabel('équipe', { exact: true }).uncheck();
+
   await query('recovery'); await complete();
   const expected = ['/notes/ops/', '/notes/guide/', '/notes/model/'];
   assert.deepEqual(await urls(), expected);

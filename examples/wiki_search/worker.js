@@ -14,7 +14,13 @@ self.addEventListener('message', async ({ data }) => {
       search = await createContentSearcher(await wasm.arrayBuffer());
       // Validate with the MoonBit decoder, including explicit empty sections.
       if (search(indexJson, '', '[]', 0).error !== null) throw new Error('Invalid content index');
-      const tags = [...new Set(JSON.parse(indexJson).flatMap(entry => entry.tags))].sort();
+      const names = new Map();
+      for (const tag of JSON.parse(indexJson).flatMap(entry => entry.tags)) {
+        // Match MoonBit's ASCII-only folding; preserve the first display spelling.
+        const key = tag.replace(/[A-Z]/g, letter => letter.toLowerCase());
+        if (!names.has(key)) names.set(key, tag);
+      }
+      const tags = [...names.values()].sort();
       self.postMessage({ id: data.id, type: 'ready', tags });
     } else if (data.type === 'search') {
       const response = search(indexJson, data.query, JSON.stringify(data.tags), 10);

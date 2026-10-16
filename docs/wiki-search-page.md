@@ -36,6 +36,8 @@ relative paths. Load only an index you intend to make available to visitors;
 this page inherits the index's publication and draft rules.
 
 Submit a query with Enter or Search. Check tags to require every selected tag.
+ASCII case variants share one checkbox, using the first indexed display spelling;
+non-ASCII case variants remain distinct, matching the retrieval core.
 Only the latest submitted query can update the results; submitting an empty
 query clears them. Search returns up to ten sections. Snippets and titles are
 inserted as text. HTTP and HTTPS citations use the exact returned URL, without
