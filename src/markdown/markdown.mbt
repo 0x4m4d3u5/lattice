@@ -1595,7 +1595,16 @@ fn parse_blocks_with_code_lines(
       // Both terms and definition values are parsed as inline content so
       // **bold**, `code`, [links](url), etc. work as expected.
       let items : Array[(Array[Inline], Array[Array[Inline]])] = []
-      while i < n && is_definition_term_start(ls, i) {
+      // Continuations must honor the same earlier block branches as the outer
+      // parser. Keep the shared paragraph-boundary predicate unchanged.
+      while i < n && is_definition_term_start(ls, i) &&
+        !is_footnote_def_line(ls[i]) &&
+        !is_heading_line(ls[i]) &&
+        !is_hrule(ls[i]) &&
+        !is_fence_start(ls[i]) &&
+        !is_blockquote_line(ls[i]) &&
+        !is_unordered_item(ls[i]) &&
+        !is_ordered_item(ls[i]) {
         let term_str = ls[i]
         let term_inlines = parse_inlines(term_str, 0, term_str.length())
         i = i + 1

@@ -144,7 +144,9 @@ Frontmatter is fenced with `---` and uses TOML-style `key = value` assignments. 
 
 Definition lists pair a term line with following `: definition` lines. A term
 and definition can follow prose without a blank line. An unpaired line such as
-`: note` is rendered as ordinary paragraph text.
+`: note` is rendered as ordinary paragraph text. Headings, lists, code fences,
+horizontal rules, blockquotes and footnote definitions end a definition list
+instead of becoming additional terms.
 
 ## 5. Add templates
 

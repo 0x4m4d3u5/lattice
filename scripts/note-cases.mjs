@@ -130,6 +130,12 @@ export function runNoteCases(render, assert) {
     ok('<pre><code>: marker in code</code></pre>\n'));
   check(render(yaml(': orphan\n\nTerm\n: explanation'), 'definition.md', '{}'),
     ok('<p>: orphan</p>\n<dl>\n<dt>Term</dt>\n<dd>explanation</dd>\n</dl>\n'));
+  check(render(yaml('Term\n: definition\n## Recovery\n: literal note'), 'definition-priority.md', '{}'),
+    ok('<dl>\n<dt>Term</dt>\n<dd>definition</dd>\n</dl>\n<h2 id="recovery">Recovery</h2>\n<p>: literal note</p>\n'));
+  check(render(yaml('Term\n: definition\n~~~\n: [[missing]]\n~~~'), 'definition-priority.md', '{}'),
+    ok('<dl>\n<dt>Term</dt>\n<dd>definition</dd>\n</dl>\n<pre><code>: [[missing]]</code></pre>\n'));
+  check(render(yaml('Initial\n: first\n<em>Term</em>\n: second'), 'definition-priority.md', '{}'),
+    ok('<dl>\n<dt>Initial</dt>\n<dd>first</dd>\n<dt><em>Term</em></dt>\n<dd>second</dd>\n</dl>\n'));
   // A new caller-supplied map must take effect; no prior note/map/error state leaks.
   for (let n = 0; n < 256; n++) {
     const text = `Synthetic note ${n} 🌱.`;
