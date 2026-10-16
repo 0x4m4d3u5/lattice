@@ -69,9 +69,14 @@ pub fn validate_note() -> Int {
         field_type: @schema.TString(None, None),
         required: true,
       },
+      {
+        name: "aliases",
+        field_type: @schema.TArray(@schema.TString(None, None)),
+        required: false,
+      },
     ],
   }
-  let valid = match @frontmatter.parse("---\ntitle: 'Garden''s ''🌱'''\n---\nA note.\n") {
+  let valid = match @frontmatter.parse("---\ntitle: 'Garden''s ''🌱'''\naliases: [3D printing, 2026 roadmap]\n---\nA note.\n") {
     Ok(fm) => fm
     Err(_) => return -1
   }
@@ -79,6 +84,14 @@ pub fn validate_note() -> Int {
     return -3
   }
   if title != "Garden's '🌱'" { return -4 }
+  guard valid.fields.get("aliases") is Some(@frontmatter.FArray(aliases)) else {
+    return -5
+  }
+  if aliases.length() != 2 { return -6 }
+  guard (aliases[0], aliases[1]) is
+    (@frontmatter.FStr("3D printing"), @frontmatter.FStr("2026 roadmap")) else {
+    return -7
+  }
   let invalid = match @frontmatter.parse("---\n---\nA note.\n") {
     Ok(fm) => fm
     Err(_) => return -2

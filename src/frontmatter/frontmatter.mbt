@@ -171,6 +171,7 @@ fn parse_int_str(s : String) -> Result[Int, String] {
 fn parse_value_at(
   s : String,
   pos : Int,
+  yaml_plain : Bool,
 ) -> Result[(FrontmatterValue, Int), String] {
   let n = s.length()
   let mut i = pos
@@ -193,12 +194,16 @@ fn parse_value_at(
       Err(e) => Err(e)
     }
   } else if c == '[' {
-    parse_array_at(s, i)
+    parse_array_at(s, i, yaml_plain)
   } else if @strutil.is_digit(c) || c == '-' {
     let mut j = i
+    // YAML plain scalars include internal spaces. TOML numeric tokens end at
+    // whitespace so missing array commas still produce a parse error.
     while j < n &&
-          @strutil.char_at(s, j) != ' ' &&
-          @strutil.char_at(s, j) != '\t' &&
+          (
+            yaml_plain ||
+            (@strutil.char_at(s, j) != ' ' && @strutil.char_at(s, j) != '\t')
+          ) &&
           @strutil.char_at(s, j) != ',' &&
           @strutil.char_at(s, j) != ']' {
       j = j + 1
@@ -240,6 +245,7 @@ fn parse_value_at(
 fn parse_array_at(
   s : String,
   pos : Int,
+  yaml_plain : Bool,
 ) -> Result[(FrontmatterValue, Int), String] {
   let n = s.length()
   if pos >= n || @strutil.char_at(s, pos) != '[' {
@@ -255,7 +261,7 @@ fn parse_array_at(
     return Ok((FArray(items), i + 1))
   }
   while i < n {
-    match parse_value_at(s, i) {
+    match parse_value_at(s, i, yaml_plain) {
       Err(e) => return Err(e)
       Ok((val, next)) => {
         items.push(val)
@@ -281,8 +287,11 @@ fn parse_array_at(
 }
 
 ///|
-fn parse_value_strict(s : String) -> Result[FrontmatterValue, String] {
-  match parse_value_at(s, 0) {
+fn parse_value_strict(
+  s : String,
+  yaml_plain : Bool,
+) -> Result[FrontmatterValue, String] {
+  match parse_value_at(s, 0, yaml_plain) {
     Err(e) => Err(e)
     Ok((value, next)) => {
       let mut i = next
@@ -322,7 +331,7 @@ fn parse_assignment(
     return Err("empty key")
   }
   let val_str = trim_ws(@strutil.substr(line, eq + 1, n))
-  match parse_value_strict(val_str) {
+  match parse_value_strict(val_str, false) {
     Ok(val) => Ok((key, val))
     Err(e) => Err("value error for '" + key + "': " + e)
   }
@@ -341,7 +350,7 @@ fn parse_yaml_value(raw : String) -> FrontmatterValue {
     }
     return FStr(unquoted)
   }
-  match parse_value_strict(value) {
+  match parse_value_strict(value, true) {
     Ok(parsed) => parsed
     Err(_) => FStr(value)
   }
