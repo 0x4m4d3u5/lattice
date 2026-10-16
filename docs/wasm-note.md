@@ -89,6 +89,10 @@ npm exec --prefix tests/browser -- playwright install chromium --only-shell
 bash scripts/check-browser-note.sh
 ```
 
+The gate also requires a POSIX C compiler (`cc`, or the executable named by
+`CC`) for a native-server fixture. It serves disposable assets over loopback
+and checks `.mjs` imports, streaming `.wasm` loading, and binary-response bytes.
+
 The isolated harness pins official Playwright 1.63.0 and its core package with
 registry integrity hashes. It launches a fresh headless browser profile with
 `chromiumSandbox: true`; it does not connect to existing browser sessions or
