@@ -1,5 +1,7 @@
 # Local section search
 
+For a ready-to-publish interface, use the [wiki search page](wiki-search-page.md).
+
 Enable `content_index_file = content-index.json` in `site.cfg`. Builds add a
 `sections` array to each content-index entry alongside the existing body,
 headings and links. Each section has `heading` and rendered plaintext `body`.
