@@ -31,6 +31,14 @@ pub fn render_note() -> Int {
   if priority.toc.length() != 1 || !priority.html.contains("<h2 id=\"recovery\">Recovery</h2>") {
     return -7
   }
+  if @markdown.render("[Read \\] notes](/guide).", Map([])) !=
+    "<p><a href=\"/guide\">Read ] notes</a>.</p>\n" {
+    return -8
+  }
+  if @markdown.render("![Read \\] notes](/guide.png).", Map([])) !=
+    "<p><img src=\"/guide.png\" alt=\"Read ] notes\" />.</p>\n" {
+    return -9
+  }
   let html = @markdown.render(fm.body, links)
   let navigation = @search.render_content_index_with_navigation(
     [@search.new_content_entry("Garden", "garden", "/garden/", [], "", "", "", "page", None, "body")],
