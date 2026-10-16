@@ -58,6 +58,13 @@ export function runNoteCases(render, assert) {
   });
   check(render(yaml('$$\n## Not a heading\n[[missing]]\n$$\n\nAfter.'), 'closed-math.md', '{}'),
     ok('<div class="math-block">\\[## Not a heading\n[[missing]]\\]</div>\n<p>After.</p>\n'));
+  check(render(yaml('Ref[^a] then[^b].\n\n[^a]: First text\n[^b]: Other text\n[^a]: Shadowed text'), 'duplicate-footnote.md', '{}'),
+    ok('<p>Ref<sup><a href="#fn-a" id="fnref-a">[1]</a></sup> then<sup><a href="#fn-b" id="fnref-b">[2]</a></sup>.</p>\n\n<section class="footnotes">\n<ol>\n<li id="fn-a">First text <a href="#fnref-a" class="footnote-backref">↩</a></li>\n<li id="fn-b">Other text <a href="#fnref-b" class="footnote-backref">↩</a></li>\n</ol>\n</section>\n'));
+  check(render(yaml('Ref[^a].\n\n[^a]: See [[soil|Soil]].\n[^a]: Shadow [[missing]].'), 'duplicate-footnote.md', '{"soil":"/soil/"}'),
+    ok('<p>Ref<sup><a href="#fn-a" id="fnref-a">[1]</a></sup>.</p>\n\n<section class="footnotes">\n<ol>\n<li id="fn-a">See <a href="/soil/">Soil</a>. <a href="#fnref-a" class="footnote-backref">↩</a></li>\n</ol>\n</section>\n'));
+  check(render(yaml('Ref[^a].\n\n[^a]: See [[missing]].\n[^a]: Shadow [[soil]].'), 'duplicate-footnote.md', '{"soil":"/soil/"}'), {
+    html: '', diagnostics: [issue('wikilink', 'duplicate-footnote.md', "target 'missing' not found in page index")],
+  });
   check(render(yaml('A & B < C.\n'), 'escaping.md', '{}'),
     ok('<p>A &amp; B &lt; C.</p>\n'));
   check(render(yaml('e\u0301 \u0000 \ud800 🌱.\n'), 'units.md', '{}'),
