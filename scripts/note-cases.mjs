@@ -49,6 +49,15 @@ export function runNoteCases(render, assert) {
     ok('<pre><code>first\n```still code\n[[missing]]\nlast</code></pre>\n<p>Visible paragraph.</p>\n'));
   check(render(yaml('Text[^source].\n\n> [^source]: Read [[soil|Soil guide]].\n'), 'nested-footnote.md', '{"soil":"/notes/soil/"}'),
     ok('<p>Text<sup><a href="#fn-source" id="fnref-source">[1]</a></sup>.</p>\n<blockquote>\n</blockquote>\n\n<section class="footnotes">\n<ol>\n<li id="fn-source">Read <a href="/notes/soil/">Soil guide</a>. <a href="#fnref-source" class="footnote-backref">↩</a></li>\n</ol>\n</section>\n'));
+  check(render(yaml('$$\nKeep this text.\n\n## Recovery\nRead [[soil|Soil]].'), 'unclosed-math.md', '{"soil":"/soil/"}'),
+    ok('<p>$$</p>\n<p>Keep this text.</p>\n<h2 id="recovery">Recovery</h2>\n<p>Read <a href="/soil/">Soil</a>.</p>\n'));
+  check(render(yaml('$$\n~~~\n[[missing]]\n~~~\n\nVisible.'), 'unclosed-math.md', '{}'),
+    ok('<p>$$</p>\n<pre><code>[[missing]]</code></pre>\n<p>Visible.</p>\n'));
+  check(render(yaml('$$\nRead [[missing]].'), 'unclosed-math.md', '{}'), {
+    html: '', diagnostics: [issue('wikilink', 'unclosed-math.md', "target 'missing' not found in page index")],
+  });
+  check(render(yaml('$$\n## Not a heading\n[[missing]]\n$$\n\nAfter.'), 'closed-math.md', '{}'),
+    ok('<div class="math-block">\\[## Not a heading\n[[missing]]\\]</div>\n<p>After.</p>\n'));
   check(render(yaml('A & B < C.\n'), 'escaping.md', '{}'),
     ok('<p>A &amp; B &lt; C.</p>\n'));
   check(render(yaml('e\u0301 \u0000 \ud800 🌱.\n'), 'units.md', '{}'),
