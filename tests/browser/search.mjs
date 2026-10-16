@@ -23,6 +23,7 @@ assert.notEqual(run('scripts/package-search.mjs', [search]).status, 0);
 assert.equal(readFileSync(join(search, 'preserve.txt'), 'utf8'), 'unrelated local content');
 writeFileSync(join(notes, 'ops.md'), '---\ntitle: Operations\ntags: [Database, Reliability]\n---\n## Recovery drills\nRestore encrypted snapshots. Verify checksums.\n\n## Garden\nWater basil.\n');
 writeFileSync(join(notes, 'guide.md'), '---\ntitle: Recovery checklist\ntags: [Reliability]\n---\n## Preparation\nAssign a commander.\n');
+writeFileSync(join(notes, 'priority.md'), '---\ntitle: Definition priority\n---\nTerm\n: definition\n## Priorities\n: priorityprobe\n');
 writeFileSync(join(notes, 'orphan.md'), '---\ntitle: Definition boundary\n---\n: standalone marker\n\nTerm\n: glossaryprobe\n');
 writeFileSync(join(notes, 'model.md'), '---\ntitle: Recovery index\ntags: [Data]\n---\n## Catalog\nKeep a catalog.\n');
 writeFileSync(join(notes, 'literal.md'), '---\ntitle: Literal <img src=x>\n---\n## Display examples\n`<img src=x onerror="window.hacked=true">` is literal markup.\n');
@@ -156,6 +157,9 @@ try {
   await query('recovery'); await complete();
   assert.deepEqual(await urls(), ['/notes/model/']);
   await page.getByLabel('Data', { exact: true }).uncheck();
+  await query('priorityprobe'); await complete();
+  assert.deepEqual(await urls(), ['/notes/priority/']);
+  assert.equal(await page.locator('#results .section').textContent(), 'Priorities');
   await query('glossaryprobe'); await complete();
   assert.deepEqual(await urls(), ['/notes/orphan/']);
   assert.ok((await page.locator('#results .snippet').textContent()).includes(': standalone marker'));

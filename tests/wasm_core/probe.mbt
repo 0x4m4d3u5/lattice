@@ -25,6 +25,12 @@ pub fn render_note() -> Int {
     "<p>Context.</p>\n<dl>\n<dt>Term</dt>\n<dd>definition</dd>\n</dl>\n" {
     return -6
   }
+  let priority = @markdown.render_with_diagnostics(
+    "Term\n: definition\n## Recovery\n: literal note", Map([]),
+  )
+  if priority.toc.length() != 1 || !priority.html.contains("<h2 id=\"recovery\">Recovery</h2>") {
+    return -7
+  }
   let html = @markdown.render(fm.body, links)
   let navigation = @search.render_content_index_with_navigation(
     [@search.new_content_entry("Garden", "garden", "/garden/", [], "", "", "", "page", None, "body")],
