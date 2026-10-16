@@ -292,8 +292,32 @@ fn link_destination_closes(s : String, from : Int, to : Int) -> Map[Int, Int] {
 }
 
 ///|
-/// Decode only a matched destination; its caller will consume the whole range.
-fn decode_link_destination(s : String, start : Int, end : Int) -> String {
+/// Cache each opener's first unescaped label closer within this inline slice.
+/// Escaped punctuation consumes pairs, so an even backslash run leaves ] active.
+fn link_label_closes(s : String, from : Int, to : Int) -> Map[Int, Int] {
+  let closes : Map[Int, Int] = Map([])
+  let pending : Array[Int] = []
+  let mut i = from
+  while i < to {
+    let c = @strutil.char_at(s, i)
+    if c == '\\' && i + 1 < to &&
+      @strutil.char_at(s, i + 1).is_ascii_punctuation() {
+      i = i + 2
+    } else {
+      if c == '[' { pending.push(i) }
+      if c == ']' {
+        for open in pending { closes.set(open, i) }
+        pending.clear()
+      }
+      i = i + 1
+    }
+  }
+  closes
+}
+
+///|
+/// Decode escaped punctuation only after matching a complete destination or label.
+fn decode_link_punctuation(s : String, start : Int, end : Int) -> String {
   let buf = StringBuilder()
   let mut i = start
   let mut text_start = start
@@ -528,6 +552,18 @@ fn parse_inlines_with_code_ranges(
     }
     ends.get(start).unwrap_or(-1)
   }
+  let mut label_closes : Map[Int, Int]? = None
+  fn label_close_at(open : Int) -> Int {
+    let closes = match label_closes {
+      Some(closes) => closes
+      None => {
+        let closes = link_label_closes(s, from, to)
+        label_closes = Some(closes)
+        closes
+      }
+    }
+    closes.get(open).unwrap_or(-1)
+  }
   let mut destination_closes : Map[Int, Int]? = None
   fn destination_at(open : Int) -> (String, Int)? {
     let closes = match destination_closes {
@@ -539,7 +575,7 @@ fn parse_inlines_with_code_ranges(
       }
     }
     match closes.get(open) {
-      Some(end) => Some((decode_link_destination(s, open + 1, end), end))
+      Some(end) => Some((decode_link_punctuation(s, open + 1, end), end))
       None => None
     }
   }
@@ -897,7 +933,7 @@ fn parse_inlines_with_code_ranges(
       text_start = i
     } else if c == '!' && i + 1 < to && @strutil.char_at(s, i + 1) == '[' {
       // image: ![alt](url)
-      let bracket_close = @strutil.find_char(s, i + 2, ']', to)
+      let bracket_close = label_close_at(i + 1)
       if bracket_close >= 0 &&
         bracket_close + 1 < to &&
         @strutil.char_at(s, bracket_close + 1) == '(' {
@@ -905,7 +941,7 @@ fn parse_inlines_with_code_ranges(
           if text_start < i {
             result.push(Text(@strutil.substr(s, text_start, i)))
           }
-          let alt = @strutil.substr(s, i + 2, bracket_close)
+          let alt = decode_link_punctuation(s, i + 2, bracket_close)
           result.push(Image(alt, url))
           i = paren_close + 1
           text_start = i
@@ -983,7 +1019,7 @@ fn parse_inlines_with_code_ranges(
         text_start = i
       } else {
         // regular link: [text](url)
-        let bracket_close = @strutil.find_char(s, i + 1, ']', to)
+        let bracket_close = label_close_at(i)
         if bracket_close >= 0 &&
           bracket_close + 1 < to &&
           @strutil.char_at(s, bracket_close + 1) == '(' {
