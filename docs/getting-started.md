@@ -142,6 +142,10 @@ Ordinary collection, standalone, and root content pages accept `.md` in any lett
 
 Frontmatter is fenced with `---` and uses TOML-style `key = value` assignments. In the current implementation, dates are plain strings, so `"2024-01-15"` is validated as `String`.
 
+Definition lists pair a term line with following `: definition` lines. A term
+and definition can follow prose without a blank line. An unpaired line such as
+`: note` is rendered as ordinary paragraph text.
+
 ## 5. Add templates
 
 The example site has one page template and one index template.

@@ -1463,7 +1463,6 @@ fn is_block_starter(line : String) -> Bool {
   is_unordered_item(line) ||
   is_ordered_item(line) ||
   is_blockquote_line(line) ||
-  is_definition_line(line) ||
   is_html_block_start(line) ||
   is_math_block_start(line)
 }
@@ -1696,7 +1695,10 @@ fn parse_blocks_with_code_lines(
       // paragraph: accumulate non-blank, non-block-starter lines
       let para_lines : Array[String] = []
       let para_start = i
-      while i < n && !is_blank(ls[i]) && !is_block_starter(ls[i]) {
+      // A definition marker alone is prose; only a term/definition pair starts
+      // a block. Stop before its term so the outer parser can consume the pair.
+      while i < n && !is_blank(ls[i]) && !is_block_starter(ls[i]) &&
+        !is_definition_term_start(ls, i) {
         para_lines.push(ls[i])
         i = i + 1
       }

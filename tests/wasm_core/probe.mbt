@@ -18,6 +18,13 @@ pub fn render_note() -> Int {
   for link in resolved {
     links.set(link.raw.target, link.url)
   }
+  if @markdown.render(": orphan", Map([])) != "<p>: orphan</p>\n" {
+    return -5
+  }
+  if @markdown.render("Context.\nTerm\n: definition", Map([])) !=
+    "<p>Context.</p>\n<dl>\n<dt>Term</dt>\n<dd>definition</dd>\n</dl>\n" {
+    return -6
+  }
   let html = @markdown.render(fm.body, links)
   let navigation = @search.render_content_index_with_navigation(
     [@search.new_content_entry("Garden", "garden", "/garden/", [], "", "", "", "page", None, "body")],
