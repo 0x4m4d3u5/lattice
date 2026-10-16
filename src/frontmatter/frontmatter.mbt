@@ -194,10 +194,6 @@ fn parse_value_at(
     }
   } else if c == '[' {
     parse_array_at(s, i)
-  } else if @strutil.starts_with_at(s, i, "true") {
-    Ok((FBool(true), i + 4))
-  } else if @strutil.starts_with_at(s, i, "false") {
-    Ok((FBool(false), i + 5))
   } else if @strutil.is_digit(c) || c == '-' {
     let mut j = i
     while j < n &&
@@ -229,7 +225,14 @@ fn parse_value_at(
           @strutil.char_at(s, j) != ']' {
       j = j + 1
     }
-    Ok((FStr(trim_ws(@strutil.substr(s, i, j))), j))
+    // Boolean names must match the whole scalar, not a tag-name prefix.
+    let raw = trim_ws(@strutil.substr(s, i, j))
+    let value = match raw {
+      "true" => FBool(true)
+      "false" => FBool(false)
+      _ => FStr(raw)
+    }
+    Ok((value, j))
   }
 }
 
