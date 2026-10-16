@@ -110,7 +110,9 @@ static const char *mime_for_path(const char *path) {
     if (strcmp(dot, "html") == 0 || strcmp(dot, "htm") == 0)
         return "text/html; charset=utf-8";
     if (strcmp(dot, "css")  == 0) return "text/css; charset=utf-8";
-    if (strcmp(dot, "js")   == 0) return "text/javascript; charset=utf-8";
+    if (strcmp(dot, "js") == 0 || strcmp(dot, "mjs") == 0)
+        return "text/javascript; charset=utf-8";
+    if (strcmp(dot, "wasm") == 0) return "application/wasm";
     if (strcmp(dot, "json") == 0) return "application/json";
     if (strcmp(dot, "xml")  == 0) return "application/xml";
     if (strcmp(dot, "png")  == 0) return "image/png";
