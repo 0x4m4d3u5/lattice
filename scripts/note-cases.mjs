@@ -121,6 +121,15 @@ export function runNoteCases(render, assert) {
     ok("<p><a href=\"/wiki%22data-probe=%22yes?x=%2f&amp;plus=a+b#frag\">Guide</a></p>\n"));
   check(render(yaml("<https://example.test/a\"b?x=%22&plus=a+b#frag>"), 'destinations.md', "{}"),
     ok("<p><a href=\"https://example.test/a%22b?x=%22&amp;plus=a+b#frag\">https://example.test/a\"b?x=%22&amp;plus=a+b#frag</a></p>\n"));
+  check(render(yaml(': orphan definition'), 'definition.md', '{}'), ok('<p>: orphan definition</p>\n'));
+  check(render(yaml(': orphan\n\n## Public\n> : quoted orphan'), 'definition.md', '{}'),
+    ok('<p>: orphan</p>\n<h2 id="public">Public</h2>\n<blockquote>\n<p>: quoted orphan</p>\n</blockquote>\n'));
+  check(render(yaml('Context.\nRecovery\n: See [[soil|the guide]].'), 'definition.md', '{"soil":"/notes/soil/"}'),
+    ok('<p>Context.</p>\n<dl>\n<dt>Recovery</dt>\n<dd>See <a href="/notes/soil/">the guide</a>.</dd>\n</dl>\n'));
+  check(render(yaml('~~~\n: marker in code\n~~~'), 'definition.md', '{}'),
+    ok('<pre><code>: marker in code</code></pre>\n'));
+  check(render(yaml(': orphan\n\nTerm\n: explanation'), 'definition.md', '{}'),
+    ok('<p>: orphan</p>\n<dl>\n<dt>Term</dt>\n<dd>explanation</dd>\n</dl>\n'));
   // A new caller-supplied map must take effect; no prior note/map/error state leaks.
   for (let n = 0; n < 256; n++) {
     const text = `Synthetic note ${n} 🌱.`;
