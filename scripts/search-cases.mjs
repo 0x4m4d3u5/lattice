@@ -50,6 +50,17 @@ export function runSearchCases(search, assert) {
   equal(run('recovery', [], 10, [...pages].reverse()), recovery);
   const tied = ['z', 'a'].map(name => ({ title: 'Notebook', url: `/${name}/`, tags: [], sections: [{ heading: 'Soil', body: 'Clay.' }] }));
   equal(run('soil', [], 10, tied).results.map(hit => hit.url), ['/a/', '/z/']);
+  const caseTags = [
+    { title: 'Upper', url: '/a/', tags: ['Database', 'Équipe'], sections: [{ heading: '', body: 'tagprobe' }] },
+    { title: 'Lower', url: '/b/', tags: ['database', 'équipe'], sections: [{ heading: '', body: 'tagprobe' }] },
+    { title: 'ASCII variant', url: '/c/', tags: ['DATABASE', 'ÉQUIPE'], sections: [{ heading: '', body: 'tagprobe' }] },
+  ];
+  equal(run('tagprobe', ['DATABASE'], 10, caseTags).results.map(hit => hit.url), ['/a/', '/b/', '/c/']);
+  equal(run('tagprobe', ['Database', 'database'], 10, caseTags).results.map(hit => hit.url), ['/a/', '/b/', '/c/']);
+  equal(run('tagprobe', ['Équipe'], 10, caseTags).results.map(hit => hit.url), ['/a/', '/c/']);
+  equal(run('tagprobe', ['ÉQUIPE'], 10, caseTags).results.map(hit => hit.url), ['/a/', '/c/']);
+  equal(run('tagprobe', ['équipe'], 10, caseTags).results.map(hit => hit.url), ['/b/']);
+  equal(run('tagprobe', ['Équipe', 'équipe'], 10, caseTags).results, []);
   const legacy = [{ title: 'Legacy', url: '/legacy/', tags: [], body: 'Archive recovery notes.' }];
   equal(run('recovery', [], 10, legacy).results.map(hit => [hit.url, hit.section, hit.snippet]), [['/legacy/', '', 'Archive recovery notes.']]);
   equal(run('recovery', [], 10, [{ ...legacy[0], sections: [] }]).results, []);
