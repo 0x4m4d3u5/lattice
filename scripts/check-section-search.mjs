@@ -45,7 +45,7 @@ writeFileSync(join(standalone, 'guide.md'), '---\ntitle: Recovery checklist\ntag
 writeFileSync(join(standalone, 'hidden.md'), '---\ntitle: Hidden\ndraft: true\n---\n## Private drill\nSynthetic draft marker.\n');
 writeFileSync(join(standalone, 'comments.md'), '---\ntitle: Comments\n---\n<!--\n\n## Private heading\n\nprivatemarker\n\n-->\n\n## Public\n\nvisible\n');
 writeFileSync(join(standalone, 'closed.md'), '---\ntitle: Closed comments\n---\nBefore.\n\n<!--\n\n## Hidden\n\nprivatemarker\n\n<div>--></div>\n\n## Public\n\nvisible\n');
-writeFileSync(join(standalone, 'references.md'), '---\ntitle: References\n---\n## Recovery\nSee procedure[^1].\n\n[^1]: Restore encrypted snapshots.\n');
+writeFileSync(join(standalone, 'references.md'), '---\ntitle: References\n---\n## Recovery\nSee procedure[^1].\n\n[^1]: Restore encrypted snapshots.\n[^1]: Shadowedmarker [[missing]].\n');
 writeFileSync(join(standalone, 'unfinished.md'), '---\ntitle: Unfinished formula\n---\n$$\nPreamble retained.\n\n## Preserved\nUnfinishedmarker read [[guide|the checklist]].\n\n~~~\n[[missing]]\n~~~\n');
 // The generated /posts/ page supersedes this source; do not retrieve its text.
 writeFileSync(join(content, 'posts.md'), '---\ntitle: Old index\n---\n## Obsolete\nObsolete recovery instructions.\n');
@@ -90,6 +90,10 @@ const verify = (drafts = false) => {
   const html = readFileSync(join(output, 'unfinished/index.html'), 'utf8');
   assert.ok(html.includes('<h2 id="preserved">Preserved</h2>'));
   assert.ok(html.includes('<a href="/guide/">the checklist</a>'));
+  const referenceHtml = readFileSync(join(output, 'references/index.html'), 'utf8');
+  assert.equal((referenceHtml.match(/<li id="fn-1">/g) ?? []).length, 1);
+  assert.ok(!referenceHtml.includes('Shadowedmarker'));
+  assert.ok(!JSON.stringify(index.find(entry => entry.url === '/references/')).includes('Shadowedmarker'));
   return index;
 };
 build(); verify();
@@ -106,6 +110,7 @@ if (process.env.LATTICE_CLI) {
   const preserved = JSON.parse(search(JSON.stringify(index), 'unfinishedmarker', '[]', 10));
   assert.equal(preserved.error, null);
   assert.deepEqual(preserved.results.map(hit => [hit.url, hit.section, hit.section_index]), [['/unfinished/', 'Preserved', 1]]);
+  assert.deepEqual(JSON.parse(search(JSON.stringify(index), 'shadowedmarker', '[]', 10)).results, []);
   const reference = JSON.parse(search(JSON.stringify(index), 'encrypted', '[]', 10));
   const footnote = reference.results.find(hit => hit.url === '/references/');
   assert.equal(footnote?.section, 'Footnotes');
