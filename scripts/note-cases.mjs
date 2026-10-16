@@ -24,6 +24,10 @@ export function runNoteCases(render, assert) {
     ok('<p>Paths C:\\Users\\notes and \\🌱.</p>\n<p>First<br />\nSecond.</p>\n'));
   check(render(yaml('First\\\r\nSecond.\n\nThird\\\rFourth.\n\n`Literal\\\r\ncode`\n'), 'crlf.md', '{}'),
     ok('<p>First<br />\nSecond.</p>\n<p>Third<br />\nFourth.</p>\n<p><code>Literal\\\r\ncode</code></p>\n'));
+  for (const ending of ['\r\n', '\n', '\r']) {
+    check(render(yaml(`First  ${ending}Second.\n\nThird${ending}Fourth.\n`), 'space-break.md', '{}'),
+      ok('<p>First<br />\nSecond.</p>\n<p>Third Fourth.</p>\n'));
+  }
   check(render(yaml('```\nfirst\n```still code\n[[missing]]\nlast\n```\n\nVisible paragraph.\n'), 'fence.md', '{}'),
     ok('<pre><code>first\n```still code\n[[missing]]\nlast</code></pre>\n<p>Visible paragraph.</p>\n'));
   check(render(yaml('Text[^source].\n\n> [^source]: Read [[soil|Soil guide]].\n'), 'nested-footnote.md', '{"soil":"/notes/soil/"}'),

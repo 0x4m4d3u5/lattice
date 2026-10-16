@@ -1007,21 +1007,30 @@ fn parse_inlines_with_code_ranges(
           i = i + 1
         }
       }
-    } else if c == '\n' {
-      // soft line break: two trailing spaces before newline = hard break,
-      // otherwise collapse to a space (standard markdown behavior)
-      if text_start < i {
-        result.push(Text(@strutil.substr(s, text_start, i)))
-      }
-      let is_hard = i >= 2 &&
+    } else if c == '\n' || c == '\r' {
+      // Treat CRLF as one ending. Two or more trailing spaces are the hard
+      // break delimiter; keep lookbehind inside the current inline slice.
+      let is_hard = i - from >= 2 &&
         @strutil.char_at(s, i - 1) == ' ' &&
         @strutil.char_at(s, i - 2) == ' '
+      let mut text_end = i
+      if is_hard {
+        while text_end > text_start && @strutil.char_at(s, text_end - 1) == ' ' {
+          text_end = text_end - 1
+        }
+      }
+      if text_start < text_end {
+        result.push(Text(@strutil.substr(s, text_start, text_end)))
+      }
       if is_hard {
         result.push(HardBreak)
       } else {
         result.push(Text(" "))
       }
       i = i + 1
+      if c == '\r' && i < to && @strutil.char_at(s, i) == '\n' {
+        i = i + 1
+      }
       text_start = i
     } else {
       i = i + 1
