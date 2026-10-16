@@ -72,7 +72,7 @@ try {
   }));
   assert.equal(result.ok, true, result.error);
   assert.equal(result.worker, true, 'cases did not execute in a real dedicated worker');
-  assert.equal(result.count, 602);
+  assert.equal(result.count, 606);
   assert.equal(result.searchCount, 126);
   // DOM inspection needs no network, including image requests.
   await context.route('**/*', route => route.abort());

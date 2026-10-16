@@ -1496,6 +1496,8 @@ fn parse_blocks_with_code_lines(
   let footnotes : Array[FootnoteDef] = []
   let mut i = 0
   let n = ls.length()
+  // A failed scan proves no math closer remains in this block context.
+  let mut math_closers_exhausted = false
   while i < n {
     let line = ls[i]
     if is_blank(line) {
@@ -1675,6 +1677,7 @@ fn parse_blocks_with_code_lines(
       }
       result.push(Table(aligns, header_inlines, rows))
     } else if is_math_block_start(line) {
+      let math_start = i
       // Display math block: $$...$$
       let t = @strutil.trim(line)
       let math_lines : Array[String] = []
@@ -1684,7 +1687,7 @@ fn parse_blocks_with_code_lines(
       }
       i = i + 1
       let mut found_close = false
-      while i < n {
+      while !math_closers_exhausted && i < n {
         let cur = @strutil.trim(ls[i])
         if cur == "$$" {
           found_close = true
@@ -1697,7 +1700,9 @@ fn parse_blocks_with_code_lines(
       if found_close {
         result.push(MathBlock(@strutil.join_lines(math_lines)))
       } else {
-        // No closing $$ — treat opening line as a paragraph
+        // Resume after the literal opener; failed lookahead must not eat prose.
+        math_closers_exhausted = true
+        i = math_start + 1
         let text = @strutil.trim_end(line)
         result.push(Paragraph(parse_inlines(text, 0, text.length())))
       }
