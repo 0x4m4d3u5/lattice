@@ -665,7 +665,7 @@ test "frontmatter TOML with no body text produces empty body string" {
 
 ///|
 test "frontmatter YAML boolean true and false parse correctly" {
-  // YAML uses parse_yaml_value → parse_value_strict → starts_with "true"/"false"
+  // Complete unquoted boolean values retain their type in YAML.
   let src = "---\nactive: true\ndisabled: false\n---\n"
   match @frontmatter.parse(src) {
     Ok(fm) => {
