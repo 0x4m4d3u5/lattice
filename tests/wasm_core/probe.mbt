@@ -71,10 +71,14 @@ pub fn validate_note() -> Int {
       },
     ],
   }
-  let valid = match @frontmatter.parse("---\ntitle: Garden\n---\nA note.\n") {
+  let valid = match @frontmatter.parse("---\ntitle: 'Garden''s ''🌱'''\n---\nA note.\n") {
     Ok(fm) => fm
     Err(_) => return -1
   }
+  guard valid.fields.get("title") is Some(@frontmatter.FStr(title)) else {
+    return -3
+  }
+  if title != "Garden's '🌱'" { return -4 }
   let invalid = match @frontmatter.parse("---\n---\nA note.\n") {
     Ok(fm) => fm
     Err(_) => return -2

@@ -334,7 +334,8 @@ fn parse_yaml_value(raw : String) -> FrontmatterValue {
   if value.length() >= 2 &&
     @strutil.char_at(value, 0) == '\'' &&
     @strutil.char_at(value, value.length() - 1) == '\'' {
-    let unquoted = @strutil.substr(value, 1, value.length() - 1)
+    // YAML single quotes escape an apostrophe by doubling it.
+    let unquoted = @strutil.substr(value, 1, value.length() - 1).replace_all(old="''", new="'")
     if @strutil.is_valid_iso8601_date(unquoted) {
       return FDate(unquoted)
     }
