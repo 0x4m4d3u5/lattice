@@ -279,6 +279,14 @@ fn parse_array_at(
       return Ok((FArray(items), i + 1))
     } else if @strutil.char_at(s, i) == ',' {
       i = i + 1
+      // YAML and TOML allow a trailing comma; it does not introduce a value.
+      while i < n &&
+            (@strutil.char_at(s, i) == ' ' || @strutil.char_at(s, i) == '\t') {
+        i = i + 1
+      }
+      if i < n && @strutil.char_at(s, i) == ']' {
+        return Ok((FArray(items), i + 1))
+      }
     } else {
       return Err("expected ',' or ']' inside array")
     }

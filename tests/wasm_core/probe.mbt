@@ -84,7 +84,7 @@ pub fn validate_note() -> Int {
       },
     ],
   }
-  let valid = match @frontmatter.parse("---\ntitle: 'Garden''s ''🌱'''\naliases: [3D printing, 2026 roadmap]\n---\nA note.\n") {
+  let valid = match @frontmatter.parse("---\ntitle: 'Garden''s ''🌱'''\naliases: [3D printing, 2026 roadmap,]\n---\nA note.\n") {
     Ok(fm) => fm
     Err(_) => return -1
   }
