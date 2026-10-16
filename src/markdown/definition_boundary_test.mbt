@@ -3,7 +3,7 @@ test "orphan definition markers remain literal paragraphs" {
   for
     (source, expected) in [
       (": orphan definition", "<p>: orphan definition</p>\n"),
-      (": ", "<p>: </p>\n"),
+      (": ", "<p>:</p>\n"),
       (": orphan\n\nAfter.", "<p>: orphan</p>\n<p>After.</p>\n"),
       ("## Guide\n: orphan", "<h2 id=\"guide\">Guide</h2>\n<p>: orphan</p>\n"),
     ] {

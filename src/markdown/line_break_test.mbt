@@ -42,3 +42,56 @@ test "space break lookbehind and CRLF lookahead stay inside inline slices" {
   assert_eq(render_slice(source, 0, 8), ["First", "<br />\n"])
   assert_eq(render_slice(source, 0, 9), ["First", "<br />\n"])
 }
+
+///|
+test "paragraph boundaries ignore trailing spaces and CRLF markers" {
+  // Literal cmark-gfm 0.29.0.gfm.13 output for both line-ending forms.
+  for ending in ["\r\n", "\n"] {
+    for spaces in ["", "  "] {
+      let source = "Text" + spaces + ending + ending + "Next" + ending
+      assert_eq(@markdown.render(source, Map([])), "<p>Text</p>\n<p>Next</p>\n")
+    }
+  }
+}
+
+///|
+test "paragraph endings at EOF never introduce an inline break" {
+  // cmark-gfm also discards trailing spaces when there is no final newline.
+  for ending in ["\r\n", "\n", ""] {
+    for spaces in ["  ", ""] {
+      assert_eq(
+        @markdown.render("Text" + spaces + ending, Map([])),
+        "<p>Text</p>\n",
+      )
+    }
+  }
+}
+
+///|
+test "paragraph boundary trimming preserves internal code span text" {
+  let source = "`Literal  \r\ncode`  \r\n\r\nNext"
+  assert_eq(
+    @markdown.render(source, Map([])),
+    "<p><code>Literal  \r\ncode</code></p>\n<p>Next</p>\n",
+  )
+}
+
+///|
+test "single-line block fields discard terminal CRLF markers" {
+  for ending in ["\r\n", "\n"] {
+    for spaces in ["", "  "] {
+      for
+        (source, expected) in [
+          ("- Text" + spaces + ending, "<ul>\n<li>Text</li>\n</ul>\n"),
+          ("1. Text" + spaces + ending, "<ol>\n<li>Text</li>\n</ol>\n"),
+          (
+            "Term" + spaces + ending + ": Text" + spaces + ending,
+            "<dl>\n<dt>Term</dt>\n<dd>Text</dd>\n</dl>\n",
+          ),
+          ("$$" + spaces + ending, "<p>$$</p>\n"),
+        ] {
+        assert_eq(@markdown.render(source, Map([])), expected)
+      }
+    }
+  }
+}

@@ -24,6 +24,23 @@ export function runNoteCases(render, assert) {
     ok('<p>Paths C:\\Users\\notes and \\🌱.</p>\n<p>First<br />\nSecond.</p>\n'));
   check(render(yaml('First\\\r\nSecond.\n\nThird\\\rFourth.\n\n`Literal\\\r\ncode`\n'), 'crlf.md', '{}'),
     ok('<p>First<br />\nSecond.</p>\n<p>Third<br />\nFourth.</p>\n<p><code>Literal\\\r\ncode</code></p>\n'));
+  for (const spaces of ['', '  ']) {
+    check(render(yaml(`Text${spaces}`), 'paragraph-eof.md', '{}'), ok('<p>Text</p>\n'));
+    for (const ending of ['\r\n', '\n']) {
+      check(render(yaml(`- Text${spaces}${ending}`), 'list-boundary.md', '{}'),
+        ok('<ul>\n<li>Text</li>\n</ul>\n'));
+      check(render(yaml(`1. Text${spaces}${ending}`), 'list-boundary.md', '{}'),
+        ok('<ol>\n<li>Text</li>\n</ol>\n'));
+      check(render(yaml(`Term${spaces}${ending}: Text${spaces}${ending}`), 'definition-boundary.md', '{}'),
+        ok('<dl>\n<dt>Term</dt>\n<dd>Text</dd>\n</dl>\n'));
+      check(render(yaml(`$$${spaces}${ending}`), 'fallback-boundary.md', '{}'), ok('<p>$$</p>\n'));
+      check(render(yaml(`Text${spaces}${ending}${ending}Next${ending}`), 'paragraph-boundary.md', '{}'),
+        ok('<p>Text</p>\n<p>Next</p>\n'));
+      check(render(yaml(`Text${spaces}${ending}`), 'paragraph-eof.md', '{}'), ok('<p>Text</p>\n'));
+    }
+  }
+  check(render(yaml('`Literal  \r\ncode`  \r\n\r\nNext'), 'code-boundary.md', '{}'),
+    ok('<p><code>Literal  \r\ncode</code></p>\n<p>Next</p>\n'));
   for (const ending of ['\r\n', '\n', '\r']) {
     check(render(yaml(`First  ${ending}Second.\n\nThird${ending}Fourth.\n`), 'space-break.md', '{}'),
       ok('<p>First<br />\nSecond.</p>\n<p>Third Fourth.</p>\n'));
