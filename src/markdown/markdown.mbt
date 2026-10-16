@@ -1007,21 +1007,30 @@ fn parse_inlines_with_code_ranges(
           i = i + 1
         }
       }
-    } else if c == '\n' {
-      // soft line break: two trailing spaces before newline = hard break,
-      // otherwise collapse to a space (standard markdown behavior)
-      if text_start < i {
-        result.push(Text(@strutil.substr(s, text_start, i)))
-      }
-      let is_hard = i >= 2 &&
+    } else if c == '\n' || c == '\r' {
+      // Treat CRLF as one ending. Two or more trailing spaces are the hard
+      // break delimiter; keep lookbehind inside the current inline slice.
+      let is_hard = i - from >= 2 &&
         @strutil.char_at(s, i - 1) == ' ' &&
         @strutil.char_at(s, i - 2) == ' '
+      let mut text_end = i
+      if is_hard {
+        while text_end > text_start && @strutil.char_at(s, text_end - 1) == ' ' {
+          text_end = text_end - 1
+        }
+      }
+      if text_start < text_end {
+        result.push(Text(@strutil.substr(s, text_start, text_end)))
+      }
       if is_hard {
         result.push(HardBreak)
       } else {
         result.push(Text(" "))
       }
       i = i + 1
+      if c == '\r' && i < to && @strutil.char_at(s, i) == '\n' {
+        i = i + 1
+      }
       text_start = i
     } else {
       i = i + 1
@@ -1539,7 +1548,7 @@ fn parse_blocks_with_code_lines(
       // Single-pass: consume each item line then immediately consume its
       // indented continuation lines before moving to the next item.
       while i < n && is_unordered_item(ls[i]) {
-        let text = @strutil.substr(ls[i], 2, ls[i].length())
+        let text = @strutil.trim_end(@strutil.substr(ls[i], 2, ls[i].length()))
         i = i + 1
         // Collect indented continuation lines belonging to this item.
         let nested_lines : Array[String] = []
@@ -1567,7 +1576,7 @@ fn parse_blocks_with_code_lines(
       // Single-pass: consume each item line then immediately consume its
       // indented continuation lines before moving to the next item.
       while i < n && is_ordered_item(ls[i]) {
-        let text = ordered_item_text(ls[i])
+        let text = @strutil.trim_end(ordered_item_text(ls[i]))
         i = i + 1
         // Collect indented continuation lines belonging to this item.
         let nested_lines : Array[String] = []
@@ -1605,14 +1614,14 @@ fn parse_blocks_with_code_lines(
         !is_blockquote_line(ls[i]) &&
         !is_unordered_item(ls[i]) &&
         !is_ordered_item(ls[i]) {
-        let term_str = ls[i]
+        let term_str = @strutil.trim_end(ls[i])
         let term_inlines = parse_inlines(term_str, 0, term_str.length())
         i = i + 1
         // Collect all : definition lines for this term
         let defs : Array[Array[Inline]] = []
         while i < n && is_definition_line(ls[i]) {
           // Strip ": " prefix and any extra leading whitespace (e.g. ":   ")
-          let def_text = @strutil.trim_start(
+          let def_text = @strutil.trim(
             @strutil.substr(ls[i], 2, ls[i].length()),
           )
           defs.push(parse_inlines(def_text, 0, def_text.length()))
@@ -1689,7 +1698,8 @@ fn parse_blocks_with_code_lines(
         result.push(MathBlock(@strutil.join_lines(math_lines)))
       } else {
         // No closing $$ — treat opening line as a paragraph
-        result.push(Paragraph(parse_inlines(line, 0, line.length())))
+        let text = @strutil.trim_end(line)
+        result.push(Paragraph(parse_inlines(text, 0, text.length())))
       }
     } else if is_html_block_start(line) {
       // Raw HTML block — accumulate until first blank line and emit verbatim.
@@ -1711,7 +1721,9 @@ fn parse_blocks_with_code_lines(
         para_lines.push(ls[i])
         i = i + 1
       }
-      let para_text = @strutil.join_lines(para_lines)
+      // Discard paragraph-final whitespace, including the CR retained when
+      // lines_of consumes a CRLF boundary. Internal code-span text stays intact.
+      let para_text = @strutil.join_lines(para_lines).trim_end(chars=" \t\r").to_owned()
       // Code ranges arrive in source order. Count newlines only in the newly
       // visited slices rather than rescanning each range's paragraph prefix.
       let code_ranges = on_code.map(fn(report) {
