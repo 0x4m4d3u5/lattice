@@ -245,6 +245,17 @@ fn next_heading_anchor(text : String, counts : Map[String, Int]) -> String {
 // ── inline parsing helpers ────────────────────────────────────────────────────
 
 ///|
+/// Match only the bounded scheme prefix; preserve the original URL for output.
+fn has_autolink_scheme(s : String, start : Int, limit : Int) -> Bool {
+  if start >= limit { return false }
+  let end = if limit - start > 8 { start + 8 } else { limit }
+  let prefix = @strutil.to_ascii_lower(@strutil.substr(s, start, end))
+  prefix.has_prefix("https://") ||
+  prefix.has_prefix("http://") ||
+  prefix.has_prefix("mailto:")
+}
+
+///|
 fn backtick_run_end(s : String, pos : Int, limit : Int) -> Int {
   pos + s[pos:limit].iter().take_while(c => c == '`').count()
 }
@@ -790,9 +801,7 @@ fn parse_inlines_with_code_ranges(
       if i + 1 < to {
         let rest_start = i + 1
         let next_c = @strutil.char_at(s, rest_start)
-        if @strutil.starts_with_at(s, rest_start, "https://") ||
-          @strutil.starts_with_at(s, rest_start, "http://") ||
-          @strutil.starts_with_at(s, rest_start, "mailto:") {
+        if has_autolink_scheme(s, rest_start, to) {
           // autolink: <https://...>, <http://...>, <mailto:...>
           let close_bracket = @strutil.find_char(s, rest_start, '>', to)
           if close_bracket > rest_start {
@@ -1465,9 +1474,7 @@ fn is_html_block_start(line : String) -> Bool {
     return false
   }
   // Exclude autolinks: <http://...>, <https://...>, <mailto:...>
-  if @strutil.starts_with_at(line, 1, "https://") ||
-    @strutil.starts_with_at(line, 1, "http://") ||
-    @strutil.starts_with_at(line, 1, "mailto:") {
+  if has_autolink_scheme(line, 1, n) {
     return false
   }
   let c = line[1]
