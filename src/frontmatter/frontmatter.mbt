@@ -84,8 +84,8 @@ fn split_lines(s : String) -> Array[String] {
 }
 
 ///|
-/// Parse a string as a double, supporting negative values and decimal points.
-/// The string must contain at least one decimal point to be a float.
+/// Parse a string as a double, supporting signed values and decimal points.
+/// A float requires a decimal point and at least one digit.
 fn parse_float_str(s : String) -> Result[Double, String] {
   let n = s.length()
   if n == 0 {
@@ -93,12 +93,13 @@ fn parse_float_str(s : String) -> Result[Double, String] {
   }
   let mut i = 0
   let neg = @strutil.char_at(s, 0) == '-'
-  if neg {
+  if neg || @strutil.char_at(s, 0) == '+' {
     i = 1
   }
   if i >= n {
-    return Err("expected digits after '-'")
+    return Err("expected digits after sign")
   }
+  let mut has_digit = false
   let mut has_dot = false
   let mut value = 0.0
   // Parse integer part
@@ -112,6 +113,7 @@ fn parse_float_str(s : String) -> Result[Double, String] {
     if !@strutil.is_digit(c) {
       return Err("invalid character in float")
     }
+    has_digit = true
     value = value * 10.0 + (c.to_int() - '0'.to_int()).to_double()
     i = i + 1
   }
@@ -125,9 +127,13 @@ fn parse_float_str(s : String) -> Result[Double, String] {
     if !@strutil.is_digit(c) {
       return Err("invalid character in float fractional part")
     }
+    has_digit = true
     value = value + (c.to_int() - '0'.to_int()).to_double() / divisor
     divisor = divisor * 10.0
     i = i + 1
+  }
+  if !has_digit {
+    return Err("expected digits in float")
   }
   if neg {
     Ok(0.0 - value)
@@ -144,11 +150,11 @@ fn parse_int_str(s : String) -> Result[Int, String] {
   }
   let mut i = 0
   let neg = @strutil.char_at(s, 0) == '-'
-  if neg {
+  if neg || @strutil.char_at(s, 0) == '+' {
     i = 1
   }
   if i >= n {
-    return Err("expected digits after '-'")
+    return Err("expected digits after sign")
   }
   while i < n {
     let c = @strutil.char_at(s, i)
@@ -157,7 +163,8 @@ fn parse_int_str(s : String) -> Result[Int, String] {
     }
     i = i + 1
   }
-  match @strutil.parse_int(s) {
+  let decimal = if s.has_prefix("+") { @strutil.substr(s, 1, n) } else { s }
+  match @strutil.parse_int(decimal) {
     Some(value) => Ok(value)
     None => Err("integer out of range")
   }
@@ -216,7 +223,7 @@ fn parse_value_at(
     Err("unterminated single-quoted string")
   } else if c == '[' {
     parse_array_at(s, i, yaml_plain)
-  } else if @strutil.is_digit(c) || c == '-' {
+  } else if @strutil.is_digit(c) || c == '-' || c == '+' {
     let mut j = i
     // YAML plain scalars include internal spaces. TOML numeric tokens end at
     // whitespace so missing array commas still produce a parse error.
