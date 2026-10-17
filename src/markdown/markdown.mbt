@@ -1127,7 +1127,18 @@ fn heading_level_and_text(line : String) -> (Int, String) {
 ///|
 pub fn is_hrule(line : String) -> Bool {
   let t = @strutil.trim(line)
-  t == "---" || t == "***" || t == "___"
+  if t.is_empty() { return false }
+  let marker = @strutil.char_at(t, 0)
+  if marker != '-' && marker != '*' && marker != '_' { return false }
+  let mut count = 0
+  for c in t.iter() {
+    if c == marker {
+      count = count + 1
+    } else if c != ' ' && c != '\t' {
+      return false
+    }
+  }
+  count >= 3
 }
 
 ///|
@@ -1588,7 +1599,7 @@ fn parse_blocks_with_code_lines(
       let items : Array[ListItem] = []
       // Single-pass: consume each item line then immediately consume its
       // indented continuation lines before moving to the next item.
-      while i < n && is_unordered_item(ls[i]) {
+      while i < n && is_unordered_item(ls[i]) && !is_hrule(ls[i]) {
         let text = @strutil.trim_end(@strutil.substr(ls[i], 2, ls[i].length()))
         i = i + 1
         // Collect indented continuation lines belonging to this item.
