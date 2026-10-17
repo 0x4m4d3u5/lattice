@@ -1160,7 +1160,8 @@ fn fence_lang_tag(line : String, width : Int) -> String? {
   if lang.length() == 0 {
     None
   } else {
-    Some(lang)
+    let end = lang.find_by(c => c == ' ' || c == '\t').unwrap_or(lang.length())
+    Some(lang[:end].to_owned())
   }
 }
 
