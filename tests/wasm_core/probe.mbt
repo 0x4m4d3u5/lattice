@@ -155,6 +155,14 @@ pub fn validate_note() -> Int {
   guard bom.fields.get("title") is Some(@frontmatter.FStr("Garden")) else {
     return -15
   }
+  let capitals = match @frontmatter.parse("---\nfeatured: True\nextra: FALSE\n---\n") {
+    Ok(fm) => fm
+    Err(_) => return -16
+  }
+  guard (capitals.fields.get("featured"), capitals.fields.get("extra")) is
+    (Some(@frontmatter.FBool(true)), Some(@frontmatter.FBool(false))) else {
+    return -17
+  }
   let invalid = match @frontmatter.parse("---\n---\nA note.\n") {
     Ok(fm) => fm
     Err(_) => return -2

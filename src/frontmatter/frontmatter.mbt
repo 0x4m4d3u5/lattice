@@ -256,6 +256,8 @@ fn parse_value_at(
     let value = match raw {
       "true" => FBool(true)
       "false" => FBool(false)
+      "True" | "TRUE" => if yaml_plain { FBool(true) } else { FStr(raw) }
+      "False" | "FALSE" => if yaml_plain { FBool(false) } else { FStr(raw) }
       _ => FStr(raw)
     }
     Ok((value, j))
