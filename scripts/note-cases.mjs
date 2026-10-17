@@ -1,3 +1,10 @@
+const fenceLanguage = `x"\fonmouseover="this.dataset.latticeProbe='executed'`;
+export const fenceLanguageProbe = {
+  language: fenceLanguage,
+  source: `---\ntitle: Synthetic\n---\n~~~${fenceLanguage}\nhello\n~~~`,
+  html: `<pre><code class="language-x&quot;\fonmouseover=&quot;this.dataset.latticeProbe='executed'">hello</code></pre>\n`,
+};
+
 // Expected results are authored independently of Lattice's parser/renderer.
 // A host supplies its assertion library; these cases require no Node services.
 export function runNoteCases(render, assert) {
@@ -6,6 +13,7 @@ export function runNoteCases(render, assert) {
   const ok = (html) => ({ html, diagnostics: [] });
   const issue = (kind, source, message) => ({ kind, source, message });
   const yaml = (body) => `---\ntitle: Garden\n---\n${body}`;
+  check(render(fenceLanguageProbe.source, 'fence-language.md', '{}'), ok(fenceLanguageProbe.html));
   check(render(yaml('## Planting & Care\n\n## Planting & Care\n\nJump [[#Planting & Care|here]] or [[#planting-care-2]]. `[[#sample]]`.\n'), 'local.md', '{}'),
     ok('<h2 id="planting-care">Planting &amp; Care</h2>\n<h2 id="planting-care-2">Planting &amp; Care</h2>\n<p>Jump <a href="#planting-care">here</a> or <a href="#planting-care-2">#planting-care-2</a>. <code>[[#sample]]</code>.</p>\n'));
   check(render(yaml('[[#]]\n'), 'local.md', '{}'), {

@@ -47,6 +47,10 @@ pub fn render_note() -> Int {
     "<pre><code class=\"language-text\">hello</code></pre>\n" {
     return -11
   }
+  if @markdown.render("~~~x\"\u000conmouseover=\"this.dataset.latticeProbe='executed'\nhello\n~~~", Map([])) !=
+    "<pre><code class=\"language-x&quot;\u000conmouseover=&quot;this.dataset.latticeProbe='executed'\">hello</code></pre>\n" {
+    return -12
+  }
   let html = @markdown.render(fm.body, links)
   let navigation = @search.render_content_index_with_navigation(
     [@search.new_content_entry("Garden", "garden", "/garden/", [], "", "", "", "page", None, "body")],
