@@ -1,5 +1,5 @@
 import { createNoteRuntime } from '../../examples/wasm_note/host.mjs';
-import { runNoteCases } from '../../scripts/note-cases.mjs';
+import { runNoteCases, fenceLanguageProbe } from '../../scripts/note-cases.mjs';
 import { runSearchCases } from '../../scripts/search-cases.mjs';
 
 // Compare JSON values without depending on object property order.
@@ -37,6 +37,7 @@ try {
   ).html;
   self.postMessage({
     destinationHtml,
+    fenceLanguageHtml: render(fenceLanguageProbe.source, 'fence-language.md', '{}').html,
     ok: true, count, searchCount, worker: self instanceof DedicatedWorkerGlobalScope,
     userAgent: navigator.userAgent,
     imageAltHtml: render('---\ntitle: Image\n---\n![He said "hello" & waved](/plot.png)', 'image-alt.md', '{}').html,

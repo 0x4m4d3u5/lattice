@@ -1958,13 +1958,13 @@ fn render_fenced_code(lang : String?, code : String) -> String {
         let tokens = @highlight.highlight(l, code)
         let highlighted = @highlight.render_highlighted(tokens)
         "<pre class=\"highlight language-" +
-        @strutil.escape_html_body(l) +
+        @strutil.escape_html_attr(l) +
         "\"><code>" +
         highlighted +
         "</code></pre>\n"
       } else {
         "<pre><code class=\"language-" +
-        @strutil.escape_html_body(l) +
+        @strutil.escape_html_attr(l) +
         "\">" +
         @strutil.escape_html_body(code) +
         "</code></pre>\n"

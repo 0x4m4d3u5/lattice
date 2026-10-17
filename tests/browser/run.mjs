@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { chromium } from 'playwright';
+import { fenceLanguageProbe } from '../../scripts/note-cases.mjs';
 
 const browserChannel = process.env.LATTICE_BROWSER_CHANNEL ?? 'chromium';
 assert.ok(['chromium', 'chrome'].includes(browserChannel), 'unsupported browser channel');
@@ -72,7 +73,7 @@ try {
   }));
   assert.equal(result.ok, true, result.error);
   assert.equal(result.worker, true, 'cases did not execute in a real dedicated worker');
-  assert.equal(result.count, 609);
+  assert.equal(result.count, 610);
   assert.equal(result.searchCount, 126);
   // DOM inspection needs no network, including image requests.
   await context.route('**/*', route => route.abort());
@@ -97,6 +98,25 @@ try {
     return { alt: element?.getAttribute('alt'), attributes: element?.getAttributeNames().sort() };
   }, result.imageAltHtml);
   assert.deepEqual(image, { alt: 'He said "hello" & waved', attributes: ['alt', 'src'] });
+  const fenceLanguage = await page.evaluate((html) => {
+    // A live element makes accidental event attributes observable on dispatch.
+    const container = document.createElement('div');
+    container.innerHTML = html;
+    document.body.append(container);
+    try {
+      const code = container.querySelector('code');
+      const attributes = code.getAttributeNames().sort();
+      const before = code.dataset.latticeProbe ?? null;
+      code.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+      return { language: code.getAttribute('class'), attributes, before, after: code.dataset.latticeProbe ?? null };
+    } finally {
+      container.remove();
+    }
+  }, result.fenceLanguageHtml);
+  assert.deepEqual(fenceLanguage, {
+    language: 'language-' + fenceLanguageProbe.language,
+    attributes: ['class'], before: null, after: null,
+  });
   assert.match(result.userAgent, /Chrome\//);
   console.log(`${browserName} ${browser.version()}: ${result.count} supplied-note and ${result.searchCount} retrieval comparisons passed in a reused Web Worker instance`);
   console.log(`Worker runtime: ${result.userAgent}`);
