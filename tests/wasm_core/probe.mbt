@@ -140,6 +140,14 @@ pub fn validate_note() -> Int {
     (@frontmatter.FStr("Research, notes"), @frontmatter.FStr("Garden's 🌱")) else {
     return -11
   }
+  let commented = match @frontmatter.parse("---\nfeatured: false # explanation\ntitle: 'Keep # literal' # title\n---\n") {
+    Ok(fm) => fm
+    Err(_) => return -12
+  }
+  guard (commented.fields.get("featured"), commented.fields.get("title")) is
+    (Some(@frontmatter.FBool(false)), Some(@frontmatter.FStr("Keep # literal"))) else {
+    return -13
+  }
   let invalid = match @frontmatter.parse("---\n---\nA note.\n") {
     Ok(fm) => fm
     Err(_) => return -2

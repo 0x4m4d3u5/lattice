@@ -367,6 +367,62 @@ fn parse_assignment(
 }
 
 ///|
+/// Strip comments outside quoted nodes in supported one-line YAML values.
+fn yaml_value_before_comment(raw : String) -> String {
+  let mut i = 0
+  let mut depth = 0
+  let mut node_start = true
+  let mut after_node = false
+  while i < raw.length() {
+    let c = @strutil.char_at(raw, i)
+    let separated = i == 0 ||
+      after_node ||
+      (
+        i > 0 &&
+        (
+          @strutil.char_at(raw, i - 1) == ' ' ||
+          @strutil.char_at(raw, i - 1) == '\t'
+        )
+      )
+    if c == '#' && separated {
+      return trim_ws(@strutil.substr(raw, 0, i))
+    }
+    if node_start && (c == '\'' || c == '"') {
+      // Reuse quote parsing so escapes and literal hashes stay inside the node.
+      match parse_value_at(raw, i, true) {
+        Ok((_, next)) => {
+          i = next
+          node_start = false
+          after_node = true
+          continue
+        }
+        Err(_) => return raw
+      }
+    }
+    if node_start && c == '{' {
+      // Unsupported flow maps retain their existing fallback representation.
+      return raw
+    }
+    if node_start && c == '[' {
+      depth = depth + 1
+      after_node = false
+    } else if depth > 0 && c == ']' {
+      depth = depth - 1
+      node_start = false
+      after_node = true
+    } else if depth > 0 && c == ',' {
+      node_start = true
+      after_node = false
+    } else if c != ' ' && c != '\t' {
+      node_start = false
+      after_node = false
+    }
+    i = i + 1
+  }
+  raw
+}
+
+///|
 fn parse_yaml_value(raw : String) -> FrontmatterValue {
   let value = trim_ws(raw)
   match parse_value_strict(value, true) {
@@ -414,7 +470,7 @@ fn parse_yaml_assignment(
   if key.length() == 0 {
     return Err("empty key")
   }
-  let value = trim_ws(@strutil.substr(line, colon + 1, line.length()))
+  let value = yaml_value_before_comment(trim_ws(@strutil.substr(line, colon + 1, line.length())))
   if value.length() > 0 {
     return Ok((key, parse_yaml_value(value), line_index + 1))
   }
@@ -433,7 +489,7 @@ fn parse_yaml_assignment(
         @strutil.char_at(raw, 1) == ' ' ||
         @strutil.char_at(raw, 1) == '\t'
       ) {
-      let item_raw = trim_ws(@strutil.substr(raw, 1, raw.length()))
+      let item_raw = yaml_value_before_comment(trim_ws(@strutil.substr(raw, 1, raw.length())))
       items.push(parse_yaml_value(item_raw))
       j = j + 1
       continue
