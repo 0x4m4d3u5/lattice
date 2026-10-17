@@ -112,6 +112,18 @@ pub fn validate_note() -> Int {
     (@frontmatter.FStr("3D printing"), @frontmatter.FStr("2026 roadmap")) else {
     return -7
   }
+  let quoted = match @frontmatter.parse("---\naliases: ['Research, notes', 'Garden''s 🌱']\n---\n") {
+    Ok(fm) => fm
+    Err(_) => return -8
+  }
+  guard quoted.fields.get("aliases") is Some(@frontmatter.FArray(items)) else {
+    return -9
+  }
+  if items.length() != 2 { return -10 }
+  guard (items[0], items[1]) is
+    (@frontmatter.FStr("Research, notes"), @frontmatter.FStr("Garden's 🌱")) else {
+    return -11
+  }
   let invalid = match @frontmatter.parse("---\n---\nA note.\n") {
     Ok(fm) => fm
     Err(_) => return -2

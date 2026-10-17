@@ -193,6 +193,27 @@ fn parse_value_at(
         }
       Err(e) => Err(e)
     }
+  } else if yaml_plain && c == '\'' {
+    let mut j = i + 1
+    while j < n {
+      if @strutil.char_at(s, j) == '\'' {
+        if j + 1 < n && @strutil.char_at(s, j + 1) == '\'' {
+          j = j + 2
+        } else {
+          // A doubled apostrophe is content; only an unpaired quote closes.
+          let value = @strutil.substr(s, i + 1, j).replace_all(old="''", new="'")
+          let parsed = if @strutil.is_valid_iso8601_date(value) {
+            FDate(value)
+          } else {
+            FStr(value)
+          }
+          return Ok((parsed, j + 1))
+        }
+      } else {
+        j = j + 1
+      }
+    }
+    Err("unterminated single-quoted string")
   } else if c == '[' {
     parse_array_at(s, i, yaml_plain)
   } else if @strutil.is_digit(c) || c == '-' {
@@ -348,16 +369,6 @@ fn parse_assignment(
 ///|
 fn parse_yaml_value(raw : String) -> FrontmatterValue {
   let value = trim_ws(raw)
-  if value.length() >= 2 &&
-    @strutil.char_at(value, 0) == '\'' &&
-    @strutil.char_at(value, value.length() - 1) == '\'' {
-    // YAML single quotes escape an apostrophe by doubling it.
-    let unquoted = @strutil.substr(value, 1, value.length() - 1).replace_all(old="''", new="'")
-    if @strutil.is_valid_iso8601_date(unquoted) {
-      return FDate(unquoted)
-    }
-    return FStr(unquoted)
-  }
   match parse_value_strict(value, true) {
     Ok(parsed) => parsed
     Err(_) => FStr(value)
