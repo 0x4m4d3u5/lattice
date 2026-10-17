@@ -1684,9 +1684,10 @@ fn line_col_of_first(source : String, pattern : String) -> (Int?, Int?) {
 
 ///|
 fn frontmatter_field_line(source : String, field : String) -> Int? {
-  let (delimiter, separator) = if source.has_prefix("---") {
+  let prefix = source.strip_prefix("\ufeff").unwrap_or(source[:])
+  let (delimiter, separator) = if prefix.has_prefix("---") {
     ("---", ":")
-  } else if source.has_prefix("+++") {
+  } else if prefix.has_prefix("+++") {
     ("+++", "=")
   } else {
     return None

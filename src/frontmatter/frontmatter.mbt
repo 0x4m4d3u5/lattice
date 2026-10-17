@@ -504,11 +504,21 @@ fn parse_yaml_assignment(
   }
 }
 
+///|
+/// A leading decoded BOM is an encoding marker, not frontmatter content.
+fn without_leading_bom(content : String) -> String {
+  match content.strip_prefix("\ufeff") {
+    Some(rest) => rest.to_owned()
+    None => content
+  }
+}
+
 // ── public API ────────────────────────────────────────────────────────────────
 
 ///|
 /// Parse YAML frontmatter (--- delimited).
 pub fn parse_yaml(content : String) -> Result[Frontmatter, String] {
+  let content = without_leading_bom(content)
   let n = content.length()
   if !@strutil.starts_with_at(content, 0, "---") {
     return Err("missing opening '---' delimiter")
@@ -555,6 +565,7 @@ pub fn parse_yaml(content : String) -> Result[Frontmatter, String] {
 ///|
 /// Parse TOML frontmatter (+++ delimited).
 pub fn parse_toml(content : String) -> Result[Frontmatter, String] {
+  let content = without_leading_bom(content)
   let n = content.length()
   if !@strutil.starts_with_at(content, 0, "+++") {
     return Err("missing opening '+++' delimiter")
@@ -624,6 +635,7 @@ pub fn parse_toml(content : String) -> Result[Frontmatter, String] {
 /// body text here
 /// ```
 pub fn parse(content : String) -> Result[Frontmatter, String] {
+  let content = without_leading_bom(content)
   if @strutil.starts_with_at(content, 0, "---") {
     parse_yaml(content)
   } else if @strutil.starts_with_at(content, 0, "+++") {

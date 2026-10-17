@@ -148,6 +148,13 @@ pub fn validate_note() -> Int {
     (Some(@frontmatter.FBool(false)), Some(@frontmatter.FStr("Keep # literal"))) else {
     return -13
   }
+  let bom = match @frontmatter.parse("\ufeff---\ntitle: Garden\n---\nBody.\n") {
+    Ok(fm) => fm
+    Err(_) => return -14
+  }
+  guard bom.fields.get("title") is Some(@frontmatter.FStr("Garden")) else {
+    return -15
+  }
   let invalid = match @frontmatter.parse("---\n---\nA note.\n") {
     Ok(fm) => fm
     Err(_) => return -2
