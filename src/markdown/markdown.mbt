@@ -540,6 +540,7 @@ fn parse_inlines_with_code_ranges(
   on_code : ((Int, Int) -> Unit)?,
 ) -> Array[Inline] {
   let result : Array[Inline] = []
+  let exhausted_underscore_closers : Map[Int, Bool] = Map([])
   let mut html_tag_ends : Map[Int, Int]? = None
   fn html_tag_end_at(start : Int) -> Int {
     let ends = match html_tag_ends {
@@ -722,6 +723,7 @@ fn parse_inlines_with_code_ranges(
         i = i + 1
       }
     } else if c == '_' {
+      let under_count = count_char(s, i, '_')
       // underscore emphasis: _italic_, __bold__, ___bold italic___
       // Word-boundary rule: only treat _ as opener if the char before it is
       // NOT alphanumeric. This prevents snake_case identifiers from being
@@ -732,10 +734,9 @@ fn parse_inlines_with_code_ranges(
           @strutil.is_alpha(prev) || @strutil.is_digit(prev)
         })
       if prev_is_alnum {
-        // mid-word underscore — treat as literal
-        i = i + 1
+        // Keep the whole intraword delimiter run literal.
+        i = i + under_count
       } else {
-        let under_count = count_char(s, i, '_')
         let inner_start = i + under_count
         let close_needle = if under_count >= 3 {
           "___"
@@ -744,63 +745,40 @@ fn parse_inlines_with_code_ranges(
         } else {
           "_"
         }
-        let close = @strutil.find_str(s, inner_start, close_needle, to)
-        if close > inner_start {
-          // Closing delimiter word-boundary: the char after the close must
-          // NOT be alphanumeric (mirrors the opener rule).
+        let mut close = if exhausted_underscore_closers.get(under_count).unwrap_or(false) {
+          -1
+        } else {
+          @strutil.find_str(s, inner_start, close_needle, to)
+        }
+        while close > inner_start {
+          // Skip every intraword candidate, not just the first two.
           let close_end = close + under_count
           let next_is_alnum = close_end < to &&
             ({
               let next = @strutil.char_at(s, close_end)
               @strutil.is_alpha(next) || @strutil.is_digit(next)
             })
-          if next_is_alnum {
-            // Close is mid-word — skip this match and keep looking
-            let next_close = @strutil.find_str(s, close + 1, close_needle, to)
-            if next_close > inner_start {
-              let nc_end = next_close + under_count
-              let nc_is_alnum = nc_end < to &&
-                ({
-                  let nc = @strutil.char_at(s, nc_end)
-                  @strutil.is_alpha(nc) || @strutil.is_digit(nc)
-                })
-              if nc_is_alnum {
-                // Still mid-word — give up, treat opener as literal
-                i = i + 1
-              } else {
-                if text_start < i {
-                  result.push(Text(@strutil.substr(s, text_start, i)))
-                }
-                let inner = parse_inlines_with_code_ranges(s, inner_start, next_close, on_code)
-                if under_count >= 3 {
-                  result.push(BoldItalic(inner))
-                } else if under_count == 2 {
-                  result.push(Bold(inner))
-                } else {
-                  result.push(Italic(inner))
-                }
-                i = next_close + under_count
-                text_start = i
-              }
-            } else {
-              // No valid close — literal underscore
-              i = i + 1
-            }
-          } else {
-            if text_start < i {
-              result.push(Text(@strutil.substr(s, text_start, i)))
-            }
-            let inner = parse_inlines_with_code_ranges(s, inner_start, close, on_code)
-            if under_count >= 3 {
-              result.push(BoldItalic(inner))
-            } else if under_count == 2 {
-              result.push(Bold(inner))
-            } else {
-              result.push(Italic(inner))
-            }
-            i = close + under_count
-            text_start = i
+          if !next_is_alnum { break }
+          close = @strutil.find_str(s, close + 1, close_needle, to)
+        }
+        if close < 0 {
+          // No later opener of this width can find a closer in this slice.
+          exhausted_underscore_closers.set(under_count, true)
+        }
+        if close > inner_start {
+          if text_start < i {
+            result.push(Text(@strutil.substr(s, text_start, i)))
           }
+          let inner = parse_inlines_with_code_ranges(s, inner_start, close, on_code)
+          if under_count >= 3 {
+            result.push(BoldItalic(inner))
+          } else if under_count == 2 {
+            result.push(Bold(inner))
+          } else {
+            result.push(Italic(inner))
+          }
+          i = close + under_count
+          text_start = i
         } else {
           // no matching close — treat underscores as literal text
           i = i + 1
