@@ -51,6 +51,14 @@ pub fn render_note() -> Int {
     "<pre><code class=\"language-x&quot;\u000conmouseover=&quot;this.dataset.latticeProbe='executed'\">hello</code></pre>\n" {
     return -12
   }
+  if @markdown.render("_alpha_beta_gamma_delta_", Map([])) !=
+    "<p><em>alpha_beta_gamma_delta</em></p>\n" {
+    return -13
+  }
+  if @markdown.render("__alpha__beta__gamma__delta__", Map([])) !=
+    "<p><strong>alpha__beta__gamma__delta</strong></p>\n" {
+    return -14
+  }
   let html = @markdown.render(fm.body, links)
   let navigation = @search.render_content_index_with_navigation(
     [@search.new_content_entry("Garden", "garden", "/garden/", [], "", "", "", "page", None, "body")],
