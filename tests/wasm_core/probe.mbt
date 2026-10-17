@@ -63,6 +63,10 @@ pub fn render_note() -> Int {
     "<p><a href=\"HTTPS://example.test/Guide\">HTTPS://example.test/Guide</a></p>\n" {
     return -15
   }
+  if @markdown.render("<https://example.test/a b>", Map([])) !=
+    "<p>&lt;https://example.test/a b&gt;</p>\n" {
+    return -16
+  }
   let html = @markdown.render(fm.body, links)
   let navigation = @search.render_content_index_with_navigation(
     [@search.new_content_entry("Garden", "garden", "/garden/", [], "", "", "", "page", None, "body")],

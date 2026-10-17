@@ -803,8 +803,12 @@ fn parse_inlines_with_code_ranges(
         let next_c = @strutil.char_at(s, rest_start)
         if has_autolink_scheme(s, rest_start, to) {
           // autolink: <https://...>, <http://...>, <mailto:...>
-          let close_bracket = @strutil.find_char(s, rest_start, '>', to)
-          if close_bracket > rest_start {
+          // Stop at invalid URI characters rather than scanning past nested <.
+          let close_bracket = s[rest_start:to]
+            .find_by(c => c == '>' || c == '<' || c == ' ' || c.is_ascii_control())
+            .map(offset => rest_start + offset)
+            .unwrap_or(-1)
+          if close_bracket > rest_start && @strutil.char_at(s, close_bracket) == '>' {
             let url = @strutil.substr(s, rest_start, close_bracket)
             if text_start < i {
               result.push(Text(@strutil.substr(s, text_start, i)))
