@@ -43,6 +43,10 @@ pub fn render_note() -> Int {
     "<p>Before.</p>\n<hr />\n<p>After.</p>\n" {
     return -10
   }
+  if @markdown.render("~~~text title=example.txt\nhello\n~~~", Map([])) !=
+    "<pre><code class=\"language-text\">hello</code></pre>\n" {
+    return -11
+  }
   let html = @markdown.render(fm.body, links)
   let navigation = @search.render_content_index_with_navigation(
     [@search.new_content_entry("Garden", "garden", "/garden/", [], "", "", "", "page", None, "body")],
