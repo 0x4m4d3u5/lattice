@@ -39,6 +39,14 @@ jobs:
       - name: Installed Chrome Web Worker note renderer
         env:
           LATTICE_BROWSER_CHANNEL: chrome
+          LATTICE_PREVIEW_DIR: ${{ runner.temp }}/lattice-reader-preview
         run: |
           /opt/google/chrome/chrome --version
           bash scripts/check-browser-note.sh
+      - name: Retain synthetic reader previews
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: reader-preview
+          path: ${{ runner.temp }}/lattice-reader-preview/*.png
+          if-no-files-found: error
+          retention-days: 7

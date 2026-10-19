@@ -5,6 +5,7 @@ if (process.argv.length !== 3) throw new Error('Usage: node scripts/package-sear
 const destination = resolve(process.argv[2]);
 const sources = [
   ['index.html', '../examples/wiki_search/index.html'],
+  ['page.css', '../examples/wiki_search/page.css'],
   ['app.js', '../examples/wiki_search/app.js'],
   ['worker.js', '../examples/wiki_search/worker.js'],
   ['host.js', '../examples/wasm_note/host.mjs'],

@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{title}}</title>
+  <link rel="stylesheet" href="/static/search/page.css">
+</head>
+<body>
+  <article>
+    <header>
+      <span class="eyebrow">From the wiki</span>
+      <h1>{{title}}</h1>
+      {{?description}}<p class="lede">{{description}}</p>{{/?description}}
+    </header>
+    {{?table_of_contents}}
+    <nav class="contents" aria-label="On this page">
+      <details><summary>On this page</summary>{{table_of_contents}}</details>
+    </nav>
+    {{/?table_of_contents}}
+    {{body_no_h1}}
+    {{?backlinks}}<aside aria-label="Linked from">{{backlinks}}</aside>{{/?backlinks}}
+  </article>
+</body>
+</html>

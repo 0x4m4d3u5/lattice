@@ -21,8 +21,8 @@ assert.equal(packaged.status, 0, packaged.stderr);
 writeFileSync(join(search, 'preserve.txt'), 'unrelated local content');
 assert.notEqual(run('scripts/package-search.mjs', [search]).status, 0);
 assert.equal(readFileSync(join(search, 'preserve.txt'), 'utf8'), 'unrelated local content');
-writeFileSync(join(notes, 'ops.md'), '---\ntitle: Operations\ntags: [Database, Reliability]\n---\n## Recovery drills\nRestore encrypted snapshots. Verify checksums.\n\n## Garden\nWater basil.\n');
-writeFileSync(join(notes, 'guide.md'), '---\ntitle: Recovery checklist\ntags: [Reliability]\n---\n## Preparation\nAssign a commander.\n');
+writeFileSync(join(notes, 'ops.md'), '---\ntitle: Operations\ndescription: A field guide to restoring services with confidence. Practice the sequence, record the evidence, and leave a clearer path for the next person.\ntoc: true\ntags: [Database, Reliability]\n---\n## Recovery drills\nRestore encrypted snapshots. Verify checksums. A backup is only useful when the team knows how to bring it back. Run this exercise in an isolated training environment before you need it during an incident.\n\n> The goal is repeatability: another person should be able to follow the record and reach the same result.\n\n### Before you begin\n\n1. Choose a snapshot and record its timestamp.\n2. Confirm that the restore target is isolated from production.\n3. Assign one person to run the exercise and another to capture observations.\n\n### Verify the result\n\nCompare the restored records with the manifest. Check both totals and a small sample of individual entries; a successful process exit is only the first signal.\n\n### Leave a useful record\n\nWrite down what surprised you, which step took longest, and what you would change in the runbook. Link the evidence from the exercise so the next reader can follow the decisions.\n\n## Training sandbox\n\nThe fictional basil dataset is used for these drills. It contains no customer records.\n');
+writeFileSync(join(notes, 'guide.md'), '---\ntitle: Recovery checklist\ntags: [Reliability]\n---\n## Preparation\nAssign a commander. See [[ops]] for the practice sequence.\n');
 writeFileSync(join(notes, 'priority.md'), '---\ntitle: Definition priority\n---\nTerm\n: definition\n## Priorities\n: priorityprobe\n');
 writeFileSync(join(notes, 'orphan.md'), '---\ntitle: Definition boundary\n---\n: standalone marker\n\nTerm\n: glossaryprobe\n');
 writeFileSync(join(notes, 'model.md'), '---\ntitle: Recovery index\ntags: [Data]\n---\n## Catalog\nKeep a catalog.\n');
@@ -30,20 +30,21 @@ writeFileSync(join(notes, 'literal.md'), '---\ntitle: Literal <img src=x>\n---\n
 for (const [name, tags] of [['case-a', '[Database, Équipe]'], ['case-b', '[database, équipe]'], ['case-c', '[DATABASE, ÉQUIPE]']]) {
   writeFileSync(join(notes, `${name}.md`), `---\ntitle: ${name}\ntags: ${tags}\n---\n## Tag probe\ntagprobe\n`);
 }
-writeFileSync(join(templates, 'page.html'), '<!doctype html><title>{{title}}</title><article>{{content}}</article>');
+writeFileSync(join(templates, 'page.html'), readFileSync(new URL('examples/wiki_search/page.html', repository), 'utf8').replace('/static/search/page.css', '/wiki/static/search/page.css'));
 writeFileSync(join(templates, '404.html'), '{{content}}');
 const collections = join(root, 'collections.cfg');
-writeFileSync(collections, `[notes]\nschema = title:String,tags:Optional[Array[String]]\ndir = ${notes}\n`);
+writeFileSync(collections, `[notes]\nschema = title:String,tags:Optional[Array[String]],description:Optional[String]\ndir = ${notes}\n`);
 const config = join(root, 'site.cfg');
 writeFileSync(config, `title = Wiki\nbase_url = https://example.test\ntemplates_dir = ${templates}\ncollections_file = ${collections}\ncontent_index_file = content-index.json\noutput_dir = ${output}\n`);
 const built = run('_build/js/debug/build/kurisu/lattice/cmd/main/main.js', ['build', content, '-c', config, '--collections', collections]);
 assert.equal(built.status, 0, built.stdout + built.stderr);
-for (const name of ['index.html', 'app.js', 'worker.js', 'host.js', 'renderer.wasm']) {
+for (const name of ['index.html', 'app.js', 'worker.js', 'host.js', 'renderer.wasm', 'page.css']) {
   assert.deepEqual(readFileSync(join(output, 'static/search', name)), readFileSync(join(search, name)));
 }
 // Extend only this disposable synthetic index to exercise caller-supplied URLs
 // and explicit exclusion. Normal published note entries remain untouched.
 const entries = JSON.parse(readFileSync(join(output, 'content-index.json'), 'utf8'));
+entries.push({ title: 'External', url: 'https://example.org/note/', tags: [], sections: [{ heading: '', body: 'externalpreviewprobe' }] });
 entries.push({ title: 'Excluded', url: '/excluded/', tags: [], body: 'exclusionprobe', sections: [] });
 for (const url of ['javascript:window.hacked=true', 'data:text/html,bad', 'http://[']) {
   entries.push({ title: 'Citation probe', url, tags: [], sections: [{ heading: 'Citation', body: 'citationprobe' }] });
@@ -53,6 +54,7 @@ const assets = new Map([
   ['/wiki/static/search/', ['static/search/index.html', 'text/html']],
   ...['app.js', 'worker.js', 'host.js'].map(name => [`/wiki/static/search/${name}`, [`static/search/${name}`, 'text/javascript']]),
   ['/wiki/static/search/renderer.wasm', ['static/search/renderer.wasm', 'application/wasm']],
+  ['/wiki/static/search/page.css', ['static/search/page.css', 'text/css']],
   ['/notes/ops/', ['notes/ops/index.html', 'text/html']],
 ]);
 let indexMode = 'unavailable';
@@ -171,7 +173,11 @@ try {
   assert.equal(await page.evaluate(() => window.hacked), undefined);
   await query('citationprobe'); await complete();
   assert.deepEqual(await urls(), [null, null, null]);
-  assert.equal(await page.getByRole('link').count(), 0);
+  assert.equal(await page.locator('#results').getByRole('link').count(), 0);
+  assert.equal(await page.getByRole('button', { name: /^Read note:/ }).count(), 0);
+  await query('externalpreviewprobe'); await complete();
+  assert.deepEqual(await urls(), ['https://example.org/note/']);
+  assert.equal(await page.getByRole('button', { name: /^Read note:/ }).count(), 0);
   await page.evaluate(() => { window.holdNextResult = true; });
   await query('basil');
   await page.waitForFunction(() => window.heldResults.length === 1);
@@ -200,6 +206,62 @@ try {
   await page.getByLabel('Database', { exact: true }).uncheck();
   await query('recovery'); await complete();
   assert.deepEqual(await urls(), expected);
+  // Read the actual published output without losing the current search.
+  const preview = page.getByRole('button', { name: 'Read note: Operations', exact: true });
+  const closePreview = page.getByRole('button', { name: '← Back to results', exact: true });
+  await preview.focus();
+  await page.keyboard.press('Enter');
+  await page.frameLocator('#reader iframe').locator('article').waitFor();
+  assert.ok((await page.frameLocator('#reader iframe').locator('article').textContent()).includes('Restore encrypted snapshots.'));
+  assert.equal(await page.locator('#reader iframe').getAttribute('sandbox'), '');
+  assert.equal(await page.frameLocator('#reader iframe').locator('h1').textContent(), 'Operations | Wiki');
+  assert.equal(await page.frameLocator('#reader iframe').getByRole('navigation', { name: 'On this page' }).count(), 1);
+  assert.equal(await page.frameLocator('#reader iframe').getByRole('complementary', { name: 'Linked from' }).count(), 1);
+  assert.equal(await page.locator('#results li.selected').count(), 1);
+  assert.equal(await preview.getAttribute('aria-current'), 'true');
+  const contents = page.frameLocator('#reader iframe').getByText('On this page', { exact: true });
+  await contents.focus();
+  await page.keyboard.press('Enter');
+  assert.equal(await page.frameLocator('#reader iframe').getByRole('link', { name: 'Before you begin', exact: true }).isVisible(), true);
+  await page.keyboard.press('Enter');
+  assert.equal(await page.frameLocator('#reader iframe').getByRole('link', { name: 'Before you begin', exact: true }).isVisible(), false);
+  await closePreview.focus();
+  assert.equal(await closePreview.evaluate(element => element === document.activeElement), true);
+  assert.equal(await page.getByRole('searchbox').inputValue(), 'recovery');
+  assert.deepEqual(await urls(), expected);
+  const columns = await page.locator('.search-column, #reader').evaluateAll(elements => elements.map(element => element.getBoundingClientRect().toJSON()));
+  assert.ok(columns[1].x >= columns[0].right);
+  if (process.env.LATTICE_PREVIEW_DIR) {
+    mkdirSync(process.env.LATTICE_PREVIEW_DIR, { recursive: true });
+    await page.screenshot({ path: join(process.env.LATTICE_PREVIEW_DIR, 'reader-desktop.png'), fullPage: true });
+  }
+  await page.keyboard.press('Tab');
+  assert.equal(await page.getByRole('link', { name: 'Open full page ↗', exact: true }).evaluate(element => element === document.activeElement), true);
+  await page.keyboard.press('Escape');
+  assert.equal(await page.locator('#reader').isHidden(), true);
+  assert.equal(await page.locator('#reader iframe').count(), 0);
+  assert.equal(await preview.evaluate(element => element === document.activeElement), true);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await preview.click();
+  await page.frameLocator('#reader iframe').locator('article').waitFor();
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  assert.equal(await page.locator('.search-column').isHidden(), true);
+  assert.equal(await page.frameLocator('#reader iframe').locator('html').evaluate(element => element.scrollWidth <= innerWidth), true);
+  if (process.env.LATTICE_PREVIEW_DIR) await page.screenshot({ path: join(process.env.LATTICE_PREVIEW_DIR, 'reader-mobile.png'), fullPage: true });
+  await closePreview.click();
+  assert.equal(await preview.evaluate(element => element === document.activeElement), true);
+  assert.equal(await preview.getAttribute('aria-current'), null);
+  await preview.click();
+  await page.getByRole('link', { name: 'Skip to search' }).focus();
+  await page.keyboard.press('Enter');
+  assert.equal(await page.locator('#reader').isHidden(), true);
+  assert.equal(await page.getByRole('searchbox').evaluate(element => element === document.activeElement), true);
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await preview.click();
+  await query('basil'); await complete();
+  assert.equal(await page.locator('#reader').isHidden(), true);
+  assert.equal(await page.locator('#reader iframe').count(), 0);
+  await page.setViewportSize({ width: 1280, height: 720 });
   await page.getByRole('link', { name: 'Operations', exact: true }).click();
   assert.equal(new URL(page.url()).pathname, '/notes/ops/');
   assert.ok((await page.locator('article').textContent()).includes('Restore encrypted snapshots.'));
