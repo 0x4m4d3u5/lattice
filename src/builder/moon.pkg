@@ -25,6 +25,7 @@ import {
   "kurisu/lattice/src/manifest" @manifest,
   "kurisu/lattice/src/watch" @watch,
   "kurisu/lattice/src/strutil" @strutil,
+  "moonbitlang/core/encoding/utf8" @utf8,
   "moonbitlang/x/fs" @fs,
   "moonbitlang/x/path" @path,
 }
