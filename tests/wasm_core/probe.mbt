@@ -174,6 +174,21 @@ pub fn validate_note() -> Int {
   guard missing.fields.get("values") is Some(@frontmatter.FStr("[1,,2]")) else {
     return -22
   }
+  let literal = match @frontmatter.parse("+++\ntitle = 'Research, notes'\ntags = ['C:\\notes', '2026-01-02']\n+++\n") {
+    Ok(fm) => fm
+    Err(_) => return -23
+  }
+  guard literal.fields.get("title") is Some(@frontmatter.FStr("Research, notes")) else {
+    return -24
+  }
+  guard literal.fields.get("tags") is Some(@frontmatter.FArray(literal_tags)) else {
+    return -25
+  }
+  guard literal_tags.length() == 2 &&
+    literal_tags[0] is @frontmatter.FStr("C:\\notes") &&
+    literal_tags[1] is @frontmatter.FStr("2026-01-02") else {
+    return -26
+  }
   let capitals = match @frontmatter.parse("---\nfeatured: True\nextra: FALSE\n---\n") {
     Ok(fm) => fm
     Err(_) => return -16

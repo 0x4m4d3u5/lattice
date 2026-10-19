@@ -200,15 +200,23 @@ fn parse_value_at(
         }
       Err(e) => Err(e)
     }
-  } else if yaml_plain && c == '\'' {
+  } else if c == '\'' {
+    if !yaml_plain && @strutil.starts_with_at(s, i, "'''") {
+      return Err("multiline literal strings are not supported")
+    }
     let mut j = i + 1
     while j < n {
       if @strutil.char_at(s, j) == '\'' {
-        if j + 1 < n && @strutil.char_at(s, j + 1) == '\'' {
+        if yaml_plain && j + 1 < n && @strutil.char_at(s, j + 1) == '\'' {
           j = j + 2
         } else {
-          // A doubled apostrophe is content; only an unpaired quote closes.
-          let value = @strutil.substr(s, i + 1, j).replace_all(old="''", new="'")
+          // TOML literal strings close at the first apostrophe, with no escapes.
+          let literal = @strutil.substr(s, i + 1, j)
+          if !yaml_plain {
+            return Ok((FStr(literal), j + 1))
+          }
+          // YAML doubles apostrophes and retains its existing date conversion.
+          let value = literal.replace_all(old="''", new="'")
           let parsed = if @strutil.is_valid_iso8601_date(value) {
             FDate(value)
           } else {
@@ -217,6 +225,10 @@ fn parse_value_at(
           return Ok((parsed, j + 1))
         }
       } else {
+        let code = @strutil.char_at(s, j).to_int()
+        if !yaml_plain && ((code < 32 && code != 9) || code == 127) {
+          return Err("control character in literal string")
+        }
         j = j + 1
       }
     }
