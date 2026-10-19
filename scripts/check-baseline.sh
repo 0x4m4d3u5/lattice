@@ -15,6 +15,8 @@ echo "Running copied getting-started workflow"
 node scripts/check-getting-started.mjs || status=1
 echo "Running CLI cross-note heading fixture"
 node scripts/check-wikilink-headings.mjs || status=1
+echo "Running final HTML wikilink fragment fixture"
+node scripts/check-wikilink-fragments.mjs || status=1
 echo "Running generated-output navigation fixture"
 node scripts/check-navigation-overwrites.mjs || status=1
 echo "Running root and standalone tag-index fixture"

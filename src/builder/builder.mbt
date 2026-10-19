@@ -4715,12 +4715,48 @@ pub fn build(
   config : BuildConfig,
   cache_store : @cache.CacheStore,
 ) -> BuildResult {
+  let output = OutputPlan::new(config.output_dir)
+  let result = prepare_output(config, cache_store, output)
+  if result.errors > 0 {
+    return result
+  }
+  try {
+    output.publish(result.diagnostics, result.messages)
+    result
+  } catch {
+    @fs.IOError(msg) => {
+      result.diagnostics.push(
+        build_error(
+          Some(config.output_dir),
+          None,
+          None,
+          "output publication failed: " + msg,
+        ),
+      )
+      let messages = result.messages.filter(fn(message) {
+        !message.has_prefix("[build]") &&
+        !message.has_prefix("[lattice] wrote ") &&
+        !message.has_prefix("[lattice] copied ")
+      })
+      messages.push("[lattice] build failed; no successful publication")
+      { ..result, errors: 1, rebuilt_pages: 0, redirect_count: 0, messages, }
+    }
+  }
+}
+
+///|
+/// Populate the final ordered output plan, including tag regeneration and pruning.
+/// This function never publishes; check uses a fresh cache to prepare every page.
+fn prepare_output(
+  config : BuildConfig,
+  cache_store : @cache.CacheStore,
+  output : OutputPlan,
+) -> BuildResult {
   let messages : Array[String] = []
   messages.push(
     "[lattice] building " + config.content_dir + " → " + config.output_dir,
   )
   let diagnostics : Array[@diagnostic.Diagnostic] = []
-  let output = OutputPlan::new(config.output_dir)
 
   let layout = match load_project_layout(config) {
     Ok(parsed) => parsed
@@ -6586,21 +6622,6 @@ pub fn build(
     }
     output.prune_files(dropped_slots)
     error_count = @diagnostic.count_errors(diagnostics)
-    if error_count == 0 {
-      output.publish(diagnostics, messages) catch {
-        @fs.IOError(msg) => {
-          diagnostics.push(
-            build_error(
-              Some(config.output_dir),
-              None,
-              None,
-              "output publication failed: " + msg,
-            ),
-          )
-          error_count = error_count + 1
-        }
-      }
-    }
   }
   if error_count > 0 {
     // Planned work is not published work. Do not report successful writes on failure.
@@ -7332,6 +7353,33 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
       message: @assets.format_error(asset_err),
     })
     i = i + 1
+  }
+  // Keep lint's existing diagnostics. Only a complete preparation can establish
+  // final output ownership; do not infer fragments from partial render results.
+  {
+    let output = OutputPlan::new(config.output_dir)
+    let prepared = prepare_output(
+      { ..config, force_rebuild: true, },
+      @cache.empty(config.output_dir),
+      output,
+    )
+    if prepared.errors == 0 {
+      check_output_fragments(
+        all_sources_for_backlinks, page_index, config, output, violations,
+      )
+    } else if violations.is_empty() {
+      for diagnostic in prepared.diagnostics {
+        if diagnostic.severity == @diagnostic.Error {
+          violations.push({
+            path: diagnostic.path.unwrap_or(config.content_dir),
+            line: diagnostic.line,
+            column: diagnostic.column,
+            kind: @lint.IOError,
+            message: diagnostic.message,
+          })
+        }
+      }
+    }
   }
   { violations, messages }
 }
