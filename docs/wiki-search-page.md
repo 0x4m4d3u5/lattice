@@ -50,3 +50,18 @@ navigation. An operation taking over 30 seconds also offers retry.
 See [section search](section-search.md) for lexical matching, ranking and older
 content-index compatibility. The excerpt-only `search-index.json` is not a
 substitute for the content index.
+
+## Published-page preview
+
+Each same-origin result offers **Preview page**. On wide screens the published
+HTML opens beside the results; on smaller screens it appears above them. Search
+text and selected tags stay in place. Close preview returns keyboard focus to its
+button, and a new search closes the old preview. Escape also closes it while focus
+is in the preview controls (keyboard events inside the embedded page stay there).
+
+The pane loads the existing published page in a sandboxed iframe; it does not
+render Markdown again or infer headings from the search index. This preserves the
+page's own TOC, backlinks and styling. Scripts and forms in the embedded page are
+disabled. **Open full page** remains available for interactive content or sites
+that block embedding. External citations remain normal links without preview
+buttons. This is an additive example UI, not a new generator or output contract.

@@ -44,6 +44,7 @@ for (const name of ['index.html', 'app.js', 'worker.js', 'host.js', 'renderer.wa
 // Extend only this disposable synthetic index to exercise caller-supplied URLs
 // and explicit exclusion. Normal published note entries remain untouched.
 const entries = JSON.parse(readFileSync(join(output, 'content-index.json'), 'utf8'));
+entries.push({ title: 'External', url: 'https://example.org/note/', tags: [], sections: [{ heading: '', body: 'externalpreviewprobe' }] });
 entries.push({ title: 'Excluded', url: '/excluded/', tags: [], body: 'exclusionprobe', sections: [] });
 for (const url of ['javascript:window.hacked=true', 'data:text/html,bad', 'http://[']) {
   entries.push({ title: 'Citation probe', url, tags: [], sections: [{ heading: 'Citation', body: 'citationprobe' }] });
@@ -172,6 +173,10 @@ try {
   await query('citationprobe'); await complete();
   assert.deepEqual(await urls(), [null, null, null]);
   assert.equal(await page.getByRole('link').count(), 0);
+  assert.equal(await page.getByRole('button', { name: /^Preview page:/ }).count(), 0);
+  await query('externalpreviewprobe'); await complete();
+  assert.deepEqual(await urls(), ['https://example.org/note/']);
+  assert.equal(await page.getByRole('button', { name: /^Preview page:/ }).count(), 0);
   await page.evaluate(() => { window.holdNextResult = true; });
   await query('basil');
   await page.waitForFunction(() => window.heldResults.length === 1);
@@ -200,6 +205,43 @@ try {
   await page.getByLabel('Database', { exact: true }).uncheck();
   await query('recovery'); await complete();
   assert.deepEqual(await urls(), expected);
+  // Read the actual published output without losing the current search.
+  const preview = page.getByRole('button', { name: 'Preview page: Operations', exact: true });
+  const closePreview = page.getByRole('button', { name: 'Close preview', exact: true });
+  await preview.focus();
+  await page.keyboard.press('Enter');
+  await page.frameLocator('#reader iframe').locator('article').waitFor();
+  assert.ok((await page.frameLocator('#reader iframe').locator('article').textContent()).includes('Restore encrypted snapshots.'));
+  assert.equal(await page.locator('#reader iframe').getAttribute('sandbox'), '');
+  assert.equal(await closePreview.evaluate(element => element === document.activeElement), true);
+  assert.equal(await page.getByRole('searchbox').inputValue(), 'recovery');
+  assert.deepEqual(await urls(), expected);
+  const columns = await page.locator('.search-column, #reader').evaluateAll(elements => elements.map(element => element.getBoundingClientRect().toJSON()));
+  assert.ok(columns[1].x >= columns[0].right);
+  if (process.env.LATTICE_PREVIEW_DIR) {
+    mkdirSync(process.env.LATTICE_PREVIEW_DIR, { recursive: true });
+    await page.screenshot({ path: join(process.env.LATTICE_PREVIEW_DIR, 'reader-desktop.png'), fullPage: true });
+  }
+  await page.keyboard.press('Tab');
+  assert.equal(await page.getByRole('link', { name: 'Open full page', exact: true }).evaluate(element => element === document.activeElement), true);
+  await page.keyboard.press('Escape');
+  assert.equal(await page.locator('#reader').isHidden(), true);
+  assert.equal(await page.locator('#reader iframe').count(), 0);
+  assert.equal(await preview.evaluate(element => element === document.activeElement), true);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await preview.click();
+  await page.frameLocator('#reader iframe').locator('article').waitFor();
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  const stacked = await page.locator('.search-column, #reader').evaluateAll(elements => elements.map(element => element.getBoundingClientRect().toJSON()));
+  assert.ok(stacked[1].bottom <= stacked[0].y);
+  if (process.env.LATTICE_PREVIEW_DIR) await page.screenshot({ path: join(process.env.LATTICE_PREVIEW_DIR, 'reader-mobile.png'), fullPage: true });
+  await closePreview.click();
+  assert.equal(await preview.evaluate(element => element === document.activeElement), true);
+  await preview.click();
+  await query('basil'); await complete();
+  assert.equal(await page.locator('#reader').isHidden(), true);
+  assert.equal(await page.locator('#reader iframe').count(), 0);
+  await page.setViewportSize({ width: 1280, height: 720 });
   await page.getByRole('link', { name: 'Operations', exact: true }).click();
   assert.equal(new URL(page.url()).pathname, '/notes/ops/');
   assert.ok((await page.locator('article').textContent()).includes('Restore encrypted snapshots.'));

@@ -22,6 +22,21 @@
     #status, .section, .citation { color: #415d61; }
     #results { list-style: none; padding: 0; }
     #results li { background: #fff; border: 1px solid #c7d3cb; border-radius: .5rem; padding: 1.2rem; margin: 1rem 0; }
+    body.reader-open { max-width: 88rem; }
+    .search-column { min-width: 0; }
+    #reader { min-width: 0; border: 1px solid #c7d3cb; border-radius: .5rem; background: #fff; padding: 1rem; }
+    #reader h2 { margin: .8rem 0; overflow-wrap: anywhere; }
+    #reader p { font-size: .85rem; color: #415d61; }
+    #reader iframe { display: block; width: 100%; height: 65vh; border: 0; background: white; }
+    #results button { margin-top: .5rem; }
+    @media (min-width: 64rem) {
+      .reader-open main { display: grid; grid-template-columns: minmax(18rem, 1fr) minmax(0, 2fr); gap: 2rem; align-items: start; }
+      #reader { position: sticky; top: 1rem; }
+    }
+    @media (max-width: 63.99rem) {
+      .reader-open main { display: flex; flex-direction: column; gap: 1rem; }
+      #reader { order: -1; width: 100%; box-sizing: border-box; }
+    }
     #results p { margin: .5rem 0; white-space: pre-wrap; overflow-wrap: anywhere; }
     .section { font-weight: 600; }
     .citation { font-size: .85rem; }
@@ -34,22 +49,31 @@
     <p>Find sections in published notes. Select tags to narrow your search.</p>
   </header>
   <main>
-    <form id="search" data-index="../../content-index.json">
-      <fieldset id="controls" disabled>
-        <label for="query">Search notes</label>
-        <div class="query">
-          <input id="query" type="search" autocomplete="off" placeholder="e.g. restore checksums">
-          <button type="submit">Search</button>
-        </div>
-        <fieldset id="filters" hidden>
-          <legend>Tags — match all selected</legend>
-          <div id="tags"></div>
+    <section class="search-column" aria-label="Search">
+      <form id="search" data-index="../../content-index.json">
+        <fieldset id="controls" disabled>
+          <label for="query">Search notes</label>
+          <div class="query">
+            <input id="query" type="search" autocomplete="off" placeholder="e.g. restore checksums">
+            <button type="submit">Search</button>
+          </div>
+          <fieldset id="filters" hidden>
+            <legend>Tags — match all selected</legend>
+            <div id="tags"></div>
+          </fieldset>
         </fieldset>
-      </fieldset>
-    </form>
-    <p id="status" role="status" aria-live="polite">Loading search…</p>
-    <button id="retry" type="button" hidden>Retry loading search</button>
-    <ol id="results" aria-label="Matching sections" aria-busy="true"></ol>
+      </form>
+      <p id="status" role="status" aria-live="polite">Loading search…</p>
+      <button id="retry" type="button" hidden>Retry loading search</button>
+      <ol id="results" aria-label="Matching sections" aria-busy="true"></ol>
+    </section>
+    <aside id="reader" aria-labelledby="reader-title" hidden>
+      <button id="close-reader" type="button">Close preview</button>
+      <h2 id="reader-title"></h2>
+      <a id="reader-link">Open full page</a>
+      <p>Published page preview. If it cannot display here, open the full page.</p>
+      <div id="reader-frame"></div>
+    </aside>
     <noscript>Enable JavaScript to search this wiki.</noscript>
   </main>
   <script type="module" src="./app.js"></script>
