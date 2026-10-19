@@ -73,6 +73,11 @@ writeFileSync(target, page(`<div ID='actual' title='> id="attribute-fake"'></div
 <div id=" actual-space "></div><div id="first" id="duplicate-attribute"></div>`));
 for (const id of ['actual', 'unquoted', 'entity-id', 'first']) assertLink(`[[Target#${id}]]`, true);
 for (const id of ['attribute-fake', 'comment-fake', 'script-fake', 'textarea-fake', 'actual-space', 'duplicate-attribute']) assertLink(`[[Target#${id}]]`, false);
+// Browser fragment navigation also supports named anchors and #top, but not
+// elements held in inert template document fragments.
+writeFileSync(target, page('<a name="legacy"></a><div name="not-an-anchor"></div><template id="template-element"><div id="inert"></div><template><a name="nested-inert"></a></template></template><div id="after-template"></div>'));
+for (const id of ['legacy', 'top', 'template-element', 'after-template']) assertLink(`[[Target#${id}]]`, true);
+for (const id of ['inert', 'nested-inert', 'not-an-anchor']) assertLink(`[[Target#${id}]]`, false);
 // Generated collection output wins over an authored page at the same URL.
 writeFileSync(join(content, 'posts.md'), page('## Authored'));
 writeFileSync(join(templates, 'index.html'), '<main id="generated">{{content}}</main>');

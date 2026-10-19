@@ -1,7 +1,7 @@
 ///|
 /// Read actual start-tag attributes. The existing HTML scanner excludes comments,
 /// quoted attributes and raw/RCDATA text, including script's fake markup.
-fn published_html_ids(html : String) -> Map[String, Bool] {
+fn published_html_fragments(html : String) -> Map[String, Bool] {
   let starts : Array[Int] = []
   for i = 0; i < html.length(); i = i + 1 {
     if @strutil.char_at(html, i) == '<' {
@@ -9,7 +9,8 @@ fn published_html_ids(html : String) -> Map[String, Bool] {
     }
   }
   let (_, boundaries) = @strutil.strip_html_tags_with_boundaries(html, starts)
-  let ids : Map[String, Bool] = Map([])
+  let ids : Map[String, Bool] = Map([("top", true)])
+  let mut template_depth = 0
   for index = 0; index < starts.length(); index = index + 1 {
     if !boundaries[index] {
       continue
@@ -18,6 +19,14 @@ fn published_html_ids(html : String) -> Map[String, Bool] {
     if pos >= html.length() {
       continue
     }
+    let closing = @strutil.char_at(html, pos) == '/'
+    if closing {
+      pos = pos + 1
+    }
+    if pos >= html.length() {
+      continue
+    }
+    let tag_start = pos
     let first = @strutil.char_at(html, pos)
     if !((first >= 'a' && first <= 'z') || (first >= 'A' && first <= 'Z')) {
       continue
@@ -28,7 +37,21 @@ fn published_html_ids(html : String) -> Map[String, Bool] {
           @strutil.char_at(html, pos) != '/' {
       pos = pos + 1
     }
+    let tag_name = html[tag_start:pos].to_owned().to_lower()
+    if closing {
+      if tag_name == "template" && template_depth > 0 {
+        template_depth = template_depth - 1
+      }
+      continue
+    }
+    if template_depth > 0 {
+      if tag_name == "template" {
+        template_depth = template_depth + 1
+      }
+      continue
+    }
     let mut found_id : String? = None
+    let mut found_name : String? = None
     while pos < html.length() {
       while pos < html.length() &&
             (
@@ -83,7 +106,8 @@ fn published_html_ids(html : String) -> Map[String, Bool] {
           value = html[start:pos].to_owned()
         }
       }
-      if name == "id" && found_id is None {
+      if (name == "id" && found_id is None) ||
+        (tag_name == "a" && name == "name" && found_name is None) {
         // Surround with sentinels so text decoding cannot trim an ID into a
         // valid fragment. Resolved heading fragments contain no whitespace.
         let decoded = @strutil.strip_html_tags(
@@ -91,16 +115,29 @@ fn published_html_ids(html : String) -> Map[String, Bool] {
           value.replace(old="<", new="&lt;").replace(old=">", new="&gt;") +
           "x",
         )
-        found_id = Some(decoded[1:decoded.length() - 1].to_owned())
+        let value = decoded[1:decoded.length() - 1].to_owned()
+        if name == "id" {
+          found_id = Some(value)
+        } else {
+          found_name = Some(value)
+        }
       }
       if pos == start {
         pos = pos + 1
       }
     }
-    if pos < html.length() &&
-      @strutil.char_at(html, pos) == '>' &&
-      found_id is Some(id) {
-      ids.set(id, true)
+    if pos < html.length() && @strutil.char_at(html, pos) == '>' {
+      if found_id is Some(id) {
+        ids.set(id, true)
+      }
+      if found_name is Some(name) {
+        ids.set(name, true)
+      }
+      // The template element itself is in the document, but its descendants
+      // belong to a separate inert DocumentFragment, including nested templates.
+      if tag_name == "template" {
+        template_depth = template_depth + 1
+      }
     }
   }
   ids
@@ -145,12 +182,13 @@ fn check_output_fragments(
         let ids = match ids_by_path.get(path) {
           Some(ids) => ids
           None => {
-            let html = match final_files.get(path) {
-              Some(Text(html)) | Some(OptionalText(html)) => html
-              Some(Binary(bytes)) => @utf8.decode_lossy(bytes)
-              None => ""
+            let ids = match final_files.get(path) {
+              Some(Text(html)) | Some(OptionalText(html)) =>
+                published_html_fragments(html)
+              Some(Binary(bytes)) =>
+                published_html_fragments(@utf8.decode_lossy(bytes))
+              None => Map([])
             }
-            let ids = published_html_ids(html)
             ids_by_path.set(path, ids)
             ids
           }
