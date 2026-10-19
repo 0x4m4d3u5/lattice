@@ -174,7 +174,13 @@ fn check_output_fragments(
           continue
         }
         let url = if page.is_empty() {
-          page_index.get(source.slug).unwrap_or("")
+          // Directory aliases can shadow a slug in page_index. A local href
+          // still targets this source document, not that named lookup alias.
+          match collection.definition.name {
+            "_standalone" => standalone_page_url(source.slug)
+            "_root" => root_page_url(source.slug)
+            name => collection_page_url(name, source.slug)
+          }
         } else {
           page.to_owned()
         }
