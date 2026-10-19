@@ -156,12 +156,7 @@ fn check_output_fragments(
           }
         }
         if !ids.contains(fragment.to_owned()) {
-          let display = match link.raw.display {
-            Some(display) => "|" + display
-            None => ""
-          }
-          let marker = "[[" + link.raw.target + display + "]]"
-          let (line, column) = line_col_of_first(source.content, marker)
+          let (line, column) = fragment_link_location(source.content, link.raw)
           violations.push({
             path: source.path,
             line,
@@ -179,4 +174,33 @@ fn check_output_fragments(
       }
     }
   }
+}
+
+///|
+/// Resolve the authored spelling before locating it: the Markdown parser trims
+/// targets and labels, so reconstructing [[target|display]] loses whitespace.
+fn fragment_link_location(
+  source : String,
+  link : @wikilink.RawWikilink,
+) -> (Int?, Int?) {
+  let mut cursor = 0
+  while cursor < source.length() {
+    let start = @strutil.find_str(source, cursor, "[[", source.length())
+    if start < 0 {
+      break
+    }
+    let end = @strutil.find_str(source, start + 2, "]]", source.length())
+    if end < 0 {
+      break
+    }
+    let authored = source[start:end + 2].to_owned()
+    let parsed = @wikilink.extract(authored, link.source_file)
+    if parsed.length() == 1 &&
+      parsed[0].target == link.target &&
+      parsed[0].display == link.display {
+      return line_col_of_first(source, authored)
+    }
+    cursor = end + 2
+  }
+  (None, None)
 }
