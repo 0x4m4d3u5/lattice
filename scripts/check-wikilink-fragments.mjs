@@ -166,5 +166,13 @@ console.log(`Final HTML fragments, templates, overwrites and read-only check pas
     message: "[[#collection-only]]: fragment 'collection-only' not found in published page '/wiki/notes/'",
   }]);
   assert.deepEqual(snapshot(output), before, 'invalid local-fragment check must not touch output');
+  // User collection names may coincide with the internal grouping labels.
+  writeNote('[[#Local Only]]');
+  for (const name of ['_root', '_standalone']) {
+    writeFileSync(collections, `[${name}]\nschema = title:String\ndir = ${notes}\n`);
+    const checked = run('check');
+    assert.equal(checked.status, 0, checked.stdout + checked.stderr);
+  }
+  assert.deepEqual(snapshot(output), before);
   console.log('Local fragments use the source URL while named collection aliases keep their destination');
 }

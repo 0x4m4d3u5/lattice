@@ -6893,6 +6893,7 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
     all_sources_for_backlinks, page_index,
   )
 
+  let source_urls : Map[String, String] = Map([])
   let graph_pages : Array[@graph.GraphPage] = []
   let tag_pages_by_slug : Map[String, Array[@tags.TaggedPage]] = Map([])
   let rendered_collections : Array[CollectionRenderResult] = []
@@ -6958,6 +6959,7 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
     while j < coll.sources.length() {
       let src = coll.sources[j]
       let page_url = collection_page_url(coll.definition.name, src.slug)
+      source_urls.set(src.path, page_url)
       let lint_backlinks_html = match backlink_index.get(src.slug) {
         Some(refs) => render_backlinks_html(refs)
         None => ""
@@ -7030,6 +7032,7 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
     while si < standalone_sources.length() {
       let src = standalone_sources[si]
       let page_url = standalone_page_url(src.slug)
+      source_urls.set(src.path, page_url)
       let lint_backlinks_html = match backlink_index.get(src.slug) {
         Some(refs) => render_backlinks_html(refs)
         None => ""
@@ -7089,6 +7092,7 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
     while ri < root_sources.length() {
       let src = root_sources[ri]
       let page_url = root_page_url(src.slug)
+      source_urls.set(src.path, page_url)
       let lint_backlinks_html = match backlink_index.get(src.slug) {
         Some(refs) => render_backlinks_html(refs)
         None => ""
@@ -7365,7 +7369,7 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
     )
     if prepared.errors == 0 {
       check_output_fragments(
-        all_sources_for_backlinks, page_index, config, output, violations,
+        all_sources_for_backlinks, page_index, source_urls, config, output, violations,
       )
     } else if violations.is_empty() {
       for diagnostic in prepared.diagnostics {

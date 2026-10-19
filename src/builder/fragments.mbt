@@ -147,6 +147,7 @@ fn published_html_fragments(html : String) -> Map[String, Bool] {
 fn check_output_fragments(
   collections : Array[CollectionSources],
   page_index : Map[String, String],
+  source_urls : Map[String, String],
   config : BuildConfig,
   output : OutputPlan,
   violations : Array[@lint.LintViolation],
@@ -176,11 +177,7 @@ fn check_output_fragments(
         let url = if page.is_empty() {
           // Directory aliases can shadow a slug in page_index. A local href
           // still targets this source document, not that named lookup alias.
-          match collection.definition.name {
-            "_standalone" => standalone_page_url(source.slug)
-            "_root" => root_page_url(source.slug)
-            name => collection_page_url(name, source.slug)
-          }
+          source_urls.get(source.path).unwrap_or("")
         } else {
           page.to_owned()
         }
