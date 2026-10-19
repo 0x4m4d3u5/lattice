@@ -123,13 +123,13 @@ The `[data.nav]` and `[data.site]` sections in `collections.cfg` make these requ
 
 ## 4. Add a Markdown document
 
-This frontmatter matches `example/content/posts/welcome-lattice.md`:
+Create a note with YAML frontmatter that satisfies the collection schema:
 
 ```md
 ---
-title = Welcome to the Example Site
-date = "2024-01-15"
-tags = [intro, lattice, demo]
+title: Welcome to the Example Site
+date: 2024-01-15
+tags: [intro, lattice, demo]
 ---
 # Welcome
 
@@ -140,7 +140,7 @@ Place it at `content/posts/welcome-lattice.md`.
 
 Ordinary collection, standalone, and root content pages accept `.md` in any letter case (`.MD`, `.Md`, `.mD`). Their URLs use the same normalized slugs.
 
-Frontmatter is fenced with `---` and uses TOML-style `key = value` assignments. In the current implementation, dates are plain strings, so `"2024-01-15"` is validated as `String`.
+YAML frontmatter uses `---` fences and `key: value` assignments. The unquoted ISO date above is parsed as `Date`, matching the collection schema. For TOML frontmatter, use `+++` fences and `key = value` assignments instead.
 
 Definition lists pair a term line with following `: definition` lines. A term
 and definition can follow prose without a blank line. An unpaired line such as
@@ -220,13 +220,13 @@ The example site has one page template and one index template.
 From repo root, the example site builds with:
 
 ```bash
-moon run cmd/main -- ./example/content ./dist --config ./example/site.cfg --collections ./example/collections.cfg
+moon run cmd/main --target js -- build ./example/content -o ./dist --config ./example/site.cfg
 ```
 
-For your own site, if `collections_file = ./collections.cfg` is set in `lattice.toml`, you can build with:
+For your own site, run the `lattice` executable from `my-site/`. If `collections_file = ./collections.cfg` is set in `lattice.toml`, build with:
 
 ```bash
-moon run cmd/main -- --config ./lattice.toml
+lattice build --config ./lattice.toml
 ```
 
 That works because the CLI defaults to:
@@ -238,7 +238,7 @@ That works because the CLI defaults to:
 If you prefer not to set `collections_file` in the config, pass it explicitly:
 
 ```bash
-moon run cmd/main -- ./content ./dist --config ./lattice.toml --collections ./collections.cfg
+lattice build ./content -o ./dist --config ./lattice.toml --collections ./collections.cfg
 ```
 
 ## What the output looks like

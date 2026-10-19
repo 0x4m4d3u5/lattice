@@ -11,6 +11,8 @@ for gate in check test build; do
 done
 echo "Running vendored clap tests --target js --deny-warn"
 moon -C vendor/clap test --target js --deny-warn -p TheWaWaR/clap || status=1
+echo "Running copied getting-started workflow"
+node scripts/check-getting-started.mjs || status=1
 echo "Running CLI cross-note heading fixture"
 node scripts/check-wikilink-headings.mjs || status=1
 echo "Running generated-output navigation fixture"
