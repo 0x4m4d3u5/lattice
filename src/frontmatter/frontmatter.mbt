@@ -291,6 +291,11 @@ fn parse_array_at(
     return Ok((FArray(items), i + 1))
   }
   while i < n {
+    // A comma separates values; it cannot stand in for an empty string.
+    // Empty arrays and a single trailing comma are handled above/below.
+    if @strutil.char_at(s, i) == ',' {
+      return Err("expected value before ',' inside array")
+    }
     match parse_value_at(s, i, yaml_plain) {
       Err(e) => return Err(e)
       Ok((val, next)) => {

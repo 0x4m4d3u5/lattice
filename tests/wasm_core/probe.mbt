@@ -163,6 +163,17 @@ pub fn validate_note() -> Int {
     (Some(@frontmatter.FInt(42)), Some(@frontmatter.FFloat(1.5))) else {
     return -19
   }
+  match @frontmatter.parse("+++\nvalues = [1,,2]\n+++\n") {
+    Err(_) => ()
+    Ok(_) => return -20
+  }
+  let missing = match @frontmatter.parse("---\nvalues: [1,,2]\n---\n") {
+    Ok(fm) => fm
+    Err(_) => return -21
+  }
+  guard missing.fields.get("values") is Some(@frontmatter.FStr("[1,,2]")) else {
+    return -22
+  }
   let capitals = match @frontmatter.parse("---\nfeatured: True\nextra: FALSE\n---\n") {
     Ok(fm) => fm
     Err(_) => return -16
