@@ -12,6 +12,8 @@ let previewTrigger;
 
 function dismissPreview(restoreFocus = false) {
   reader.hidden = true;
+  document.querySelector('#welcome').hidden = false;
+  previewTrigger?.closest('li')?.classList.remove('selected');
   readerFrame.replaceChildren();
   document.body.classList.remove('reader-open');
   if (restoreFocus) (previewTrigger?.isConnected ? previewTrigger : query).focus();
@@ -19,7 +21,10 @@ function dismissPreview(restoreFocus = false) {
 }
 
 function preview(url, title, trigger) {
+  previewTrigger?.closest('li')?.classList.remove('selected');
   previewTrigger = trigger;
+  trigger.closest('li').classList.add('selected');
+  document.querySelector('#welcome').hidden = true;
   document.querySelector('#reader-title').textContent = title;
   document.querySelector('#reader-link').href = url.href;
   const frame = document.createElement('iframe');
@@ -104,8 +109,8 @@ function renderHits(hits) {
     if (previewUrl) {
       const button = document.createElement('button');
       button.type = 'button';
-      button.textContent = 'Preview page';
-      button.setAttribute('aria-label', `Preview page: ${hit.title}`);
+      button.textContent = 'Read note →';
+      button.setAttribute('aria-label', `Read note: ${hit.title}`);
       button.addEventListener('click', () => preview(previewUrl, hit.title, button));
       item.append(button);
     }

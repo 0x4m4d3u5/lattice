@@ -51,17 +51,30 @@ See [section search](section-search.md) for lexical matching, ranking and older
 content-index compatibility. The excerpt-only `search-index.json` is not a
 substitute for the content index.
 
-## Published-page preview
+## Reader workspace
 
-Each same-origin result offers **Preview page**. On wide screens the published
-HTML opens beside the results; on smaller screens it appears above them. Search
-text and selected tags stay in place. Close preview returns keyboard focus to its
-button, and a new search closes the old preview. Escape also closes it while focus
-is in the preview controls (keyboard events inside the embedded page stay there).
+The search rail keeps the query, tag filters and matching passages together. Use
+**Read note** to open a same-origin published page alongside the results; the
+selected result stays highlighted. On mobile the note takes the available screen,
+with **Back to results** restoring the previous search and keyboard focus. Escape
+also returns to results while focus is in the reader toolbar. Keyboard events
+inside the embedded page stay there. A new search closes the current note.
 
-The pane loads the existing published page in a sandboxed iframe; it does not
-render Markdown again or infer headings from the search index. This preserves the
-page's own TOC, backlinks and styling. Scripts and forms in the embedded page are
-disabled. **Open full page** remains available for interactive content or sites
-that block embedding. External citations remain normal links without preview
-buttons. This is an additive example UI, not a new generator or output contract.
+The reader loads existing HTML in a sandboxed iframe. It does not render Markdown
+again, invent heading links from index metadata, or execute embedded scripts and
+forms. **Open full page** is available for interactive content or sites that block
+embedding. External citations remain normal links. Existing page themes continue
+to control their typography and layout.
+
+For an integrated wiki style, copy `examples/wiki_search/page.html` into your
+site's templates directory as the page template. The packager includes its
+`page.css` stylesheet. Adjust `/static/search/page.css` in the template to your
+chosen static directory and site prefix. This is opt-in: it does not replace
+existing templates. It uses the existing title, description, body, TOC and
+backlink variables; contents and backlinks appear only when Lattice supplies them.
+Enable `toc: true` in a note's frontmatter to publish its contents navigation.
+
+The browser fixture builds realistic synthetic runbook notes with this template,
+then checks desktop/mobile layout, keyboard navigation, published contents and
+backlinks. CI retains screenshots for review. No external fonts or UI frameworks
+are needed.
