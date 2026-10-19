@@ -26,6 +26,19 @@ const run = (args) => {
   assert.ifError(result.error);
   assert.equal(result.status, 0, `${args.join(' ')}\n${result.stdout}${result.stderr}`);
 };
+const pageUrl = '/posts/welcome-lattice/';
+const verifyPublication = () => {
+  const html = readFileSync(join(root, 'dist', pageUrl, 'index.html'), 'utf8');
+  assert.ok(html.includes('Welcome to the Example Site'));
+  assert.ok(html.includes('<h1 id="welcome">Welcome</h1>'));
+  assert.ok(html.includes('This demo site exists to exercise the full lattice pipeline in one place.'));
+  assert.ok(html.includes('Structural integrity demo') && html.includes('Built with typed content contracts'));
+  for (const path of ['posts/index.html', 'posts/feed.xml', 'tags/intro/index.html', 'graph.json', 'sitemap.xml', 'robots.txt']) {
+    assert.ok(existsSync(join(root, 'dist', path)), `missing documented output ${path}`);
+  }
+  const search = JSON.parse(readFileSync(join(root, 'dist/search-index.json'), 'utf8'));
+  assert.ok(search.some(entry => entry.url === pageUrl && entry.title === 'Welcome to the Example Site'));
+};
 try {
   write('lattice.toml', blocks(section(1), 'cfg').at(-1));
   write('collections.cfg', blocks(section(2), 'cfg').at(-1));
@@ -39,22 +52,19 @@ try {
   // The first command is the separate repository example; execute both new-site commands.
   const commands = blocks(section(6), 'bash').slice(1);
   assert.equal(commands.length, 2);
-  for (const command of commands) {
+  for (const [index, command] of commands.entries()) {
+    if (index === 1) {
+      // This command is documented for sites without collections_file.
+      write('lattice.toml', blocks(section(1), 'cfg').at(-1)
+        .replace(/^collections_file\s*=.*$/gm, ''));
+    }
+    // Each command must independently publish, without previous output or cache.
+    rmSync(join(root, 'dist'), { recursive: true, force: true });
     const tokens = command.trim().split(/\s+/);
     assert.equal(tokens[0], 'lattice', 'expected the documented executable');
     run(tokens.slice(1));
+    verifyPublication();
   }
-  const pageUrl = '/posts/welcome-lattice/';
-  const html = readFileSync(join(root, 'dist', pageUrl, 'index.html'), 'utf8');
-  assert.ok(html.includes('Welcome to the Example Site'));
-  assert.ok(html.includes('<h1 id="welcome">Welcome</h1>'));
-  assert.ok(html.includes('This demo site exists to exercise the full lattice pipeline in one place.'));
-  assert.ok(html.includes('Structural integrity demo') && html.includes('Built with typed content contracts'));
-  for (const path of ['posts/index.html', 'posts/feed.xml', 'tags/intro/index.html', 'graph.json', 'sitemap.xml', 'robots.txt']) {
-    assert.ok(existsSync(join(root, 'dist', path)), `missing documented output ${path}`);
-  }
-  const search = JSON.parse(readFileSync(join(root, 'dist/search-index.json'), 'utf8'));
-  assert.ok(search.some(entry => entry.url === pageUrl && entry.title === 'Welcome to the Example Site'));
   // Exercise the optional retrieval output described in the guide.
   const option = guide.match(/`(content_index_file = content-index\.json)`/);
   assert.ok(option, 'missing documented content-index opt-in');
