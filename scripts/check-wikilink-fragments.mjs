@@ -125,3 +125,54 @@ assert.ok(mixed.violations.some((v) => v.message.includes("target 'Missing'")));
 assert.ok(mixed.violations.some((v) => v.message.includes("fragment 'authored'")));
 assert.deepEqual(snapshot(output), before, 'all checks remain nonpublishing');
 console.log(`Final HTML fragments, templates, overwrites and read-only check passed (${root})`);
+
+// Collection directory aliases are lookup names, not the current document URL.
+// In particular, notes/notes.md must not validate local links against /wiki/.
+{
+  const root = mkdtempSync(join(tmpdir(), 'lattice-local-fragment-alias-'));
+  const content = join(root, 'content');
+  const notes = join(content, 'notes');
+  const templates = join(root, 'templates');
+  const output = join(root, 'dist');
+  for (const path of [notes, join(content, 'data'), templates]) mkdirSync(path, { recursive: true });
+  mkdirSync(join(content, 'standalone'));
+  writeFileSync(join(content, 'standalone/manual.md'), page('## Manual\n[[#Manual]]'));
+  writeFileSync(join(content, 'index.md'), page('## Home\n[[#Home]]'));
+  const note = join(notes, 'notes.md');
+  const writeNote = (link) => writeFileSync(note, page(`## Local Only\n${link}`));
+  writeNote('[[#Local Only|this note]]\n[[Notes#collection-only|collection index]]');
+  writeFileSync(join(templates, 'page.html'), '{{content}}');
+  writeFileSync(join(templates, 'index.html'), '<main id="collection-only">{{content}}</main>');
+  const collections = join(root, 'collections.cfg');
+  writeFileSync(collections, `[wiki]\nschema = title:String\ndir = ${notes}\n`);
+  const config = join(root, 'site.cfg');
+  writeFileSync(config, `title = Local Alias\nbase_url = https://example.test\noutput_dir = ${output}\ntemplates_dir = ${templates}\ncollections_file = ${collections}\n`);
+  const run = (command) => spawnSync(process.execPath, [cli, command, content, '-c', config, ...(command === 'check' ? ['--format', 'json'] : [])], { encoding: 'utf8', timeout: 30_000 });
+  const valid = run('check');
+  assert.equal(valid.status, 0, valid.stdout + valid.stderr);
+  assert.ok(!existsSync(output), 'local-fragment check must not publish');
+  const built = run('build');
+  assert.equal(built.status, 0, built.stdout + built.stderr);
+  const html = readFileSync(join(output, 'wiki/notes/index.html'), 'utf8');
+  assert.ok(html.includes('id="local-only"'));
+  assert.ok(html.includes('href="#local-only"'));
+  assert.ok(html.includes('href="/wiki/#collection-only"'));
+  const before = snapshot(output);
+  writeNote('[[#collection-only|not in this note]]');
+  const invalid = run('check');
+  assert.equal(invalid.status, 1, invalid.stdout + invalid.stderr);
+  assert.deepEqual(JSON.parse(invalid.stdout.slice(invalid.stdout.indexOf('{\n  "violations"'))).violations, [{
+    path: note, line: 5, column: 1, kind: 'broken_wikilink',
+    message: "[[#collection-only]]: fragment 'collection-only' not found in published page '/wiki/notes/'",
+  }]);
+  assert.deepEqual(snapshot(output), before, 'invalid local-fragment check must not touch output');
+  // User collection names may coincide with the internal grouping labels.
+  writeNote('[[#Local Only]]');
+  for (const name of ['_root', '_standalone']) {
+    writeFileSync(collections, `[${name}]\nschema = title:String\ndir = ${notes}\n`);
+    const checked = run('check');
+    assert.equal(checked.status, 0, checked.stdout + checked.stderr);
+  }
+  assert.deepEqual(snapshot(output), before);
+  console.log('Local fragments use the source URL while named collection aliases keep their destination');
+}
