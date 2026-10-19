@@ -218,6 +218,7 @@ try {
   assert.equal(await page.frameLocator('#reader iframe').getByRole('navigation', { name: 'On this page' }).count(), 1);
   assert.equal(await page.frameLocator('#reader iframe').getByRole('complementary', { name: 'Linked from' }).count(), 1);
   assert.equal(await page.locator('#results li.selected').count(), 1);
+  assert.equal(await preview.getAttribute('aria-current'), 'true');
   const contents = page.frameLocator('#reader iframe').getByText('On this page', { exact: true });
   await contents.focus();
   await page.keyboard.press('Enter');
@@ -249,6 +250,12 @@ try {
   if (process.env.LATTICE_PREVIEW_DIR) await page.screenshot({ path: join(process.env.LATTICE_PREVIEW_DIR, 'reader-mobile.png'), fullPage: true });
   await closePreview.click();
   assert.equal(await preview.evaluate(element => element === document.activeElement), true);
+  assert.equal(await preview.getAttribute('aria-current'), null);
+  await preview.click();
+  await page.getByRole('link', { name: 'Skip to search' }).focus();
+  await page.keyboard.press('Enter');
+  assert.equal(await page.locator('#reader').isHidden(), true);
+  assert.equal(await page.getByRole('searchbox').evaluate(element => element === document.activeElement), true);
   await page.setViewportSize({ width: 1280, height: 720 });
   await preview.click();
   await query('basil'); await complete();

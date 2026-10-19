@@ -14,6 +14,7 @@ function dismissPreview(restoreFocus = false) {
   reader.hidden = true;
   document.querySelector('#welcome').hidden = false;
   previewTrigger?.closest('li')?.classList.remove('selected');
+  previewTrigger?.removeAttribute('aria-current');
   readerFrame.replaceChildren();
   document.body.classList.remove('reader-open');
   if (restoreFocus) (previewTrigger?.isConnected ? previewTrigger : query).focus();
@@ -22,8 +23,10 @@ function dismissPreview(restoreFocus = false) {
 
 function preview(url, title, trigger) {
   previewTrigger?.closest('li')?.classList.remove('selected');
+  previewTrigger?.removeAttribute('aria-current');
   previewTrigger = trigger;
   trigger.closest('li').classList.add('selected');
+  trigger.setAttribute('aria-current', 'true');
   document.querySelector('#welcome').hidden = true;
   document.querySelector('#reader-title').textContent = title;
   document.querySelector('#reader-link').href = url.href;
@@ -40,6 +43,11 @@ function preview(url, title, trigger) {
 }
 
 closeReader.addEventListener('click', () => dismissPreview(true));
+document.querySelector('.skip').addEventListener('click', event => {
+  event.preventDefault();
+  dismissPreview();
+  query.focus();
+});
 reader.addEventListener('keydown', event => {
   if (event.key === 'Escape') {
     event.preventDefault();
