@@ -1,14 +1,14 @@
 /* Optional typography for published wiki pages; no JavaScript is required. */
-:root { color-scheme: light; color: #29382e; background: #fbfaf7; font: 17px/1.8 Georgia, 'Times New Roman', serif; }
+article { color: #29382e; font: 17px/1.8 Georgia, 'Times New Roman', serif; }
 * { box-sizing: border-box; }
 body { margin: 0; }
 article { max-width: 760px; margin: 0 auto; padding: 3rem clamp(1.3rem, 5vw, 4.5rem) 5rem; overflow-wrap: anywhere; }
-h1 { font-size: clamp(2.2rem, 5vw, 3.1rem); line-height: 1.12; font-weight: 400; letter-spacing: -.035em; margin: .65rem 0 1.1rem; }
-h2 { font-size: 1.5rem; line-height: 1.3; font-weight: 400; letter-spacing: -.02em; margin: 2rem 0 1rem; }
-h3 { font-size: 1.1rem; margin-top: 1.8rem; }
-p { margin: 1rem 0; }
-a { color: #39664a; text-underline-offset: .2em; }
-:focus-visible { outline: 3px solid #a25727; outline-offset: 3px; }
+article h1 { font-size: clamp(2.2rem, 5vw, 3.1rem); line-height: 1.12; font-weight: 400; letter-spacing: -.035em; margin: .65rem 0 1.1rem; }
+article h2 { font-size: 1.5rem; line-height: 1.3; font-weight: 400; letter-spacing: -.02em; margin: 2rem 0 1rem; }
+article h3 { font-size: 1.1rem; margin-top: 1.8rem; }
+article p { margin: 1rem 0; }
+article a { color: #39664a; text-underline-offset: .2em; }
+article :focus-visible { outline: 3px solid #a25727; outline-offset: 3px; }
 .eyebrow, .lede, .contents, .backlinks, .tags { font-family: system-ui, sans-serif; }
 .eyebrow { font-size: .65rem; text-transform: uppercase; letter-spacing: .16em; color: #63735b; }
 .lede { color: #66725f; font-size: .95rem; line-height: 1.7; padding-bottom: 1.5rem; border-bottom: 1px solid #dce1d4; }
@@ -17,13 +17,14 @@ a { color: #39664a; text-underline-offset: .2em; }
 .contents ul { margin: .5rem 0 0; padding-left: 1rem; }
 .contents a { text-decoration: none; }
 .contents a:hover { text-decoration: underline; }
-blockquote { margin: 1.5rem 0; padding: .1rem 1.2rem; border-left: 3px solid #96ac88; background: #eff2e8; color: #485c40; }
-pre { overflow: auto; padding: 1.2rem; background: #edf0e7; border: 1px solid #dce1d4; border-radius: 5px; font-size: .8rem; }
-code { font-size: .85em; }
-img, video { max-width: 100%; height: auto; }
-table { display: block; overflow-x: auto; border-collapse: collapse; font-size: .85rem; }
-th, td { border-bottom: 1px solid #dce1d4; padding: .6rem; text-align: left; }
+article blockquote { margin: 1.5rem 0; padding: .1rem 1.2rem; border-left: 3px solid #96ac88; background: #eff2e8; color: #485c40; }
+article pre { overflow: auto; padding: 1.2rem; background: #edf0e7; border: 1px solid #dce1d4; border-radius: 5px; font-size: .8rem; }
+article code { font-size: .85em; }
+article img, article video { max-width: 100%; height: auto; }
+article table { display: block; overflow-x: auto; border-collapse: collapse; font-size: .85rem; }
+article th, article td { border-bottom: 1px solid #dce1d4; padding: .6rem; text-align: left; }
 .backlinks { margin-top: 3rem; border-top: 1px solid #dce1d4; padding-top: 1rem; font-size: .8rem; }
 .backlinks h2 { font: 600 .75rem system-ui, sans-serif; text-transform: uppercase; letter-spacing: .1em; }
 .tags { font-size: .75rem; color: #66725f; }
 @media (max-width: 480px) { article { padding-top: 2rem; } }
+article [id] { scroll-margin-top: 6rem; }

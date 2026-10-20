@@ -1,6 +1,6 @@
-# Publish a wiki search page
+# Publish a browsable wiki reader
 
-The reusable search page in `examples/wiki_search` runs the MoonBit retrieval
+The reusable reader in `examples/wiki_search` runs the MoonBit retrieval
 core in a dedicated WASM GC worker. It searches the full `content-index.json`,
 with section snippets, canonical page citations and exact AND tag filters.
 There is no remote search service or dependency on a UI framework.
@@ -18,11 +18,12 @@ node scripts/package-search.mjs path/to/content/static/search
 Run the site's normal Lattice build. Its existing static publisher copies the
 package into `dist/static/search/`; link to `/static/search/` from your navigation.
 Serve the output over HTTP or HTTPS rather than opening the HTML with `file:`.
-The browser must support WASM GC and JavaScript string builtins, as described in
+Search requires WASM GC and JavaScript string builtins, as described in
 [the portable runtime documentation](wasm-note.md).
 
-The package contains the page, app module, worker, paired host adapter and WASM
-binary. Generated binaries are not checked into the repository. The packager
+The package contains the landing page, shared styles, app and catalogue modules,
+worker, paired host adapter and WASM binary. Generated binaries are not checked
+into the repository. The packager
 refuses an existing destination; use a fresh staging directory when updating,
 then replace the complete package together using your normal publishing process.
 It does not replace files in an existing site or deploy anything.
@@ -30,9 +31,9 @@ It does not replace files in an existing site or deploy anything.
 The page defaults to `../../content-index.json`, relative to its own URL. This
 loads the index at `/static/search/` and when both are hosted under a path
 prefix. Citations remain exactly as stored in the index. If the index name or page location differs, edit the form's `data-index`
-attribute in the packaged `index.html`. You can also edit the title and page
-styles there. Keep the worker, adapter and binary together at their packaged
-relative paths. Load only an index you intend to make available to visitors;
+attribute in the packaged `index.html`. You can also edit the page title there
+and the styles in `shell.css`. Keep the worker, adapter and binary together at
+their packaged relative paths. Load only an index you intend to make available to visitors;
 this page inherits the index's publication and draft rules.
 
 Submit a query with Enter or Search. Check tags to require every selected tag.
@@ -51,30 +52,55 @@ See [section search](section-search.md) for lexical matching, ranking and older
 content-index compatibility. The excerpt-only `search-index.json` is not a
 substitute for the content index.
 
-## Reader workspace
+## Landing page and collection navigation
 
-The search rail keeps the query, tag filters and matching passages together. Use
-**Read note** to open a same-origin published page alongside the results; the
-selected result stays highlighted. On mobile the note takes the available screen,
-with **Back to results** restoring the previous search and keyboard focus. Escape
-also returns to results while focus is in the reader toolbar. Keyboard events
-inside the embedded page stay there. A new search closes the current note.
+The landing page lists readable published notes by the index's `collection`
+metadata, with their titles and descriptions. Standalone pages use a Pages group.
+The sidebar offers the same directory without requiring a search. It excludes
+external/invalid URLs, duplicate canonical URLs and explicit `sections: []`
+entries, including generated indexes and overwritten source pages. Legacy
+entries with nonempty `body` text remain browsable. The directory does not infer
+collection routes or heading targets.
 
-The reader loads existing HTML in a sandboxed iframe. It does not render Markdown
-again, invent heading links from index metadata, or execute embedded scripts and
-forms. **Open full page** is available for interactive content or sites that block
-embedding. External citations remain normal links. Existing page themes continue
-to control their typography and layout.
+The directory loads before the search runtime. If the runtime is unavailable,
+browsing still works once the index has loaded. An unavailable index shows a
+retry message; an empty directory explains that no readable pages are listed.
+Titles and descriptions are inserted as text, never as index-supplied HTML.
 
-For an integrated wiki style, copy `examples/wiki_search/page.html` into your
-site's templates directory as the page template. The packager includes its
-`page.css` stylesheet. Adjust `/static/search/page.css` in the template to your
-chosen static directory and site prefix. This is opt-in: it does not replace
-existing templates. It uses the existing title, description, body, TOC and
-backlink variables; contents and backlinks appear only when Lattice supplies them.
-Enable `toc: true` in a note's frontmatter to publish its contents navigation.
+## Shared reading layout
 
-The browser fixture builds realistic synthetic runbook notes with this template,
-then checks desktop/mobile layout, keyboard navigation, published contents and
-backlinks. CI retains screenshots for review. No external fonts or UI frameworks
-are needed.
+To use the same navigation on published notes, copy both
+`examples/wiki_search/page.html` and `examples/wiki_search/wiki-navigation.html`
+into your site's templates directory. The page template uses Lattice's existing
+include mechanism. The packager uses that same navigation fragment to assemble
+the static landing page; it does not add a runtime template engine.
+
+The supplied templates default to `/static/search/` for assets and the overview,
+and `/content-index.json` for the index. Adjust these paths in **both** template
+files for your deployment prefix or chosen directory. The packaged landing page
+uses relative asset/index URLs. Keep its `data-index` equivalent to the published
+template's index URL so tab-local search state stays shared.
+
+All page links use normal navigation to the published HTML. There is no embedded
+preview or second Markdown renderer. Wiki links, fragment links, contents and
+backlinks use the generator's existing URLs; native browser history and new-tab
+navigation work normally. Notes using the shared template retain the sidebar,
+current-page indication and collection label as you follow links. Existing site
+themes remain unchanged unless you opt into the template. Other templates still
+open normally, but need the shared navigation include, styles and app module to
+participate in this layout.
+
+Queries, selected tags and collection disclosure state are retained for the tab
+using optional session storage, scoped to the index URL. Storage failure does not
+prevent reading or searching. On mobile, **Browse & search** opens the directory;
+Escape closes it and restores focus to the button. **Skip to content** closes the
+mobile directory and moves focus to the page. Normal links and published content
+remain usable without JavaScript, while the directory/search need JavaScript.
+
+Contents and backlinks appear only when supplied by Lattice. Enable `toc: true`
+in a note's frontmatter for contents navigation. The browser fixture in
+`tests/browser/fixtures/wiki` builds a fictional six-note library with three
+collections and checks desktop/mobile browsing, keyboard controls, wiki/fragment
+links, history, runtime failures and no-JavaScript reading. CI retains its landing,
+reading and mobile-navigation screenshots. No external fonts or UI framework are
+needed.

@@ -3,116 +3,19 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Search the wiki</title>
-  <style>
-    :root { color-scheme: light; font: 15px/1.6 system-ui, sans-serif; color: #27332e; background: #fbfaf7; }
-    * { box-sizing: border-box; }
-    [hidden] { display: none !important; }
-    body { margin: 0; }
-    a { color: #35664f; text-underline-offset: .22em; overflow-wrap: anywhere; }
-    button, input { font: inherit; }
-    button { cursor: pointer; }
-    :focus-visible { outline: 3px solid #a25727; outline-offset: 3px; }
-    .skip { position: absolute; left: 1rem; top: -5rem; z-index: 3; background: white; padding: .5rem; }
-    .skip:focus { top: .5rem; }
-    .masthead { height: 74px; padding: 0 2rem; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #dadfd6; background: #fffefa; }
-    .brand { display: flex; align-items: center; gap: .8rem; }
-    .mark { display: grid; place-items: center; width: 32px; height: 32px; color: #fffefa; background: #345944; font: 24px Georgia, serif; border-radius: 7px; }
-    h1 { margin: 0; font-size: 1.1rem; font-weight: 650; letter-spacing: -.03em; }
-    .edition, .eyebrow { font-size: .7rem; text-transform: uppercase; letter-spacing: .14em; color: #626e64; }
-    main { display: grid; grid-template-columns: 330px minmax(0, 1fr); min-height: calc(100dvh - 74px); }
-    .search-column { padding: 1.6rem 1.25rem; background: #f1f3ed; border-right: 1px solid #dadfd6; min-width: 0; }
-    fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
-    label, legend { font-size: .8rem; font-weight: 600; }
-    .query { display: flex; gap: .4rem; margin: .55rem 0 1.2rem; }
-    input[type=search] { min-width: 0; width: 100%; border: 1px solid #bec9bd; border-radius: 5px; background: #fffefa; padding: .6rem .7rem; }
-    button { border: 1px solid #345944; border-radius: 5px; color: #fff; background: #345944; padding: .55rem .7rem; }
-    button:disabled { opacity: .5; cursor: wait; }
-    #tags { display: flex; flex-wrap: wrap; gap: .35rem .7rem; margin: .5rem 0 1.5rem; }
-    #tags label { color: #4d5c50; font-weight: 400; overflow-wrap: anywhere; }
-    input[type=checkbox] { accent-color: #345944; }
-    #status { font-size: .75rem; color: #626e64; border-top: 1px solid #d9dfd3; padding-top: 1rem; }
-    #results { list-style: none; padding: 0; margin: 0 -.6rem; }
-    #results li { padding: 1rem .6rem; border-bottom: 1px solid #d9dfd3; border-left: 3px solid transparent; }
-    #results li.selected { background: #e3eadd; border-left-color: #345944; }
-    #results h2 { font-size: .95rem; margin: 0 0 .2rem; line-height: 1.4; }
-    #results h2 a { text-decoration: none; color: #273c2e; }
-    #results h2 a:hover { text-decoration: underline; }
-    #results p { margin: .35rem 0; overflow-wrap: anywhere; }
-    .section { color: #506347; font-size: .75rem; font-weight: 600; }
-    .snippet { font-size: .8rem; color: #536054; }
-    .citation { font: .65rem/1.6 ui-monospace, monospace; color: #626e64; }
-    #results button { border: 0; background: transparent; padding: .35rem 0; color: #345944; font-size: .8rem; font-weight: 600; }
-    #reader { min-width: 0; }
-    .reader-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 1rem; min-height: 66px; padding: .8rem 2rem; border-bottom: 1px solid #e3e5dd; }
-    #close-reader { background: transparent; color: #4b5c4e; border-color: #c9d0c3; font-size: .8rem; white-space: nowrap; }
-    #reader-title { margin: 0; font-size: .8rem; font-weight: 500; overflow-wrap: anywhere; }
-    #reader-link { font-size: .75rem; white-space: nowrap; }
-    .reader-hint { margin: 0; padding: .45rem 2rem; font-size: .7rem; color: #657060; background: #f4f5ef; }
-    #reader iframe { display: block; width: 100%; height: calc(100dvh - 174px); min-height: 420px; border: 0; background: #fbfaf7; }
-    #welcome { max-width: 44rem; padding: clamp(2rem, 8vw, 7rem) clamp(2rem, 5vw, 5rem); align-self: start; }
-    #welcome h2 { font: 400 clamp(2.4rem, 4vw, 3.5rem)/1.15 Georgia, serif; letter-spacing: -.035em; margin: 1rem 0; }
-    #welcome p { color: #62705f; }
-    #welcome .reading-rule { width: 3rem; border-top: 2px solid #78916d; margin-top: 2rem; }
-    @media (min-width: 761px) {
-      .search-column { height: calc(100dvh - 74px); overflow-y: auto; }
-    }
-    @media (max-width: 760px) {
-      .masthead { height: 62px; padding: 0 1.2rem; }
-      .edition { display: none; }
-      main { display: block; min-height: calc(100dvh - 62px); }
-      .search-column { border-right: 0; min-height: calc(100dvh - 62px); padding: 1.4rem 1.2rem; }
-      #welcome { display: none; }
-      .reader-open .search-column { display: none; }
-      .reader-toolbar { padding: .8rem 1rem; gap: .6rem; }
-      #reader-title { display: none; }
-      .reader-hint { padding: .45rem 1rem; }
-      #reader iframe { height: calc(100dvh - 162px); min-height: 350px; }
-    }
-  </style>
+  <title>Explore the wiki</title>
+  <link rel="stylesheet" href="./shell.css">
 </head>
 <body>
-  <a class="skip" href="#query">Skip to search</a>
-  <header class="masthead">
-    <div class="brand"><span class="mark" aria-hidden="true">L</span><h1>Lattice <span style="font-weight:400;color:#657060">/ Wiki</span></h1></div>
-    <span class="edition">Notes, connected.</span>
-  </header>
-  <main>
-    <section class="search-column" aria-label="Search">
-      <form id="search" data-index="../../content-index.json">
-        <fieldset id="controls" disabled>
-          <label for="query">Search notes</label>
-          <div class="query">
-            <input id="query" type="search" autocomplete="off" placeholder="Find a passage…">
-            <button type="submit">Search</button>
-          </div>
-          <fieldset id="filters" hidden>
-            <legend>Tags — match all selected</legend>
-            <div id="tags"></div>
-          </fieldset>
-        </fieldset>
-      </form>
-      <p id="status" role="status" aria-live="polite">Loading search…</p>
-      <button id="retry" type="button" hidden>Retry loading search</button>
-      <ol id="results" aria-label="Matching sections" aria-busy="true"></ol>
-    </section>
-    <section id="welcome" aria-labelledby="welcome-title">
-      <span class="eyebrow">Your reading space</span>
-      <h2 id="welcome-title">Follow a thought.<br>Find the connection.</h2>
-      <p>Search the wiki for a topic or phrase. Open a result here to read the full note while keeping your place in the search.</p>
-      <div class="reading-rule" aria-hidden="true"></div>
-      <p>Use tags to narrow your search. Each result points back to its published source.</p>
-    </section>
-    <aside id="reader" aria-labelledby="reader-title" hidden>
-      <div class="reader-toolbar">
-      <button id="close-reader" type="button">← Back to results</button>
-      <h2 id="reader-title"></h2>
-      <a id="reader-link">Open full page ↗</a>
-      </div>
-      <p class="reader-hint">Reading the published page · Open full page for interactive content.</p>
-      <div id="reader-frame"></div>
-    </aside>
-    <noscript>Enable JavaScript to search this wiki.</noscript>
+  <!-- wiki-navigation -->
+  <main id="lattice-main-content" class="landing" tabindex="-1">
+    <header class="landing-header">
+      <p class="eyebrow">The library</p>
+      <h1>The wiki, at a glance.</h1>
+      <p class="intro">Browse the collections. Follow a link. Pick up the thread.</p>
+      <p id="lattice-catalogue-status" role="status">Loading the published page directory…</p>
+    </header>
+    <div id="lattice-collections"></div>
   </main>
   <script type="module" src="./app.js"></script>
 </body>
