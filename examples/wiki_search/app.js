@@ -1,3 +1,5 @@
+import { buildCatalogue } from './catalogue.js';
+
 const form = document.querySelector('#search');
 const controls = document.querySelector('#controls');
 const query = document.querySelector('#query');
@@ -5,55 +7,87 @@ const tags = document.querySelector('#tags');
 const status = document.querySelector('#status');
 const results = document.querySelector('#results');
 const retry = document.querySelector('#retry');
-const reader = document.querySelector('#reader');
-const closeReader = document.querySelector('#close-reader');
-const readerFrame = document.querySelector('#reader-frame');
-let previewTrigger;
+const navigation = document.querySelector('#navigation');
+const toggle = document.querySelector('#navigation-toggle');
+const catalogueStatus = document.querySelector('#catalogue-status');
+const overview = document.querySelector('.overview-link');
+const stateKey = `lattice-reader:${new URL(form.dataset.index, document.baseURI).href}`;
+let saved = {};
+try { saved = JSON.parse(sessionStorage.getItem(stateKey)) || {}; } catch { /* Storage is optional. */ }
+query.value = typeof saved.query === 'string' ? saved.query : '';
+let groupState = saved.groups && typeof saved.groups === 'object' ? saved.groups : {};
+let catalogueLoaded = false;
 
-function dismissPreview(restoreFocus = false) {
-  reader.hidden = true;
-  document.querySelector('#welcome').hidden = false;
-  previewTrigger?.closest('li')?.classList.remove('selected');
-  previewTrigger?.removeAttribute('aria-current');
-  readerFrame.replaceChildren();
-  document.body.classList.remove('reader-open');
-  if (restoreFocus) (previewTrigger?.isConnected ? previewTrigger : query).focus();
-  previewTrigger = undefined;
+function persist() {
+  const selected = controls.disabled && !tags.children.length && Array.isArray(saved.tags)
+    ? saved.tags : [...tags.querySelectorAll('input:checked')].map(input => input.value);
+  try { sessionStorage.setItem(stateKey, JSON.stringify({ query: query.value, tags: selected, groups: groupState })); } catch { /* Private/restricted storage must not break reading. */ }
 }
-
-function preview(url, title, trigger) {
-  previewTrigger?.closest('li')?.classList.remove('selected');
-  previewTrigger?.removeAttribute('aria-current');
-  previewTrigger = trigger;
-  trigger.closest('li').classList.add('selected');
-  trigger.setAttribute('aria-current', 'true');
-  document.querySelector('#welcome').hidden = true;
-  document.querySelector('#reader-title').textContent = title;
-  document.querySelector('#reader-link').href = url.href;
-  const frame = document.createElement('iframe');
-  frame.title = `Published page: ${title}`;
-  // Display the existing output without executing its scripts or granting
-  // embedded content access to this search page. Full-page links stay available.
-  frame.setAttribute('sandbox', '');
-  frame.src = url.href;
-  readerFrame.replaceChildren(frame);
-  reader.hidden = false;
-  document.body.classList.add('reader-open');
-  closeReader.focus();
+function setNavigation(open) {
+  document.body.classList.toggle('navigation-open', open);
+  toggle.setAttribute('aria-expanded', String(open));
 }
-
-closeReader.addEventListener('click', () => dismissPreview(true));
-document.querySelector('.skip').addEventListener('click', event => {
-  event.preventDefault();
-  dismissPreview();
-  query.focus();
+document.body.classList.add('js');
+toggle.hidden = false;
+toggle.addEventListener('click', () => {
+  const open = toggle.getAttribute('aria-expanded') !== 'true';
+  setNavigation(open);
+  if (open) overview.focus();
 });
-reader.addEventListener('keydown', event => {
-  if (event.key === 'Escape') {
-    event.preventDefault();
-    dismissPreview(true);
+navigation.addEventListener('keydown', event => {
+  if (event.key === 'Escape' && toggle.getAttribute('aria-expanded') === 'true') {
+    setNavigation(false); toggle.focus();
   }
 });
+document.querySelector('.skip').addEventListener('click', () => setNavigation(false));
+if (new URL(overview.href).pathname === location.pathname) overview.setAttribute('aria-current', 'page');
+
+function renderCatalogue(entries) {
+  const pages = buildCatalogue(entries, document.baseURI, overview.href);
+  const groups = new Map();
+  for (const page of pages) {
+    if (!groups.has(page.collection)) groups.set(page.collection, []);
+    groups.get(page.collection).push(page);
+  }
+  catalogueLoaded = true;
+  const directory = document.querySelector('#page-navigation');
+  const collections = document.querySelector('#collections');
+  directory.replaceChildren();
+  collections?.replaceChildren();
+  for (const [name, pages] of groups) {
+    const detail = document.createElement('details');
+    detail.open = groupState[name] !== false;
+    if (pages.some(page => new URL(page.url).pathname === location.pathname)) detail.open = true;
+    const summary = document.createElement('summary');
+    summary.textContent = `${name} · ${pages.length}`;
+    detail.append(summary);
+    const list = document.createElement('ul');
+    const section = document.createElement('section');
+    section.className = 'collection';
+    const heading = document.createElement('div');
+    heading.className = 'collection-heading';
+    const title = document.createElement('h2'); title.textContent = name;
+    const count = document.createElement('span'); count.textContent = `${pages.length} ${pages.length === 1 ? 'note' : 'notes'}`;
+    heading.append(title, count); section.append(heading);
+    const cards = document.createElement('ul');
+    for (const page of pages) {
+      const link = document.createElement('a'); link.href = page.url; link.textContent = page.title;
+      const item = document.createElement('li'); item.append(link); list.append(item);
+      if (new URL(page.url).pathname === location.pathname) {
+        link.setAttribute('aria-current', 'page');
+        const label = document.querySelector('#current-collection'); if (label) label.textContent = name;
+        const heading = document.querySelector('article > header > h1'); if (heading) heading.textContent = page.title;
+      }
+      const card = document.createElement('li'); card.append(link.cloneNode(true));
+      if (page.description) { const text = document.createElement('p'); text.textContent = page.description; card.append(text); }
+      cards.append(card);
+    }
+    detail.append(list); directory.append(detail);
+    detail.addEventListener('toggle', () => { groupState[name] = detail.open; persist(); });
+    section.append(cards); collections?.append(section);
+  }
+  if (catalogueStatus) catalogueStatus.textContent = pages.length ? `${pages.length} published notes · ${groups.size} ${groups.size === 1 ? 'collection' : 'collections'}` : 'No readable pages are listed in this wiki yet.';
+}
 
 let activeWorker;
 let request = 0;
@@ -67,11 +101,11 @@ function stop() {
 
 function fail() {
   stop();
-  dismissPreview();
   controls.disabled = true;
   results.replaceChildren();
   results.setAttribute('aria-busy', 'false');
   status.textContent = 'Search is unavailable. Retry loading search.';
+  if (catalogueStatus && !catalogueLoaded) catalogueStatus.textContent = 'The page directory is unavailable. Retry loading the wiki using the navigation panel.';
   retry.hidden = false;
 }
 
@@ -90,15 +124,11 @@ function renderHits(hits) {
     const item = document.createElement('li');
     const heading = document.createElement('h2');
     const title = document.createElement('a');
-    let previewUrl;
     // The retrieval core copies caller-supplied URLs. Only web URLs navigate.
     try {
       const url = new URL(hit.url, document.baseURI);
       if (url.protocol === 'https:' || url.protocol === 'http:') {
         title.setAttribute('href', hit.url);
-        if (url.origin === location.origin && url.pathname !== location.pathname && !url.username && !url.password) {
-          previewUrl = url;
-        }
       }
     } catch { /* Invalid citations remain text, without disabling other hits. */ }
     title.textContent = hit.title;
@@ -114,14 +144,6 @@ function renderHits(hits) {
       paragraph.textContent = text;
       item.append(paragraph);
     }
-    if (previewUrl) {
-      const button = document.createElement('button');
-      button.type = 'button';
-      button.textContent = 'Read note →';
-      button.setAttribute('aria-label', `Read note: ${hit.title}`);
-      button.addEventListener('click', () => preview(previewUrl, hit.title, button));
-      item.append(button);
-    }
     results.append(item);
   }
   status.textContent = hits.length ? `Showing ${hits.length} matching sections (up to 10).` : 'No matching sections.';
@@ -129,7 +151,6 @@ function renderHits(hits) {
 
 function start() {
   stop();
-  dismissPreview();
   retry.hidden = true;
   controls.disabled = true;
   results.replaceChildren();
@@ -145,11 +166,12 @@ function start() {
     }
     worker.addEventListener('message', ({ data }) => {
       if (worker !== activeWorker || data.id !== request) return;
+      if (data.type === 'catalogue') { renderCatalogue(data.entries); return; }
       clearTimeout(timer);
       results.setAttribute('aria-busy', 'false');
       try {
         if (data.type === 'ready') {
-          const selected = new Set([...tags.querySelectorAll('input:checked')].map(input => input.value));
+          const selected = new Set(tags.children.length ? [...tags.querySelectorAll('input:checked')].map(input => input.value) : Array.isArray(saved.tags) ? saved.tags : []);
           tags.replaceChildren();
           for (const tag of data.tags) {
             const label = document.createElement('label');
@@ -163,6 +185,7 @@ function start() {
           document.querySelector('#filters').hidden = !data.tags.length;
           controls.disabled = false;
           status.textContent = 'Enter a query to search this wiki.';
+          if (query.value.trim()) form.requestSubmit();
         } else if (data.type === 'results') {
           renderHits(data.results);
         } else {
@@ -177,7 +200,6 @@ function start() {
 form.addEventListener('submit', event => {
   event.preventDefault();
   if (controls.disabled) return;
-  dismissPreview();
   results.replaceChildren();
   if (!query.value.trim()) {
     ++request; // Clearing invalidates any pending result, too.
@@ -186,10 +208,11 @@ form.addEventListener('submit', event => {
     status.textContent = 'Enter a query to search this wiki.';
     return;
   }
+  persist();
   status.textContent = 'Searching…';
   send('search', { query: query.value, tags: [...tags.querySelectorAll('input:checked')].map(input => input.value) });
 });
 retry.addEventListener('click', start);
-window.addEventListener('pagehide', stop);
+window.addEventListener('pagehide', () => { persist(); stop(); });
 window.addEventListener('pageshow', event => { if (event.persisted) start(); });
 start();

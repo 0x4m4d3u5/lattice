@@ -1,0 +1,21 @@
+<a class="skip" href="#main-content">Skip to content</a>
+<header class="masthead">
+  <a class="brand" href="/static/search/"><span class="mark" aria-hidden="true">L</span><span><strong>Lattice</strong> / Wiki</span></a>
+  <button id="navigation-toggle" type="button" aria-controls="navigation" aria-expanded="false" hidden>Browse &amp; search</button>
+  <span class="edition">Notes, connected.</span>
+</header>
+<aside id="navigation" class="search-column" aria-label="Wiki navigation">
+  <a class="overview-link" href="/static/search/">Overview <span aria-hidden="true">←</span></a>
+  <form id="search" data-index="/content-index.json">
+    <fieldset id="controls" disabled>
+      <label for="query">Search notes</label>
+      <div class="query"><input id="query" type="search" autocomplete="off" placeholder="Find a passage…"><button type="submit">Search</button></div>
+      <details id="filters" hidden><summary>Filter by tags</summary><fieldset><legend>Match all selected</legend><div id="tags"></div></fieldset></details>
+    </fieldset>
+  </form>
+  <p id="status" role="status" aria-live="polite">Loading wiki…</p>
+  <button id="retry" type="button" hidden>Retry loading search</button>
+  <ol id="results" aria-label="Matching sections" aria-busy="true"></ol>
+  <nav id="page-navigation" aria-label="Pages by collection"></nav>
+  <noscript>Enable JavaScript for the page directory and search. Published page links still work.</noscript>
+</aside>

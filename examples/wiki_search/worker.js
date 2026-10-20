@@ -5,12 +5,19 @@ let search;
 self.addEventListener('message', async ({ data }) => {
   try {
     if (data.type === 'load') {
-      const [index, wasm] = await Promise.all([
-        fetch(data.indexUrl, { cache: 'no-store' }),
-        fetch(new URL('./renderer.wasm', import.meta.url), { cache: 'no-store' }),
-      ]);
-      if (!index.ok || !wasm.ok) throw new Error('Search files unavailable');
+      const index = await fetch(data.indexUrl, { cache: 'no-store' });
+      if (!index.ok) throw new Error('Index unavailable');
       indexJson = await index.text();
+      const entries = JSON.parse(indexJson);
+      if (!Array.isArray(entries)) throw new Error('Invalid index');
+      self.postMessage({ id: data.id, type: 'catalogue', entries: entries.map(entry => ({
+        title: entry?.title, url: entry?.url, collection: entry?.collection,
+        description: entry?.description,
+        sections: Array.isArray(entry?.sections) ? entry.sections.slice(0, 1).map(() => ({})) : undefined,
+        body: typeof entry?.body === 'string' && entry.body.trim() ? 'present' : '',
+      })) });
+      const wasm = await fetch(new URL('./renderer.wasm', import.meta.url), { cache: 'no-store' });
+      if (!wasm.ok) throw new Error('Search runtime unavailable');
       search = await createContentSearcher(await wasm.arrayBuffer());
       // Validate with the MoonBit decoder, including explicit empty sections.
       if (search(indexJson, '', '[]', 0).error !== null) throw new Error('Invalid content index');

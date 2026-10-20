@@ -30,7 +30,8 @@ writeFileSync(join(notes, 'literal.md'), '---\ntitle: Literal <img src=x>\n---\n
 for (const [name, tags] of [['case-a', '[Database, Équipe]'], ['case-b', '[database, équipe]'], ['case-c', '[DATABASE, ÉQUIPE]']]) {
   writeFileSync(join(notes, `${name}.md`), `---\ntitle: ${name}\ntags: ${tags}\n---\n## Tag probe\ntagprobe\n`);
 }
-writeFileSync(join(templates, 'page.html'), readFileSync(new URL('examples/wiki_search/page.html', repository), 'utf8').replace('/static/search/page.css', '/wiki/static/search/page.css'));
+writeFileSync(join(templates, 'page.html'), readFileSync(new URL('examples/wiki_search/page.html', repository), 'utf8').replaceAll('/static/search/', '/wiki/static/search/'));
+writeFileSync(join(templates, 'wiki-navigation.html'), readFileSync(new URL('examples/wiki_search/wiki-navigation.html', repository), 'utf8').replaceAll('/static/search/', '/wiki/static/search/').replace('/content-index.json', '/wiki/content-index.json'));
 writeFileSync(join(templates, '404.html'), '{{content}}');
 const collections = join(root, 'collections.cfg');
 writeFileSync(collections, `[notes]\nschema = title:String,tags:Optional[Array[String]],description:Optional[String]\ndir = ${notes}\n`);
@@ -38,7 +39,7 @@ const config = join(root, 'site.cfg');
 writeFileSync(config, `title = Wiki\nbase_url = https://example.test\ntemplates_dir = ${templates}\ncollections_file = ${collections}\ncontent_index_file = content-index.json\noutput_dir = ${output}\n`);
 const built = run('_build/js/debug/build/kurisu/lattice/cmd/main/main.js', ['build', content, '-c', config, '--collections', collections]);
 assert.equal(built.status, 0, built.stdout + built.stderr);
-for (const name of ['index.html', 'app.js', 'worker.js', 'host.js', 'renderer.wasm', 'page.css']) {
+for (const name of ['index.html', 'app.js', 'worker.js', 'host.js', 'renderer.wasm', 'page.css', 'shell.css', 'catalogue.js']) {
   assert.deepEqual(readFileSync(join(output, 'static/search', name)), readFileSync(join(search, name)));
 }
 // Extend only this disposable synthetic index to exercise caller-supplied URLs
@@ -52,8 +53,9 @@ for (const url of ['javascript:window.hacked=true', 'data:text/html,bad', 'http:
 const validIndex = JSON.stringify(entries);
 const assets = new Map([
   ['/wiki/static/search/', ['static/search/index.html', 'text/html']],
-  ...['app.js', 'worker.js', 'host.js'].map(name => [`/wiki/static/search/${name}`, [`static/search/${name}`, 'text/javascript']]),
+  ...['app.js', 'worker.js', 'host.js', 'catalogue.js'].map(name => [`/wiki/static/search/${name}`, [`static/search/${name}`, 'text/javascript']]),
   ['/wiki/static/search/renderer.wasm', ['static/search/renderer.wasm', 'application/wasm']],
+  ['/wiki/static/search/shell.css', ['static/search/shell.css', 'text/css']],
   ['/wiki/static/search/page.css', ['static/search/page.css', 'text/css']],
   ['/notes/ops/', ['notes/ops/index.html', 'text/html']],
 ]);
@@ -104,7 +106,11 @@ try {
     };
   });
   const status = async text => page.waitForFunction(expected => document.querySelector('#status').textContent === expected, text);
-  const ready = () => page.waitForFunction(() => !document.querySelector('#controls').disabled);
+  const ready = async () => {
+    await page.waitForFunction(() => !document.querySelector('#controls').disabled);
+    if (await page.locator('#navigation').isHidden()) await page.getByRole('button', { name: 'Browse & search' }).click();
+    if (await page.locator('#filters').isVisible() && !await page.locator('#filters').evaluate(element => element.open)) await page.locator('#filters summary').click();
+  };
   const query = async value => {
     await page.getByRole('searchbox', { name: 'Search notes' }).fill(value);
     await page.getByRole('button', { name: 'Search', exact: true }).click();
@@ -206,63 +212,13 @@ try {
   await page.getByLabel('Database', { exact: true }).uncheck();
   await query('recovery'); await complete();
   assert.deepEqual(await urls(), expected);
-  // Read the actual published output without losing the current search.
-  const preview = page.getByRole('button', { name: 'Read note: Operations', exact: true });
-  const closePreview = page.getByRole('button', { name: '← Back to results', exact: true });
-  await preview.focus();
-  await page.keyboard.press('Enter');
-  await page.frameLocator('#reader iframe').locator('article').waitFor();
-  assert.ok((await page.frameLocator('#reader iframe').locator('article').textContent()).includes('Restore encrypted snapshots.'));
-  assert.equal(await page.locator('#reader iframe').getAttribute('sandbox'), '');
-  assert.equal(await page.frameLocator('#reader iframe').locator('h1').textContent(), 'Operations | Wiki');
-  assert.equal(await page.frameLocator('#reader iframe').getByRole('navigation', { name: 'On this page' }).count(), 1);
-  assert.equal(await page.frameLocator('#reader iframe').getByRole('complementary', { name: 'Linked from' }).count(), 1);
-  assert.equal(await page.locator('#results li.selected').count(), 1);
-  assert.equal(await preview.getAttribute('aria-current'), 'true');
-  const contents = page.frameLocator('#reader iframe').getByText('On this page', { exact: true });
-  await contents.focus();
-  await page.keyboard.press('Enter');
-  assert.equal(await page.frameLocator('#reader iframe').getByRole('link', { name: 'Before you begin', exact: true }).isVisible(), true);
-  await page.keyboard.press('Enter');
-  assert.equal(await page.frameLocator('#reader iframe').getByRole('link', { name: 'Before you begin', exact: true }).isVisible(), false);
-  await closePreview.focus();
-  assert.equal(await closePreview.evaluate(element => element === document.activeElement), true);
+  await page.getByLabel('Database', { exact: true }).check();
+  await query('recovery'); await complete();
+  await page.locator('#results').getByRole('link', { name: 'Operations', exact: true }).click();
+  await ready(); await complete();
   assert.equal(await page.getByRole('searchbox').inputValue(), 'recovery');
-  assert.deepEqual(await urls(), expected);
-  const columns = await page.locator('.search-column, #reader').evaluateAll(elements => elements.map(element => element.getBoundingClientRect().toJSON()));
-  assert.ok(columns[1].x >= columns[0].right);
-  if (process.env.LATTICE_PREVIEW_DIR) {
-    mkdirSync(process.env.LATTICE_PREVIEW_DIR, { recursive: true });
-    await page.screenshot({ path: join(process.env.LATTICE_PREVIEW_DIR, 'reader-desktop.png'), fullPage: true });
-  }
-  await page.keyboard.press('Tab');
-  assert.equal(await page.getByRole('link', { name: 'Open full page ↗', exact: true }).evaluate(element => element === document.activeElement), true);
-  await page.keyboard.press('Escape');
-  assert.equal(await page.locator('#reader').isHidden(), true);
-  assert.equal(await page.locator('#reader iframe').count(), 0);
-  assert.equal(await preview.evaluate(element => element === document.activeElement), true);
-  await page.setViewportSize({ width: 390, height: 844 });
-  await preview.click();
-  await page.frameLocator('#reader iframe').locator('article').waitFor();
-  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
-  assert.equal(await page.locator('.search-column').isHidden(), true);
-  assert.equal(await page.frameLocator('#reader iframe').locator('html').evaluate(element => element.scrollWidth <= innerWidth), true);
-  if (process.env.LATTICE_PREVIEW_DIR) await page.screenshot({ path: join(process.env.LATTICE_PREVIEW_DIR, 'reader-mobile.png'), fullPage: true });
-  await closePreview.click();
-  assert.equal(await preview.evaluate(element => element === document.activeElement), true);
-  assert.equal(await preview.getAttribute('aria-current'), null);
-  await preview.click();
-  await page.getByRole('link', { name: 'Skip to search' }).focus();
-  await page.keyboard.press('Enter');
-  assert.equal(await page.locator('#reader').isHidden(), true);
-  assert.equal(await page.getByRole('searchbox').evaluate(element => element === document.activeElement), true);
-  await page.setViewportSize({ width: 1280, height: 720 });
-  await preview.click();
-  await query('basil'); await complete();
-  assert.equal(await page.locator('#reader').isHidden(), true);
-  assert.equal(await page.locator('#reader iframe').count(), 0);
-  await page.setViewportSize({ width: 1280, height: 720 });
-  await page.getByRole('link', { name: 'Operations', exact: true }).click();
+  assert.equal(await page.getByLabel('Database', { exact: true }).isChecked(), true);
+  assert.deepEqual(await urls(), ['/notes/ops/']);
   assert.equal(new URL(page.url()).pathname, '/notes/ops/');
   assert.ok((await page.locator('article').textContent()).includes('Restore encrypted snapshots.'));
   await page.goBack(); await ready();
