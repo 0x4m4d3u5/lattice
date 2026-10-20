@@ -23,9 +23,18 @@ function persist() {
     ? saved.tags : [...tags.querySelectorAll('input:checked')].map(input => input.value);
   try { sessionStorage.setItem(stateKey, JSON.stringify({ query: query.value, tags: selected, groups: groupState })); } catch { /* Private/restricted storage must not break reading. */ }
 }
-function setNavigation(open) {
+let readingPosition;
+function setNavigation(open, restorePosition = true) {
+  if (open && !document.body.classList.contains('navigation-open')) {
+    readingPosition = { left: scrollX, top: scrollY };
+  }
   document.body.classList.toggle('navigation-open', open);
   toggle.setAttribute('aria-expanded', String(open));
+  if (!open) {
+    // Hiding the article and focusing the menu can move the document scroll.
+    if (restorePosition && readingPosition) window.scrollTo({ ...readingPosition, behavior: 'instant' });
+    readingPosition = undefined;
+  }
 }
 document.body.classList.add('js');
 toggle.hidden = false;
@@ -36,10 +45,10 @@ toggle.addEventListener('click', () => {
 });
 navigation.addEventListener('keydown', event => {
   if (event.key === 'Escape' && toggle.getAttribute('aria-expanded') === 'true') {
-    setNavigation(false); toggle.focus();
+    setNavigation(false); toggle.focus({ preventScroll: true });
   }
 });
-document.querySelector('.skip').addEventListener('click', () => setNavigation(false));
+document.querySelector('.skip').addEventListener('click', () => setNavigation(false, false));
 if (new URL(overview.href).pathname === location.pathname) overview.setAttribute('aria-current', 'page');
 
 function renderCatalogue(entries) {

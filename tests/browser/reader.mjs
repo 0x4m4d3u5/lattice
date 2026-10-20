@@ -123,6 +123,24 @@ try {
   await page.locator('#lattice-page-navigation').getByRole('link', { name: 'Getting started', exact: true }).click(); await ready();
   assert.equal(await page.locator('#lattice-navigation').isHidden(), true);
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  // Dismissing mobile navigation returns to the passage being read.
+  await page.setViewportSize({ width: 390, height: 500 });
+  await page.locator('#navigation').scrollIntoViewIfNeeded();
+  const readingPosition = await page.evaluate(() => scrollY);
+  assert.ok(readingPosition > 100);
+  await toggle.click();
+  await page.keyboard.press('Escape');
+  assert.equal(await page.evaluate(() => scrollY), readingPosition);
+  assert.equal(await toggle.evaluate(element => element === document.activeElement), true);
+  await toggle.click();
+  await page.locator('#lattice-page-navigation a').last().scrollIntoViewIfNeeded();
+  await toggle.click();
+  assert.equal(await page.evaluate(() => scrollY), readingPosition);
+  await toggle.click();
+  await page.getByRole('link', { name: 'Skip to content' }).focus(); await page.keyboard.press('Enter');
+  assert.equal(await page.locator('main').evaluate(element => element === document.activeElement), true);
+  assert.ok(await page.evaluate(() => scrollY) < readingPosition);
+  await page.setViewportSize({ width: 390, height: 844 });
   await save('reader-mobile.png');
   await toggle.click(); await save('navigation-mobile.png');
   await page.locator('.overview-link').click(); await ready();
