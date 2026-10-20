@@ -21,3 +21,7 @@ You can search for an exact passage, but you do not need a query to begin. Follo
 ## Keep the trail useful
 
 When a note changes, review the links around it. The [[review-checklist]] is a starting point for a small, deliberate review.
+
+## Navigation
+
+The page directory and the contents of a note are separate ways to navigate. A heading link should always lead to the note itself.

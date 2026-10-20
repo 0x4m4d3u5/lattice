@@ -1,15 +1,15 @@
 import { buildCatalogue } from './catalogue.js';
 
-const form = document.querySelector('#search');
-const controls = document.querySelector('#controls');
-const query = document.querySelector('#query');
-const tags = document.querySelector('#tags');
-const status = document.querySelector('#status');
-const results = document.querySelector('#results');
-const retry = document.querySelector('#retry');
-const navigation = document.querySelector('#navigation');
-const toggle = document.querySelector('#navigation-toggle');
-const catalogueStatus = document.querySelector('#catalogue-status');
+const form = document.querySelector('#lattice-search');
+const controls = document.querySelector('#lattice-controls');
+const query = document.querySelector('#lattice-query');
+const tags = document.querySelector('#lattice-tags');
+const status = document.querySelector('#lattice-status');
+const results = document.querySelector('#lattice-results');
+const retry = document.querySelector('#lattice-retry');
+const navigation = document.querySelector('#lattice-navigation');
+const toggle = document.querySelector('#lattice-navigation-toggle');
+const catalogueStatus = document.querySelector('#lattice-catalogue-status');
 const overview = document.querySelector('.overview-link');
 const stateKey = `lattice-reader:${new URL(form.dataset.index, document.baseURI).href}`;
 let saved = {};
@@ -50,8 +50,8 @@ function renderCatalogue(entries) {
     groups.get(page.collection).push(page);
   }
   catalogueLoaded = true;
-  const directory = document.querySelector('#page-navigation');
-  const collections = document.querySelector('#collections');
+  const directory = document.querySelector('#lattice-page-navigation');
+  const collections = document.querySelector('#lattice-collections');
   directory.replaceChildren();
   collections?.replaceChildren();
   for (const [name, pages] of groups) {
@@ -75,7 +75,7 @@ function renderCatalogue(entries) {
       const item = document.createElement('li'); item.append(link); list.append(item);
       if (new URL(page.url).pathname === location.pathname) {
         link.setAttribute('aria-current', 'page');
-        const label = document.querySelector('#current-collection'); if (label) label.textContent = name;
+        const label = document.querySelector('#lattice-current-collection'); if (label) label.textContent = name;
         const heading = document.querySelector('article > header > h1'); if (heading) heading.textContent = page.title;
       }
       const card = document.createElement('li'); card.append(link.cloneNode(true));
@@ -182,7 +182,7 @@ function start() {
             label.append(input, document.createTextNode(` ${tag}`));
             tags.append(label);
           }
-          document.querySelector('#filters').hidden = !data.tags.length;
+          document.querySelector('#lattice-filters').hidden = !data.tags.length;
           controls.disabled = false;
           status.textContent = 'Enter a query to search this wiki.';
           if (query.value.trim()) form.requestSubmit();
