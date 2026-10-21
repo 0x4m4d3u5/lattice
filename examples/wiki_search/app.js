@@ -4,6 +4,8 @@ const form = document.querySelector('#lattice-search');
 const controls = document.querySelector('#lattice-controls');
 const query = document.querySelector('#lattice-query');
 const tags = document.querySelector('#lattice-tags');
+const filters = document.querySelector('#lattice-filters');
+const clearTags = document.querySelector('#lattice-clear-tags');
 const status = document.querySelector('#lattice-status');
 const results = document.querySelector('#lattice-results');
 const retry = document.querySelector('#lattice-retry');
@@ -17,6 +19,12 @@ try { saved = JSON.parse(sessionStorage.getItem(stateKey)) || {}; } catch { /* S
 query.value = typeof saved.query === 'string' ? saved.query : '';
 let groupState = saved.groups && typeof saved.groups === 'object' ? saved.groups : {};
 let catalogueLoaded = false;
+
+function updateFilters() {
+  const count = tags.querySelectorAll('input:checked').length;
+  filters.querySelector('summary').textContent = count ? `Filter by tags (${count} selected)` : 'Filter by tags';
+  clearTags.hidden = count === 0;
+}
 
 function persist() {
   const selected = controls.disabled && !tags.children.length && Array.isArray(saved.tags)
@@ -191,7 +199,8 @@ function start() {
             label.append(input, document.createTextNode(` ${tag}`));
             tags.append(label);
           }
-          document.querySelector('#lattice-filters').hidden = !data.tags.length;
+          filters.hidden = !data.tags.length;
+          updateFilters();
           controls.disabled = false;
           status.textContent = 'Enter a query to search this wiki.';
           if (query.value.trim()) form.requestSubmit();
@@ -222,6 +231,14 @@ form.addEventListener('submit', event => {
   send('search', { query: query.value, tags: [...tags.querySelectorAll('input:checked')].map(input => input.value) });
 });
 retry.addEventListener('click', start);
+tags.addEventListener('change', () => { updateFilters(); persist(); });
+clearTags.addEventListener('click', () => {
+  for (const input of tags.querySelectorAll('input:checked')) input.checked = false;
+  updateFilters();
+  persist();
+  query.focus();
+  form.requestSubmit();
+});
 window.addEventListener('pagehide', () => { persist(); stop(); });
 window.addEventListener('pageshow', event => { if (event.persisted) start(); });
 start();

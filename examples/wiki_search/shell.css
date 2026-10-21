@@ -23,6 +23,7 @@ button { border: 1px solid #345944; border-radius: 5px; color: #fff; background:
 button:disabled { opacity: .5; cursor: wait; }
 #lattice-filters { color: #4d5c50; }
 #lattice-filters fieldset { padding-top: .65rem; }
+#lattice-clear-tags { margin-top: .6rem; background: transparent; color: #345944; border-color: #bec9bd; font-size: .8rem; }
 #lattice-tags { display: flex; flex-wrap: wrap; gap: .35rem .7rem; margin: .5rem 0 1rem; }
 #lattice-tags label { font-weight: 400; overflow-wrap: anywhere; min-height: 24px; }
 input[type=checkbox] { accent-color: #345944; }

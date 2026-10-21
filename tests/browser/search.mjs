@@ -215,12 +215,44 @@ try {
   await page.getByLabel('Database', { exact: true }).check();
   await query('recovery'); await complete();
   await page.locator('#lattice-results').getByRole('link', { name: 'Operations', exact: true }).click();
+  await page.waitForFunction(() => !document.querySelector('#lattice-controls').disabled);
+  await complete();
+  assert.equal(await page.locator('#lattice-filters').evaluate(element => element.open), false);
+  assert.equal(await page.locator('#lattice-filters summary').textContent(), 'Filter by tags (1 selected)');
+  assert.equal(await page.getByRole('button', { name: 'Clear tag filters', exact: true }).isVisible(), true);
   await ready(); await complete();
   assert.equal(await page.getByRole('searchbox').inputValue(), 'recovery');
   assert.equal(await page.getByLabel('Database', { exact: true }).isChecked(), true);
   assert.deepEqual(await urls(), ['/notes/ops/']);
   assert.equal(new URL(page.url()).pathname, '/notes/ops/');
   assert.ok((await page.locator('article').textContent()).includes('Restore encrypted snapshots.'));
+  // Restored filters stay visible even when their checkboxes are collapsed.
+  await page.locator('#lattice-filters summary').click();
+  if (process.env.LATTICE_PREVIEW_DIR) {
+    mkdirSync(process.env.LATTICE_PREVIEW_DIR, { recursive: true });
+    await page.screenshot({ path: join(process.env.LATTICE_PREVIEW_DIR, 'filters-desktop.png') });
+  }
+  await page.setViewportSize({ width: 390, height: 844 });
+  await ready();
+  await page.getByLabel('Data', { exact: true }).check();
+  await query('recovery'); await complete(); await status('No matching sections.');
+  await page.locator('#lattice-filters summary').click();
+  assert.equal(await page.locator('#lattice-filters summary').textContent(), 'Filter by tags (2 selected)');
+  if (process.env.LATTICE_PREVIEW_DIR) await page.screenshot({ path: join(process.env.LATTICE_PREVIEW_DIR, 'filters-mobile.png') });
+  const clearFilters = page.getByRole('button', { name: 'Clear tag filters', exact: true });
+  await clearFilters.focus(); await page.keyboard.press('Enter'); await complete();
+  assert.deepEqual(await urls(), expected);
+  assert.equal(await clearFilters.isHidden(), true);
+  assert.equal(await page.locator('#lattice-filters summary').textContent(), 'Filter by tags');
+  assert.equal(await page.locator('#lattice-filters').evaluate(element => element.open), false);
+  assert.equal(await page.getByRole('searchbox').evaluate(element => element === document.activeElement), true);
+  assert.equal(await page.getByRole('searchbox').inputValue(), 'recovery');
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  await page.reload(); await ready(); await complete();
+  assert.equal(await page.locator('#lattice-tags input:checked').count(), 0);
+  assert.equal(await clearFilters.isHidden(), true);
+  assert.deepEqual(await urls(), expected);
+  await page.setViewportSize({ width: 1280, height: 720 });
   await page.goBack(); await ready();
   await query('basil'); await complete();
   assert.deepEqual(await urls(), ['/notes/ops/']);

@@ -37,6 +37,9 @@ their packaged relative paths. Load only an index you intend to make available t
 this page inherits the index's publication and draft rules.
 
 Submit a query with Enter or Search. Check tags to require every selected tag.
+The filter summary shows the selected count even when collapsed or restored
+after navigation. **Clear tag filters** removes all selected tags and immediately
+reruns the current query, returning keyboard focus to the search field.
 ASCII case variants share one checkbox, using the first indexed display spelling;
 non-ASCII case variants remain distinct, matching the retrieval core.
 Only the latest submitted query can update the results; submitting an empty
