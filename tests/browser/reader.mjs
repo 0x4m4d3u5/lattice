@@ -123,15 +123,18 @@ try {
   await page.locator('article').getByRole('link', { name: 'publishing-a-note', exact: true }).click(); await ready();
   assert.equal(await systems.evaluate(element => element.open), false);
   // Crossing the responsive breakpoint must not strand keyboard focus in hidden UI.
+  await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.locator('.overview-link').focus();
   await page.evaluate(() => { window.holdLayoutChanges = true; });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.waitForFunction(() => document.activeElement === document.querySelector('#lattice-navigation-toggle'), null, { timeout: 2000 });
   assert.equal(await page.locator('#lattice-navigation').isHidden(), true);
+  assert.equal(await page.getByRole('search', { name: 'Wiki search', exact: true }).count(), 0);
   const toggle = page.getByRole('button', { name: 'Browse & search' });
   await toggle.focus(); await page.keyboard.press('Enter');
   assert.equal(await toggle.getAttribute('aria-expanded'), 'true');
   assert.equal(await page.locator('#lattice-navigation').isVisible(), true);
+  assert.equal(await page.getByRole('search', { name: 'Wiki search', exact: true }).getByRole('searchbox', { name: 'Search notes', exact: true }).count(), 1);
   await page.waitForFunction(() => window.pendingLayoutChanges.length > 0);
   await page.evaluate(() => {
     window.holdLayoutChanges = false;
