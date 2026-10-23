@@ -84,12 +84,34 @@ try {
     mkdirSync(process.env.LATTICE_PREVIEW_DIR, { recursive: true });
     await page.screenshot({ path: join(process.env.LATTICE_PREVIEW_DIR, name), fullPage: name.includes('landing') });
   };
+  const checkForcedColors = async name => {
+    await page.emulateMedia({ forcedColors: 'active' });
+    const current = page.locator('#lattice-navigation [aria-current=page]');
+    assert.equal(await current.count(), 1);
+    assert.equal(await current.evaluate(link => {
+      const style = getComputedStyle(link);
+      return style.borderInlineStartStyle === 'solid' && parseFloat(style.borderInlineStartWidth) > 0
+        && style.borderInlineStartColor !== style.backgroundColor;
+    }), true, 'Current page needs a visible marker when forced colors removes backgrounds and shadows');
+    assert.equal(await page.locator('#lattice-page-navigation a:not([aria-current])').evaluateAll(links =>
+      links.every(link => parseFloat(getComputedStyle(link).borderInlineStartWidth) === 0)), true);
+    await current.focus();
+    await page.keyboard.press('Tab'); await page.keyboard.press('Shift+Tab');
+    assert.equal(await current.evaluate(link => {
+      const style = getComputedStyle(link);
+      return document.activeElement === link && style.outlineStyle !== 'none' && parseFloat(style.outlineWidth) > 0;
+    }), true, 'Keyboard focus must remain distinct from the current-page marker');
+    await save(name);
+    await current.evaluate(link => link.blur());
+    await page.emulateMedia({ forcedColors: 'none' });
+  };
   await page.goto(`${origin}/wiki/static/search/`); await ready();
   assert.equal(await page.getByRole('searchbox').inputValue(), '');
   assert.equal(await page.locator('#lattice-collections .collection').count(), 3);
   assert.equal(await page.locator('#lattice-page-navigation a').count(), 6);
   assert.equal(await page.locator('#lattice-collections a').count(), 6);
   await save('landing-desktop.png');
+  await checkForcedColors('landing-forced-colors.png');
   const start = page.locator('#lattice-collections').getByRole('link', { name: 'Getting started', exact: true });
   await start.focus(); await page.keyboard.press('Enter'); await ready();
   assert.equal(new URL(page.url()).pathname, urlFor('Getting started'));
@@ -98,6 +120,7 @@ try {
   assert.equal(await page.locator('iframe').count(), 0);
   assert.equal(await page.evaluate(() => document.getElementById('navigation')?.tagName), 'H2');
   await save('reader-desktop.png');
+  await checkForcedColors('reader-forced-colors.png');
   // A real wikilink, then a heading link, preserve the shared shell and native URL.
   await page.locator('article').getByRole('link', { name: 'publishing-a-note', exact: true }).click(); await ready();
   assert.equal(new URL(page.url()).pathname, urlFor('Publishing a note'));
@@ -191,6 +214,7 @@ try {
   await page.setViewportSize({ width: 390, height: 844 });
   await save('reader-mobile.png');
   await toggle.click(); await save('navigation-mobile.png');
+  await checkForcedColors('navigation-mobile-forced-colors.png');
   await page.locator('.overview-link').click(); await ready();
   await save('landing-mobile.png');
   assert.equal(await page.locator('#lattice-collections').isVisible(), true);
