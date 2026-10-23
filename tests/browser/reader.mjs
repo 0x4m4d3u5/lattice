@@ -107,7 +107,10 @@ try {
   await systems.locator('summary').click();
   await page.locator('article').getByRole('link', { name: 'publishing-a-note', exact: true }).click(); await ready();
   assert.equal(await systems.evaluate(element => element.open), false);
+  // Crossing the responsive breakpoint must not strand keyboard focus in hidden UI.
+  await page.locator('.overview-link').focus();
   await page.setViewportSize({ width: 390, height: 844 });
+  await page.waitForFunction(() => document.activeElement === document.querySelector('#lattice-navigation-toggle'), null, { timeout: 2000 });
   assert.equal(await page.locator('#lattice-navigation').isHidden(), true);
   const toggle = page.getByRole('button', { name: 'Browse & search' });
   await toggle.focus(); await page.keyboard.press('Enter');
@@ -115,6 +118,26 @@ try {
   assert.equal(await page.locator('#lattice-navigation').isVisible(), true);
   await page.keyboard.press('Escape');
   assert.equal(await toggle.evaluate(element => element === document.activeElement), true);
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.waitForFunction(() => document.activeElement === document.querySelector('.overview-link'));
+  assert.equal(await toggle.isHidden(), true);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.waitForFunction(() => document.activeElement === document.querySelector('#lattice-navigation-toggle'), null, { timeout: 2000 });
+  await toggle.click();
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.waitForFunction(() => document.querySelector('#lattice-navigation-toggle').getAttribute('aria-expanded') === 'false');
+  assert.equal(await page.locator('main').isVisible(), true);
+  assert.equal(await page.locator('.overview-link').evaluate(element => element === document.activeElement), true);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.waitForFunction(() => document.activeElement === document.querySelector('#lattice-navigation-toggle'), null, { timeout: 2000 });
+  assert.equal(await page.locator('#lattice-navigation').isHidden(), true);
+  assert.equal(await page.locator('main').isVisible(), true);
+  await page.locator('main').focus();
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: 844 });
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(resolve)));
+    assert.equal(await page.locator('main').evaluate(element => element === document.activeElement), true);
+  }
   await toggle.click();
   await page.getByRole('link', { name: 'Skip to content' }).focus(); await page.keyboard.press('Enter');
   assert.equal(await page.locator('main').evaluate(element => element === document.activeElement), true);

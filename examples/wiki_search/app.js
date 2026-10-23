@@ -57,6 +57,21 @@ navigation.addEventListener('keydown', event => {
   }
 });
 document.querySelector('.skip').addEventListener('click', () => setNavigation(false, false));
+const mobileLayout = window.matchMedia('(max-width: 800px)');
+function keepNavigationFocusVisible(focused) {
+  if (mobileLayout.matches && navigation.contains(focused)) toggle.focus({ preventScroll: true });
+  else if (!mobileLayout.matches && focused === toggle) overview.focus({ preventScroll: true });
+}
+// Browsers may blur a newly hidden control before dispatching the media change.
+for (const region of [navigation, toggle]) region.addEventListener('focusout', event => {
+  if (!event.relatedTarget && !region.getClientRects().length) keepNavigationFocusVisible(event.target);
+});
+mobileLayout.addEventListener('change', () => {
+  const focused = document.activeElement;
+  // A changed layout invalidates the mobile menu's saved scroll position.
+  setNavigation(false, false);
+  keepNavigationFocusVisible(focused);
+});
 if (new URL(overview.href).pathname === location.pathname) overview.setAttribute('aria-current', 'page');
 
 function renderCatalogue(entries) {
