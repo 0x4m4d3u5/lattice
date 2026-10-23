@@ -134,6 +134,7 @@ try {
   indexMode = 'valid';
   await page.getByRole('button', { name: 'Retry loading search' }).click();
   await ready();
+  assert.equal(await page.getByRole('search', { name: 'Wiki search', exact: true }).count(), 1);
   assert.equal(indexRequests, 4);
   assert.deepEqual(await page.locator('#lattice-tags input').evaluateAll(inputs => inputs.map(input => input.value)),
     ['Data', 'Database', 'Legacy', 'Reliability', 'Équipe', 'équipe']);
@@ -232,6 +233,7 @@ try {
   assert.equal(await page.getByLabel('Database', { exact: true }).isChecked(), true);
   assert.deepEqual(await urls(), ['/notes/ops/']);
   assert.equal(new URL(page.url()).pathname, '/notes/ops/');
+  assert.equal(await page.getByRole('search', { name: 'Wiki search', exact: true }).count(), 1);
   assert.ok((await page.locator('article').textContent()).includes('Restore encrypted snapshots.'));
   // Restored filters stay visible even when their checkboxes are collapsed.
   await page.locator('#lattice-filters summary').click();
