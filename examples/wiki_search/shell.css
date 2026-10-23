@@ -76,3 +76,7 @@ main:focus { outline: none; }
   .collection ul { grid-template-columns: 1fr; }
 }
 @media (min-width: 801px) { #lattice-navigation-toggle { display: none; } }
+@media print {
+  .masthead, .skip, #lattice-navigation { display: none; }
+  main, .js.navigation-open main { display: block; margin-left: 0; }
+}

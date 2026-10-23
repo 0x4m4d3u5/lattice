@@ -108,6 +108,8 @@ mobile directory and moves focus to the page. Crossing between mobile and deskto
 resets the mobile menu and moves focus only when its navigation control becomes
 hidden. Normal links and published content
 remain usable without JavaScript, while the directory/search need JavaScript.
+Printing shows the main content without the navigation panel, including when
+the mobile menu is open. Returning from print preserves the screen's menu state.
 
 Contents and backlinks appear only when supplied by Lattice. Enable `toc: true`
 in a note's frontmatter for contents navigation. The browser fixture in
