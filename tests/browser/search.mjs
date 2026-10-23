@@ -54,6 +54,7 @@ for (const url of ['javascript:window.hacked=true', 'data:text/html,bad', 'http:
 }
 entries.push({ title: 'Legacyprobe', url: '/legacy/', tags: ['Legacy'], body: '' });
 const validIndex = JSON.stringify(entries);
+const changedTagIndex = JSON.stringify(entries.map(entry => ({ ...entry, tags: entry.tags.map(tag => tag.replace(/[A-Z]/g, letter => letter.toLowerCase())) })));
 const assets = new Map([
   ['/wiki/static/search/', ['static/search/index.html', 'text/html']],
   ...['app.js', 'worker.js', 'host.js', 'catalogue.js'].map(name => [`/wiki/static/search/${name}`, [`static/search/${name}`, 'text/javascript']]),
@@ -70,7 +71,7 @@ const server = createServer(async (request, response) => {
   if (request.url === '/wiki/content-index.json') {
     if (++indexRequests === 1) await firstRequest;
     response.writeHead(indexMode === 'unavailable' ? 503 : 200, { 'Content-Type': 'application/json' });
-    response.end(indexMode === 'empty' ? '[]' : indexMode === 'excluded-only' ? JSON.stringify(entries.filter(entry => entry.sections?.length === 0)) : indexMode === 'syntax' ? '{' : indexMode === 'excerpt' ? '[{"title":"Excerpt","url":"/","tags":[],"excerpt":"recovery"}]' : validIndex);
+    response.end(indexMode === 'casechanged' ? changedTagIndex : indexMode === 'empty' ? '[]' : indexMode === 'excluded-only' ? JSON.stringify(entries.filter(entry => entry.sections?.length === 0)) : indexMode === 'syntax' ? '{' : indexMode === 'excerpt' ? '[{"title":"Excerpt","url":"/","tags":[],"excerpt":"recovery"}]' : validIndex);
     return;
   }
   const asset = assets.get(request.url);
@@ -217,6 +218,25 @@ try {
   await page.evaluate(() => window.oldWorker.dispatchEvent(new ErrorEvent('error')));
   assert.equal(await page.locator('#lattice-controls').isDisabled(), false);
   assert.equal(await page.getByLabel('Database', { exact: true }).isChecked(), true);
+  await page.getByLabel('Équipe', { exact: true }).check();
+  await query('tagprobe'); await complete();
+  assert.deepEqual(await urls(), ['/notes/case-a/', '/notes/case-c/']);
+  // A rebuilt index can choose a different display spelling for the same tag.
+  indexMode = 'casechanged';
+  await page.reload(); await ready(); await complete();
+  assert.equal(await page.getByLabel('database', { exact: true }).isChecked(), true);
+  assert.equal(await page.getByLabel('Équipe', { exact: true }).isChecked(), true);
+  assert.equal(await page.getByLabel('équipe', { exact: true }).isChecked(), false);
+  assert.deepEqual(await urls(), ['/notes/case-a/', '/notes/case-c/']);
+  indexMode = 'valid';
+  await page.evaluate(() => window.searchWorkers.at(-1).dispatchEvent(new ErrorEvent('error')));
+  await status(unavailable);
+  await page.getByRole('button', { name: 'Retry loading search' }).click(); await ready(); await complete();
+  assert.equal(await page.getByLabel('Database', { exact: true }).isChecked(), true);
+  assert.equal(await page.getByLabel('Équipe', { exact: true }).isChecked(), true);
+  assert.equal(await page.getByLabel('équipe', { exact: true }).isChecked(), false);
+  assert.deepEqual(await urls(), ['/notes/case-a/', '/notes/case-c/']);
+  await page.getByLabel('Équipe', { exact: true }).uncheck();
   await page.getByLabel('Database', { exact: true }).uncheck();
   await query('recovery'); await complete();
   assert.deepEqual(await urls(), expected);

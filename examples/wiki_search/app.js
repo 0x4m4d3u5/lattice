@@ -20,6 +20,9 @@ query.value = typeof saved.query === 'string' ? saved.query : '';
 let groupState = saved.groups && typeof saved.groups === 'object' ? saved.groups : {};
 let catalogueLoaded = false;
 
+// Match the worker and retrieval core's ASCII-only tag identity.
+const tagKey = tag => tag.replace(/[A-Z]/g, letter => letter.toLowerCase());
+
 function updateFilters() {
   const count = tags.querySelectorAll('input:checked').length;
   filters.querySelector('summary').textContent = count ? `Filter by tags (${count} selected)` : 'Filter by tags';
@@ -212,14 +215,15 @@ function start() {
       results.setAttribute('aria-busy', 'false');
       try {
         if (data.type === 'ready') {
-          const selected = new Set(tags.children.length ? [...tags.querySelectorAll('input:checked')].map(input => input.value) : Array.isArray(saved.tags) ? saved.tags : []);
+          const selectedValues = tags.children.length ? [...tags.querySelectorAll('input:checked')].map(input => input.value) : Array.isArray(saved.tags) ? saved.tags : [];
+          const selected = new Set(selectedValues.filter(tag => typeof tag === 'string').map(tagKey));
           tags.replaceChildren();
           for (const tag of data.tags) {
             const label = document.createElement('label');
             const input = document.createElement('input');
             input.type = 'checkbox';
             input.value = tag;
-            input.checked = selected.has(tag);
+            input.checked = selected.has(tagKey(tag));
             label.append(input, document.createTextNode(` ${tag}`));
             tags.append(label);
           }
