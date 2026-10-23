@@ -45,6 +45,8 @@ the picker, since those entries cannot produce search results. Legacy indexes
 without sections keep their tag filters.
 ASCII case variants share one checkbox, using the first indexed display spelling;
 non-ASCII case variants remain distinct, matching the retrieval core.
+Selected filters survive ASCII capitalization changes in a reloaded index,
+including when retrying search.
 Only the latest submitted query can update the results; submitting an empty
 query clears them. Search returns up to ten sections. Snippets and titles are
 inserted as text. HTTP and HTTPS citations use the exact returned URL, without
