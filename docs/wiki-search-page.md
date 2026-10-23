@@ -40,6 +40,9 @@ Submit a query with Enter or Search. Check tags to require every selected tag.
 The filter summary shows the selected count even when collapsed or restored
 after navigation. **Clear tag filters** removes all selected tags and immediately
 reruns the current query, returning keyboard focus to the search field.
+Tags belonging only to entries with explicitly empty sections are omitted from
+the picker, since those entries cannot produce search results. Legacy indexes
+without sections keep their tag filters.
 ASCII case variants share one checkbox, using the first indexed display spelling;
 non-ASCII case variants remain distinct, matching the retrieval core.
 Only the latest submitted query can update the results; submitting an empty

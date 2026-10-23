@@ -22,6 +22,7 @@ writeFileSync(join(search, 'preserve.txt'), 'unrelated local content');
 assert.notEqual(run('scripts/package-search.mjs', [search]).status, 0);
 assert.equal(readFileSync(join(search, 'preserve.txt'), 'utf8'), 'unrelated local content');
 writeFileSync(join(notes, 'ops.md'), '---\ntitle: Operations\ndescription: A field guide to restoring services with confidence. Practice the sequence, record the evidence, and leave a clearer path for the next person.\ntoc: true\ntags: [Database, Reliability]\n---\n## Recovery drills\nRestore encrypted snapshots. Verify checksums. A backup is only useful when the team knows how to bring it back. Run this exercise in an isolated training environment before you need it during an incident.\n\n> The goal is repeatability: another person should be able to follow the record and reach the same result.\n\n### Before you begin\n\n1. Choose a snapshot and record its timestamp.\n2. Confirm that the restore target is isolated from production.\n3. Assign one person to run the exercise and another to capture observations.\n\n### Verify the result\n\nCompare the restored records with the manifest. Check both totals and a small sample of individual entries; a successful process exit is only the first signal.\n\n### Leave a useful record\n\nWrite down what surprised you, which step took longest, and what you would change in the runbook. Link the evidence from the exercise so the next reader can follow the decisions.\n\n## Training sandbox\n\nThe fictional basil dataset is used for these drills. It contains no customer records.\n');
+writeFileSync(join(notes, 'retired.md'), '---\ntitle: Retired note\ntags: [RetiredOnly]\n---\n<!-- No published passage remains. -->\n');
 writeFileSync(join(notes, 'guide.md'), '---\ntitle: Recovery checklist\ntags: [Reliability]\n---\n## Preparation\nAssign a commander. See [[ops]] for the practice sequence.\n');
 writeFileSync(join(notes, 'priority.md'), '---\ntitle: Definition priority\n---\nTerm\n: definition\n## Priorities\n: priorityprobe\n');
 writeFileSync(join(notes, 'orphan.md'), '---\ntitle: Definition boundary\n---\n: standalone marker\n\nTerm\n: glossaryprobe\n');
@@ -45,11 +46,13 @@ for (const name of ['index.html', 'app.js', 'worker.js', 'host.js', 'renderer.wa
 // Extend only this disposable synthetic index to exercise caller-supplied URLs
 // and explicit exclusion. Normal published note entries remain untouched.
 const entries = JSON.parse(readFileSync(join(output, 'content-index.json'), 'utf8'));
+assert.deepEqual(entries.find(entry => entry.title === 'Retired note').sections, []);
 entries.push({ title: 'External', url: 'https://example.org/note/', tags: [], sections: [{ heading: '', body: 'externalpreviewprobe' }] });
 entries.push({ title: 'Excluded', url: '/excluded/', tags: [], body: 'exclusionprobe', sections: [] });
 for (const url of ['javascript:window.hacked=true', 'data:text/html,bad', 'http://[']) {
   entries.push({ title: 'Citation probe', url, tags: [], sections: [{ heading: 'Citation', body: 'citationprobe' }] });
 }
+entries.push({ title: 'Legacyprobe', url: '/legacy/', tags: ['Legacy'], body: '' });
 const validIndex = JSON.stringify(entries);
 const assets = new Map([
   ['/wiki/static/search/', ['static/search/index.html', 'text/html']],
@@ -67,7 +70,7 @@ const server = createServer(async (request, response) => {
   if (request.url === '/wiki/content-index.json') {
     if (++indexRequests === 1) await firstRequest;
     response.writeHead(indexMode === 'unavailable' ? 503 : 200, { 'Content-Type': 'application/json' });
-    response.end(indexMode === 'empty' ? '[]' : indexMode === 'syntax' ? '{' : indexMode === 'excerpt' ? '[{"title":"Excerpt","url":"/","tags":[],"excerpt":"recovery"}]' : validIndex);
+    response.end(indexMode === 'empty' ? '[]' : indexMode === 'excluded-only' ? JSON.stringify(entries.filter(entry => entry.sections?.length === 0)) : indexMode === 'syntax' ? '{' : indexMode === 'excerpt' ? '[{"title":"Excerpt","url":"/","tags":[],"excerpt":"recovery"}]' : validIndex);
     return;
   }
   const asset = assets.get(request.url);
@@ -133,7 +136,11 @@ try {
   await ready();
   assert.equal(indexRequests, 4);
   assert.deepEqual(await page.locator('#lattice-tags input').evaluateAll(inputs => inputs.map(input => input.value)),
-    ['Data', 'Database', 'Reliability', 'Équipe', 'équipe']);
+    ['Data', 'Database', 'Legacy', 'Reliability', 'Équipe', 'équipe']);
+  await page.getByLabel('Legacy', { exact: true }).check();
+  await query('legacyprobe'); await complete();
+  assert.deepEqual(await urls(), ['/legacy/']);
+  await page.getByLabel('Legacy', { exact: true }).uncheck();
   await page.getByLabel('Database', { exact: true }).check();
   await query('tagprobe'); await complete();
   assert.deepEqual(await urls(), ['/notes/case-a/', '/notes/case-b/', '/notes/case-c/']);
@@ -267,10 +274,13 @@ try {
   assert.deepEqual(await urls(), ['/notes/ops/']);
   await page.setViewportSize({ width: 390, height: 844 });
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
-  indexMode = 'empty';
-  await page.reload(); await ready();
-  assert.equal(await page.locator('#lattice-filters').isHidden(), true);
-  await query('recovery'); await complete(); await status('No matching sections.');
+  for (const mode of ['excluded-only', 'empty']) {
+    indexMode = mode;
+    await page.reload(); await ready();
+    assert.equal(await page.locator('#lattice-filters').isHidden(), true);
+    assert.equal(await page.locator('#lattice-clear-tags').isHidden(), true);
+    await query('recovery'); await complete(); await status('No matching sections.');
+  }
   assert.deepEqual(errors, []);
   console.log(`${browser.version()}: packaged published wiki search passed loading, retries, tags, DOM safety, stale replies, clearing and navigation`);
 } finally {
