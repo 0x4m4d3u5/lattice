@@ -15,6 +15,10 @@ button, summary { cursor: pointer; }
 .search-column { padding: 1.5rem 1.25rem 3rem; background: #f1f3ed; border-right: 1px solid #dadfd6; width: 300px; position: fixed; top: 74px; bottom: 0; overflow-y: auto; }
 .overview-link { display: flex; justify-content: space-between; color: #344c39; font-weight: 600; text-decoration: none; margin-bottom: 1.6rem; }
 .overview-link[aria-current], #lattice-page-navigation a[aria-current] { background: #e1e9d9; color: #233c2a; box-shadow: inset 3px 0 #4b7051; }
+@media (forced-colors: active) {
+  /* Forced colors removes the shadow; keep a marker separate from focus. */
+  .overview-link[aria-current], #lattice-page-navigation a[aria-current] { border-inline-start: 3px solid LinkText; }
+}
 fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
 label, legend, #lattice-filters summary { font-size: .8rem; font-weight: 600; }
 .query { display: flex; gap: .4rem; margin: .55rem 0 .8rem; }

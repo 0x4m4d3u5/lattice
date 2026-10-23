@@ -93,10 +93,12 @@ All page links use normal navigation to the published HTML. There is no embedded
 preview or second Markdown renderer. Wiki links, fragment links, contents and
 backlinks use the generator's existing URLs; native browser history and new-tab
 navigation work normally. Notes using the shared template retain the sidebar,
-current-page indication and collection label as you follow links. Existing site
-themes remain unchanged unless you opt into the template. Other templates still
-open normally, but need the shared navigation include, styles and app module to
-participate in this layout.
+current-page indication and collection label as you follow links.
+The current-page marker remains visible in forced-colors mode, separately from
+the keyboard focus outline.
+Existing site themes remain unchanged unless you opt into the template. Other
+templates still open normally, but need the shared navigation include, styles
+and app module to participate in this layout.
 
 Queries, selected tags and collection disclosure state are retained for the tab
 using optional session storage, scoped to the index URL. Storage failure does not
