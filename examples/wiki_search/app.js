@@ -47,6 +47,7 @@ function setNavigation(open, restorePosition = true) {
 document.body.classList.add('js');
 toggle.hidden = false;
 toggle.addEventListener('click', () => {
+  syncNavigationLayout();
   const open = toggle.getAttribute('aria-expanded') !== 'true';
   setNavigation(open);
   if (open) overview.focus();
@@ -57,6 +58,29 @@ navigation.addEventListener('keydown', event => {
   }
 });
 document.querySelector('.skip').addEventListener('click', () => setNavigation(false, false));
+const mobileLayout = window.matchMedia('(max-width: 800px)');
+let currentMobileLayout = mobileLayout.matches;
+function keepNavigationFocusVisible(focused) {
+  if (mobileLayout.matches && navigation.contains(focused)) toggle.focus({ preventScroll: true });
+  else if (!mobileLayout.matches && focused === toggle) overview.focus({ preventScroll: true });
+}
+// Browsers may blur a newly hidden control before dispatching the media change.
+for (const region of [navigation, toggle]) region.addEventListener('focusout', event => {
+  if (!event.relatedTarget && !region.getClientRects().length) {
+    syncNavigationLayout();
+    keepNavigationFocusVisible(event.target);
+  }
+});
+function syncNavigationLayout() {
+  // Focus recovery or activation may precede a queued media-change event.
+  if (currentMobileLayout === mobileLayout.matches) return;
+  currentMobileLayout = mobileLayout.matches;
+  const focused = document.activeElement;
+  // A changed layout invalidates the mobile menu's saved scroll position.
+  setNavigation(false, false);
+  keepNavigationFocusVisible(focused);
+}
+mobileLayout.addEventListener('change', syncNavigationLayout);
 if (new URL(overview.href).pathname === location.pathname) overview.setAttribute('aria-current', 'page');
 
 function renderCatalogue(entries) {
