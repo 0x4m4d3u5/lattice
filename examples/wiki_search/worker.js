@@ -22,7 +22,9 @@ self.addEventListener('message', async ({ data }) => {
       // Validate with the MoonBit decoder, including explicit empty sections.
       if (search(indexJson, '', '[]', 0).error !== null) throw new Error('Invalid content index');
       const names = new Map();
-      for (const tag of JSON.parse(indexJson).flatMap(entry => entry.tags)) {
+      // Explicitly empty sections never participate in retrieval. Missing sections
+      // are legacy page-sized passages, even when only their title can match.
+      for (const tag of entries.flatMap(entry => entry.sections?.length === 0 ? [] : entry.tags)) {
         // Match MoonBit's ASCII-only folding; preserve the first display spelling.
         const key = tag.replace(/[A-Z]/g, letter => letter.toLowerCase());
         if (!names.has(key)) names.set(key, tag);
