@@ -105,6 +105,22 @@ try {
     await current.evaluate(link => link.blur());
     await page.emulateMedia({ forcedColors: 'none' });
   };
+  const checkPrint = async name => {
+    const menuState = await page.locator('#lattice-navigation-toggle').getAttribute('aria-expanded');
+    await page.emulateMedia({ media: 'print' });
+    assert.equal(await page.locator('article').isVisible(), true, 'Printing must include the note even with mobile navigation open');
+    assert.equal(await page.locator('#lattice-navigation').isHidden(), true);
+    assert.equal(await page.locator('.masthead').isHidden(), true);
+    assert.equal(await page.locator('main').evaluate(main => getComputedStyle(main).marginLeft), '0px');
+    await save(name);
+    if (process.env.LATTICE_PREVIEW_DIR) await page.pdf({ path: join(process.env.LATTICE_PREVIEW_DIR, name.replace('.png', '.pdf')), format: 'A4' });
+    await page.emulateMedia({ media: 'screen' });
+    assert.equal(await page.locator('#lattice-navigation-toggle').getAttribute('aria-expanded'), menuState);
+    if (await page.locator('#lattice-navigation-toggle').isVisible()) {
+      assert.equal(await page.locator('#lattice-navigation').isVisible(), menuState === 'true');
+      assert.equal(await page.locator('article').isVisible(), menuState !== 'true');
+    }
+  };
   await page.goto(`${origin}/wiki/static/search/`); await ready();
   assert.equal(await page.getByRole('searchbox').inputValue(), '');
   assert.equal(await page.locator('#lattice-collections .collection').count(), 3);
@@ -121,6 +137,7 @@ try {
   assert.equal(await page.evaluate(() => document.getElementById('navigation')?.tagName), 'H2');
   await save('reader-desktop.png');
   await checkForcedColors('reader-forced-colors.png');
+  await checkPrint('reader-print-desktop.png');
   // A real wikilink, then a heading link, preserve the shared shell and native URL.
   await page.locator('article').getByRole('link', { name: 'publishing-a-note', exact: true }).click(); await ready();
   assert.equal(new URL(page.url()).pathname, urlFor('Publishing a note'));
@@ -213,8 +230,10 @@ try {
   assert.ok(await page.evaluate(() => scrollY) < readingPosition);
   await page.setViewportSize({ width: 390, height: 844 });
   await save('reader-mobile.png');
+  await checkPrint('reader-print-mobile-closed.png');
   await toggle.click(); await save('navigation-mobile.png');
   await checkForcedColors('navigation-mobile-forced-colors.png');
+  await checkPrint('reader-print-mobile-open.png');
   await page.locator('.overview-link').click(); await ready();
   await save('landing-mobile.png');
   assert.equal(await page.locator('#lattice-collections').isVisible(), true);
