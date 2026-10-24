@@ -55,6 +55,9 @@ Explicit `sections: []` entries stay excluded. An unavailable or malformed index
 unsupported runtime or worker failure shows a retry control. Retry reloads the
 index and starts a fresh worker; queries reuse that worker until failure or
 navigation. An operation taking over 30 seconds also offers retry.
+Retry stays focusable while loading and ignores duplicate activation. On success,
+focus returns to the search field only if it is still on Retry; moving elsewhere
+or closing mobile navigation keeps the reader's chosen focus.
 
 See [section search](section-search.md) for lexical matching, ranking and older
 content-index compatibility. The excerpt-only `search-index.json` is not a

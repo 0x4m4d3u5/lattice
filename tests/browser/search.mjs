@@ -96,12 +96,16 @@ try {
   await page.addInitScript(() => {
     window.searchWorkers = [];
     window.heldResults = [];
+    window.heldReady = [];
     const NativeWorker = window.Worker;
     window.Worker = class extends NativeWorker {
       constructor(...args) { super(...args); window.searchWorkers.push(this); }
       addEventListener(type, callback, options) {
         super.addEventListener(type, type !== 'message' ? callback : event => {
-          if (event.data.type === 'results' && window.holdNextResult) {
+          if (event.data.type === 'ready' && window.holdNextReady) {
+            window.holdNextReady = false;
+            window.heldReady.push(() => callback.call(this, event));
+          } else if (event.data.type === 'results' && window.holdNextResult) {
             window.holdNextResult = false;
             window.heldResults.push(() => callback.call(this, event));
           } else { callback.call(this, event); }
@@ -129,11 +133,29 @@ try {
   await status(unavailable);
   for (const mode of ['excerpt', 'syntax']) {
     indexMode = mode;
-    await page.getByRole('button', { name: 'Retry loading search' }).click();
+    await page.getByRole('button', { name: 'Retry loading search' }).focus();
+    await page.keyboard.press('Enter');
     await status(unavailable);
+    assert.equal(await page.locator('#lattice-retry').evaluate(button => button === document.activeElement), true);
+    assert.equal(await page.locator('#lattice-retry').getAttribute('aria-disabled'), null);
   }
   indexMode = 'valid';
-  await page.getByRole('button', { name: 'Retry loading search' }).click();
+  await page.evaluate(() => { window.holdNextReady = true; });
+  await page.getByRole('button', { name: 'Retry loading search' }).focus();
+  await page.keyboard.press('Enter');
+  await page.waitForFunction(() => window.heldReady.length === 1);
+  assert.equal(await page.locator('#lattice-retry').evaluate(button => button === document.activeElement), true);
+  assert.equal(await page.locator('#lattice-retry').getAttribute('aria-disabled'), 'true');
+  if (process.env.LATTICE_PREVIEW_DIR) {
+    mkdirSync(process.env.LATTICE_PREVIEW_DIR, { recursive: true });
+    await page.screenshot({ path: join(process.env.LATTICE_PREVIEW_DIR, 'retry-loading-desktop.png') });
+  }
+  await page.keyboard.press('Enter');
+  assert.equal(await page.evaluate(() => window.searchWorkers.length), 4, 'Loading retry cannot start another worker');
+  await page.evaluate(() => window.heldReady.shift()());
+  await page.waitForFunction(() => !document.querySelector('#lattice-controls').disabled);
+  assert.equal(await page.getByRole('searchbox', { name: 'Search notes' }).evaluate(input => input === document.activeElement), true,
+    'Successful keyboard retry should return focus to search');
   await ready();
   assert.equal(await page.getByRole('search', { name: 'Wiki search', exact: true }).count(), 1);
   assert.equal(indexRequests, 4);
@@ -214,7 +236,14 @@ try {
     window.oldWorker.dispatchEvent(new ErrorEvent('error'));
   });
   await status(unavailable);
-  await page.getByRole('button', { name: 'Retry loading search' }).click(); await ready();
+  await page.evaluate(() => { window.holdNextReady = true; });
+  await page.getByRole('button', { name: 'Retry loading search' }).click();
+  await page.waitForFunction(() => window.heldReady.length === 1);
+  await page.locator('.overview-link').focus();
+  await page.evaluate(() => window.heldReady.shift()());
+  await page.waitForFunction(() => !document.querySelector('#lattice-controls').disabled);
+  assert.equal(await page.locator('.overview-link').evaluate(link => link === document.activeElement), true, 'Retry must not steal focus after the reader moves away');
+  await ready();
   await page.evaluate(() => window.oldWorker.dispatchEvent(new ErrorEvent('error')));
   assert.equal(await page.locator('#lattice-controls').isDisabled(), false);
   assert.equal(await page.getByLabel('Database', { exact: true }).isChecked(), true);
@@ -229,9 +258,23 @@ try {
   assert.equal(await page.getByLabel('équipe', { exact: true }).isChecked(), false);
   assert.deepEqual(await urls(), ['/notes/case-a/', '/notes/case-c/']);
   indexMode = 'valid';
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole('button', { name: 'Browse & search' }).click();
   await page.evaluate(() => window.searchWorkers.at(-1).dispatchEvent(new ErrorEvent('error')));
   await status(unavailable);
-  await page.getByRole('button', { name: 'Retry loading search' }).click(); await ready(); await complete();
+  await page.evaluate(() => { window.holdNextReady = true; });
+  await page.getByRole('button', { name: 'Retry loading search' }).focus();
+  await page.keyboard.press('Enter');
+  await page.waitForFunction(() => window.heldReady.length === 1);
+  if (process.env.LATTICE_PREVIEW_DIR) await page.screenshot({ path: join(process.env.LATTICE_PREVIEW_DIR, 'retry-loading-mobile.png') });
+  await page.keyboard.press('Escape');
+  await page.evaluate(() => window.heldReady.shift()());
+  await page.waitForFunction(() => !document.querySelector('#lattice-controls').disabled);
+  assert.equal(await page.locator('#lattice-navigation').isHidden(), true);
+  assert.equal(await page.locator('#lattice-navigation-toggle').evaluate(button => button === document.activeElement), true,
+    'Completing retry after mobile dismissal must not focus hidden search');
+  await ready(); await complete();
+  await page.setViewportSize({ width: 1280, height: 720 });
   assert.equal(await page.getByLabel('Database', { exact: true }).isChecked(), true);
   assert.equal(await page.getByLabel('Équipe', { exact: true }).isChecked(), true);
   assert.equal(await page.getByLabel('équipe', { exact: true }).isChecked(), false);
