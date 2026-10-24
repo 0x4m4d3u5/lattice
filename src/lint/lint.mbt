@@ -12,6 +12,7 @@ pub(all) enum ViolationType {
   DuplicateSlug
   IOError
   MissingImageAlt
+  ConfigError
 } derive(Eq, Hash, Debug)
 
 ///|
@@ -30,6 +31,7 @@ pub impl Show for ViolationType with fn output(self, logger) {
     DuplicateSlug => logger.write_string("DuplicateSlug")
     IOError => logger.write_string("IOError")
     MissingImageAlt => logger.write_string("MissingImageAlt")
+    ConfigError => logger.write_string("ConfigError")
   }
 }
 
@@ -73,6 +75,7 @@ pub fn violation_type_name(kind : ViolationType) -> String {
     DuplicateSlug => "duplicate_slug"
     IOError => "io"
     MissingImageAlt => "missing_image_alt"
+    ConfigError => "config"
   }
 }
 

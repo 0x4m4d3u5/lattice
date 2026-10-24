@@ -131,7 +131,7 @@ test "explain_error_code accepts enum name (case-insensitive)" {
 }
 
 ///|
-test "list_error_codes mentions all 12 codes" {
+test "list_error_codes mentions all 13 codes" {
   let listing = list_error_codes()
   assert_true(listing.contains("E001"))
   assert_true(listing.contains("E002"))
@@ -145,6 +145,7 @@ test "list_error_codes mentions all 12 codes" {
   assert_true(listing.contains("E010"))
   assert_true(listing.contains("E011"))
   assert_true(listing.contains("E012"))
+  assert_true(listing.contains("E013"))
   assert_true(listing.contains("MissingRequiredFrontmatter"))
   assert_true(listing.contains("SchemaError"))
   assert_true(listing.contains("FrontmatterError"))
@@ -182,5 +183,15 @@ test "explain and list include opt-in image alt policy E012" {
     guard explain_error_code(code) is Some(text) else { abort("missing policy explanation") }
     assert_true(text.contains("require_image_alt=true"))
     assert_true(text.contains("alt=\"\""))
+  }
+}
+
+///|
+test "explain and list include site configuration errors" {
+  assert_true(list_error_codes().contains("E013  ConfigError"))
+  for code in ["E013", "config_error"] {
+    let explanation = explain_error_code(code).unwrap()
+    assert_true(explanation.contains("site configuration"))
+    assert_true(explanation.contains("I/O error"))
   }
 }
