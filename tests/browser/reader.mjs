@@ -137,6 +137,16 @@ try {
   assert.equal(new URL(page.url()).pathname, urlFor('Getting started'));
   assert.equal(await page.locator('#lattice-page-navigation [aria-current=page]').textContent(), 'Getting started');
   assert.equal(await page.locator('#lattice-current-collection').textContent(), 'Guides');
+  const onward = page.getByRole('navigation', { name: 'Collection reading order' });
+  assert.equal(await onward.locator('a').count(), 1);
+  assert.equal(new URL(await onward.locator('a').getAttribute('href'), page.url()).pathname, urlFor('Publishing a note'));
+  await onward.locator('a').focus(); await page.keyboard.press('Enter'); await ready();
+  assert.equal(new URL(page.url()).pathname, urlFor('Publishing a note'));
+  await page.getByRole('navigation', { name: 'Collection reading order' }).locator('a').click(); await ready();
+  assert.equal(new URL(page.url()).pathname, urlFor('Getting started'));
+  await onward.scrollIntoViewIfNeeded();
+  await save('reading-order-desktop.png');
+  await page.evaluate(() => scrollTo(0, 0));
   assert.equal(await page.locator('iframe').count(), 0);
   assert.equal(await page.evaluate(() => document.getElementById('navigation')?.tagName), 'H2');
   await save('reader-desktop.png');
@@ -282,6 +292,16 @@ try {
   assert.ok((await plain.locator('article').textContent()).includes('Find your way around'));
   await plain.locator('article').getByRole('link', { name: 'publishing-a-note', exact: true }).click();
   assert.equal(new URL(plain.url()).pathname, urlFor('Publishing a note'));
+  await plain.setViewportSize({ width: 320, height: 800 });
+  const previous = plain.getByRole('navigation', { name: 'Collection reading order' }).locator('a');
+  assert.ok((await previous.textContent()).includes('Getting started'));
+  await previous.click();
+  assert.equal(new URL(plain.url()).pathname, urlFor('Getting started'));
+  assert.equal(await plain.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  if (process.env.LATTICE_PREVIEW_DIR) {
+    await plain.getByRole('navigation', { name: 'Collection reading order' }).scrollIntoViewIfNeeded();
+    await plain.screenshot({ path: join(process.env.LATTICE_PREVIEW_DIR, 'reading-order-mobile-no-js.png') });
+  }
   await noJS.close();
   assert.deepEqual(errors, []);
   console.log(`${browser.version()}: reader landing, collections, wiki/fragment links, history, mobile, keyboard, contrast/type/reflow, search-runtime failure and no-JS reading passed (${root})`);
