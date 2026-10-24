@@ -27,5 +27,9 @@ article th, article td { border-bottom: 1px solid var(--border-subtle); padding:
 .backlinks { margin-top: var(--space-page); border-top: 1px solid var(--border-subtle); padding-top: var(--space-lg); font-size: var(--type-navigation); }
 .backlinks h2 { font: 600 var(--type-navigation)/1.5 var(--font-interface); letter-spacing: normal; }
 .tags { font-size: var(--type-navigation); color: var(--text-metadata); }
+.reading-navigation { display: flex; flex-wrap: wrap; gap: var(--space-xl); margin-top: var(--space-page); padding-top: var(--space-lg); border-top: 1px solid var(--border-subtle); font: var(--type-navigation)/1.6 var(--font-interface); }
+.reading-navigation:empty { display: none; }
+.reading-navigation a { flex: 1 1 12rem; min-width: 0; }
+.reading-navigation span { display: block; color: var(--text-metadata); font-size: var(--type-metadata); }
 @media (max-width: 480px) { article { padding-top: var(--space-section); } }
 article [id] { scroll-margin-top: 6rem; }
