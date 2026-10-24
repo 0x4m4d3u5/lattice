@@ -5,6 +5,47 @@ core in a dedicated WASM GC worker. It searches the full `content-index.json`,
 with section snippets, canonical page citations and exact AND tag filters.
 There is no remote search service or dependency on a UI framework.
 
+## Start a new wiki
+
+The repository's wiki starter assembles the existing reader, shared templates,
+a typed Guides collection, a welcome page and two linked sample notes. It enables
+the content index and uses relative project paths, so the generated project can
+be moved without rewriting its configuration.
+
+From the repository root, with the [pinned toolchain](reliability-baseline.md#reproduce)
+on your PATH:
+
+```sh
+export LATTICE_REPO="$PWD"
+bash scripts/check-wasm-note.sh
+moon build cmd/main --target js --deny-warn
+node scripts/create-wiki.mjs ../my-wiki
+cd ../my-wiki
+export LATTICE_CLI="$LATTICE_REPO/_build/js/debug/build/kurisu/lattice/cmd/main/main.js"
+node "$LATTICE_CLI" check --format json
+node "$LATTICE_CLI" build
+python3 -m http.server 8000 --directory dist
+```
+
+Visit `http://localhost:8000/` for the welcome note, or
+`http://localhost:8000/static/search/` for the library and search. Stop the local
+server with Ctrl+C. Generation does not start a server or deploy anything.
+
+The destination must not exist, even as an empty directory; its parent must
+already exist. All reader inputs, including the built WASM runtime, are read
+before the destination is created. The command does not download or compile
+dependencies. A filesystem write failure can leave a partial new directory;
+there is no automatic cleanup or replacement of existing files.
+
+Edit `content/guides/`, `collections.cfg`, and `content/lattice.conf` to grow the
+wiki. Each sample guide requires a title and description, and the linked examples
+demonstrate strict wikilink checking. Set `base_url` to the intended site address
+before publishing. The generated README includes check/build and local-preview
+instructions. To add the reader to an existing site, use the asset-only workflow
+below; `lattice init` retains its existing general-site scaffold.
+
+## Add the reader to an existing site
+
 Enable `content_index_file = content-index.json` in your site's configuration.
 Using the repository's pinned toolchain, build the portable application and
 package the page into a **new** directory under your content's static directory:

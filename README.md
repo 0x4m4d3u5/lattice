@@ -65,6 +65,10 @@ for the supported scope; raw HTML and templates are not audited.
 
 ## Quick Start
 
+For a connected note library with shared navigation and local section search, use
+the [wiki starter](docs/wiki-search-page.md#start-a-new-wiki). It creates a new
+project from the existing reader, templates and a small typed sample collection.
+
 See [pinned installation and baseline instructions](docs/reliability-baseline.md#reproduce) for the verified durable toolchain. The default-target commands below require a working native compiler. The durable tagged compiler distribution is verified with JavaScript: use `moon build --target js` and add `--target js` before `--` in each `moon run` command. See [the backend limitation](docs/reliability-baseline.md#local-results-and-backend-limitation) for details.
 
 ### Build from source
