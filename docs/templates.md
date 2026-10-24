@@ -33,6 +33,7 @@ The current implementation supports these built-in slots:
 - `{{description}}` - page description from frontmatter or site config fallback
 - `{{url}}` - canonical page URL
 - `{{site_name}}` - site title from config
+- `{{head_meta}}` - escaped Open Graph title, description (when nonempty), URL and type, plus a canonical link; place this once inside `<head>`. URLs use the configured `base_url` and the page's published route.
 
 The `date_part` filter extracts `year`, `month`, or `day` from a valid date or
 supported datetime, including local times, UTC/offset timestamps, and a space

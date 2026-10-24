@@ -52,7 +52,9 @@ writeFileSync(guide, guideSource + '\n[[missing-note]]\n');
 assert.ok(JSON.parse(run(cli, ['check', '--format', 'json'], starter, 1).stdout).violations.some(v => v.kind === 'broken_wikilink'));
 writeFileSync(guide, guideSource.replace('description: A short tour of your connected library.\n', ''));
 assert.ok(JSON.parse(run(cli, ['check', '--format', 'json'], starter, 1).stdout).violations.some(v => v.message.includes('description')));
-writeFileSync(guide, guideSource);
+const guideDescription = 'A "quoted" tour & <context>.';
+writeFileSync(guide, guideSource.replace('A short tour of your connected library.', JSON.stringify(guideDescription)));
+assert.deepEqual(check().violations, []);
 run(cli, ['build'], starter);
 const output = join(starter, 'dist');
 const index = JSON.parse(readFileSync(join(output, 'content-index.json')));
@@ -81,6 +83,25 @@ try {
   const channel = process.env.LATTICE_BROWSER_CHANNEL ?? 'chromium';
   assert.ok(['chrome', 'chromium'].includes(channel));
   browser = await chromium.launch({ headless: true, chromiumSandbox: true, ...(channel === 'chrome' ? { channel } : {}) });
+  // Metadata must be in the published HTML, before the search app can run.
+  const noJS = await browser.newContext({ javaScriptEnabled: false });
+  await noJS.route('**/*', route => new URL(route.request().url()).origin === origin ? route.continue() : route.abort());
+  const published = await noJS.newPage();
+  for (const [path, description, type] of [
+    ['/', 'Read, connect, and publish your notes.', 'website'],
+    [urlFor('Getting started'), guideDescription, 'website'],
+  ]) {
+    await published.goto(origin + path);
+    const canonical = 'https://example.test' + path;
+    assert.equal(await published.locator('head link[rel="canonical"]').count(), 1, `canonical metadata missing on ${path}`);
+    assert.equal(await published.locator('head link[rel="canonical"]').getAttribute('href'), canonical);
+    for (const [property, value] of Object.entries({ title: await published.title(), description, url: canonical, type })) {
+      const meta = published.locator(`head meta[property="og:${property}"]`);
+      assert.equal(await meta.count(), 1);
+      assert.equal(await meta.getAttribute('content'), value);
+    }
+  }
+  await noJS.close();
   const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
   await context.route('**/*', route => new URL(route.request().url()).origin === origin ? route.continue() : route.abort());
   const page = await context.newPage();
@@ -113,7 +134,7 @@ try {
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
   if (process.env.LATTICE_PREVIEW_DIR) await page.screenshot({ path: join(process.env.LATTICE_PREVIEW_DIR, 'wiki-starter-mobile.png') });
   assert.deepEqual(errors, []);
-  console.log(`${browser.version()}: fresh wiki starter, refusal/preflight, read-only check, typed schema, wikilinks, desktop/mobile navigation and real WASM search passed (${root})`);
+  console.log(`${browser.version()}: fresh wiki starter, refusal/preflight, read-only check, typed schema, wikilinks, no-JS publishing metadata, desktop/mobile navigation and real WASM search passed (${root})`);
 } finally {
   if (browser) await browser.close();
   await new Promise(resolve => server.close(resolve));
