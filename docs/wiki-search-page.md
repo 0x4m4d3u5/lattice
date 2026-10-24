@@ -121,6 +121,17 @@ Titles and descriptions are inserted as text, never as index-supplied HTML.
 
 ## Shared reading layout
 
+The shared styles keep Lattice's warm palette and serif article text, using a
+small set of semantic CSS variables in `shell.css` for reading text, navigation,
+metadata, surfaces, selection and focus. `page.css` uses those same roles. The
+default type hierarchy uses 18px article text, 14px navigation and at least 12px
+metadata, with relative units that follow the browser's default text size.
+This selectively applies Fluent 2's guidance on
+[semantic tokens](https://fluent2.microsoft.design/design-tokens),
+[manuscript layouts and spacing](https://fluent2.microsoft.design/layout), and
+[typographic hierarchy](https://fluent2.microsoft.design/typography), without a
+framework dependency or a replacement for Lattice's reading layout.
+
 To use the same navigation on published notes, copy both
 `examples/wiki_search/page.html` and `examples/wiki_search/wiki-navigation.html`
 into your site's templates directory. The page template uses Lattice's existing

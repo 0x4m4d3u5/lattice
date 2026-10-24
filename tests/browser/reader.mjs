@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { createServer } from 'node:http';
 import { chromium } from 'playwright';
+import { checkReaderStyle } from './reader-style.mjs';
 
 const repository = new URL('../../', import.meta.url);
 const root = mkdtempSync(join(tmpdir(), 'lattice-reader-ui-'));
@@ -127,6 +128,9 @@ try {
   assert.equal(await page.locator('#lattice-page-navigation a').count(), 6);
   assert.equal(await page.locator('#lattice-collections a').count(), 6);
   await save('landing-desktop.png');
+  await page.locator('.overview-link').focus();
+  await page.keyboard.press('Tab'); await page.keyboard.press('Shift+Tab');
+  await checkReaderStyle(page);
   await checkForcedColors('landing-forced-colors.png');
   const start = page.locator('#lattice-collections').getByRole('link', { name: 'Getting started', exact: true });
   await start.focus(); await page.keyboard.press('Enter'); await ready();
@@ -136,6 +140,7 @@ try {
   assert.equal(await page.locator('iframe').count(), 0);
   assert.equal(await page.evaluate(() => document.getElementById('navigation')?.tagName), 'H2');
   await save('reader-desktop.png');
+  await checkReaderStyle(page);
   await checkForcedColors('reader-forced-colors.png');
   await checkPrint('reader-print-desktop.png');
   // A real wikilink, then a heading link, preserve the shared shell and native URL.
@@ -230,14 +235,32 @@ try {
   assert.ok(await page.evaluate(() => scrollY) < readingPosition);
   await page.setViewportSize({ width: 390, height: 844 });
   await save('reader-mobile.png');
+  await checkReaderStyle(page);
   await checkPrint('reader-print-mobile-closed.png');
   await toggle.click(); await save('navigation-mobile.png');
+  await checkReaderStyle(page);
   await checkForcedColors('navigation-mobile-forced-colors.png');
   await checkPrint('reader-print-mobile-open.png');
   await page.locator('.overview-link').click(); await ready();
   await save('landing-mobile.png');
+  await checkReaderStyle(page);
   assert.equal(await page.locator('#lattice-collections').isVisible(), true);
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  // Narrow CSS viewport also exercises the reflow used by browser zoom. Keep
+  // article, controls and real search results readable on both sides of 800px.
+  for (const width of [320, 800, 801]) {
+    await page.setViewportSize({ width, height: 844 });
+    await page.goto(`${origin}${urlFor('Getting started')}`); await ready();
+    await checkReaderStyle(page);
+    if (width <= 800) await toggle.click();
+    await page.getByRole('searchbox').fill('publishing');
+    await page.getByRole('button', { name: 'Search', exact: true }).click();
+    await page.locator('#lattice-results a').first().waitFor();
+    await checkReaderStyle(page);
+    if (width === 320) await save('navigation-narrow-search.png');
+  }
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`${origin}/wiki/static/search/`); await ready();
   // Directory and published reading survive failure of the search runtime.
   failWasm = true;
   await page.reload();
@@ -261,7 +284,7 @@ try {
   assert.equal(new URL(plain.url()).pathname, urlFor('Publishing a note'));
   await noJS.close();
   assert.deepEqual(errors, []);
-  console.log(`${browser.version()}: reader landing, collections, wiki/fragment links, history, mobile, keyboard, search-runtime failure and no-JS reading passed (${root})`);
+  console.log(`${browser.version()}: reader landing, collections, wiki/fragment links, history, mobile, keyboard, contrast/type/reflow, search-runtime failure and no-JS reading passed (${root})`);
 } finally {
   if (browser) await browser.close();
   await new Promise(resolve => server.close(resolve));
