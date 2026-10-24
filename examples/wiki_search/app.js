@@ -151,6 +151,7 @@ function fail() {
   status.textContent = 'Search is unavailable. Retry loading search.';
   if (catalogueStatus && !catalogueLoaded) catalogueStatus.textContent = 'The page directory is unavailable. Retry loading the wiki using the navigation panel.';
   retry.hidden = false;
+  retry.removeAttribute('aria-disabled');
 }
 
 function send(type, payload) {
@@ -195,7 +196,8 @@ function renderHits(hits) {
 
 function start() {
   stop();
-  retry.hidden = true;
+  // Keep an activated retry focusable while loading; native disabled would blur it.
+  retry.setAttribute('aria-disabled', 'true');
   controls.disabled = true;
   results.replaceChildren();
   status.textContent = 'Loading search…';
@@ -230,6 +232,9 @@ function start() {
           filters.hidden = !data.tags.length;
           updateFilters();
           controls.disabled = false;
+          if (document.activeElement === retry) query.focus({ preventScroll: true });
+          retry.hidden = true;
+          retry.removeAttribute('aria-disabled');
           status.textContent = 'Enter a query to search this wiki.';
           if (query.value.trim()) form.requestSubmit();
         } else if (data.type === 'results') {
@@ -258,7 +263,9 @@ form.addEventListener('submit', event => {
   status.textContent = 'Searching…';
   send('search', { query: query.value, tags: [...tags.querySelectorAll('input:checked')].map(input => input.value) });
 });
-retry.addEventListener('click', start);
+retry.addEventListener('click', () => {
+  if (retry.getAttribute('aria-disabled') !== 'true') start();
+});
 tags.addEventListener('change', () => { updateFilters(); persist(); });
 clearTags.addEventListener('click', () => {
   for (const input of tags.querySelectorAll('input:checked')) input.checked = false;
