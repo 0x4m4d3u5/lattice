@@ -197,6 +197,11 @@ preview or second Markdown renderer. Wiki links, fragment links, contents and
 backlinks use the generator's existing URLs; native browser history and new-tab
 navigation work normally. Notes using the shared template retain the sidebar,
 current-page indication and collection label as you follow links.
+At the end of a collection note, previous/next links let readers continue through
+the collection without returning to the sidebar. They use the publisher's existing
+collection order and URLs, include the neighboring note titles, and work without
+JavaScript. Missing neighbors are omitted; pages without either neighbor have no
+visible reading-order footer.
 The current-page marker remains visible in forced-colors mode, separately from
 the keyboard focus outline.
 Existing site themes remain unchanged unless you opt into the template. Other

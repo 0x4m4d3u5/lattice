@@ -122,8 +122,13 @@ try {
   const ready = () => page.waitForFunction(() => !document.querySelector('#lattice-controls').disabled);
   await page.goto(origin); await ready();
   assert.equal(await page.locator('article > header > h1').textContent(), 'Welcome to your wiki');
+  assert.equal(await page.locator('.reading-navigation').isVisible(), false, 'a root page has no collection neighbors');
   await page.locator('article').getByRole('link', { name: 'Getting started', exact: true }).click(); await ready();
   assert.equal(new URL(page.url()).pathname, urlFor('Getting started'));
+  const readingOrder = page.getByRole('navigation', { name: 'Collection reading order' });
+  assert.equal(await readingOrder.locator('a').count(), 2);
+  assert.equal(await readingOrder.locator('[rel="prev"]').getAttribute('href'), urlFor('Field journal'));
+  assert.equal(await readingOrder.locator('[rel="next"]').getAttribute('href'), urlFor('Publishing notes'));
   await page.locator('article').getByRole('link', { name: 'publishing checklist', exact: true }).click(); await ready();
   assert.equal(new URL(page.url()).hash, '#check-before-publishing');
   assert.equal(await page.locator('#check-before-publishing').count(), 1);
