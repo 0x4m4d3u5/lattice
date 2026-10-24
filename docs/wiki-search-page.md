@@ -44,6 +44,54 @@ before publishing. The generated README includes check/build and local-preview
 instructions. To add the reader to an existing site, use the asset-only workflow
 below; `lattice init` retains its existing general-site scaffold.
 
+## Add your first note
+
+From the wiki directory, create a file using the collection's schema. Use another
+terminal if the local HTTP server is still running:
+
+```sh
+lattice new Guides --name field-journal
+```
+
+With the repository's JavaScript CLI, use
+`node "$LATTICE_CLI" new Guides --name field-journal` instead.
+`Guides` is the collection name in `collections.cfg`; `field-journal` is the
+filename without `.md`. The command refuses to overwrite an existing note.
+
+Open `content/guides/field-journal.md` and replace the generated placeholders
+with your title, description and writing. For example:
+
+```md
+---
+title: Field journal
+description: Observations from a walk in the garden.
+tags: [Journal]
+toc: true
+---
+## First observation
+
+A copperleaf plant caught the afternoon light.
+
+Return to [[getting-started|Getting started]].
+```
+
+The template displays the frontmatter title, so start body sections at `##`.
+`toc: true` adds contents navigation; tags make the note filterable in search.
+Add `[[field-journal|Field journal]]` to `content/guides/getting-started.md`
+to connect the new note to the tour. Wikilinks use the filename, not the title.
+
+Check before building, stopping if validation fails:
+
+```sh
+lattice check && lattice build
+```
+
+Or use `node "$LATTICE_CLI" check && node "$LATTICE_CLI" build`.
+The build updates the directory and search index automatically. With the local
+server running, reload the overview, open **Field journal** under **Guides**,
+or search for **copperleaf**. Follow the note's link back to **Getting started**.
+Repeat check and build after editing; the plain HTTP server does not rebuild.
+
 ## Add the reader to an existing site
 
 Enable `content_index_file = content-index.json` in your site's configuration.

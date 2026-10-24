@@ -56,10 +56,23 @@ const guideDescription = 'A "quoted" tour & <context>.';
 writeFileSync(guide, guideSource.replace('A short tour of your connected library.', JSON.stringify(guideDescription)));
 assert.deepEqual(check().violations, []);
 run(cli, ['build'], starter);
+// Follow the generated README after the initial sample wiki has been built.
+const readme = readFileSync(join(starter, 'README.md'), 'utf8');
+assert.ok(readme.includes('lattice new Guides --name field-journal'));
+run(cli, ['new', 'Guides', '--name', 'field-journal'], starter);
+const journal = join(starter, 'content/guides/field-journal.md');
+assert.ok(readFileSync(journal, 'utf8').includes('title:'));
+const authoredExample = readme.match(/```md\n([\s\S]*?)```/)[1];
+writeFileSync(journal, authoredExample);
+writeFileSync(guide, readFileSync(guide, 'utf8') + '\n[[field-journal|Field journal]]\n');
+const authored = snapshot(starter);
+assert.deepEqual(check().violations, []);
+assert.deepEqual(snapshot(starter), authored, 'authoring check must preserve the previous build');
+run(cli, ['build'], starter);
 const output = join(starter, 'dist');
 const index = JSON.parse(readFileSync(join(output, 'content-index.json')));
 const urlFor = title => index.find(entry => entry.title === title).url;
-assert.equal(index.filter(entry => entry.sections.length > 0).length, 3);
+assert.equal(index.filter(entry => entry.sections.length > 0).length, 4);
 const assets = new Map();
 function register(directory, prefix = '') {
   for (const entry of readdirSync(directory, { withFileTypes: true })) {
@@ -115,7 +128,18 @@ try {
   assert.equal(new URL(page.url()).hash, '#check-before-publishing');
   assert.equal(await page.locator('#check-before-publishing').count(), 1);
   await page.locator('.overview-link').click(); await ready();
-  assert.equal(await page.locator('#lattice-collections a').count(), 3);
+  assert.equal(await page.locator('#lattice-collections a').count(), 4);
+  await page.locator('#lattice-collections').getByRole('link', { name: 'Field journal', exact: true }).click(); await ready();
+  assert.equal(new URL(page.url()).pathname, urlFor('Field journal'));
+  await page.locator('article > p').getByRole('link', { name: 'Getting started', exact: true }).click(); await ready();
+  assert.equal(new URL(page.url()).pathname, urlFor('Getting started'));
+  await page.getByRole('searchbox').fill('copperleaf');
+  await page.getByRole('button', { name: 'Search', exact: true }).click();
+  await page.locator('#lattice-results a').waitFor();
+  assert.equal(await page.locator('#lattice-results a').getAttribute('href'), urlFor('Field journal'));
+  await page.locator('#lattice-results a').click(); await ready();
+  assert.equal(await page.locator('article > header > h1').textContent(), 'Field journal');
+  assert.ok((await page.locator('article').textContent()).includes('copperleaf'));
   await page.getByRole('searchbox').fill('reproducible');
   await page.getByRole('button', { name: 'Search', exact: true }).click();
   await page.locator('#lattice-results a').waitFor();
@@ -134,7 +158,7 @@ try {
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
   if (process.env.LATTICE_PREVIEW_DIR) await page.screenshot({ path: join(process.env.LATTICE_PREVIEW_DIR, 'wiki-starter-mobile.png') });
   assert.deepEqual(errors, []);
-  console.log(`${browser.version()}: fresh wiki starter, refusal/preflight, read-only check, typed schema, wikilinks, no-JS publishing metadata, desktop/mobile navigation and real WASM search passed (${root})`);
+  console.log(`${browser.version()}: fresh wiki starter, README authoring/rebuild, refusal/preflight, read-only check, typed schema, wikilinks, no-JS publishing metadata, desktop/mobile navigation and real WASM search passed (${root})`);
 } finally {
   if (browser) await browser.close();
   await new Promise(resolve => server.close(resolve));
