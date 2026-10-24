@@ -112,8 +112,10 @@ moon run cmd/main -- new posts --name my-first-post --config content/lattice.con
 
 String and enum stubs are quoted, including array members, so choices such as
 `"true"`, `"42"`, or `"draft # review"` retain their text in YAML. Review placeholders
-and run `lattice check` before publishing; references and date constraints can
-still require author input.
+and run `lattice check` before publishing. Numeric placeholders use the declared
+minimum, or zero capped by the maximum when no minimum is given; float values
+retain a decimal point. References and date constraints can still require author
+input.
 
 ## CLI Reference
 
