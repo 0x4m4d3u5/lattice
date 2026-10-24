@@ -1441,13 +1441,11 @@ pub fn scaffold_site(target_dir : String) -> Result[Unit, String] {
 ///|
 /// Generate a default stub value for a schema field type.
 ///
-/// Returns a YAML-appropriate string representation that satisfies the
-/// field type constraints. For bounded types (TInt, TFloat, TString, TDate),
-/// the stub is chosen to satisfy the declared bounds:
+/// Returns a raw placeholder value. Numeric stubs honor consistent bounds;
+/// dates and references can still require author input before validation.
 /// - TString(minlen=N) → "placeholder" (padded to satisfy minlen if needed)
-/// - TDate(after=X) → today's date or after, whichever is later
-/// - TInt(min=N) → N
-/// - TFloat(min=N) → N
+/// - TDate → today's date
+/// - TInt/TFloat → minimum when present, otherwise zero capped by maximum
 /// - TEnum → first allowed value
 pub fn stub_for_field_type(ft : @schema.FieldType, today : String) -> String {
   match ft {
@@ -1483,16 +1481,26 @@ pub fn stub_for_field_type(ft : @schema.FieldType, today : String) -> String {
       }
     }
     @schema.TDate(_, _) => today
-    @schema.TInt(min_val, _) =>
+    @schema.TInt(min_val, max_val) =>
       match min_val {
         Some(n) => n.to_string()
-        None => "0"
+        None =>
+          match max_val {
+            Some(n) if n < 0 => n.to_string()
+            _ => "0"
+          }
       }
-    @schema.TFloat(min_val, _) =>
-      match min_val {
-        Some(n) => n.to_string()
-        None => "0.0"
+    @schema.TFloat(min_val, max_val) => {
+      let value = match min_val {
+        Some(n) => n
+        None =>
+          match max_val {
+            Some(n) if n < 0.0 => n
+            _ => 0.0
+          }
       }
+      frontmatter_float(value)
+    }
     @schema.TBool => "false"
     @schema.TArray(_) => "[]"
     @schema.TOptional(inner) => stub_for_field_type(inner, today)
@@ -1501,6 +1509,34 @@ pub fn stub_for_field_type(ft : @schema.FieldType, today : String) -> String {
     @schema.TSlug => "example-slug"
     @schema.TDateTime(_, _) => "2026-01-01T00:00:00Z"
     @schema.TRef(_) => "example-slug"
+  }
+}
+
+///|
+/// Core's shortest Double string can omit the decimal point or use an exponent.
+/// Frontmatter distinguishes floats by a dot and accepts decimal notation only.
+/// Expand the core representation without rounding away small/large bounds.
+fn frontmatter_float(value : Double) -> String {
+  let raw = value.to_string()
+  match raw.split_once("e") {
+    None => if raw.contains(".") { raw } else { raw + ".0" }
+    Some((mantissa_view, exponent_view)) => {
+      let mantissa = mantissa_view.to_owned()
+      let sign = if mantissa.has_prefix("-") { "-" } else { "" }
+      let unsigned = mantissa.replace_all(old="-", new="")
+      let digits = unsigned.replace_all(old=".", new="")
+      let exponent = @strutil.parse_int(
+        exponent_view.to_owned().replace_all(old="+", new=""),
+      ).unwrap()
+      let point = unsigned.find(".").unwrap_or(unsigned.length()) + exponent
+      if point <= 0 {
+        sign + "0." + "0".repeat(-point) + digits
+      } else if point >= digits.length() {
+        sign + digits + "0".repeat(point - digits.length()) + ".0"
+      } else {
+        sign + digits[:point].to_owned() + "." + digits[point:].to_owned()
+      }
+    }
   }
 }
 

@@ -87,6 +87,40 @@ test "stub_for_field_type - TBool" {
 }
 
 ///|
+test "numeric stubs round trip with their declared bounds and types" {
+  let types : Array[@schema.FieldType] = [
+    @schema.TInt(None, Some(-1)),
+    @schema.TInt(None, Some(5)),
+    @schema.TInt(Some(-5), Some(-2)),
+    @schema.TFloat(Some(0.0), Some(5.0)),
+    @schema.TFloat(Some(1.0), Some(1.0)),
+    @schema.TFloat(None, Some(-0.5)),
+    @schema.TFloat(None, Some(-2.0)),
+    @schema.TFloat(None, Some(5.0)),
+    @schema.TFloat(Some(0.0000001), Some(0.0000002)),
+    @schema.TFloat(None, Some(-0.0000001)),
+    @schema.TFloat(Some(1.25e21), None),
+    @schema.TFloat(None, Some(-1.25e21)),
+  ]
+  for field_type in types {
+    let schema : @schema.Schema = {
+      name: "measurements",
+      fields: [
+        { name: "value", field_type, required: true },
+        { name: "values", field_type: @schema.TArray(field_type), required: true },
+        { name: "wrapped", field_type: @schema.TOptional(field_type), required: true },
+      ],
+    }
+    let source = @scaffold.generate_frontmatter(schema, "2026-04-01") + "\n\nA measurement.\n"
+    let frontmatter = @frontmatter.parse(source).unwrap()
+    assert_eq(@schema.validate(frontmatter, schema).length(), 0)
+  }
+  assert_eq(@scaffold.stub_for_field_type(@schema.TFloat(Some(0.0), None), "2026-04-01"), "0.0")
+  assert_eq(@scaffold.stub_for_field_type(@schema.TInt(None, Some(-1)), "2026-04-01"), "-1")
+  assert_eq(@scaffold.stub_for_field_type(@schema.TFloat(None, Some(5.0)), "2026-04-01"), "0.0")
+}
+
+///|
 test "stub_for_field_type - TEnum" {
   let result = @scaffold.stub_for_field_type(
     @schema.TEnum(["draft", "published"]),
