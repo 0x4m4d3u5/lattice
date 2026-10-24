@@ -106,9 +106,14 @@ moon run cmd/main -- build content dist --config content/lattice.conf
 ### Create a new post from the collection schema
 
 ```bash
-moon run cmd/main -- new posts my-first-post --config content/lattice.conf
+moon run cmd/main -- new posts --name my-first-post --config content/lattice.conf
 # Generates content/posts/my-first-post.md with correct frontmatter stubs
 ```
+
+String and enum stubs are quoted, including array members, so choices such as
+`"true"`, `"42"`, or `"draft # review"` retain their text in YAML. Review placeholders
+and run `lattice check` before publishing; references and date constraints can
+still require author input.
 
 ## CLI Reference
 

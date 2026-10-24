@@ -3,3 +3,7 @@ import {
   "kurisu/lattice/src/schema" @schema,
   "kurisu/lattice/src/strutil" @strutil,
 }
+
+import {
+  "kurisu/lattice/src/frontmatter" @frontmatter,
+} for "test"

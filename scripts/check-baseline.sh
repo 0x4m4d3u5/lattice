@@ -15,6 +15,8 @@ echo "Running copied getting-started workflow"
 node scripts/check-getting-started.mjs || status=1
 echo "Running machine-readable CLI check fixture"
 node scripts/check-cli-json.mjs || status=1
+echo "Running schema-driven new-content fixture"
+node scripts/check-new-content.mjs || status=1
 echo "Running CLI cross-note heading fixture"
 node scripts/check-wikilink-headings.mjs || status=1
 echo "Running final HTML wikilink fragment fixture"

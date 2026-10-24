@@ -169,7 +169,7 @@ test "generate_frontmatter - basic schema" {
   // Should start with ---
   assert_eq(lines[0], "---")
   // Required fields emitted as values
-  inspect(lines[1], content="title: placeholder")
+  inspect(lines[1], content="title: \"placeholder\"")
   inspect(lines[2], content="date: 2026-04-01")
   // Optional fields emitted as comments
   inspect(lines[3], content="# tags:")
@@ -197,7 +197,46 @@ test "generate_frontmatter - array field required" {
     .map(fn(sv) { sv.to_owned() })
     .collect()
   inspect(lines[1], content="items:")
-  inspect(lines[2], content="  - placeholder")
+  inspect(lines[2], content="  - \"placeholder\"")
+}
+
+///|
+test "generated enum scalars and array members preserve text through validation" {
+  for
+    value in [
+      "true", "42", "draft # review", "", " padded ", "say \"hello\"", "C:\\notes\\draft",
+      "line\nnext\tindent",
+    ] {
+    let schema : @schema.Schema = {
+      name: "notes",
+      fields: [
+        { name: "choice", field_type: @schema.TEnum([value]), required: true, },
+        {
+          name: "choices",
+          field_type: @schema.TArray(@schema.TEnum([value])),
+          required: true,
+        },
+        {
+          name: "wrapped",
+          field_type: @schema.TOptional(@schema.TEnum([value])),
+          required: true,
+        },
+        {
+          name: "wrapped_choices",
+          field_type: @schema.TOptional(@schema.TArray(@schema.TEnum([value]))),
+          required: true,
+        },
+      ],
+    }
+    let source = @scaffold.generate_frontmatter(schema, "2026-04-01") +
+      "\n\nA note.\n"
+    let frontmatter = @frontmatter.parse(source).unwrap()
+    match frontmatter.fields.get("choice") {
+      Some(@frontmatter.FStr(actual)) => assert_eq(actual, value)
+      _ => abort("expected the original string choice")
+    }
+    assert_eq(@schema.validate(frontmatter, schema).length(), 0)
+  }
 }
 
 ///|
