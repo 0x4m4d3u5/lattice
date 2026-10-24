@@ -241,6 +241,29 @@ If you prefer not to set `collections_file` in the config, pass it explicitly:
 lattice build ./content -o ./dist --config ./lattice.toml --collections ./collections.cfg
 ```
 
+## Machine-readable checks
+
+For an editor or CI consumer, run a one-shot check with JSON output:
+
+```bash
+lattice check ./content --config ./lattice.toml --format json
+```
+
+Stdout is one JSON object containing `violations` and `summary`, with no progress
+messages or ANSI colors. Exit status is `0` when clean and `1` when validation or
+project loading fails. Each violation includes `path`, nullable `line` and
+`column`, `kind`, and `message`; the summary counts violations by kind and file.
+Site configuration errors use kind `config` (`lattice explain E013`), collection
+configuration errors use `collections`, and missing/unreadable configuration
+files use `io`. Existing content violation kinds are unchanged. Inline collection
+errors point to the site config; a location is null when the parser has none.
+
+Checks do not create or update output, cache, or manifest files, including on
+startup failure. Default text output keeps its progress messages and diagnostics.
+This JSON contract applies to valid one-shot command invocations: argument/help
+output is still text, and `--watch` remains an interactive stream with lifecycle
+messages rather than a single JSON document.
+
 ## What the output looks like
 
 For a `posts` collection with one page, lattice writes clean URLs under `dist/`:

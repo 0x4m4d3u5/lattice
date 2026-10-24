@@ -46,6 +46,27 @@ fn print_diagnostic_main(d : @diagnostic.Diagnostic) -> Unit {
 }
 
 ///|
+fn print_setup_diagnostic(
+  options : CliOptions,
+  kind : @lint.ViolationType,
+  path : String,
+  d : @diagnostic.Diagnostic,
+) -> Unit {
+  if options.check_json {
+    println(
+      @lint.format_violations_json({
+        violations: [
+          { path, line: d.line, column: d.column, kind, message: d.message, },
+        ],
+        messages: [],
+      }),
+    )
+  } else {
+    print_diagnostic_main(d)
+  }
+}
+
+///|
 fn cli_error(message : String) -> @diagnostic.Diagnostic {
   @diagnostic.error(message)
 }
@@ -548,24 +569,31 @@ fn parse_positive_int(value : String) -> Int? {
 fn load_collections_for_watch(
   content_dir : String,
   collections_path : String?,
-) -> Result[Array[@collections.CollectionDef], @diagnostic.Diagnostic] {
+) -> Result[
+  Array[@collections.CollectionDef],
+  (@lint.ViolationType, @diagnostic.Diagnostic),
+] {
   match collections_path {
     None => Ok([@collections.default_posts_collection(content_dir)])
     Some(path) => {
       let source = @fs.read_file_to_string(path) catch {
         @fs.IOError(msg) =>
           return Err(
-            with_path(
-              cli_error("cannot read collections file: " + msg),
-              Some(path),
-              None,
-              None,
+            (
+              @lint.IOError,
+              with_path(
+                cli_error("cannot read collections file: " + msg),
+                Some(path),
+                None,
+                None,
+              ),
             ),
           )
       }
       match @collections.parse(source) {
         Ok(parsed) => Ok(parsed.definitions)
-        Err(err) => Err(collections_error_diagnostic(path, err))
+        Err(err) =>
+          Err((@lint.CollectionsError, collections_error_diagnostic(path, err)))
       }
     }
   }
@@ -625,7 +653,10 @@ fn load_cli_state(options : CliOptions) -> Result[CliState, Int] {
 
   let config_source = @fs.read_file_to_string(effective_config_path) catch {
     @fs.IOError(msg) => {
-      print_diagnostic_main(
+      print_setup_diagnostic(
+        options,
+        @lint.IOError,
+        effective_config_path,
         with_path(
           cli_error("cannot read config file: " + msg),
           Some(effective_config_path),
@@ -640,7 +671,12 @@ fn load_cli_state(options : CliOptions) -> Result[CliState, Int] {
   let site = match @config.parse(config_source) {
     Ok(c) => c
     Err(err) => {
-      print_diagnostic_main(config_error_diagnostic(effective_config_path, err))
+      print_setup_diagnostic(
+        options,
+        @lint.ConfigError,
+        effective_config_path,
+        config_error_diagnostic(effective_config_path, err),
+      )
       return Err(1)
     }
   }
@@ -672,7 +708,12 @@ fn load_cli_state(options : CliOptions) -> Result[CliState, Int] {
     match load_inline_collections(site.collections) {
       Ok(defs) => defs
       Err(diagnostic) => {
-        print_diagnostic_main(diagnostic)
+        print_setup_diagnostic(
+          options,
+          @lint.CollectionsError,
+          effective_config_path,
+          diagnostic,
+        )
         return Err(1)
       }
     }
@@ -683,8 +724,13 @@ fn load_cli_state(options : CliOptions) -> Result[CliState, Int] {
         build_config.collections_path,
       ) {
       Ok(defs) => defs
-      Err(diagnostic) => {
-        print_diagnostic_main(diagnostic)
+      Err((kind, diagnostic)) => {
+        print_setup_diagnostic(
+          options,
+          kind,
+          diagnostic.path.unwrap_or(effective_config_path),
+          diagnostic,
+        )
         return Err(1)
       }
     }
@@ -747,15 +793,15 @@ fn run_once(
   let start_ms = @watch.current_millis()
   if check_mode {
     let lint_result = @builder.check(build_config)
+    if check_json {
+      println(@lint.format_violations_json(lint_result))
+      return if @lint.has_violations(lint_result) { 1 } else { 0 }
+    }
     // Print accumulated progress messages
     let mut mi = 0
     while mi < lint_result.messages.length() {
       println(lint_result.messages[mi])
       mi = mi + 1
-    }
-    if check_json {
-      println(@lint.format_violations_json(lint_result))
-      return if @lint.has_violations(lint_result) { 1 } else { 0 }
     }
     let mut i = 0
     while i < lint_result.violations.length() {
@@ -983,6 +1029,9 @@ pub fn list_error_codes() -> String {
     "  E011  IOError                     — file read/write failed (permissions, missing path)\n",
   )
   buf.write_string("  E012  MissingImageAlt             — opt-in Markdown image alt-text policy\n")
+  buf.write_string(
+    "  E013  ConfigError                 — site configuration is invalid\n",
+  )
   buf.write_string("\n")
   buf.write_string(
     "Run `lattice explain <code>` for a full explanation of any code.",
@@ -994,7 +1043,7 @@ pub fn list_error_codes() -> String {
 /// Return a full human-readable explanation for an error code.
 ///
 /// Accepts:
-///   - "E001" through "E012" (case-insensitive)
+///   - "E001" through "E013" (case-insensitive)
 ///   - Full enum name like "BrokenWikilink" or "broken_wikilink" (case-insensitive)
 ///
 /// Returns None if the code is not recognized.
@@ -1191,6 +1240,14 @@ pub fn explain_error_code(code : String) -> String? {
       "  Image/figure shortcode alt values must be descriptive or exactly empty.\n" +
       "  Code examples, raw HTML, templates and other shortcode bodies are outside this policy.",
     )
+    "e013" | "configerror" =>
+      Some(
+        "E013  ConfigError  [error]\n\n" +
+        "  The site configuration has invalid syntax, missing required fields,\n" +
+        "  or an invalid value. Check key = value syntax and the title and base_url fields.\n" +
+        "  JSON checks report this as kind config with the config path and line when available.\n" +
+        "  A missing or unreadable file is an I/O error instead.",
+      )
     _ => None
   }
 }
@@ -1348,7 +1405,7 @@ fn run_main() -> Unit {
     } else {
       match load_collections_for_watch("./content", collections_path) {
         Ok(defs) => defs
-        Err(diagnostic) => {
+        Err((_, diagnostic)) => {
           print_diagnostic_main(diagnostic)
           @sys.exit(1)
           return

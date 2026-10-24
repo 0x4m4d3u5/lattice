@@ -495,6 +495,21 @@ test "of_lint_violation CollectionsError maps to E009" {
 }
 
 ///|
+test "of_lint_violation ConfigError preserves source location and explains E013" {
+  let diagnostic = @diagnostic.of_lint_violation({
+    path: "site.cfg",
+    line: Some(3),
+    column: None,
+    kind: @lint.ConfigError,
+    message: "invalid configuration",
+  })
+  assert_eq(diagnostic.code, Some("E013"))
+  assert_eq(diagnostic.path, Some("site.cfg"))
+  assert_eq(diagnostic.line, Some(3))
+  assert_true(diagnostic.note.unwrap().contains("configuration"))
+}
+
+///|
 test "of_lint_violation IOError maps to E011" {
   let v : @lint.LintViolation = {
     path: "i.md",
