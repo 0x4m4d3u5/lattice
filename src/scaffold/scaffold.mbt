@@ -1505,6 +1505,19 @@ pub fn stub_for_field_type(ft : @schema.FieldType, today : String) -> String {
 }
 
 ///|
+/// Serialize textual stubs as quoted YAML scalars. The raw stub API remains
+/// useful to callers, but bare YAML would reinterpret booleans/numbers and
+/// discard comments or surrounding whitespace in enum choices.
+fn frontmatter_stub(field_type : @schema.FieldType, today : String) -> String {
+  match field_type {
+    @schema.TOptional(inner) => frontmatter_stub(inner, today)
+    @schema.TString(_, _) | @schema.TEnum(_) =>
+      stub_for_field_type(field_type, today).to_json().stringify()
+    _ => stub_for_field_type(field_type, today)
+  }
+}
+
+///|
 /// Generate frontmatter text from a schema definition.
 ///
 /// Produces a YAML frontmatter block with stub values for all required fields.
@@ -1517,16 +1530,16 @@ pub fn generate_frontmatter(schema : @schema.Schema, today : String) -> String {
     let fdef = schema.fields[i]
     if fdef.required {
       // Emit required fields with stub values
-      let stub = stub_for_field_type(fdef.field_type, today)
+      let stub = frontmatter_stub(fdef.field_type, today)
       // For array values, emit a single-element array using the inner type's stub
       match fdef.field_type {
         @schema.TArray(inner) =>
           buf.write_string(
-            fdef.name + ":\n  - " + stub_for_field_type(inner, today) + "\n",
+            fdef.name + ":\n  - " + frontmatter_stub(inner, today) + "\n",
           )
         @schema.TOptional(@schema.TArray(inner)) =>
           buf.write_string(
-            fdef.name + ":\n  - " + stub_for_field_type(inner, today) + "\n",
+            fdef.name + ":\n  - " + frontmatter_stub(inner, today) + "\n",
           )
         _ => buf.write_string(fdef.name + ": " + stub + "\n")
       }
