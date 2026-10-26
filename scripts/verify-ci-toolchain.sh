@@ -5,7 +5,7 @@ set -euo pipefail
 MOON_HOME=$(realpath -m "$MOON_HOME")
 export MOON_HOME
 [[ "$(uname -ms)" == 'Linux x86_64' ]] || { echo 'Expected Linux x86_64' >&2; exit 1; }
-[[ "$(node --version)" == 'v26.10.0' ]] || { echo 'Expected Node 26.10.0' >&2; exit 1; }
+[[ "$(node --version)" == 'v26.12.1' ]] || { echo 'Expected Node 26.12.1' >&2; exit 1; }
 cd "$MOON_HOME"
 sha256sum --check --strict <<'HASHES'
 6da4919f45f4abf7c6d7f3cf8d9a457de77dca430d6fb811d21b27ae1ac8e11d  bin/moon

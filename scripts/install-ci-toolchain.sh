@@ -11,7 +11,7 @@ if [[ -e "$MOON_HOME" ]]; then
   exit
 fi
 [[ "$(uname -ms)" == 'Linux x86_64' ]] || { echo 'Expected Linux x86_64' >&2; exit 1; }
-[[ "$(node --version)" == 'v26.10.0' ]] || { echo 'Expected Node 26.10.0' >&2; exit 1; }
+[[ "$(node --version)" == 'v26.12.1' ]] || { echo 'Expected Node 26.12.1' >&2; exit 1; }
 work_dir=$(mktemp -d)
 staging_dir=''
 trap 'rm -rf "$work_dir"; [[ -z "$staging_dir" ]] || rm -rf "$staging_dir"' EXIT
