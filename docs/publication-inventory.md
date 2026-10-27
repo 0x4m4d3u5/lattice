@@ -83,3 +83,6 @@ The additive MoonBit API is `@builder.inventory(config)` returning
 `PublicationInventory`, with `format_inventory` and `format_inventory_json` for
 presentation. It never calls `OutputPlan::publish` and does not change `build`,
 `check`, `serve` or their runtime contracts.
+
+Compare two saved JSON inventories with [`inventory-diff`](inventory-comparison.md)
+to review planned HTML path additions/removals without inferring moves or anchors.
