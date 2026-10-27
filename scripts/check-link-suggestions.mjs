@@ -16,7 +16,7 @@ const config = join(root, 'site.cfg');
 writeFileSync(config, `title = Suggestions\nbase_url = https://example.test\ncollections_file = ${root}/collections.cfg\noutput_dir = ${out}\n`);
 const source = join(notes, 'author.md');
 writeFileSync(join(content, 'journal.md'), note('Overwritten authored index'));
-const targets = ['journl', 'guid', ' Guidee.md | manual ', 'guid#Setup|setup', 'guid#Removed', '#Setpu', 'plam', 'ab', 'zzzz', 'secre', 'note', 'bake'];
+const targets = ['journl', 'guid', ' Guidee.md | manual ', 'guid#Setup|setup', 'guid#Removed', '#Setpu', 'plam', 'ab', 'zzzz', 'secre', 'note', 'bake', 'guid|first', 'guid|second'];
 const original = note('Author', targets.map(x => '[[' + x + ']]').join('\n\n') + '\n\n`[[guid]]`');
 writeFileSync(source, original);
 const cli = fileURLToPath(new URL('../_build/js/debug/build/kurisu/lattice/cmd/main/main.js', import.meta.url));
@@ -32,7 +32,12 @@ assert.match(message('guid#Setup').message, /\[\[guide#Setup\|setup\]\]/);
 assert.match(message('plam').message, /\[\[plan\]\].*\[\[plum\]\]/);
 assert.match(message('note').message, /\[\[notes\]\]/);
 for (const target of ['journl', 'guid#Removed', '#Setpu', 'ab', 'zzzz', 'secre', 'bake']) assert.ok(!message(target).message.includes('Nearby valid targets'), target);
-assert.equal(violations.filter(v => v.message.startsWith('[[guid]]:')).length, 1, 'inline code is not a reference');
+const repeats = violations.filter(v => v.message.startsWith('[[guid]]:'));
+assert.equal(repeats.length, 3, 'inline code is not a reference');
+for (const label of ['first', 'second']) {
+  const line = 4 + 2 * targets.indexOf('guid|' + label);
+  assert.ok(repeats.find(v => v.line === line).message.includes('[[guide|' + label + ']]'), 'preserve each occurrence label');
+}
 assert.equal(json().raw, first.raw);
 const text = run(); assert.equal(text.status, 1); assert.ok(text.stdout.includes(message('guid').message));
 assert.equal(readFileSync(source, 'utf8'), original); assert.equal(existsSync(out), false);

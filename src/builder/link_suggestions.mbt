@@ -65,10 +65,16 @@ fn add_link_suggestions(
         if choices.is_empty() {
           continue
         }
+        let (line, column) = fragment_link_location(source.content, error.link)
+        if line is None || column is None {
+          continue
+        }
         let original = "[[" + error.link.target + "]]: " + error.message
         for index, violation in violations {
           if violation.kind == @lint.BrokenWikilink &&
             violation.path == source.path &&
+            violation.line == line &&
+            violation.column == column &&
             violation.message == original {
             violations[index] = {
               ..violation,
