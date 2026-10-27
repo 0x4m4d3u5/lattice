@@ -117,3 +117,46 @@ test "image-like opaque regions preserve following links and images" {
     )
   }
 }
+
+///|
+test "literal image labels destinations and shortcode parameters stay literal" {
+  assert_true(
+    @markdown.render("![Price $5](/price.png) costs $5", Map([])).contains(
+      "<img src=\"/price.png\" alt=\"Price $5\" />",
+    ),
+  )
+  for
+    source in [
+      "[A](/price$5) [Guide](/guide) end$", "Before {{< image src=\"/photo.png\" alt=\"![x](foo\" >}} [Guide](/guide) tail)",
+    ] {
+    assert_true(
+      @markdown.render(source, Map([])).contains("<a href=\"/guide\">Guide</a>"),
+    )
+  }
+  assert_eq(
+    @markdown.missing_image_alt_urls(
+      "Before {{< image src=\"/photo.png\" alt=\"![x](foo\" >}} ![](/blank.png) tail)",
+    ),
+    ["/blank.png"],
+  )
+}
+
+///|
+test "literal alt and reference tokens cannot hide later Markdown" {
+  for alt in ["Price $5", "`literal", "<span title='", "{{< literal"] {
+    let body = "[![" + alt + "](/thumb.png)](/full) [Guide](/guide) $5 ` >}}"
+    let html = @markdown.render(body, Map([]))
+    assert_true(html.contains("<a href=\"/full\"><img src=\"/thumb.png\""))
+    assert_true(html.contains("<a href=\"/guide\">Guide</a>"))
+  }
+  for
+    prefix in [
+      "[[![x](foo]]", "[^![x](foo]", "{{< callout >}} ![x](foo {{< /callout >}}",
+      "{{< invalid =\"![x](foo\" >}}",
+    ] {
+    assert_eq(
+      @markdown.missing_image_alt_urls(prefix + " ![](/blank.png) tail)"),
+      ["/blank.png"],
+    )
+  }
+}

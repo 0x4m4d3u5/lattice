@@ -366,13 +366,41 @@ fn link_destination_closes(s : String, from : Int, to : Int) -> Map[Int, Int] {
 }
 
 ///|
-/// Cache label closers within this inline slice. A complete inline image
-/// consumes its own label/destination without closing an enclosing link label.
-/// Other labels retain the existing first-unescaped-closer behavior.
+/// Literal image alt text ends at the first unescaped ]. Index candidates once
+/// so malformed image prefixes do not repeatedly scan the remaining slice.
+fn literal_label_closes(s : String, from : Int, to : Int) -> Map[Int, Int] {
+  let closes : Map[Int, Int] = Map([])
+  let pending : Array[Int] = []
+  let mut i = from
+  while i < to {
+    let c = @strutil.char_at(s, i)
+    if c == '\\' &&
+      i + 1 < to &&
+      @strutil.char_at(s, i + 1).is_ascii_punctuation() {
+      i = i + 2
+    } else {
+      if c == '[' {
+        pending.push(i)
+      }
+      if c == ']' {
+        for open in pending {
+          closes.set(open, i)
+        }
+        pending.clear()
+      }
+      i = i + 1
+    }
+  }
+  closes
+}
+
+///|
+/// Match labels in active inline text. Images consume literal alt/destination
+/// text; code, math, HTML, shortcodes and reference tokens remain opaque.
 fn link_label_closes(s : String, from : Int, to : Int) -> Map[Int, Int] {
   let closes : Map[Int, Int] = Map([])
   let pending : Array[Int] = []
-  let image_openers : Map[Int, Bool] = Map([])
+  let literal_labels = literal_label_closes(s, from, to)
   let html_ends = inline_html_tag_ends(s, from, to)
   let destinations = link_destination_closes(s, from, to)
   let mut i = from
@@ -383,8 +411,6 @@ fn link_label_closes(s : String, from : Int, to : Int) -> Map[Int, Int] {
       @strutil.char_at(s, i + 1).is_ascii_punctuation() {
       i = i + 2
     } else if c == '`' {
-      // Code is opaque: image-looking text must not skip active Markdown
-      // after the span. Use exactly the parser's delimiter-run rules.
       let start = backtick_run_end(s, i, to)
       let width = start - i
       let close = find_code_span_close(s, start, to, width)
@@ -394,28 +420,53 @@ fn link_label_closes(s : String, from : Int, to : Int) -> Map[Int, Int] {
     } else if c == '<' &&
       inline_opaque_angle_end(s, i, to, html_ends) is Some(end) {
       i = end
-    } else {
-      if c == '!' && i + 1 < to && @strutil.char_at(s, i + 1) == '[' {
-        image_openers.set(i + 1, true)
+    } else if c == '{' && i + 2 < to && @strutil.starts_with_at(s, i, "{{<") {
+      let close = @strutil.find_str(s, i + 3, ">}}", to)
+      if close >= 0 {
+        let raw = split_shortcode_params_raw(@strutil.substr(s, i + 3, close))
+        i = close + 3
+        if @shortcode.parse(raw) is Ok(call) && call.name == "callout" {
+          let closing = "{{< /callout >}}"
+          let end = @strutil.find_str(s, i, closing, to)
+          if end >= 0 {
+            i = end + closing.length()
+          }
+        }
+      } else {
+        i = i + 3
       }
+    } else if c == '[' && i + 1 < to && @strutil.char_at(s, i + 1) == '[' {
+      let close = @strutil.find_str(s, i + 2, "]]", to)
+      i = if close >= 0 { close + 2 } else { i + 2 }
+    } else if c == '[' && i + 1 < to && @strutil.char_at(s, i + 1) == '^' {
+      let close = @strutil.find_char(s, i + 2, ']', to)
+      i = if close >= 0 { close + 1 } else { i + 1 }
+    } else if c == '!' &&
+      i + 1 < to &&
+      @strutil.char_at(s, i + 1) == '[' &&
+      literal_labels.get(i + 1) is Some(close) &&
+      close + 1 < to &&
+      @strutil.char_at(s, close + 1) == '(' &&
+      destinations.get(close + 1) is Some(end) {
+      closes.set(i + 1, close)
+      i = end + 1
+    } else {
       if c == '[' {
         pending.push(i)
       }
       if c == ']' {
-        if pending.length() > 0 &&
-          image_openers.contains(pending[pending.length() - 1]) &&
-          i + 1 < to &&
-          @strutil.char_at(s, i + 1) == '(' &&
-          destinations.get(i + 1) is Some(end) {
-          let open = pending.pop().unwrap()
-          closes.set(open, i)
-          i = end + 1
-          continue
-        }
         for open in pending {
           closes.set(open, i)
         }
+        let had_label = pending.length() > 0
         pending.clear()
+        if had_label &&
+          i + 1 < to &&
+          @strutil.char_at(s, i + 1) == '(' &&
+          destinations.get(i + 1) is Some(end) {
+          i = end + 1
+          continue
+        }
       }
       i = i + 1
     }
