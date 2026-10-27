@@ -26,7 +26,7 @@ lattice uses a **two-pass build**:
 1. **Pass 1 — Collect & Index.** Walk markdown sources, compute slugs, and build a page index.
 2. **Pass 2 — Prepare & Publish.** Validate sources, resolve wikilinks, render pages and indexes, and snapshot static assets in memory. Publish only after preparation succeeds.
 
-The page index supports forward references. Unresolved wikilinks are errors in `check`, but warnings in `build`, which still emits the page. Validation or generation errors leave existing output, cache, and manifest unchanged; a failed first build creates no output. Predictable destination conflicts are checked before writing. Publication itself is not atomic: disk-write failures or interruption can leave partial output, and stale files can remain. See [build safety](docs/build-safety.md) for the exact boundary.
+The page index supports forward references. Unresolved wikilinks are errors in `check`, but warnings in `build`, which still emits the page. Validation or generation errors leave existing output, cache, and manifest unchanged; validation or generation failure on a first build creates no output. Predictable destination conflicts are checked before writing. The supported Node publisher stages all required bytes before replacing files individually. Staging failures preserve existing files; later replacement failures or interruption can leave mixed old/new output, and stale files can remain. Publication is not a whole-directory transaction. See [build safety](docs/build-safety.md) for the exact boundary.
 
 ### Structural Guarantees
 
@@ -120,7 +120,7 @@ python3 -m http.server 8000 --directory dist
 
 Open `http://localhost:8000/posts/my-first-post/`. Stop the server with Ctrl+C. Repeat check and build after edits; this server does not rebuild. These commands only prepare local output and start a local preview, without deploying it.
 
-The CLI reference below uses `lattice` as shorthand for an installed executable; from this source checkout, substitute `node "$LATTICE_CLI"`. The native-only `serve` command requires a working native compiler; it is not part of the verified JavaScript workflow.
+The CLI reference below uses `lattice` as shorthand for an installed executable; from this source checkout, substitute `node "$LATTICE_CLI"`. The native-only `serve` command is not available in the supported publication profile: non-JavaScript backends currently lack a tested replacement adapter. Use the local HTTP preview above.
 
 String and enum stubs are quoted, including array members, so choices such as
 `"true"`, `"42"`, or `"draft # review"` retain their text in YAML. Review placeholders
