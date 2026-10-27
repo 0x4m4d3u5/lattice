@@ -2656,12 +2656,21 @@ pub(all) struct TextSection {
 
 ///|
 /// Collect sections in the same rendering pass, preserving normal HTML and IDs.
+/// Optional section_offsets receives one UTF-16 heading start per section;
+/// preambles and generated footnotes have None. Offsets describe renderer origin,
+/// not a guarantee that a template publishes that heading.
 pub fn render_with_text_sections(
   body : String,
   wikilinks : Map[String, String],
+  section_offsets? : Array[Int?] = [],
 ) -> (RenderResult, Int?, Array[TextSection]) {
   let sections : Array[TextSection] = []
-  let (rendered, boundary) = render_document(body, wikilinks, Some(sections))
+  let (rendered, boundary) = render_document(
+    body,
+    wikilinks,
+    Some(sections),
+    section_offsets~,
+  )
   (rendered, boundary, sections)
 }
 
@@ -2670,6 +2679,7 @@ fn render_document(
   body : String,
   wikilinks : Map[String, String],
   sections : Array[TextSection]?,
+  section_offsets? : Array[Int?] = [],
 ) -> (RenderResult, Int?) {
   let preprocessed = preprocess_callout_next_line(body)
   let ls = lines_of(preprocessed)
@@ -2715,7 +2725,9 @@ fn render_document(
     rendered.html
   }
   if sections is Some(items) {
-    collect_text_sections(html_with_footnotes, heading_ranges, items)
+    collect_text_sections(
+      html_with_footnotes, heading_ranges, items, section_offsets,
+    )
   }
   (
     {
@@ -2736,6 +2748,7 @@ fn collect_text_sections(
   html : String,
   ranges : Array[(Int, Int)],
   sections : Array[TextSection],
+  section_offsets : Array[Int?],
 ) -> Unit {
   let offsets : Array[Int] = []
   for (start, end) in ranges {
@@ -2754,12 +2767,14 @@ fn collect_text_sections(
   if visible.is_empty() {
     if whole_text != "" {
       sections.push({ heading: "", body: whole_text, })
+      section_offsets.push(None)
     }
     return
   }
   let preamble = @strutil.strip_html_tags(html[:visible[0].0].to_owned())
   if preamble != "" {
     sections.push({ heading: "", body: preamble, })
+    section_offsets.push(None)
   }
   for i = 0; i < visible.length(); i = i + 1 {
     let (start, heading_end) = visible[i]
@@ -2782,6 +2797,7 @@ fn collect_text_sections(
     }
     if heading != "" || body != "" {
       sections.push({ heading, body, })
+      section_offsets.push(if generated { None } else { Some(start) })
     }
   }
 }

@@ -64,6 +64,19 @@ export function runSearchCases(search, assert) {
   const legacy = [{ title: 'Legacy', url: '/legacy/', tags: [], body: 'Archive recovery notes.' }];
   equal(run('recovery', [], 10, legacy).results.map(hit => [hit.url, hit.section, hit.snippet]), [['/legacy/', '', 'Archive recovery notes.']]);
   equal(run('recovery', [], 10, [{ ...legacy[0], sections: [] }]).results, []);
+  const targets = [{ title: 'Targets', url: '/targets/', tags: [], sections: [
+    { heading: 'Repeated', body: 'targetprobe', fragment: 'z-last' },
+    { heading: 'Repeated', body: 'targetprobe', fragment: 'a-first' },
+    { heading: 'Removed', body: 'targetprobe' },
+    { heading: 'Special', body: 'targetprobe', fragment: 'café & 100% #🌱' },
+    { heading: 'Empty', body: 'targetprobe', fragment: '' },
+    { heading: 'Malformed', body: 'targetprobe', fragment: 42 },
+  ] }];
+  const targetHits = run('targetprobe', [], 10, targets).results;
+  equal(targetHits.map(hit => hit.url), Array(6).fill('/targets/'));
+  equal(targetHits.map(hit => hit.fragment ?? null), ['z-last', 'a-first', null, 'café & 100% #🌱', null, null]);
+  equal(targetHits.map(hit => hit.section_index), [0, 1, 2, 3, 4, 5]);
+  equal(run('targetprobe', [], 10, [...targets, ...targets]).results.every(hit => !('fragment' in hit)), true);
   const late = '🌱 '.repeat(180) + 'recovery procedure ' + '🌱 '.repeat(180);
   const snippet = run('recovery', [], 10, [{ ...legacy[0], body: late }]).results[0].snippet;
   equal(snippet.includes('recovery procedure'), true);

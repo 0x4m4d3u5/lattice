@@ -1,7 +1,10 @@
 ///|
 /// Read actual start-tag attributes. The existing HTML scanner excludes comments,
 /// quoted attributes and raw/RCDATA text, including script's fake markup.
-fn published_html_fragments(html : String) -> Map[String, Bool] {
+fn published_html_fragments(
+  html : String,
+  on_tag? : (Int, String, String?, String?) -> Unit = fn(_, _, _, _) { () },
+) -> Map[String, Bool] {
   let starts : Array[Int] = []
   for i = 0; i < html.length(); i = i + 1 {
     if @strutil.char_at(html, i) == '<' {
@@ -39,6 +42,9 @@ fn published_html_fragments(html : String) -> Map[String, Bool] {
     }
     let tag_name = html[tag_start:pos].to_owned().to_lower()
     if closing {
+      if template_depth == 0 {
+        on_tag(starts[index], "/" + tag_name, None, None)
+      }
       if tag_name == "template" && template_depth > 0 {
         template_depth = template_depth - 1
       }
@@ -127,6 +133,7 @@ fn published_html_fragments(html : String) -> Map[String, Bool] {
       }
     }
     if pos < html.length() && @strutil.char_at(html, pos) == '>' {
+      on_tag(starts[index], tag_name, found_id, found_name)
       if found_id is Some(id) {
         ids.set(id, true)
       }
@@ -244,4 +251,101 @@ fn fragment_link_location(
     cursor = end + 2
   }
   (None, None)
+}
+
+///|
+/// Provenance comes from renderer offsets carried through verbatim template
+/// slots, never from matching heading labels or a second slug implementation.
+fn section_slot_offsets(
+  offsets : Array[Int?],
+  leading_h1_end : Int?,
+) -> Map[@template.TemplateSlot, Array[(Int, Int)]] {
+  let full : Array[(Int, Int)] = []
+  let trimmed : Array[(Int, Int)] = []
+  let cut = leading_h1_end.unwrap_or(0)
+  for index = 0; index < offsets.length(); index = index + 1 {
+    if offsets[index] is Some(offset) {
+      full.push((index, offset))
+      if offset >= cut {
+        trimmed.push((index, offset - cut))
+      }
+    }
+  }
+  Map([
+    (@template.Content, full),
+    (@template.Body, full),
+    (@template.BodyNoH1, trimmed),
+  ])
+}
+
+///|
+fn section_fragment_candidates(
+  html : String,
+  origins : Array[(Int, Int)],
+) -> Map[Int, String] {
+  let at : Map[Int, Int] = Map([])
+  for (index, offset) in origins {
+    at.set(offset, index)
+  }
+  let candidates : Map[Int, String] = Map([])
+  let mut select_depth = 0
+  let mut noscript_depth = 0
+  let mut plaintext = false
+  let _ = published_html_fragments(html, on_tag=fn(offset, tag, id, _) {
+    // These HTML parsing contexts can suppress heading elements even though the
+    // plaintext indexer's simpler scanner sees tags. Prefer a page citation.
+    match tag {
+      "select" => select_depth = select_depth + 1
+      "/select" => select_depth = (select_depth - 1).max(0)
+      "noscript" => noscript_depth = noscript_depth + 1
+      "/noscript" => noscript_depth = (noscript_depth - 1).max(0)
+      "plaintext" => plaintext = true
+      _ => ()
+    }
+    if select_depth == 0 &&
+      noscript_depth == 0 &&
+      !plaintext &&
+      at.get(offset) is Some(index) &&
+      id is Some(id) &&
+      ["h1", "h2", "h3", "h4", "h5", "h6"].contains(tag) &&
+      id != "" {
+      candidates.set(index, id)
+    }
+  })
+  unique_section_fragments(html, candidates)
+}
+
+///|
+fn unique_section_fragments(
+  html : String,
+  candidates : Map[Int, String],
+) -> Map[Int, String] {
+  let counts : Map[String, Int] = Map([])
+  let mut uncertain_entity = false
+  let _ = published_html_fragments(html, on_tag=fn(_, _, id, name) {
+    if id is Some(id) {
+      if id.contains("&") {
+        uncertain_entity = true
+      }
+      counts.set(id, counts.get(id).unwrap_or(0) + 1)
+    }
+    if name is Some(name) && Some(name) != id {
+      if name.contains("&") {
+        uncertain_entity = true
+      }
+      counts.set(name, counts.get(name).unwrap_or(0) + 1)
+    }
+  })
+  let result : Map[Int, String] = Map([])
+  // The shared scanner decodes basic/numeric entities, not every HTML named
+  // reference or missing-semicolon recovery. Uncertain IDs cannot prove uniqueness.
+  if uncertain_entity {
+    return result
+  }
+  for (index, id) in candidates {
+    if counts.get(id) == Some(1) {
+      result.set(index, id)
+    }
+  }
+  result
 }

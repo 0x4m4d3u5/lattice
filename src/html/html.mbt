@@ -540,7 +540,12 @@ pub fn render_feed_link_tag(title : String, feed_url : String) -> String {
 /// `meta.description` renders as a `<meta name="description">` tag.
 /// `meta.stylesheet` renders as a `<link rel="stylesheet">` tag.
 /// `body_html` is injected verbatim between `<body>` and `</body>`.
-pub fn render_page(meta : PageMeta, body_html : String) -> String {
+/// The optional callback receives its UTF-16 insertion offset.
+pub fn render_page(
+  meta : PageMeta,
+  body_html : String,
+  body_offset? : (Int) -> Unit = fn(_) { () },
+) -> String {
   let lang = if meta.lang.length() > 0 { meta.lang } else { "en" }
   let desc_tag = match meta.description {
     Some(d) =>
@@ -632,25 +637,24 @@ pub fn render_page(meta : PageMeta, body_html : String) -> String {
   let structured_data_script = render_structured_data_script(
     meta.structured_data,
   )
-  "<!doctype html>\n" +
-  "<html lang=\"" +
-  @strutil.escape_html_attr(lang) +
-  "\">\n" +
-  "<head>\n" +
-  "  <meta charset=\"utf-8\" />\n" +
-  "  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />\n" +
-  "  <title>" +
-  @strutil.escape_html_body(meta.title) +
-  "</title>\n" +
-  desc_tag +
-  social_tags +
-  structured_data_script +
-  style_tag +
-  "</head>\n" +
-  "<body>\n" +
-  body_html +
-  "</body>\n" +
-  "</html>\n"
+  let prefix = "<!doctype html>\n" +
+    "<html lang=\"" +
+    @strutil.escape_html_attr(lang) +
+    "\">\n" +
+    "<head>\n" +
+    "  <meta charset=\"utf-8\" />\n" +
+    "  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />\n" +
+    "  <title>" +
+    @strutil.escape_html_body(meta.title) +
+    "</title>\n" +
+    desc_tag +
+    social_tags +
+    structured_data_script +
+    style_tag +
+    "</head>\n" +
+    "<body>\n"
+  body_offset(prefix.length())
+  prefix + body_html + "</body>\n" + "</html>\n"
 }
 
 ///|

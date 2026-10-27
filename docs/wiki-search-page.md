@@ -138,8 +138,12 @@ Selected filters survive ASCII capitalization changes in a reloaded index,
 including when retrying search.
 Only the latest submitted query can update the results; submitting an empty
 query clears them. Search returns up to ten sections. Snippets and titles are
-inserted as text. HTTP and HTTPS citations use the exact returned URL, without
-adding heading fragments; other or malformed URLs remain non-navigable text.
+inserted as text. HTTP and HTTPS title links use the returned page URL plus an
+encoded publisher-verified fragment when available, opening the matching passage
+through native browser navigation. Older indexes and uncertain targets keep the
+page-only link; heading labels are never converted into guessed slugs. A same-page
+passage link closes mobile navigation before the browser scrolls to the target. Other or
+malformed URLs remain non-navigable text.
 Explicit `sections: []` entries stay excluded. An unavailable or malformed index,
 unsupported runtime or worker failure shows a retry control. Retry reloads the
 index and starts a fresh worker; queries reuse that worker until failure or

@@ -22,9 +22,10 @@ published collection members, root pages and standalone pages.
 
 Built content entries also include `headings`, an array of Markdown section
 headings (levels 2–6) in document order. Each object contains `level`, `id` and plain `text`. Form a
-section citation by appending `#` and `id` to the entry's `url`; use the supplied
-ID rather than regenerating it from text, because duplicate headings receive
-numbered IDs. The catalog includes nested list and blockquote headings and is
+Markdown-body citation by appending `#` and `id` to the entry's `url`, but only
+when the template preserves that heading. For verified published passage targets,
+use the optional `sections[].fragment` described in [section search](section-search.md).
+Do not regenerate IDs from text: duplicate headings receive numbered IDs. The catalog includes nested list and blockquote headings and is
 independent of the page's `toc` and `toc_depth` settings.
 
 These headings describe the Markdown body, including on cache-hit rebuilds.

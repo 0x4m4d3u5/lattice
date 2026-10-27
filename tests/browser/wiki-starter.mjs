@@ -141,14 +141,14 @@ try {
   await page.getByRole('searchbox').fill('copperleaf');
   await page.getByRole('button', { name: 'Search', exact: true }).click();
   await page.locator('#lattice-results a').waitFor();
-  assert.equal(await page.locator('#lattice-results a').getAttribute('href'), urlFor('Field journal'));
+  assert.equal(await page.locator('#lattice-results a').getAttribute('href'), urlFor('Field journal') + '#first-observation');
   await page.locator('#lattice-results a').click(); await ready();
   assert.equal(await page.locator('article > header > h1').textContent(), 'Field journal');
   assert.ok((await page.locator('article').textContent()).includes('copperleaf'));
   await page.getByRole('searchbox').fill('reproducible');
   await page.getByRole('button', { name: 'Search', exact: true }).click();
   await page.locator('#lattice-results a').waitFor();
-  assert.equal(await page.locator('#lattice-results a').getAttribute('href'), urlFor('Publishing notes'));
+  assert.equal(await page.locator('#lattice-results a').getAttribute('href'), urlFor('Publishing notes') + '#check-before-publishing');
   await page.locator('#lattice-results a').click(); await ready();
   assert.equal(await page.locator('article > header > h1').textContent(), 'Publishing notes');
   if (process.env.LATTICE_PREVIEW_DIR) {

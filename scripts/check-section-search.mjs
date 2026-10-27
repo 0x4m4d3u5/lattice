@@ -63,28 +63,28 @@ const build = (flags = []) => {
 };
 const expected = [
   { heading: 'Operations', body: 'Scope: production infrastructure.' },
-  { heading: 'Backups', body: 'Snapshot the volume nightly. Keep encrypted copies offsite.' },
-  { heading: 'Recovery drills', body: 'Restore a backup into an isolated cluster. Verify checksums before promotion. Quoted reminder Practice regularly.' },
-  { heading: 'Recovery drills', body: 'Record elapsed time after each exercise. ## This is example code' },
+  { heading: 'Backups', fragment: 'backups', body: 'Snapshot the volume nightly. Keep encrypted copies offsite.' },
+  { heading: 'Recovery drills', fragment: 'recovery-drills', body: 'Restore a backup into an isolated cluster. Verify checksums before promotion. Quoted reminder Practice regularly.' },
+  { heading: 'Recovery drills', fragment: 'recovery-drills-2', body: 'Record elapsed time after each exercise. ## This is example code' },
 ];
 const verify = (drafts = false) => {
   const index = JSON.parse(readFileSync(join(output, 'content-index.json'), 'utf8'));
   const ops = index.find(entry => entry.title === 'Operations handbook');
   assert.deepEqual(ops.sections, expected); // Independent boundaries and rendered plaintext.
   assert.deepEqual(index.find(entry => entry.url === '/').sections, [{ heading: '', body: 'Introductory notes.' }]);
-  assert.deepEqual(index.find(entry => entry.url === '/guide/').sections, [{ heading: 'Preparation', body: 'Assign a commander. Check database backups.' }]);
+  assert.deepEqual(index.find(entry => entry.url === '/guide/').sections, [{ heading: 'Preparation', fragment: 'preparation', body: 'Assign a commander. Check database backups.' }]);
   assert.ok(index.filter(entry => entry.url === '/posts/').every(entry => entry.sections.length === 0));
   assert.equal(index.some(entry => entry.title === 'Hidden'), drafts);
   assert.deepEqual(index.find(entry => entry.url === '/comments/').sections, []);
   assert.deepEqual(index.find(entry => entry.url === '/closed/').sections, [
-    { heading: '', body: 'Before.' }, { heading: 'Public', body: 'visible' },
+    { heading: '', body: 'Before.' }, { heading: 'Public', fragment: 'public', body: 'visible' },
   ]);
   assert.ok(!JSON.stringify(index.map(entry => entry.sections)).includes('privatemarker'));
   assert.deepEqual(index.find(entry => entry.url === '/references/').sections.map(section => section.heading), ['Recovery', 'Footnotes']);
   const unfinished = index.find(entry => entry.url === '/unfinished/');
   assert.deepEqual(unfinished.sections, [
     { heading: '', body: '$$ Preamble retained.' },
-    { heading: 'Preserved', body: 'Unfinishedmarker read the checklist. [[missing]]' },
+    { heading: 'Preserved', fragment: 'preserved', body: 'Unfinishedmarker read the checklist. [[missing]]' },
   ]);
   assert.ok(unfinished.links.some(link => link.url === '/guide/'));
   const html = readFileSync(join(output, 'unfinished/index.html'), 'utf8');

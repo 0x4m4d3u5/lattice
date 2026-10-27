@@ -236,23 +236,60 @@ pub fn search_content(
     Ok(documents) => documents
     Err(message) => return search_response([], Some(message))
   }
-  search_response(retrieve_sections(documents, query, tags, limit), None)
+  // Keep canonical page URLs and ranking unchanged. Ambiguous duplicate page
+  // records deliberately retain page-only citations.
+  let fragments : Map[String, Map[Int, String]] = Map([])
+  let seen : Map[String, Bool] = Map([])
+  if index is Array(entries) {
+    for entry in entries {
+      if entry is Object(fields) && fields.get("url") is Some(String(url)) {
+        if seen.contains(url) {
+          fragments.remove(url)
+          continue
+        }
+        seen.set(url, true)
+        let items : Map[Int, String] = Map([])
+        if fields.get("sections") is Some(Array(sections)) {
+          for i = 0; i < sections.length(); i = i + 1 {
+            if sections[i] is Object(section) &&
+              section.get("fragment") is Some(String(fragment)) &&
+              fragment != "" {
+              items.set(i, fragment)
+            }
+          }
+        }
+        fragments.set(url, items)
+      }
+    }
+  }
+  search_response(
+    retrieve_sections(documents, query, tags, limit),
+    None,
+    fragments~,
+  )
 }
 
 ///|
-fn search_response(hits : Array[SectionHit], error : String?) -> String {
+fn search_response(
+  hits : Array[SectionHit],
+  error : String?,
+  fragments? : Map[String, Map[Int, String]] = Map([]),
+) -> String {
   let results = hits.map(fn(hit) {
-    Json::object(
-      Map([
-        ("title", Json::string(hit.title)),
-        ("url", Json::string(hit.url)),
-        ("tags", Json::array(hit.tags.map(Json::string))),
-        ("section", Json::string(hit.section)),
-        ("section_index", Json::number(hit.section_index.to_double())),
-        ("snippet", Json::string(hit.snippet)),
-        ("score", Json::number(hit.score.to_double())),
-      ]),
-    )
+    let fields = Map([
+      ("title", Json::string(hit.title)),
+      ("url", Json::string(hit.url)),
+      ("tags", Json::array(hit.tags.map(Json::string))),
+      ("section", Json::string(hit.section)),
+      ("section_index", Json::number(hit.section_index.to_double())),
+      ("snippet", Json::string(hit.snippet)),
+      ("score", Json::number(hit.score.to_double())),
+    ])
+    if fragments.get(hit.url) is Some(items) &&
+      items.get(hit.section_index) is Some(fragment) {
+      fields.set("fragment", Json::string(fragment))
+    }
+    Json::object(fields)
   })
   Json::object(
     Map([

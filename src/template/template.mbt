@@ -932,6 +932,22 @@ priv enum LoopCtx {
 }
 
 ///|
+/// The pinned StringBuilder has no public length accessor. Count appended UTF-16
+/// units alongside its existing buffer without repeatedly materializing output.
+priv struct TemplateOutput {
+  buffer : StringBuilder
+  mut length : Int
+  origins : Map[TemplateSlot, Array[(Int, Int)]]
+  emitted : Array[(Int, Int)]
+}
+
+///|
+fn TemplateOutput::write_string(self : TemplateOutput, text : String) -> Unit {
+  self.buffer.write_string(text)
+  self.length = self.length + text.length()
+}
+
+///|
 /// Recursive helper that renders an array of `TemplatePart`s into `out`.
 ///
 /// `strict` controls error behaviour:
@@ -948,7 +964,7 @@ fn render_body_parts(
   page_field_arrays : Map[String, Array[String]],
   loop_ctx : LoopCtx,
   strict : Bool,
-  out : StringBuilder,
+  out : TemplateOutput,
 ) -> Result[Unit, TemplateError] {
   let mut i = 0
   while i < parts.length() {
@@ -956,7 +972,17 @@ fn render_body_parts(
       Text(t) => out.write_string(t)
       Slot(slot, filters) =>
         match slots.get(slot) {
-          Some(value) => out.write_string(apply_filters(value, filters))
+          Some(value) => {
+            let rendered = apply_filters(value, filters)
+            if rendered == value {
+              for (key, offset) in out.origins.get(slot).unwrap_or([]) {
+                if offset >= 0 && offset < value.length() {
+                  out.emitted.push((key, out.length + offset))
+                }
+              }
+            }
+            out.write_string(rendered)
+          }
           None =>
             if strict {
               return Err(MissingRequiredSlot(slot))
@@ -1142,6 +1168,8 @@ fn render_parts(
   data_store : @data.DataStore?,
   page_fields : Map[String, String],
   page_field_arrays : Map[String, Array[String]],
+  slot_offsets? : Map[TemplateSlot, Array[(Int, Int)]] = Map([]),
+  rendered_offsets? : Array[(Int, Int)] = [],
 ) -> Result[String, TemplateError] {
   // Validate required slots upfront
   let mut i = 0
@@ -1154,7 +1182,12 @@ fn render_parts(
     i = i + 1
   }
 
-  let out = StringBuilder()
+  let out : TemplateOutput = {
+    buffer: StringBuilder(),
+    length: 0,
+    origins: slot_offsets,
+    emitted: rendered_offsets,
+  }
   match
     render_body_parts(
       template.parts,
@@ -1166,7 +1199,7 @@ fn render_parts(
       true,
       out,
     ) {
-    Ok(_) => Ok(out.to_string())
+    Ok(_) => Ok(out.buffer.to_string())
     Err(e) => Err(e)
   }
 }
@@ -1194,16 +1227,22 @@ pub fn render_template(
 
 ///|
 /// Render a parsed template with both standard slots and data slots.
+/// Optional slot offsets carry caller keys and UTF-16 positions through verbatim
+/// insertions, conditionals, loops and layouts. Changed filter output drops its
+/// offsets. Read rendered_offsets only on success; no marker text enters HTML.
 pub fn render_template_with_data(
   template : Template,
   slots : Map[TemplateSlot, String],
   data_store : @data.DataStore,
   page_fields : Map[String, String],
   page_field_arrays : Map[String, Array[String]],
+  slot_offsets? : Map[TemplateSlot, Array[(Int, Int)]] = Map([]),
+  rendered_offsets? : Array[(Int, Int)] = [],
 ) -> Result[String, TemplateError] {
   // If template has a layout, render child first, then render layout with body
   match template.layout {
     Some(layout) => {
+      let child_offsets : Array[(Int, Int)] = []
       // Render the child template
       let child_output = match
         render_parts(
@@ -1212,6 +1251,8 @@ pub fn render_template_with_data(
           Some(data_store),
           page_fields,
           page_field_arrays,
+          slot_offsets~,
+          rendered_offsets=child_offsets,
         ) {
         Ok(output) => output
         Err(e) => return Err(e)
@@ -1224,6 +1265,11 @@ pub fn render_template_with_data(
       }
       layout_slots.set(Body, child_output)
 
+      let layout_offsets = Map([])
+      for key, offsets in slot_offsets {
+        layout_offsets.set(key, offsets)
+      }
+      layout_offsets.set(Body, child_offsets)
       // Render layout with all slots including body
       render_parts(
         layout,
@@ -1231,6 +1277,8 @@ pub fn render_template_with_data(
         Some(data_store),
         page_fields,
         page_field_arrays,
+        slot_offsets=layout_offsets,
+        rendered_offsets~,
       )
     }
     None =>
@@ -1240,6 +1288,8 @@ pub fn render_template_with_data(
         Some(data_store),
         page_fields,
         page_field_arrays,
+        slot_offsets~,
+        rendered_offsets~,
       )
   }
 }

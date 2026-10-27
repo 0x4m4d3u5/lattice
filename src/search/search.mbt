@@ -183,8 +183,15 @@ pub fn render_content_index_with_sections(
   headings : Map[String, Array[@markdown.TocEntry]],
   links : Map[String, Array[@wikilink.ResolvedWikilink]],
   sections : Map[String, Array[@markdown.TextSection]],
+  fragments? : Map[String, Map[Int, String]] = Map([]),
 ) -> String {
-  render_content_entries(entries, Some(headings), Some(links), Some(sections))
+  render_content_entries(
+    entries,
+    Some(headings),
+    Some(links),
+    Some(sections),
+    fragments~,
+  )
 }
 
 ///|
@@ -193,6 +200,7 @@ fn render_content_entries(
   headings : Map[String, Array[@markdown.TocEntry]]?,
   links : Map[String, Array[@wikilink.ResolvedWikilink]]?,
   sections : Map[String, Array[@markdown.TextSection]]?,
+  fragments? : Map[String, Map[Int, String]] = Map([]),
 ) -> String {
   // Generated indexes overwrite authored pages at shared URLs. Do not advertise
   // authored navigation for any entry whose URL is occupied by such an index.
@@ -285,6 +293,11 @@ fn render_content_entries(
         @strutil.write_json_string(buf, section.heading)
         buf.write_string(", \"body\": ")
         @strutil.write_json_string(buf, section.body)
+        if fragments.get(entry.url) is Some(items) &&
+          items.get(i) is Some(fragment) {
+          buf.write_string(", \"fragment\": ")
+          @strutil.write_json_string(buf, fragment)
+        }
         buf.write_char('}')
       }
       buf.write_char(']')
