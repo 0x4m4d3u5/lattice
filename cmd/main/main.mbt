@@ -1153,7 +1153,7 @@ pub fn explain_error_code(code : String) -> String? {
     "e004" | "brokenwikilink" =>
       Some(
         "E004  BrokenWikilink  [error]\n\n" +
-        "  A wikilink target [[slug]] could not be resolved against the page index.\n\n" +
+        "  A wikilink page target or published heading fragment could not be resolved.\n\n" +
         "  Causes:\n" +
         "    • [[target]] appears in a .md file but no page with that slug exists\n" +
         "    • The target page may have been deleted or renamed since the link was written\n" +
@@ -1161,7 +1161,13 @@ pub fn explain_error_code(code : String) -> String? {
         "  Fix:\n" +
         "    • Run `lattice check` to see every broken wikilink with file:line:col locations\n" +
         "    • Ensure the target .md file exists in the content directory\n" +
-        "    • Use the exact slug (filename without extension, lowercased, hyphens only)\n\n" +
+        "    • Use a resolvable page slug and an existing published heading fragment\n\n" +
+        "  Nearby target suggestions:\n" +
+        "    • Check may offer up to three valid wikilinks for a one-character page typo\n" +
+        "    • Choose the intended page; tied suggestions are not automatic corrections\n" +
+        "    • Labels and fragments are retained only when the suggested link validates\n" +
+        "    • Excluded drafts, static overwrites and incomplete plans are not recommended\n" +
+        "    • No suggestions does not mean there is no intended target; inspect the inventory\n\n" +
         "  Example:\n" +
         "    content/posts/about.md:5:1: [[missing-page]]\n" +
         "    → E004: target 'missing-page' not found in page index",
