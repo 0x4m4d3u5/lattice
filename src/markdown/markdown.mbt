@@ -376,7 +376,7 @@ fn inline_opaque_angle_end(
   if name < to {
     let c = @strutil.char_at(s, name)
     if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') {
-      if tags.get(start) is Some(end) && end > start {
+      if tags.get(start) is Some(end) && end > start && end < to {
         return Some(end + 1)
       }
     }
@@ -415,7 +415,7 @@ fn link_destination_closes(s : String, from : Int, to : Int) -> Map[Int, Int] {
 
 ///|
 /// Literal image alt text ends at the first unescaped ]. Index candidates once
-/// so malformed image prefixes do not repeatedly scan the remaining slice.
+/// and opaque openers so malformed candidates do not rescan the remaining slice.
 fn literal_label_closes(s : String, from : Int, to : Int) -> Map[Int, Int] {
   let closes : Map[Int, Int] = Map([])
   let pending : Array[Int] = []
@@ -427,7 +427,14 @@ fn literal_label_closes(s : String, from : Int, to : Int) -> Map[Int, Int] {
       @strutil.char_at(s, i + 1).is_ascii_punctuation() {
       i = i + 2
     } else {
-      if c == '[' {
+      if c == '[' ||
+        c == '`' ||
+        c == '$' ||
+        c == '<' ||
+        c == '*' ||
+        c == '_' ||
+        c == '~' ||
+        c == '{' {
         pending.push(i)
       }
       if c == ']' {
@@ -455,33 +462,47 @@ fn link_label_closes(s : String, from : Int, to : Int) -> Map[Int, Int] {
   let mut i = from
   while i < to {
     let c = @strutil.char_at(s, i)
+    let label_to = if pending.length() > 0 {
+      literal_labels.get(i).unwrap_or(to)
+    } else {
+      to
+    }
     if c == '\\' &&
       i + 1 < to &&
       @strutil.char_at(s, i + 1).is_ascii_punctuation() {
       i = i + 2
     } else if c == '`' {
-      let start = backtick_run_end(s, i, to)
+      let start = backtick_run_end(s, i, label_to)
       let width = start - i
-      let close = find_code_span_close(s, start, to, width)
+      let close = find_code_span_close(s, start, label_to, width)
       i = if close >= 0 { close + width } else { start }
     } else if c == '*' ||
       c == '_' ||
       (c == '~' && i + 1 < to && @strutil.char_at(s, i + 1) == '~') {
-      let (_, _, end) = inline_format_span(s, i, to, exhausted_underscores)
+      let (_, _, end) = inline_format_span(
+        s,
+        i,
+        label_to,
+        if label_to < to {
+          Map([])
+        } else {
+          exhausted_underscores
+        },
+      )
       i = end
-    } else if c == '$' && inline_math_close(s, i, to) is Some(close) {
+    } else if c == '$' && inline_math_close(s, i, label_to) is Some(close) {
       i = close + 1
     } else if c == '<' &&
-      inline_opaque_angle_end(s, i, to, html_ends) is Some(end) {
+      inline_opaque_angle_end(s, i, label_to, html_ends) is Some(end) {
       i = end
     } else if c == '{' && i + 2 < to && @strutil.starts_with_at(s, i, "{{<") {
-      let close = @strutil.find_str(s, i + 3, ">}}", to)
+      let close = @strutil.find_str(s, i + 3, ">}}", label_to)
       if close >= 0 {
         let raw = split_shortcode_params_raw(@strutil.substr(s, i + 3, close))
         i = close + 3
         if @shortcode.parse(raw) is Ok(call) && call.name == "callout" {
           let closing = "{{< /callout >}}"
-          let end = @strutil.find_str(s, i, closing, to)
+          let end = @strutil.find_str(s, i, closing, label_to)
           if end >= 0 {
             i = end + closing.length()
           }

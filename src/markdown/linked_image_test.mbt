@@ -179,3 +179,16 @@ test "opaque matching respects recursive formatting slices" {
     }
   }
 }
+
+///|
+test "label formatting cannot consume content beyond the link label" {
+  for
+    opener in ["Price $5", "`code", "<span title='", "*text", "_text", "~~text"] {
+    let html = @markdown.render(
+      "[" + opener + "](/price) [Guide](/guide) $5 ` > * _ ~~",
+      Map([]),
+    )
+    assert_true(html.contains("href=\"/price\""))
+    assert_true(html.contains("href=\"/guide\""))
+  }
+}
