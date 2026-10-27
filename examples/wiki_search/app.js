@@ -60,6 +60,17 @@ navigation.addEventListener('keydown', event => {
     setNavigation(false); toggle.focus({ preventScroll: true });
   }
 });
+navigation.addEventListener('click', event => {
+  if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+  const link = event.target.closest('a[href]');
+  if (!link || link.target || link.hasAttribute('download')) return;
+  const target = new URL(link.href);
+  if (target.origin === location.origin && target.pathname === location.pathname && target.search === location.search && target.hash) {
+    // Native same-document navigation does not reload the page/reset the menu.
+    // Reveal the article before the browser scrolls to its published target.
+    setNavigation(false, false);
+  }
+});
 document.querySelector('.skip').addEventListener('click', () => setNavigation(false, false));
 const mobileLayout = window.matchMedia('(max-width: 800px)');
 let currentMobileLayout = mobileLayout.matches;
@@ -174,6 +185,10 @@ function renderHits(hits) {
       const url = new URL(hit.url, document.baseURI);
       if (url.protocol === 'https:' || url.protocol === 'http:') {
         title.setAttribute('href', hit.url);
+        if (typeof hit.fragment === 'string' && hit.fragment && !url.hash) {
+          // Only publisher-supplied targets are used; never slug section labels.
+          title.setAttribute('href', `${hit.url}#${encodeURIComponent(hit.fragment)}`);
+        }
       }
     } catch { /* Invalid citations remain text, without disabling other hits. */ }
     title.textContent = hit.title;

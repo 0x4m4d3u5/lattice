@@ -13,7 +13,9 @@ inside those states stay within their enclosing passage rather than becoming
 section labels. This preserves existing whole-body extraction semantics and
 is not a browser visibility policy or sanitizer. Visible appended footnote
 definitions form a generated passage labeled `Footnotes`, cited at the page URL.
-Duplicate headings retain separate positions.
+Duplicate headings retain separate positions. A section may also have a
+`fragment` string when its originating Markdown heading survives publication
+with a unique HTML ID. Preambles and generated footnotes have no fragment.
 Generated navigation pages and sources superseded by generated output have an
 empty sections array and are excluded from retrieval.
 
@@ -29,6 +31,7 @@ limit)` directly with an emitted index. The latter returns JSON:
     "tags": ["Reliability", "Database"],
     "section": "Recovery drills",
     "section_index": 2,
+    "fragment": "recovery-drills",
     "snippet": "Restore a backup into an isolated cluster.",
     "score": 12
   }],
@@ -36,10 +39,24 @@ limit)` directly with an emitted index. The latter returns JSON:
 }
 ```
 
-`section_index` is zero-based within that page. Citations use the canonical
-**page URL**, without inventing heading fragments: templates can omit headings
-or their IDs. The section name and snippet identify the passage. Caller-supplied
-indexes must supply valid published URLs; retrieval does not verify URLs online.
+`section_index` is zero-based within that page. `url` remains the canonical
+**page URL**, preserving existing consumers and ranking. Results optionally
+include `fragment` copied from the matching indexed section. The bundled reader
+appends a URL-encoded fragment to the title link; without it, navigation remains
+page-only. A heading label or TOC position is never used to guess a target.
+
+The publisher tracks top-level heading offsets in the Markdown rendering pass
+and carries them through verbatim template slots, includes and layouts. It checks
+actual HTML start tags and ID uniqueness, then applies final output ownership.
+Removed leading H1s, omitted/transformed content, comments, raw-text/inert template
+content, duplicate/uncertain IDs and generated/static replacements do not acquire targets.
+Nested headings still consume duplicate-ID numbers without becoming sections.
+Fresh, cached and forced builds use the same provenance. No marker attributes are
+added to published HTML and no cache format changes are needed.
+
+Old indexes, absent/empty/non-string fragments, and ambiguous duplicate URL records
+retain page-only results. Caller-supplied indexes must supply valid published
+URLs and fragment IDs; retrieval does not verify them online.
 
 The portable example exports `search_content` alongside `render_note` on JS and
 WASM GC. After `bash scripts/check-wasm-note.sh`, a JS host can use:

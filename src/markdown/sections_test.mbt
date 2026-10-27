@@ -126,3 +126,21 @@ test "a heading opening raw text stays inside the enclosing passage" {
     @strutil.strip_html_tags(rendered.html),
   )
 }
+///|
+test "section origin offsets follow rendered headings including nested numbering" {
+  let offsets : Array[Int?] = []
+  let (rendered, _, sections) = @markdown.render_with_text_sections(
+    "🌱 Preamble.\n\n# Same\n\n> ## Same\n> Nested.\n\n## Same\n\nLast.[^1]\n\n[^1]: Reference.\n",
+    Map([]),
+    section_offsets=offsets,
+  )
+  assert_eq(offsets.length(), sections.length())
+  assert_eq(offsets[0], None)
+  assert_eq(offsets[3], None)
+  assert_true(
+    rendered.html[offsets[1].unwrap():].has_prefix("<h1 id=\"same\">"),
+  )
+  assert_true(
+    rendered.html[offsets[2].unwrap():].has_prefix("<h2 id=\"same-3\">"),
+  )
+}

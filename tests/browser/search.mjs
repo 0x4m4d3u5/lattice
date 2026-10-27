@@ -47,6 +47,7 @@ for (const name of ['index.html', 'app.js', 'worker.js', 'host.js', 'renderer.wa
 // and explicit exclusion. Normal published note entries remain untouched.
 const entries = JSON.parse(readFileSync(join(output, 'content-index.json'), 'utf8'));
 assert.deepEqual(entries.find(entry => entry.title === 'Retired note').sections, []);
+entries.push({ title: 'Encoded fragment', url: '/encoded/', tags: [], sections: [{ heading: 'Special', body: 'encodedfragmentprobe', fragment: 'café & 100% #🌱' }] });
 entries.push({ title: 'External', url: 'https://example.org/note/', tags: [], sections: [{ heading: '', body: 'externalpreviewprobe' }] });
 entries.push({ title: 'Excluded', url: '/excluded/', tags: [], body: 'exclusionprobe', sections: [] });
 for (const url of ['javascript:window.hacked=true', 'data:text/html,bad', 'http://[']) {
@@ -124,7 +125,7 @@ try {
     await page.getByRole('button', { name: 'Search', exact: true }).click();
   };
   const complete = () => page.waitForFunction(() => document.querySelector('#lattice-results').getAttribute('aria-busy') === 'false');
-  const urls = () => page.locator('#lattice-results h2 a').evaluateAll(links => links.map(link => link.getAttribute('href')));
+  const urls = () => page.locator('#lattice-results h2 a').evaluateAll(links => links.map(link => link.getAttribute('href')?.split('#')[0] ?? null));
   const unavailable = 'Search is unavailable. Retry loading search.';
   await page.goto(`${origin}/wiki/static/search/`);
   await status('Loading search…');
@@ -181,6 +182,8 @@ try {
 
   await query('recovery'); await complete();
   const expected = ['/notes/ops/', '/notes/guide/', '/notes/model/'];
+  assert.deepEqual(await page.locator('#lattice-results h2 a').evaluateAll(links => links.map(link => link.getAttribute('href'))),
+    ['/notes/ops/#recovery-drills', '/notes/guide/#preparation', '/notes/model/#catalog']);
   assert.deepEqual(await urls(), expected);
   assert.equal(await page.locator('#lattice-results .section').first().textContent(), 'Recovery drills');
   await query('recovery'); await complete();
@@ -212,6 +215,8 @@ try {
   assert.deepEqual(await urls(), [null, null, null]);
   assert.equal(await page.locator('#lattice-results').getByRole('link').count(), 0);
   assert.equal(await page.getByRole('button', { name: /^Read note:/ }).count(), 0);
+  await query('encodedfragmentprobe'); await complete();
+  assert.equal(await page.locator('#lattice-results h2 a').getAttribute('href'), `/encoded/#${encodeURIComponent('café & 100% #🌱')}`);
   await query('externalpreviewprobe'); await complete();
   assert.deepEqual(await urls(), ['https://example.org/note/']);
   assert.equal(await page.getByRole('button', { name: /^Read note:/ }).count(), 0);
@@ -285,7 +290,9 @@ try {
   assert.deepEqual(await urls(), expected);
   await page.getByLabel('Database', { exact: true }).check();
   await query('recovery'); await complete();
-  await page.locator('#lattice-results').getByRole('link', { name: 'Operations', exact: true }).click();
+  const passageLink = page.locator('#lattice-results').getByRole('link', { name: 'Operations', exact: true });
+  await passageLink.focus();
+  await page.keyboard.press('Enter');
   await page.waitForFunction(() => !document.querySelector('#lattice-controls').disabled);
   await complete();
   assert.equal(await page.locator('#lattice-filters').evaluate(element => element.open), false);
@@ -296,6 +303,12 @@ try {
   assert.equal(await page.getByLabel('Database', { exact: true }).isChecked(), true);
   assert.deepEqual(await urls(), ['/notes/ops/']);
   assert.equal(new URL(page.url()).pathname, '/notes/ops/');
+  assert.equal(new URL(page.url()).hash, '#recovery-drills');
+  assert.equal(await page.locator('article :target').getAttribute('id'), 'recovery-drills');
+  await page.goBack(); await ready(); await complete();
+  await page.goForward(); await ready(); await complete();
+  assert.equal(new URL(page.url()).hash, '#recovery-drills');
+  assert.equal(await page.locator('article :target').getAttribute('id'), 'recovery-drills');
   assert.equal(await page.getByRole('search', { name: 'Wiki search', exact: true }).count(), 1);
   assert.ok((await page.locator('article').textContent()).includes('Restore encrypted snapshots.'));
   // Restored filters stay visible even when their checkboxes are collapsed.
@@ -324,6 +337,25 @@ try {
   assert.equal(await page.locator('#lattice-tags input:checked').count(), 0);
   assert.equal(await clearFilters.isHidden(), true);
   assert.deepEqual(await urls(), expected);
+  // Same-document passage links must reveal the article when mobile search is open.
+  const workersBeforeJump = await page.evaluate(() => window.searchWorkers.length);
+  await page.locator('#lattice-results').getByRole('link', { name: 'Operations', exact: true }).click();
+  assert.equal(await page.locator('#lattice-navigation').isHidden(), true);
+  assert.equal(await page.locator('article :target').isVisible(), true);
+  await ready();
+  await query('basil'); await complete();
+  const samePagePassage = page.locator('#lattice-results').getByRole('link', { name: 'Operations', exact: true });
+  await samePagePassage.focus(); await page.keyboard.press('Enter');
+  assert.equal(new URL(page.url()).hash, '#training-sandbox');
+  assert.equal(await page.locator('#lattice-navigation').isHidden(), true);
+  assert.equal(await page.locator('article :target').getAttribute('id'), 'training-sandbox');
+  assert.equal(await page.locator('article :target').isVisible(), true);
+  assert.equal(await page.evaluate(() => window.searchWorkers.length), workersBeforeJump);
+  if (process.env.LATTICE_PREVIEW_DIR) await page.screenshot({ path: join(process.env.LATTICE_PREVIEW_DIR, 'passage-mobile.png') });
+  await page.goBack();
+  assert.equal(new URL(page.url()).hash, '#recovery-drills');
+  await ready();
+  await query('recovery'); await complete();
   await page.setViewportSize({ width: 1280, height: 720 });
   await page.goBack(); await ready();
   await query('basil'); await complete();

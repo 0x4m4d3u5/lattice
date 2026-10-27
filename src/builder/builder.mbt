@@ -538,6 +538,7 @@ priv struct ProcessedDocument {
   body_text : String
   headings : Array[@markdown.TocEntry]
   sections : Array[@markdown.TextSection]
+  section_fragments : Map[Int, String]
   resolved_links : Array[@wikilink.ResolvedWikilink]
   tags : Array[@tags.TagRef]
 }
@@ -3591,6 +3592,7 @@ fn process_document(
         body_text: cache_body_text,
         headings: cache_markdown.toc,
         sections: cache_sections,
+        section_fragments: Map([]),
         resolved_links: resolved,
         tags: page_tags,
       }),
@@ -3599,8 +3601,20 @@ fn process_document(
   }
   let wl_map = build_wikilink_map(resolved)
   // Step 5: render markdown body to HTML fragment
-  let (markdown_result, leading_h1_end, sections) =
-    @markdown.render_with_text_sections(fm.body, wl_map)
+  let section_offsets : Array[Int?] = []
+  let (markdown_result, leading_h1_end, sections) = @markdown.render_with_text_sections(
+    fm.body,
+    wl_map,
+    section_offsets~,
+  )
+  let slot_offsets = section_slot_offsets(
+    section_offsets,
+    Some(
+      markdown_result.html.length() -
+      rendered_body_no_h1(markdown_result.html, leading_h1_end).length(),
+    ),
+  )
+  let mut section_fragments : Map[Int, String] = Map([])
   if markdown_result.shortcode_errors.length() > 0 {
     let mut si = 0
     while si < markdown_result.shortcode_errors.length() {
@@ -3655,6 +3669,7 @@ fn process_document(
   ) -> Result[String, String] {
     match custom_template {
       Some(tpl) => {
+        let emitted : Array[(Int, Int)] = []
         let slots = build_template_slots(
           full_title,
           body_html,
@@ -3723,15 +3738,27 @@ fn process_document(
         let page_field_arrays = frontmatter_to_arrays(fm)
         match
           @template.render_template_with_data(
-            tpl, slots, data_store, page_fields, page_field_arrays,
+            tpl,
+            slots,
+            data_store,
+            page_fields,
+            page_field_arrays,
+            slot_offsets~,
+            rendered_offsets=emitted,
           ) {
-          Ok(html) =>
-            Ok(
-              @html.inject_head_markup(
-                html,
-                @html.render_structured_data_script(structured_data),
-              ),
+          Ok(html) => {
+            let candidates = section_fragment_candidates(html, emitted)
+            let published = @html.inject_head_markup(
+              html,
+              @html.render_structured_data_script(structured_data),
             )
+            if render_url == url {
+              section_fragments = unique_section_fragments(
+                published, candidates,
+              )
+            }
+            Ok(published)
+          }
           Err(e) => Err("page template: " + template_error_text(e))
         }
       }
@@ -3747,7 +3774,17 @@ fn process_document(
           feed_url: None,
           structured_data,
         }
-        Ok(@html.render_page(meta, page_body))
+        let emitted : Array[(Int, Int)] = []
+        let html = @html.render_page(meta, page_body, body_offset=fn(offset) {
+          for
+            (index, start) in slot_offsets.get(@template.Content).unwrap_or([]) {
+            emitted.push((index, offset + toc_html.length() + start))
+          }
+        })
+        if render_url == url {
+          section_fragments = section_fragment_candidates(html, emitted)
+        }
+        Ok(html)
       }
     }
   }
@@ -3821,6 +3858,7 @@ fn process_document(
       body_text: @strutil.strip_html_tags(body_html),
       headings: markdown_result.toc,
       sections,
+      section_fragments,
       resolved_links: resolved,
       tags: page_tags,
     }),
@@ -4168,8 +4206,20 @@ fn process_document_for_lint(
   }
 
   let wl_map = build_wikilink_map(resolved)
-  let (markdown_result, leading_h1_end, sections) =
-    @markdown.render_with_text_sections(fm.body, wl_map)
+  let section_offsets : Array[Int?] = []
+  let (markdown_result, leading_h1_end, sections) = @markdown.render_with_text_sections(
+    fm.body,
+    wl_map,
+    section_offsets~,
+  )
+  let slot_offsets = section_slot_offsets(
+    section_offsets,
+    Some(
+      markdown_result.html.length() -
+      rendered_body_no_h1(markdown_result.html, leading_h1_end).length(),
+    ),
+  )
+  let mut section_fragments : Map[Int, String] = Map([])
   i = 0
   while i < markdown_result.shortcode_errors.length() {
     violations.push({
@@ -4216,6 +4266,7 @@ fn process_document_for_lint(
 
   let page_html = match custom_template {
     Some(tpl) => {
+      let emitted : Array[(Int, Int)] = []
       let slots = build_template_slots(
         full_title,
         body_html,
@@ -4284,9 +4335,18 @@ fn process_document_for_lint(
       let page_field_arrays = frontmatter_to_arrays(fm)
       match
         @template.render_template_with_data(
-          tpl, slots, data_store, page_fields, page_field_arrays,
+          tpl,
+          slots,
+          data_store,
+          page_fields,
+          page_field_arrays,
+          slot_offsets~,
+          rendered_offsets=emitted,
         ) {
-        Ok(html) => html
+        Ok(html) => {
+          section_fragments = section_fragment_candidates(html, emitted)
+          html
+        }
         Err(e) => {
           violations.push({
             path: source_path,
@@ -4323,7 +4383,14 @@ fn process_document_for_lint(
       } else {
         toc_html + body_html
       }
-      @html.render_page(meta, page_body)
+      let emitted : Array[(Int, Int)] = []
+      let html = @html.render_page(meta, page_body, body_offset=fn(offset) {
+        for (index, start) in slot_offsets.get(@template.Content).unwrap_or([]) {
+          emitted.push((index, offset + toc_html.length() + start))
+        }
+      })
+      section_fragments = section_fragment_candidates(html, emitted)
+      html
     }
   }
   {
@@ -4340,6 +4407,7 @@ fn process_document_for_lint(
       body_text: @strutil.strip_html_tags(body_html),
       headings: markdown_result.toc,
       sections,
+      section_fragments,
       resolved_links: resolved,
       tags: page_tags,
     }),
@@ -5126,8 +5194,11 @@ fn prepare_output(
   let content_entries : Array[@search.ContentEntry] = []
   let collect_content_navigation = content_index_file_name(config.site) is Some(_)
   let content_headings_by_url : Map[String, Array[@markdown.TocEntry]] = Map([])
-  let content_sections_by_url : Map[String, Array[@markdown.TextSection]] = Map([])
-  let content_links_by_url : Map[String, Array[@wikilink.ResolvedWikilink]] = Map([])
+  let content_sections_by_url : Map[String, Array[@markdown.TextSection]] = Map([],
+  )
+  let content_fragments_by_url : Map[String, Map[Int, String]] = Map([])
+  let content_links_by_url : Map[String, Array[@wikilink.ResolvedWikilink]] = Map([],
+  )
   let source_output_marks : Map[String, (String, Int)] = Map([])
   // Reserve tag routes in their original write order; render once after ownership
   // is complete, including assets and configurable index destinations.
@@ -5388,6 +5459,7 @@ fn prepare_output(
                 source_output_marks.set(doc.url, (output_path_key(out_path), source_mark))
                 if collect_content_navigation {
                   content_sections_by_url.set(doc.url, doc.sections)
+                  content_fragments_by_url.set(doc.url, doc.section_fragments)
                   content_headings_by_url.set(doc.url, doc.headings)
                   content_links_by_url.set(doc.url, doc.resolved_links)
                 }
@@ -5545,6 +5617,7 @@ fn prepare_output(
             source_output_marks.set(doc.url, (output_path_key(out_path), source_mark))
             if collect_content_navigation {
               content_sections_by_url.set(doc.url, doc.sections)
+              content_fragments_by_url.set(doc.url, doc.section_fragments)
               content_headings_by_url.set(doc.url, doc.headings)
               content_links_by_url.set(doc.url, doc.resolved_links)
             }
@@ -5711,6 +5784,7 @@ fn prepare_output(
             source_output_marks.set(doc.url, (output_path_key(out_path), source_mark))
             if collect_content_navigation {
               content_sections_by_url.set(doc.url, doc.sections)
+              content_fragments_by_url.set(doc.url, doc.section_fragments)
               content_headings_by_url.set(doc.url, doc.headings)
               content_links_by_url.set(doc.url, doc.resolved_links)
             }
@@ -6469,7 +6543,9 @@ fn prepare_output(
     let index_pages = paginate_with_optional_size(navigation_tags, page_size, fn(number) {
       tags_index_page_url(number)
     })
-    for index = index_pages.length(); index < tags_index_slots.length(); index = index + 1 {
+    for index = index_pages.length()
+        index < tags_index_slots.length()
+        index = index + 1 {
       dropped_slots.set(tags_index_slots[index], true)
     }
     let retained_empty = retain_authored_overwrites(output, source_output_marks, dropped_slots)
@@ -6478,6 +6554,7 @@ fn prepare_output(
     let overwritten = superseded_source_urls(output, source_output_marks, dropped_slots)
     for (url, _) in overwritten {
       content_sections_by_url.remove(url)
+      content_fragments_by_url.remove(url)
       content_headings_by_url.remove(url)
       content_links_by_url.remove(url)
     }
@@ -6616,9 +6693,18 @@ fn prepare_output(
     }
     if content_index_slot is Some(slot) {
       let (path, _) = output.files[slot]
-      output.files[slot] = (path, Text(@search.render_content_index_with_sections(
-        content_entries, content_headings_by_url, content_links_by_url, content_sections_by_url,
-      )))
+      output.files[slot] = (
+        path,
+        Text(
+          @search.render_content_index_with_sections(
+            content_entries,
+            content_headings_by_url,
+            content_links_by_url,
+            content_sections_by_url,
+            fragments=content_fragments_by_url,
+          ),
+        ),
+      )
     }
     output.prune_files(dropped_slots)
     error_count = @diagnostic.count_errors(diagnostics)
