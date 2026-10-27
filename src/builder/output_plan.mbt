@@ -176,80 +176,32 @@ fn OutputPlan::publish(
   messages : Array[String],
 ) -> Unit raise @fs.IOError {
   self.preflight()
-  if !staged_publication_supported() {
-    raise @fs.IOError(
-      "staged publication requires the supported Node/JavaScript CLI; this backend has no tested replacement adapter",
-    )
-  }
   for dir in self.directories {
     if !@fs.path_exists(dir) {
       @fs.create_dir(dir)
     }
   }
-  let staged : Array[(String, String, Bool)] = []
-  try {
-    // Stage all required bytes before replacing even the first destination.
-    for (path, content) in self.files {
-      let (bytes, optional) = match content {
-        Text(text) => (@utf8.encode(text), false)
-        OptionalText(text) => (@utf8.encode(text), true)
-        Binary(bytes) => (bytes, false)
-      }
-      staged.push((stage_output(path, bytes), path, optional)) catch {
-        @fs.IOError(msg) =>
-          if optional {
+  // Preserve ordered same-file writes (for example warning-only redirects).
+  // Cache and manifest are appended last by the builder.
+  for file in self.files {
+    match file.1 {
+      Text(content) => @fs.write_string_to_file(file.0, content)
+      OptionalText(content) =>
+        try {
+          @fs.write_string_to_file(file.0, content)
+          messages.push("[lattice] wrote " + file.0)
+        } catch {
+          @fs.IOError(msg) =>
             diagnostics.push(
               build_warning(
-                Some(path),
+                Some(file.0),
                 None,
                 None,
                 "could not write optional output: " + msg,
               ),
             )
-          } else {
-            raise @fs.IOError(msg)
-          }
-      }
-    }
-    // Retain ordered overwrites, with cache and manifest last. A rename failure
-    // can leave earlier complete replacements; there is no directory transaction.
-    for (temporary, path, optional) in staged {
-      try {
-        replace_output(temporary, path)
-        if optional {
-          messages.push("[lattice] wrote " + path)
         }
-      } catch {
-        @fs.IOError(msg) =>
-          if optional {
-            diagnostics.push(
-              build_warning(
-                Some(path),
-                None,
-                None,
-                "could not write optional output: " + msg,
-              ),
-            )
-          } else {
-            raise @fs.IOError(msg)
-          }
-      }
-    }
-  } catch {
-    @fs.IOError(msg) => {
-      for (temporary, _, _) in staged {
-        let cleanup = discard_output(temporary)
-        if cleanup != "" {
-          diagnostics.push(build_warning(Some(temporary), None, None, cleanup))
-        }
-      }
-      raise @fs.IOError(msg)
-    }
-  }
-  for (temporary, _, _) in staged {
-    let cleanup = discard_output(temporary)
-    if cleanup != "" {
-      diagnostics.push(build_warning(Some(temporary), None, None, cleanup))
+      Binary(content) => @fs.write_bytes_to_file(file.0, content)
     }
   }
 }

@@ -35,6 +35,4 @@ echo "Running published passage fragment fixture"
 node scripts/check-passage-fragments.mjs || status=1
 echo "Running section retrieval publishing fixture"
 node scripts/check-section-search.mjs || status=1
-echo "Running staged publication failure injection"
-node scripts/check-staged-publication.mjs || status=1
 exit "$status"

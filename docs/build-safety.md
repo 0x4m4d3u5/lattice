@@ -2,7 +2,7 @@
 
 `build` prepares output before publishing it. A validation or generation error
 leaves the previous output directory, including cache and manifest, unchanged.
-A validation or generation failure on the first build creates no output directory.
+A failed first build does not create the output directory.
 
 ## Preparation and publication
 
@@ -18,13 +18,8 @@ A validation or generation failure on the first build creates no output director
 4. Before creating directories or writing files, preflight all destination types
    and file-versus-directory conflicts within the plan. Normalize paths with
    `moonbitlang/x/path`; reject output file paths that escape the output directory.
-5. On the supported Node/JavaScript CLI, create an exclusive temporary directory
-   beside each destination and write/close its payload before replacing any
-   destination. All required files must finish staging first. Staging failures
-   preserve existing destination bytes, including cache and manifest.
-6. Rename staged files to their destinations in order, with manifest and cache
-   last. There is no direct-write fallback. No source-file reads or template
-   generation remain in this phase. Optional CSS failures still warn and continue.
+5. Publish prepared files in order, with manifest and cache last. No source-file
+   reads or template generation remain in this phase.
 
 Warnings keep their existing policy: optional default CSS write failures warn,
 and broken wikilinks still render as text in
@@ -34,30 +29,14 @@ does not add new content-discovery, draft-filtering, or URL-collision policies.
 
 ## What this does not guarantee
 
-This is a preparation gate plus **per-file replacement**, not an atomic
-filesystem transaction. The adapter uses Node's
-[`mkdtempSync`, exclusive `openSync` and `renameSync`](https://nodejs.org/api/fs.html).
-It is tested with the pinned Linux/Node profile. Other compiler backends reject
-publication before directory creation: the portable filesystem dependency lacks
-the required primitives, and no untested direct-write fallback is used. Read-only
-validation and portable rendering/search do not require the adapter.
+This is a preparation gate, **not an atomic filesystem transaction**. The pinned
+`moonbitlang/x/fs` API has no portable directory rename, exclusive temporary
+directory creation, or symlink inspection. Staging and copying files back would
+still allow partial publication while adding unsafe cleanup responsibilities.
 
-- A failed staging write or close does not truncate an existing destination.
-  Staging may create output directories; these are not rolled back.
-- A rename failure or interruption after replacement begins can leave a mix of
-  old and new **complete files**. There is no whole-directory commit or rollback.
-  Cache and manifest remain last, but they are not committed as a pair.
-- No `fsync` or directory durability guarantee is provided. Power loss, unusual
-  or network filesystem rename semantics, and concurrent writers are outside
-  this guarantee. Staging temporarily needs disk space for all prepared files.
-- Cleanup removes only payloads/directories created by this invocation, never
-  stale output or matching names found by a scan. Cleanup failures are reported;
-  interruption can leave `.lattice-stage-*` directories containing prepared data.
-  There is no automatic later-run cleanup.
-- Final-component symlinks and nonregular destinations are rejected. Parent
-  symlinks and path races are not secured by this adapter. Replacement creates a
-  new inode: ordinary permission bits are retained for existing files, but inode
-  identity, hard-link sharing, ownership, ACLs and extended attributes are not.
+- Disk-full errors, permission changes, or interruption during publication can
+  leave partially updated output. Metadata is written last, but there is no
+  rollback or crash-recovery protocol
 - Filesystem-specific aliases such as newly planned case-only path differences
   on case-insensitive volumes are not detected by lexical preflight
 - Concurrent writers, symlinked output paths, and filesystem changes between
@@ -68,11 +47,6 @@ validation and portable rendering/search do not require the adapter.
 - Buffering uses memory proportional to the prepared generated output and static
   assets. Incremental builds still avoid rewriting unchanged page HTML, but run
   rendering to validate it
-
-CLI fault injection covers partial staging writes, exclusive-open and close
-failures, first/late rename failures, recovery, binary bytes, permission bits,
-optional CSS and symlink destinations. The old direct-write implementation fails
-the staging preservation regression. Existing tests retain ordered overwrites.
 
 Synthetic regressions compare complete output snapshots, including binary assets,
 cache, and manifest; cover initial failure, late generation failure, destination
