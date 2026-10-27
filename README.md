@@ -138,6 +138,7 @@ lattice serve   [content-dir] [-o <dir>] [options]   — dev server with live re
 lattice init    <name>                                — scaffold a new site
 lattice new     <collection> --name <slug> [options]  — create content from schema
 lattice stats   [content-dir] [options]               — print site statistics
+lattice inventory [content-dir] [options]           — preview final files and exclusions (no writes)
 lattice explain <code>                                — describe an error code (e.g. E001)
 ```
 
@@ -153,6 +154,18 @@ lattice explain <code>                                — describe an error code
 | `-o <dir>` | Output directory |
 
 Defaults: `content-dir` → `./content`, config → `<content-dir>/lattice.conf`, output → config `output_dir` or `./dist`.
+
+Preview the final files of a forced build without publishing:
+
+```bash
+node "$LATTICE_CLI" inventory --format json
+```
+
+The [publication inventory](docs/publication-inventory.md) lists authored pages,
+generated files, static assets and build metadata, with draft/overwrite exclusions.
+It uses the build's preparation plan. It is not a privacy guarantee: vault metadata
+such as `type: private` does not exclude a note, and configured static assets are
+copied wholesale. Use `check` for strict wikilink validation before publishing.
 
 ## Architecture
 

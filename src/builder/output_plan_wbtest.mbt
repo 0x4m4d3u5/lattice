@@ -105,3 +105,26 @@ test "pruning preserves real explicitly requested directory conflicts" {
   assert_true(rejected)
   assert_false(@fs.path_exists(root))
 }
+
+///|
+test "pruning preserves inventory origins and records removed candidates" {
+  let output = OutputPlan::new("./_tmp_inventory_pruning")
+  output.write_text(
+    "./_tmp_inventory_pruning/removed.html",
+    "removed",
+    origin=Page("removed.md"),
+  )
+  output.write_text(
+    "./_tmp_inventory_pruning/kept.html",
+    "kept",
+    origin=Page("kept.md"),
+  )
+  output.prune_files(Map([(0, true)]))
+  assert_eq(output.origins.length(), 1)
+  assert_true(output.origins[0] is Page("kept.md"))
+  assert_eq(output.excluded.length(), 1)
+  assert_eq(output.excluded[0].source, Some("removed.md"))
+  assert_eq(output.excluded[0].path, "removed.html")
+  assert_eq(output.excluded[0].status, "excluded")
+  assert_false(@fs.path_exists(output.root))
+}
