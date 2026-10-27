@@ -105,3 +105,19 @@ test "pruning preserves real explicitly requested directory conflicts" {
   assert_true(rejected)
   assert_false(@fs.path_exists(root))
 }
+
+///|
+test "staged publication preserves ordered repeated destinations" {
+  let prefix = "./_tmp_output_plan_staged_order_"
+  let mut suffix = 0
+  while @fs.path_exists(prefix + suffix.to_string()) {
+    suffix += 1
+  }
+  let root = prefix + suffix.to_string()
+  let output = OutputPlan::new(root)
+  output.write_text(root + "/index.html", "first")
+  output.write_text(root + "/./index.html", "second")
+  output.publish([], [])
+  assert_eq(@fs.read_file_to_string(root + "/index.html"), "second")
+  assert_eq(@fs.read_dir(root).length(), 1)
+}
