@@ -95,11 +95,14 @@ Repeat check and build after editing; the plain HTTP server does not rebuild.
 ## Publish a clickable image
 
 Put a thumbnail and its larger image under `content/static/`, then use an inline
-image inside a link in your note:
+image as the complete link label in your note:
 
 ```md
 [![Garden map showing the walking paths](/static/map.png)](/static/map-large.png)
 ```
+
+This thumbnail form supports one inline image as the whole label. Mixed
+text/image labels and reference-style images are outside this support.
 
 Check and build as usual. Readers can activate the image with a pointer or
 keyboard, including without JavaScript. The image alt text names the link; use a

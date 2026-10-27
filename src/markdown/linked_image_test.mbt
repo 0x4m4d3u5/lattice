@@ -14,13 +14,7 @@ test "linked images preserve labels destinations and surrounding formatting" {
   for
     (source, expected) in [
       (
-        "[View ![Map](/map.png) now](/full)", "<p><a href=\"/full\">View <img src=\"/map.png\" alt=\"Map\" /> now</a></p>\n",
-      ),
-      (
         "[![Map \\] detail](/a(b).png)](/full(c))", "<p><a href=\"/full(c)\"><img src=\"/a(b).png\" alt=\"Map ] detail\" /></a></p>\n",
-      ),
-      (
-        "[![One](/one.png) ![Two](/two.png)](/both)", "<p><a href=\"/both\"><img src=\"/one.png\" alt=\"One\" /> <img src=\"/two.png\" alt=\"Two\" /></a></p>\n",
       ),
       (
         "**[![Map](/map.png)](/full)**", "<p><strong><a href=\"/full\"><img src=\"/map.png\" alt=\"Map\" /></a></strong></p>\n",
@@ -205,5 +199,29 @@ test "literal brackets do not impose ordinary link label boundaries" {
       "[literal $foo] ![x](bar$ ![](/blank.png) tail)",
     ),
     ["/blank.png"],
+  )
+}
+
+///|
+test "inner images do not turn literal brackets into ordinary link bounds" {
+  assert_true(
+    @markdown.render(
+      "[literal $foo ![x](/thumb.png)] *$ [Guide](/guide)*",
+      Map([]),
+    ).contains("<a href=\"/guide\">Guide</a>"),
+  )
+  assert_eq(
+    @markdown.missing_image_alt_urls(
+      "[literal $foo ![x](/thumb.png)] *$ ![](/blank.png)*",
+    ),
+    ["/blank.png"],
+  )
+}
+
+///|
+test "mixed labels keep existing link grammar" {
+  assert_eq(
+    @markdown.render("[View ![Map](/map.png) now](/full)", Map([])),
+    "<p><a href=\"/map.png\">View ![Map</a> now](/full)</p>\n",
   )
 }

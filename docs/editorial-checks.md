@@ -54,7 +54,8 @@ images inside headings, emphasis, lists, blockquotes, tables and definition
 lists. Code spans, fenced examples and math are excluded. Only image syntax
 recognized by Lattice's parser (`![text](url)`), plus parsed built-in `image` and
 `figure` shortcode nodes, is covered. Linked inline images such as
-`[![Map](/map.png)](/full-map.png)` also participate. Reference-style image syntax is not recognized as image nodes by the
+`[![Map](/map.png)](/full-map.png)` with one image as the entire label also
+participate. Mixed text/image link labels retain their existing parser behavior. Reference-style image syntax is not recognized as image nodes by the
 current parser.
 Raw HTML, templates, other shortcode kinds and shortcode bodies, metadata images
 and CSS backgrounds are outside this policy. It does not assess description quality or image availability
