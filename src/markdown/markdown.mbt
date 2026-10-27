@@ -303,21 +303,42 @@ fn link_destination_closes(s : String, from : Int, to : Int) -> Map[Int, Int] {
 }
 
 ///|
-/// Cache each opener's first unescaped label closer within this inline slice.
-/// Escaped punctuation consumes pairs, so an even backslash run leaves ] active.
+/// Cache label closers within this inline slice. A complete inline image
+/// consumes its own label/destination without closing an enclosing link label.
+/// Other labels retain the existing first-unescaped-closer behavior.
 fn link_label_closes(s : String, from : Int, to : Int) -> Map[Int, Int] {
   let closes : Map[Int, Int] = Map([])
   let pending : Array[Int] = []
+  let image_openers : Map[Int, Bool] = Map([])
+  let destinations = link_destination_closes(s, from, to)
   let mut i = from
   while i < to {
     let c = @strutil.char_at(s, i)
-    if c == '\\' && i + 1 < to &&
+    if c == '\\' &&
+      i + 1 < to &&
       @strutil.char_at(s, i + 1).is_ascii_punctuation() {
       i = i + 2
     } else {
-      if c == '[' { pending.push(i) }
+      if c == '!' && i + 1 < to && @strutil.char_at(s, i + 1) == '[' {
+        image_openers.set(i + 1, true)
+      }
+      if c == '[' {
+        pending.push(i)
+      }
       if c == ']' {
-        for open in pending { closes.set(open, i) }
+        if pending.length() > 0 &&
+          image_openers.contains(pending[pending.length() - 1]) &&
+          i + 1 < to &&
+          @strutil.char_at(s, i + 1) == '(' &&
+          destinations.get(i + 1) is Some(end) {
+          let open = pending.pop().unwrap()
+          closes.set(open, i)
+          i = end + 1
+          continue
+        }
+        for open in pending {
+          closes.set(open, i)
+        }
         pending.clear()
       }
       i = i + 1

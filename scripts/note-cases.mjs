@@ -181,6 +181,8 @@ export function runNoteCases(render, assert) {
     ok('<dl>\n<dt>Term</dt>\n<dd>definition</dd>\n</dl>\n<pre><code>: [[missing]]</code></pre>\n'));
   check(render(yaml('Initial\n: first\n<em>Term</em>\n: second'), 'definition-priority.md', '{}'),
     ok('<dl>\n<dt>Initial</dt>\n<dd>first</dd>\n<dt><em>Term</em></dt>\n<dd>second</dd>\n</dl>\n'));
+  check(render(yaml('[![Garden map](/static/map.svg)](/static/map-large.svg)'), 'thumbnail.md', '{}'),
+    ok('<p><a href="/static/map-large.svg"><img src="/static/map.svg" alt="Garden map" /></a></p>\n'));
   // A new caller-supplied map must take effect; no prior note/map/error state leaks.
   for (let n = 0; n < 256; n++) {
     const text = `Synthetic note ${n} 🌱.`;

@@ -53,8 +53,9 @@ The check visits the same Markdown AST and footnotes used for rendering, includi
 images inside headings, emphasis, lists, blockquotes, tables and definition
 lists. Code spans, fenced examples and math are excluded. Only image syntax
 recognized by Lattice's parser (`![text](url)`), plus parsed built-in `image` and
-`figure` shortcode nodes, is covered. Reference-style and
-linked-image syntax are not recognized as image nodes by the current parser.
+`figure` shortcode nodes, is covered. Linked inline images such as
+`[![Map](/map.png)](/full-map.png)` also participate. Reference-style image syntax is not recognized as image nodes by the
+current parser.
 Raw HTML, templates, other shortcode kinds and shortcode bodies, metadata images
 and CSS backgrounds are outside this policy. It does not assess description quality or image availability
 and is not a complete accessibility audit.
