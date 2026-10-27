@@ -4189,8 +4189,7 @@ fn process_document_for_lint(
   let (resolved, link_errors) = @wikilink.resolve(raw_links, page_index)
   i = 0
   while i < link_errors.length() {
-    let marker = "[[" + link_errors[i].link.target + "]]"
-    let (line, col) = line_col_of_first(source, marker)
+    let (line, col) = fragment_link_location(source, link_errors[i].link)
     violations.push({
       path: source_path,
       line,
@@ -7517,6 +7516,9 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
       output,
     )
     if prepared.errors == 0 {
+      add_link_suggestions(
+        all_sources_for_backlinks, collection_sources, page_index, config, output, violations,
+      )
       check_output_fragments(
         all_sources_for_backlinks, page_index, source_urls, config, output, violations,
       )

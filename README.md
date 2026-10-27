@@ -89,7 +89,7 @@ node "$LATTICE_CLI" check ./example/content --config ./example/site.cfg &&
 node "$LATTICE_CLI" build ./example/content -o ./dist --config ./example/site.cfg
 ```
 
-`check` prepares and validates pages without writing output. Run it before `build` for strict wikilink validation; `build` alone treats broken wikilinks as warnings.
+`check` prepares and validates pages without writing output. Run it before `build` for strict wikilink validation; `build` alone treats broken wikilinks as warnings. Nearby one-character page typos can include [valid wikilink suggestions](docs/link-suggestions.md), with labels and verified fragments preserved; choose a target and edit the source yourself.
 
 ### Scaffold a new site
 

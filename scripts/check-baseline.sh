@@ -37,4 +37,6 @@ echo "Running section retrieval publishing fixture"
 node scripts/check-section-search.mjs || status=1
 echo "Running read-only publication inventory fixture"
 node scripts/check-publication-inventory.mjs || status=1
+echo "Running conservative link suggestion fixture"
+node scripts/check-link-suggestions.mjs || status=1
 exit "$status"

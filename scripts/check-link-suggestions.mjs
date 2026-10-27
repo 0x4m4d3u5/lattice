@@ -1,0 +1,64 @@
+import assert from 'node:assert/strict';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { spawnSync } from 'node:child_process';
+const root = mkdtempSync(join(tmpdir(), 'lattice-link-suggestions-'));
+const content = join(root, 'content'), notes = join(content, 'notes'), out = join(root, 'dist');
+for (const dir of [notes, join(content, 'templates'), join(content, 'data'), join(content, 'static')]) mkdirSync(dir, { recursive: true });
+const note = (title, body = 'Text.', extra = '') => `---\ntitle: "${title}"\n${extra}---\n${body}\n`;
+for (const slug of ['guide', 'plan', 'plum', 'cake', 'lake', 'make', 'take', 'false']) writeFileSync(join(notes, slug + '.md'), note(slug, '# Removed\n\n## Setup\nText.'));
+writeFileSync(join(notes, 'secret.md'), note('Secret', 'Text.', 'draft: true\n'));
+writeFileSync(join(content, 'templates/page.html'), '<article>{{body_no_h1}}</article>');
+writeFileSync(join(root, 'collections.cfg'), `[journal]\ndir = ${notes}\nschema = title:String,draft:Optional[Bool]\n`);
+const config = join(root, 'site.cfg');
+writeFileSync(config, `title = Suggestions\nbase_url = https://example.test\ncollections_file = ${root}/collections.cfg\noutput_dir = ${out}\n`);
+const source = join(notes, 'author.md');
+writeFileSync(join(content, 'journal.md'), note('Overwritten authored index'));
+const targets = ['journl', 'guid', ' Guidee.md | manual ', 'guid#Setup|setup', 'guid#Removed', '#Setpu', 'plam', 'ab', 'zzzz', 'secre', 'note', 'bake', 'guid|first', 'guid|second'];
+const original = note('Author', targets.map(x => '[[' + x + ']]').join('\n\n') + '\n\n`[[guid]]`');
+writeFileSync(source, original);
+const cli = fileURLToPath(new URL('../_build/js/debug/build/kurisu/lattice/cmd/main/main.js', import.meta.url));
+const run = (extra = []) => spawnSync(process.execPath, [cli, 'check', content, '-c', config, ...extra], { encoding: 'utf8', timeout: 30000 });
+const json = (extra = []) => { const r = run(['--format', 'json', ...extra]); assert.equal(r.status, 1, r.stdout + r.stderr); return { raw: r.stdout, data: JSON.parse(r.stdout) }; };
+const first = json();
+const violations = first.data.violations;
+const message = (target) => violations.find(v => v.message.startsWith('[[' + target + ']]:'));
+assert.match(message('guid').message, /Nearby valid targets.*\[\[guide\]\]/);
+assert.match(message('Guidee.md').message, /\[\[guide\|manual\]\]/);
+assert.ok(message('Guidee.md').line > 0 && message('Guidee.md').column > 0);
+assert.match(message('guid#Setup').message, /\[\[guide#Setup\|setup\]\]/);
+assert.match(message('plam').message, /\[\[plan\]\].*\[\[plum\]\]/);
+assert.match(message('note').message, /\[\[notes\]\]/);
+for (const target of ['journl', 'guid#Removed', '#Setpu', 'ab', 'zzzz', 'secre', 'bake']) assert.ok(!message(target).message.includes('Nearby valid targets'), target);
+const repeats = violations.filter(v => v.message.startsWith('[[guid]]:'));
+assert.equal(repeats.length, 3, 'inline code is not a reference');
+for (const label of ['first', 'second']) {
+  const line = 4 + 2 * targets.indexOf('guid|' + label);
+  assert.ok(repeats.find(v => v.line === line).message.includes('[[guide|' + label + ']]'), 'preserve each occurrence label');
+}
+assert.equal(json().raw, first.raw);
+const text = run(); assert.equal(text.status, 1); assert.ok(text.stdout.includes(message('guid').message));
+assert.equal(readFileSync(source, 'utf8'), original); assert.equal(existsSync(out), false);
+assert.match(json(['--drafts']).data.violations.find(v => v.message.startsWith('[[secre]]:')).message, /\[\[secret\]\]/);
+// Static overwrite owners are deliberately omitted from authored-page suggestions.
+writeFileSync(config, readFileSync(config, 'utf8') + 'static_dir = journal\n');
+mkdirSync(join(content, 'journal/false'), { recursive: true }); writeFileSync(join(content, 'journal/false/index.html'), '<h2 id="setup">Static replacement</h2>');
+writeFileSync(source, note('Author', '[[fals]]'));
+assert.ok(!json().data.violations[0].message.includes('Nearby valid targets'));
+writeFileSync(config, readFileSync(config, 'utf8').replace('static_dir = journal\n', ''));
+// Suggestions are actionable with the existing resolver and fragment validator.
+writeFileSync(source, note('Author', '[[guide]] [[guide|manual]] [[guide#Setup|setup]] [[plan]] [[plum]] [[notes]]'));
+assert.equal(run().status, 0);
+// Failed preparation must not manufacture suggestions from an incomplete plan.
+writeFileSync(source, original); writeFileSync(join(notes, 'invalid.md'), '---\ndraft: true\n---\nMissing title.');
+assert.ok(json().data.violations.every(v => !v.message.includes('Nearby valid targets')));
+writeFileSync(join(notes, 'invalid.md'), note('Repaired'));
+mkdirSync(join(content, 'standalone')); writeFileSync(join(content, 'standalone/guide.md'), note('Duplicate guide'));
+const ambiguous = json().data.violations;
+assert.ok(ambiguous.some(v => v.kind === 'duplicate_slug'));
+assert.ok(ambiguous.every(v => !v.message.includes('Nearby valid targets')));
+const explain = spawnSync(process.execPath, [cli, 'explain', 'E004'], { encoding: 'utf8' });
+assert.equal(explain.status, 0); assert.match(explain.stdout, /suggestions/i);
+console.log('Link suggestions: deterministic choices, aliases, .md, published fragments, draft/static exclusions, ambiguity, CLI compatibility and actionable replacements passed');
