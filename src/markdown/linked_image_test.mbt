@@ -160,3 +160,22 @@ test "literal alt and reference tokens cannot hide later Markdown" {
     )
   }
 }
+
+///|
+test "opaque matching respects recursive formatting slices" {
+  for marker in ["*", "**", "***", "_", "__", "___", "~~"] {
+    for opener in ["$5", "`code", "<span title='", "![x](foo"] {
+      let prefix = marker + opener + marker
+      let suffix = " $5 ` >)"
+      assert_true(
+        @markdown.render(prefix + " [Guide](/guide)" + suffix, Map([])).contains(
+          "<a href=\"/guide\">Guide</a>",
+        ),
+      )
+      assert_eq(
+        @markdown.missing_image_alt_urls(prefix + " ![](/blank.png)" + suffix),
+        ["/blank.png"],
+      )
+    }
+  }
+}

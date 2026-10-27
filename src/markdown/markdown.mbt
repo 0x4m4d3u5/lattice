@@ -274,6 +274,54 @@ fn find_code_span_close(s : String, from : Int, limit : Int, width : Int) -> Int
 }
 
 ///|
+/// Return content start, closer (or -1), and the next parser position.
+/// Shared with label matching to keep opaque spans inside formatting slices.
+fn inline_format_span(
+  s : String,
+  i : Int,
+  to : Int,
+  exhausted : Map[Int, Bool],
+) -> (Int, Int, Int) {
+  let c = @strutil.char_at(s, i)
+  let width = if c == '~' { 2 } else { count_char(s, i, c) }
+  let start = i + width
+  if c == '_' && i > 0 {
+    let prev = @strutil.char_at(s, i - 1)
+    if @strutil.is_alpha(prev) || @strutil.is_digit(prev) {
+      return (start, -1, start)
+    }
+  }
+  let count = if width >= 3 { 3 } else { width }
+  let needle = c.to_string().repeat(count)
+  let mut close = if c == '_' && exhausted.get(width).unwrap_or(false) {
+    -1
+  } else {
+    @strutil.find_str(s, start, needle, to)
+  }
+  if c == '_' {
+    while close > start {
+      let end = close + width
+      if end >= to {
+        break
+      }
+      let next = @strutil.char_at(s, end)
+      if !(@strutil.is_alpha(next) || @strutil.is_digit(next)) {
+        break
+      }
+      close = @strutil.find_str(s, close + 1, needle, to)
+    }
+    if close < 0 {
+      exhausted.set(width, true)
+    }
+  }
+  if close > start {
+    (start, close, close + (if c == '_' { width } else { count }))
+  } else {
+    (start, -1, i + 1)
+  }
+}
+
+///|
 /// Shared with label matching so math cannot introduce active image candidates.
 fn inline_math_close(s : String, start : Int, to : Int) -> Int? {
   let from = start + 1
@@ -400,6 +448,7 @@ fn literal_label_closes(s : String, from : Int, to : Int) -> Map[Int, Int] {
 fn link_label_closes(s : String, from : Int, to : Int) -> Map[Int, Int] {
   let closes : Map[Int, Int] = Map([])
   let pending : Array[Int] = []
+  let exhausted_underscores : Map[Int, Bool] = Map([])
   let literal_labels = literal_label_closes(s, from, to)
   let html_ends = inline_html_tag_ends(s, from, to)
   let destinations = link_destination_closes(s, from, to)
@@ -415,6 +464,11 @@ fn link_label_closes(s : String, from : Int, to : Int) -> Map[Int, Int] {
       let width = start - i
       let close = find_code_span_close(s, start, to, width)
       i = if close >= 0 { close + width } else { start }
+    } else if c == '*' ||
+      c == '_' ||
+      (c == '~' && i + 1 < to && @strutil.char_at(s, i + 1) == '~') {
+      let (_, _, end) = inline_format_span(s, i, to, exhausted_underscores)
+      i = end
     } else if c == '$' && inline_math_close(s, i, to) is Some(close) {
       i = close + 1
     } else if c == '<' &&
@@ -796,116 +850,29 @@ fn parse_inlines_with_code_ranges(
         }
         None => i = i + 1
       }
-    } else if c == '*' {
-      // bold (**), italic (*), or bold+italic (***)
-      let star_count = count_char(s, i, '*')
-      let inner_start = i + star_count
-      let close_needle = if star_count >= 3 {
-        "***"
-      } else if star_count == 2 {
-        "**"
-      } else {
-        "*"
-      }
-      let close = @strutil.find_str(s, inner_start, close_needle, to)
-      if close > inner_start {
+    } else if c == '*' ||
+      c == '_' ||
+      (c == '~' && i + 1 < to && @strutil.char_at(s, i + 1) == '~') {
+      let (start, close, end) = inline_format_span(
+        s, i, to, exhausted_underscore_closers,
+      )
+      if close > start {
         if text_start < i {
           result.push(Text(@strutil.substr(s, text_start, i)))
         }
-        let inner = parse_inlines_with_code_ranges(s, inner_start, close, on_code)
-        if star_count >= 3 {
+        let inner = parse_inlines_with_code_ranges(s, start, close, on_code)
+        if c == '~' {
+          result.push(Strikethrough(inner))
+        } else if start - i >= 3 {
           result.push(BoldItalic(inner))
-          i = close + 3
-        } else if star_count == 2 {
+        } else if start - i == 2 {
           result.push(Bold(inner))
-          i = close + 2
         } else {
           result.push(Italic(inner))
-          i = close + 1
         }
-        text_start = i
-      } else {
-        // no matching close — treat stars as literal text
-        i = i + 1
+        text_start = end
       }
-    } else if c == '~' && i + 1 < to && @strutil.char_at(s, i + 1) == '~' {
-      // strikethrough: ~~text~~
-      let inner_start = i + 2
-      let close = @strutil.find_str(s, inner_start, "~~", to)
-      if close > inner_start {
-        if text_start < i {
-          result.push(Text(@strutil.substr(s, text_start, i)))
-        }
-        let inner = parse_inlines_with_code_ranges(s, inner_start, close, on_code)
-        result.push(Strikethrough(inner))
-        i = close + 2
-        text_start = i
-      } else {
-        // no matching close — treat tildes as literal text
-        i = i + 1
-      }
-    } else if c == '_' {
-      let under_count = count_char(s, i, '_')
-      // underscore emphasis: _italic_, __bold__, ___bold italic___
-      // Word-boundary rule: only treat _ as opener if the char before it is
-      // NOT alphanumeric. This prevents snake_case identifiers from being
-      // parsed as emphasis — a pragmatic compromise for SSG content.
-      let prev_is_alnum = i > 0 &&
-        ({
-          let prev = @strutil.char_at(s, i - 1)
-          @strutil.is_alpha(prev) || @strutil.is_digit(prev)
-        })
-      if prev_is_alnum {
-        // Keep the whole intraword delimiter run literal.
-        i = i + under_count
-      } else {
-        let inner_start = i + under_count
-        let close_needle = if under_count >= 3 {
-          "___"
-        } else if under_count == 2 {
-          "__"
-        } else {
-          "_"
-        }
-        let mut close = if exhausted_underscore_closers.get(under_count).unwrap_or(false) {
-          -1
-        } else {
-          @strutil.find_str(s, inner_start, close_needle, to)
-        }
-        while close > inner_start {
-          // Skip every intraword candidate, not just the first two.
-          let close_end = close + under_count
-          let next_is_alnum = close_end < to &&
-            ({
-              let next = @strutil.char_at(s, close_end)
-              @strutil.is_alpha(next) || @strutil.is_digit(next)
-            })
-          if !next_is_alnum { break }
-          close = @strutil.find_str(s, close + 1, close_needle, to)
-        }
-        if close < 0 {
-          // No later opener of this width can find a closer in this slice.
-          exhausted_underscore_closers.set(under_count, true)
-        }
-        if close > inner_start {
-          if text_start < i {
-            result.push(Text(@strutil.substr(s, text_start, i)))
-          }
-          let inner = parse_inlines_with_code_ranges(s, inner_start, close, on_code)
-          if under_count >= 3 {
-            result.push(BoldItalic(inner))
-          } else if under_count == 2 {
-            result.push(Bold(inner))
-          } else {
-            result.push(Italic(inner))
-          }
-          i = close + under_count
-          text_start = i
-        } else {
-          // no matching close — treat underscores as literal text
-          i = i + 1
-        }
-      }
+      i = end
     } else if c == '<' {
       match opaque_angle_end_at(i) {
         Some(end) => {
