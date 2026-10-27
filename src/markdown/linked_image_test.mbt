@@ -192,3 +192,18 @@ test "label formatting cannot consume content beyond the link label" {
     assert_true(html.contains("href=\"/guide\""))
   }
 }
+
+///|
+test "literal brackets do not impose ordinary link label boundaries" {
+  assert_true(
+    @markdown.render("[literal $foo] ![x](bar$ [Guide](/guide) tail)", Map([])).contains(
+      "<a href=\"/guide\">Guide</a>",
+    ),
+  )
+  assert_eq(
+    @markdown.missing_image_alt_urls(
+      "[literal $foo] ![x](bar$ ![](/blank.png) tail)",
+    ),
+    ["/blank.png"],
+  )
+}

@@ -462,8 +462,26 @@ fn link_label_closes(s : String, from : Int, to : Int) -> Map[Int, Int] {
   let mut i = from
   while i < to {
     let c = @strutil.char_at(s, i)
-    let label_to = if pending.length() > 0 {
-      literal_labels.get(i).unwrap_or(to)
+    // A plain bracket opener is consumed literally by the rendering parser.
+    // Keep its failed first closer cached, without carrying it across opaque text.
+    if pending.length() > 0 &&
+      literal_labels.get(pending[0]) is Some(close) &&
+      !(close + 1 < to &&
+      @strutil.char_at(s, close + 1) == '(' &&
+      destinations.contains(close + 1)) {
+      for open in pending {
+        if literal_labels.get(open) is Some(end) {
+          closes.set(open, end)
+        }
+      }
+      pending.clear()
+    }
+    let label_to = if pending.length() > 0 &&
+      literal_labels.get(i) is Some(close) &&
+      close + 1 < to &&
+      @strutil.char_at(s, close + 1) == '(' &&
+      destinations.contains(close + 1) {
+      close
     } else {
       to
     }
