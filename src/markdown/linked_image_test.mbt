@@ -82,3 +82,38 @@ test "linked image text and attributes retain existing escaping" {
     "Garden map",
   )
 }
+
+///|
+test "image-like code does not consume following active links or alt checks" {
+  assert_true(
+    @markdown.render("`![x](foo` [Guide](/guide) tail)", Map([])).contains(
+      "<a href=\"/guide\">Guide</a>",
+    ),
+  )
+  assert_eq(
+    @markdown.missing_image_alt_urls("`![x](foo` ![](/blank.png) tail)"),
+    ["/blank.png"],
+  )
+}
+
+///|
+test "image-like opaque regions preserve following links and images" {
+  for
+    prefix in [
+      "$![x](foo$", "<span title='![x](foo'>", "<!-- ![x](foo -->", "<https://example.test/![x](foo>",
+    ] {
+    assert_eq(
+      @markdown.render("Before " + prefix + " [Guide](/guide) tail)", Map([])).contains(
+        "<a href=\"/guide\">Guide</a>",
+      ),
+      true,
+      msg=prefix,
+    )
+    assert_eq(
+      @markdown.missing_image_alt_urls(
+        "Before " + prefix + " ![](/blank.png) tail)",
+      ),
+      ["/blank.png"],
+    )
+  }
+}

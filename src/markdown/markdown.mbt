@@ -274,6 +274,69 @@ fn find_code_span_close(s : String, from : Int, limit : Int, width : Int) -> Int
 }
 
 ///|
+/// Shared with label matching so math cannot introduce active image candidates.
+fn inline_math_close(s : String, start : Int, to : Int) -> Int? {
+  let from = start + 1
+  if from >= to ||
+    @strutil.char_at(s, from) == ' ' ||
+    @strutil.char_at(s, from) == '$' {
+    return None
+  }
+  let mut close = from
+  while close < to {
+    let c = @strutil.char_at(s, close)
+    if c == '\n' {
+      return None
+    }
+    if c == '$' && close > from && @strutil.char_at(s, close - 1) != '\\' {
+      return Some(close)
+    }
+    close = close + 1
+  }
+  None
+}
+
+///|
+/// Return the exclusive end of the angle-delimited opaque forms recognized by
+/// the inline parser. Quoted tag attributes use its precomputed tag matcher.
+fn inline_opaque_angle_end(
+  s : String,
+  start : Int,
+  to : Int,
+  tags : Map[Int, Int],
+) -> Int? {
+  let next = start + 1
+  if next >= to {
+    return None
+  }
+  if has_autolink_scheme(s, next, to) {
+    let close = s[next:to]
+      .find_by(c => c == '>' || c == '<' || c == ' ' || c.is_ascii_control())
+      .map(n => next + n)
+      .unwrap_or(-1)
+    return if close > next && @strutil.char_at(s, close) == '>' {
+      Some(close + 1)
+    } else {
+      None
+    }
+  }
+  if @strutil.starts_with_at(s, start, "<!--") {
+    let close = @strutil.find_str(s, start + 4, "-->", to)
+    return if close >= 0 { Some(close + 3) } else { None }
+  }
+  let name = if @strutil.char_at(s, next) == '/' { next + 1 } else { next }
+  if name < to {
+    let c = @strutil.char_at(s, name)
+    if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') {
+      if tags.get(start) is Some(end) && end > start {
+        return Some(end + 1)
+      }
+    }
+  }
+  None
+}
+
+///|
 /// Pair destination delimiters once per inline slice, including unmatched opens.
 /// A failed candidate then needs only a lookup, not another suffix scan.
 fn link_destination_closes(s : String, from : Int, to : Int) -> Map[Int, Int] {
@@ -310,6 +373,7 @@ fn link_label_closes(s : String, from : Int, to : Int) -> Map[Int, Int] {
   let closes : Map[Int, Int] = Map([])
   let pending : Array[Int] = []
   let image_openers : Map[Int, Bool] = Map([])
+  let html_ends = inline_html_tag_ends(s, from, to)
   let destinations = link_destination_closes(s, from, to)
   let mut i = from
   while i < to {
@@ -318,6 +382,18 @@ fn link_label_closes(s : String, from : Int, to : Int) -> Map[Int, Int] {
       i + 1 < to &&
       @strutil.char_at(s, i + 1).is_ascii_punctuation() {
       i = i + 2
+    } else if c == '`' {
+      // Code is opaque: image-looking text must not skip active Markdown
+      // after the span. Use exactly the parser's delimiter-run rules.
+      let start = backtick_run_end(s, i, to)
+      let width = start - i
+      let close = find_code_span_close(s, start, to, width)
+      i = if close >= 0 { close + width } else { start }
+    } else if c == '$' && inline_math_close(s, i, to) is Some(close) {
+      i = close + 1
+    } else if c == '<' &&
+      inline_opaque_angle_end(s, i, to, html_ends) is Some(end) {
+      i = end
     } else {
       if c == '!' && i + 1 < to && @strutil.char_at(s, i + 1) == '[' {
         image_openers.set(i + 1, true)
@@ -574,7 +650,7 @@ fn parse_inlines_with_code_ranges(
   let result : Array[Inline] = []
   let exhausted_underscore_closers : Map[Int, Bool] = Map([])
   let mut html_tag_ends : Map[Int, Int]? = None
-  fn html_tag_end_at(start : Int) -> Int {
+  fn opaque_angle_end_at(start : Int) -> Int? {
     let ends = match html_tag_ends {
       Some(ends) => ends
       None => {
@@ -583,7 +659,7 @@ fn parse_inlines_with_code_ranges(
         ends
       }
     }
-    ends.get(start).unwrap_or(-1)
+    inline_opaque_angle_end(s, start, to, ends)
   }
   let mut label_closes : Map[Int, Int]? = None
   fn label_close_at(open : Int) -> Int {
@@ -658,53 +734,16 @@ fn parse_inlines_with_code_ranges(
       }
       text_start = i
     } else if c == '$' {
-      // inline math: $...$
-      // Dollar followed by space or at end of string is not a math opener
-      // (prevents false positives with currency like "$5" or "$ amount").
-      // Content cannot span lines (no newlines) and cannot be empty.
-      let opener_end = i + 1
-      let is_dollar_dollar = opener_end < to &&
-        @strutil.char_at(s, opener_end) == '$'
-      // $$ is handled by the block parser (MathBlock), skip here
-      if is_dollar_dollar {
-        i = i + 1
-      } else if opener_end < to && @strutil.char_at(s, opener_end) != ' ' {
-        // Look for closing $ that is not preceded by \
-        let mut close = opener_end
-        let mut found = false
-        while close < to {
-          let ch = @strutil.char_at(s, close)
-          if ch == '$' {
-            // Check it's not preceded by a backslash
-            if close > opener_end && @strutil.char_at(s, close - 1) == '\\' {
-              close = close + 1
-              continue
-            }
-            // Closing $ must not be followed immediately by alphanumeric
-            // (prevents matching mid-word dollars) and content must be non-empty
-            let content = @strutil.substr(s, opener_end, close)
-            if content.length() > 0 && !content.contains("\n") {
-              found = true
-              break
-            }
-          }
-          close = close + 1
-        }
-        if found {
-          let content = @strutil.substr(s, opener_end, close)
+      match inline_math_close(s, i, to) {
+        Some(close) => {
           if text_start < i {
             result.push(Text(@strutil.substr(s, text_start, i)))
           }
-          result.push(Math(content))
+          result.push(Math(@strutil.substr(s, i + 1, close)))
           i = close + 1
           text_start = i
-        } else {
-          // No closing $ found — treat as literal
-          i = i + 1
         }
-      } else {
-        // $ followed by space or at end — literal dollar
-        i = i + 1
+        None => i = i + 1
       }
     } else if c == '*' {
       // bold (**), italic (*), or bold+italic (***)
@@ -817,72 +856,21 @@ fn parse_inlines_with_code_ranges(
         }
       }
     } else if c == '<' {
-      // angle-bracket autolink or inline HTML passthrough
-      let mut matched = false
-      if i + 1 < to {
-        let rest_start = i + 1
-        let next_c = @strutil.char_at(s, rest_start)
-        if has_autolink_scheme(s, rest_start, to) {
-          // autolink: <https://...>, <http://...>, <mailto:...>
-          // Stop at invalid URI characters rather than scanning past nested <.
-          let close_bracket = s[rest_start:to]
-            .find_by(c => c == '>' || c == '<' || c == ' ' || c.is_ascii_control())
-            .map(offset => rest_start + offset)
-            .unwrap_or(-1)
-          if close_bracket > rest_start && @strutil.char_at(s, close_bracket) == '>' {
-            let url = @strutil.substr(s, rest_start, close_bracket)
-            if text_start < i {
-              result.push(Text(@strutil.substr(s, text_start, i)))
-            }
+      match opaque_angle_end_at(i) {
+        Some(end) => {
+          if text_start < i {
+            result.push(Text(@strutil.substr(s, text_start, i)))
+          }
+          if has_autolink_scheme(s, i + 1, to) {
+            let url = @strutil.substr(s, i + 1, end - 1)
             result.push(Link([Text(url)], url))
-            i = close_bracket + 1
-            text_start = i
-            matched = true
+          } else {
+            result.push(InlineHtml(@strutil.substr(s, i, end)))
           }
-        } else if (next_c >= 'a' && next_c <= 'z') ||
-          (next_c >= 'A' && next_c <= 'Z') {
-          // inline open tag: <tagname ...> or <br/> etc.
-          let close_gt = html_tag_end_at(i)
-          if close_gt > i {
-            if text_start < i {
-              result.push(Text(@strutil.substr(s, text_start, i)))
-            }
-            result.push(InlineHtml(@strutil.substr(s, i, close_gt + 1)))
-            i = close_gt + 1
-            text_start = i
-            matched = true
-          }
-        } else if next_c == '/' && rest_start + 1 < to {
-          let next2 = @strutil.char_at(s, rest_start + 1)
-          if (next2 >= 'a' && next2 <= 'z') || (next2 >= 'A' && next2 <= 'Z') {
-            // inline close tag: </tagname>
-            let close_gt = html_tag_end_at(i)
-            if close_gt > i {
-              if text_start < i {
-                result.push(Text(@strutil.substr(s, text_start, i)))
-              }
-              result.push(InlineHtml(@strutil.substr(s, i, close_gt + 1)))
-              i = close_gt + 1
-              text_start = i
-              matched = true
-            }
-          }
-        } else if @strutil.starts_with_at(s, i, "<!--") {
-          // inline HTML comment: <!-- ... -->
-          let close_comment = @strutil.find_str(s, i + 4, "-->", to)
-          if close_comment >= 0 {
-            if text_start < i {
-              result.push(Text(@strutil.substr(s, text_start, i)))
-            }
-            result.push(InlineHtml(@strutil.substr(s, i, close_comment + 3)))
-            i = close_comment + 3
-            text_start = i
-            matched = true
-          }
+          i = end
+          text_start = i
         }
-      }
-      if !matched {
-        i = i + 1
+        None => i = i + 1
       }
     } else if c == '{' &&
       i + 2 < to &&
