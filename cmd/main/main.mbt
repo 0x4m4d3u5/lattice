@@ -278,6 +278,26 @@ fn build_parser() -> @clap.Parser {
         },
         help="Run validation/lint pipeline only",
       ),
+      "inventory-diff": @clap.SubCommand::new(
+        args={
+          "before": @clap.Arg::named(
+            nargs=One,
+            defaults=[""],
+            help="Previous inventory JSON file",
+          ),
+          "after": @clap.Arg::named(
+            nargs=One,
+            defaults=[""],
+            help="New inventory JSON file",
+          ),
+          "format": @clap.Arg::named(
+            nargs=One,
+            defaults=["text"],
+            help="Output format: text or json",
+          ),
+        },
+        help="Compare planned HTML paths in two saved inventories (no writes)",
+      ),
       "inventory": @clap.SubCommand::new(
         args={
           "content-dir": @clap.Arg::positional(
@@ -1513,6 +1533,41 @@ fn run_main() -> Unit {
         @sys.exit(1)
         return
       }
+    }
+    return
+  }
+
+  if subcmd_name == "inventory-diff" {
+    let format = safe_get_one(subcmd_sv, "format").unwrap_or("text")
+    if format != "text" && format != "json" {
+      print_diagnostic_main(
+        cli_error("inventory-diff --format must be text or json"),
+      )
+      @sys.exit(1)
+      return
+    }
+    let before = safe_get_one(subcmd_sv, "before").unwrap_or("")
+    let after = safe_get_one(subcmd_sv, "after").unwrap_or("")
+    let result = if before == "" || after == "" {
+      Err("inventory-diff requires --before and --after JSON files")
+    } else {
+      try {
+        let old = @fs.read_file_to_string(before)
+        let current = @fs.read_file_to_string(after)
+        @builder.compare_inventories(old, current)
+      } catch {
+        @fs.IOError(message) => Err("cannot read inventory: " + message)
+      }
+    }
+    println(
+      if format == "json" {
+        @builder.format_inventory_comparison_json(result)
+      } else {
+        @builder.format_inventory_comparison(result)
+      },
+    )
+    if result is Err(_) {
+      @sys.exit(1)
     }
     return
   }

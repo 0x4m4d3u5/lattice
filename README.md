@@ -139,6 +139,7 @@ lattice init    <name>                                — scaffold a new site
 lattice new     <collection> --name <slug> [options]  — create content from schema
 lattice stats   [content-dir] [options]               — print site statistics
 lattice inventory [content-dir] [options]           — preview final files and exclusions (no writes)
+lattice inventory-diff --before <json> --after <json> — compare planned HTML paths (no writes)
 lattice explain <code>                                — describe an error code (e.g. E001)
 ```
 
@@ -165,7 +166,7 @@ The [publication inventory](docs/publication-inventory.md) lists authored pages,
 generated files, static assets and build metadata, with draft/overwrite exclusions.
 It uses the build's preparation plan. It is not a privacy guarantee: vault metadata
 such as `type: private` does not exclude a note, and configured static assets are
-copied wholesale. Use `check` for strict wikilink validation before publishing.
+copied wholesale. Use `check` for strict wikilink validation before publishing. Compare two saved previews with [`inventory-diff`](docs/inventory-comparison.md) to review added and removed HTML paths without inferring renames.
 
 ## Architecture
 

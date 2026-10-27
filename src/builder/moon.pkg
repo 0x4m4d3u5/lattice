@@ -1,4 +1,5 @@
 import {
+  "moonbitlang/core/json" @json,
   "moonbitlang/core/diff" @diff,
   "kurisu/lattice/src/config" @config,
   "kurisu/lattice/src/assets" @assets,
@@ -30,6 +31,3 @@ import {
   "moonbitlang/x/fs" @fs,
   "moonbitlang/x/path" @path,
 }
-import {
-  "moonbitlang/core/json" @json,
-} for "test"
