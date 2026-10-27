@@ -32,10 +32,3 @@ import {
 import {
   "moonbitlang/core/json" @json,
 } for "test"
-
-options(
-  targets: {
-    "staged_js.mbt": ["js"],
-    "staged_unsupported.mbt": ["native", "llvm", "wasm", "wasm-gc"],
-  },
-)
