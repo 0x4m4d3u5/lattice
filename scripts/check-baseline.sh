@@ -13,6 +13,8 @@ echo "Running vendored clap tests --target js --deny-warn"
 moon -C vendor/clap test --target js --deny-warn -p TheWaWaR/clap || status=1
 echo "Running copied getting-started workflow"
 node scripts/check-getting-started.mjs || status=1
+echo "Running copied README author workflow"
+node scripts/check-readme.mjs || status=1
 echo "Running machine-readable CLI check fixture"
 node scripts/check-cli-json.mjs || status=1
 echo "Running schema-driven new-content fixture"
