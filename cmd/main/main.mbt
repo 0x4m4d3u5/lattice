@@ -51,8 +51,18 @@ fn print_setup_diagnostic(
   kind : @lint.ViolationType,
   path : String,
   d : @diagnostic.Diagnostic,
+  inventory_json? : Bool = false,
 ) -> Unit {
-  if options.check_json {
+  if inventory_json {
+    println(
+      @builder.format_inventory_json({
+        output_dir: None,
+        ready: false,
+        entries: [],
+        diagnostics: [d],
+      }),
+    )
+  } else if options.check_json {
     println(
       @lint.format_violations_json({
         violations: [
@@ -267,6 +277,38 @@ fn build_parser() -> @clap.Parser {
           ),
         },
         help="Run validation/lint pipeline only",
+      ),
+      "inventory": @clap.SubCommand::new(
+        args={
+          "content-dir": @clap.Arg::positional(
+            defaults=["./content"],
+            help="Content directory",
+          ),
+          "output-dir": @clap.Arg::named(
+            short='o',
+            nargs=One,
+            defaults=[""],
+            help="Output directory (default: config.output_dir or ./dist)",
+          ),
+          "config": @clap.Arg::named(
+            short='c',
+            nargs=One,
+            defaults=[""],
+            help="Override site config file",
+          ),
+          "collections": @clap.Arg::named(
+            nargs=One,
+            defaults=[""],
+            help="Override collections config file",
+          ),
+          "drafts": @clap.Arg::flag(help="Include draft sources in the preview"),
+          "format": @clap.Arg::named(
+            nargs=One,
+            defaults=["text"],
+            help="Output format: text (default) or json",
+          ),
+        },
+        help="Preview publication files and exclusions without writing",
       ),
       "serve": @clap.SubCommand::new(
         args={
@@ -645,7 +687,10 @@ fn load_inline_collections(
 }
 
 ///|
-fn load_cli_state(options : CliOptions) -> Result[CliState, Int] {
+fn load_cli_state(
+  options : CliOptions,
+  inventory_json? : Bool = false,
+) -> Result[CliState, Int] {
   let effective_config_path = match options.config_path {
     Some(path) => path
     None => options.content_dir + "/lattice.conf"
@@ -654,6 +699,7 @@ fn load_cli_state(options : CliOptions) -> Result[CliState, Int] {
   let config_source = @fs.read_file_to_string(effective_config_path) catch {
     @fs.IOError(msg) => {
       print_setup_diagnostic(
+        inventory_json~,
         options,
         @lint.IOError,
         effective_config_path,
@@ -672,6 +718,7 @@ fn load_cli_state(options : CliOptions) -> Result[CliState, Int] {
     Ok(c) => c
     Err(err) => {
       print_setup_diagnostic(
+        inventory_json~,
         options,
         @lint.ConfigError,
         effective_config_path,
@@ -709,6 +756,7 @@ fn load_cli_state(options : CliOptions) -> Result[CliState, Int] {
       Ok(defs) => defs
       Err(diagnostic) => {
         print_setup_diagnostic(
+          inventory_json~,
           options,
           @lint.CollectionsError,
           effective_config_path,
@@ -726,6 +774,7 @@ fn load_cli_state(options : CliOptions) -> Result[CliState, Int] {
       Ok(defs) => defs
       Err((kind, diagnostic)) => {
         print_setup_diagnostic(
+          inventory_json~,
           options,
           kind,
           diagnostic.path.unwrap_or(effective_config_path),
@@ -758,7 +807,7 @@ fn load_cli_state(options : CliOptions) -> Result[CliState, Int] {
     watch_roots.push(collections[i].content_dir)
     i = i + 1
   }
-  Ok({ build_config, watch_roots })
+  Ok({ build_config, watch_roots, })
 }
 
 ///|
@@ -1458,6 +1507,37 @@ fn run_main() -> Unit {
         @sys.exit(1)
         return
       }
+    }
+    return
+  }
+
+  if subcmd_name == "inventory" {
+    let format = safe_get_one(subcmd_sv, "format").unwrap_or("text")
+    if format != "text" && format != "json" {
+      print_diagnostic_main(
+        cli_error("inventory --format must be text or json"),
+      )
+      @sys.exit(1)
+      return
+    }
+    let options = cli_options_from_clap(subcmd_sv, "build")
+    let state = match load_cli_state(options, inventory_json=format == "json") {
+      Ok(state) => state
+      Err(code) => {
+        @sys.exit(code)
+        return
+      }
+    }
+    let result = @builder.inventory(state.build_config)
+    println(
+      if format == "json" {
+        @builder.format_inventory_json(result)
+      } else {
+        @builder.format_inventory(result)
+      },
+    )
+    if !result.ready {
+      @sys.exit(1)
     }
     return
   }

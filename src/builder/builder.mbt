@@ -2862,6 +2862,7 @@ fn render_404_page(
   nav_links_html : String,
   custom_css : String,
   data_store : @data.DataStore,
+  authored? : Array[Bool] = [],
 ) -> Result[String, String] {
   let page_path = config.content_dir + "/404.md"
   let has_custom_404 = @fs.path_exists(page_path)
@@ -2887,7 +2888,9 @@ fn render_404_page(
           Some(d) => d
           None => "Page not found"
         }
-        if is_draft(fm) && !config.include_drafts {
+        let visible = config.include_drafts || !is_draft(fm)
+        authored.push(visible)
+        if !visible {
           (
             "Page Not Found", "<h1>Page Not Found</h1>\n<p>The page you are looking for does not exist.</p>\n",
             "Page not found", None,
@@ -4713,6 +4716,7 @@ fn write_manifest(
     output.write_text(
       manifest_path,
       @manifest.render({ version: 1, entries: merged, }),
+      origin=BuildMetadata,
     )
     Ok(())
   } catch {
@@ -5180,6 +5184,16 @@ fn prepare_output(
           ),
         )
     }
+  } else {
+    output.excluded.push(
+      inventory_entry(
+        output.root,
+        css_path,
+        Generated,
+        "excluded",
+        "existing optional stylesheet retained",
+      ),
+    )
   }
 
   // Pass 2: render and write each page
@@ -5359,6 +5373,18 @@ fn prepare_output(
             // Skip output for drafts (unless --drafts flag is set)
             if should_skip_draft {
               messages.push("[skip draft] " + page_context)
+              output.exclude_page(
+                src.path,
+                out_path,
+                "draft excluded; use --drafts to include",
+              )
+              if is_root_page_for_site(config.site, src.slug) {
+                output.exclude_page(
+                  src.path,
+                  root_out_path,
+                  "draft root alias excluded",
+                )
+              }
             } else if !should_rebuild {
               messages.push("[skip] " + page_context)
               unchanged = unchanged + 1
@@ -5368,12 +5394,22 @@ fn prepare_output(
             let page_dir = collection_root + "/" + src.slug
             try {
               output.ensure_dir(page_dir)
-              output.write_text(out_path, doc.html)
+              output.write_text(out_path, doc.html, origin=Page(src.path))
               source_mark = output.files.length()
               if is_root_page_for_site(config.site, src.slug) {
                 match doc.root_html {
-                  Some(root_html) => output.write_text(root_out_path, root_html)
-                  None => output.write_text(root_out_path, doc.html)
+                  Some(root_html) =>
+                    output.write_text(
+                      root_out_path,
+                      root_html,
+                      origin=Page(src.path),
+                    )
+                  None =>
+                    output.write_text(
+                      root_out_path,
+                      doc.html,
+                      origin=Page(src.path),
+                    )
                 }
               }
               Some(out_path)
@@ -5553,6 +5589,11 @@ fn prepare_output(
           if !source_is_visible(src, config.include_drafts) {
             skipped_drafts = skipped_drafts + 1
             messages.push("[skip draft] standalone/" + src.slug)
+            output.exclude_page(
+              src.path,
+              out_path,
+              "draft excluded; use --drafts to include",
+            )
             si = si + 1
             continue
           }
@@ -5560,7 +5601,7 @@ fn prepare_output(
           let mut source_mark = 0
           let write_ok = try {
             output.ensure_dir(page_dir)
-            output.write_text(out_path, doc.html)
+            output.write_text(out_path, doc.html, origin=Page(src.path))
             source_mark = output.files.length()
             messages.push("[lattice] wrote " + out_path)
             true
@@ -5698,6 +5739,11 @@ fn prepare_output(
           if !source_is_visible(src, config.include_drafts) {
             skipped_drafts = skipped_drafts + 1
             messages.push("[skip draft] root/" + src.slug)
+            output.exclude_page(
+              src.path,
+              out_path,
+              "draft excluded; use --drafts to include",
+            )
             ri = ri + 1
             continue
           }
@@ -5706,7 +5752,7 @@ fn prepare_output(
           let mut source_mark = 0
           let write_ok = if src.slug == "index" {
             try {
-              output.write_text(out_path, doc.html)
+              output.write_text(out_path, doc.html, origin=Page(src.path))
               source_mark = output.files.length()
               messages.push("[lattice] wrote " + out_path + " (root homepage)")
               true
@@ -5727,7 +5773,7 @@ fn prepare_output(
             let page_dir = config.output_dir + "/" + src.slug
             try {
               output.ensure_dir(page_dir)
-              output.write_text(out_path, doc.html)
+              output.write_text(out_path, doc.html, origin=Page(src.path))
               source_mark = output.files.length()
               messages.push("[lattice] wrote " + out_path)
               true
@@ -6440,9 +6486,15 @@ fn prepare_output(
     if error_count == 0 {
       let page_path = config.content_dir + "/404.md"
       let has_custom_404 = @fs.path_exists(page_path)
+      let authored : Array[Bool] = []
       let fortyfour_html = match
         render_404_page(
-          config, templates, nav_links_html, custom_css, data_store,
+          config,
+          templates,
+          nav_links_html,
+          custom_css,
+          data_store,
+          authored~,
         ) {
         Ok(html) => Some(html)
         Err(msg) => {
@@ -6456,7 +6508,17 @@ fn prepare_output(
         Some(html) =>
           try {
             let out_path = config.output_dir + "/404.html"
-            output.write_text(out_path, html)
+            let origin = if authored.contains(true) {
+              Page(page_path)
+            } else {
+              Generated
+            }
+            output.write_text(out_path, html, origin~)
+            if has_custom_404 && !authored.contains(true) {
+              output.exclude_page(
+                page_path, out_path, "draft 404 excluded; default 404 generated",
+              )
+            }
             let source_type = if has_custom_404 { "custom" } else { "default" }
             messages.push("[lattice] wrote 404.html (" + source_type + ")")
             ()
@@ -6497,6 +6559,7 @@ fn prepare_output(
       output.write_text(
         @cache.cache_path(config.output_dir),
         @cache.render_store(next_cache_store),
+        origin=BuildMetadata,
       ) catch {
         @fs.IOError(msg) => {
           diagnostics.push(

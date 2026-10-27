@@ -14,6 +14,8 @@ priv struct OutputPlan {
   requested_directories : Array[String]
   directory_index : Map[String, Bool]
   files : Array[(String, OutputContents)]
+  origins : Array[OutputOrigin]
+  excluded : Array[InventoryEntry]
 }
 
 ///|
@@ -30,6 +32,8 @@ fn OutputPlan::new(root : String) -> OutputPlan {
     requested_directories: [],
     directory_index: Map([]),
     files: [],
+    origins: [],
+    excluded: [],
   }
 }
 
@@ -101,8 +105,10 @@ fn OutputPlan::write_text(
   self : OutputPlan,
   path : String,
   content : String,
+  origin? : OutputOrigin = Generated,
 ) -> Unit raise @fs.IOError {
   self.files.push((self.file_path(path), Text(content)))
+  self.origins.push(origin)
 }
 
 ///|
@@ -110,8 +116,10 @@ fn OutputPlan::write_optional_text(
   self : OutputPlan,
   path : String,
   content : String,
+  origin? : OutputOrigin = Generated,
 ) -> Unit raise @fs.IOError {
   self.files.push((self.file_path(path), OptionalText(content)))
+  self.origins.push(origin)
 }
 
 ///|
@@ -119,16 +127,46 @@ fn OutputPlan::write_bytes(
   self : OutputPlan,
   path : String,
   content : Bytes,
+  origin? : OutputOrigin = Generated,
 ) -> Unit raise @fs.IOError {
   self.files.push((self.file_path(path), Binary(content)))
+  self.origins.push(origin)
 }
 
 ///|
 fn OutputPlan::prune_files(self : OutputPlan, dropped : Map[Int, Bool]) -> Unit {
-  let retained = self.files.iter2().iter().filter_map(fn(pair) {
-    let (index, file) = pair
-    if dropped.contains(index) { None } else { Some(file) }
-  }).to_array()
+  let retained = self.files
+    .iter2()
+    .iter()
+    .filter_map(fn(pair) {
+      let (index, file) = pair
+      if dropped.contains(index) {
+        None
+      } else {
+        Some(file)
+      }
+    })
+    .to_array()
+  let origins : Array[OutputOrigin] = []
+  for index, origin in self.origins {
+    if dropped.contains(index) {
+      self.excluded.push(
+        inventory_entry(
+          self.root,
+          self.files[index].0,
+          origin,
+          "excluded",
+          "removed by final output planning",
+        ),
+      )
+    } else {
+      origins.push(origin)
+    }
+  }
+  self.origins.clear()
+  for origin in origins {
+    self.origins.push(origin)
+  }
   self.files.clear()
   for file in retained {
     self.files.push(file)
@@ -227,7 +265,16 @@ fn plan_static_assets(
   }
   for asset in assets {
     let path = @strutil.join_path(destination, asset.relative_path)
-    output.write_bytes(path, asset.bytes) catch {
+    output.write_bytes(
+      path,
+      asset.bytes,
+      origin=StaticAsset(
+        @strutil.join_path(
+          @strutil.join_path(config.content_dir, static_dir),
+          asset.relative_path,
+        ),
+      ),
+    ) catch {
       @fs.IOError(msg) => return Err(@assets.FileWriteError(path, msg))
     }
   }

@@ -2,6 +2,11 @@
 
 Lattice includes vault-specific helpers for PARA-method note organization and other knowledge management workflows (e.g., Obsidian vaults).
 
+Use [`lattice inventory`](publication-inventory.md) to inspect the configured
+build's final files and draft/overwrite exclusions without publishing. It includes
+static assets and does not interpret vault types as a publication filter. This is
+not an automatic vault importer, migration tool or privacy audit.
+
 ## Vault metadata
 
 Vault notes use additional frontmatter fields beyond standard blog posts:
