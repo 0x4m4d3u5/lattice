@@ -69,46 +69,58 @@ For a connected note library with shared navigation and local section search, us
 the [wiki starter](docs/wiki-search-page.md#start-a-new-wiki). It creates a new
 project from the existing reader, templates and a small typed sample collection.
 
-See [pinned installation and baseline instructions](docs/reliability-baseline.md#reproduce) for the verified durable toolchain. The default-target commands below require a working native compiler. The durable tagged compiler distribution is verified with JavaScript: use `moon build --target js` and add `--target js` before `--` in each `moon run` command. See [the backend limitation](docs/reliability-baseline.md#local-results-and-backend-limitation) for details.
+From the repository root, first follow the [pinned installation instructions](docs/reliability-baseline.md#reproduce). The supported source workflow uses the JavaScript target and Node; no globally installed `lattice` executable is needed.
 
 ### Build from source
 
 ```bash
-moon build
+moon build cmd/main --target js --deny-warn
+export LATTICE_CLI="$PWD/_build/js/debug/build/kurisu/lattice/cmd/main/main.js"
 ```
 
-### Build the example site
+Keep this terminal open: the absolute `LATTICE_CLI` path continues to work after changing into your site directory.
+
+### Check and build the example site
+
+From the repository root:
 
 ```bash
-moon run cmd/main -- build ./example/content --config ./example/site.cfg
+node "$LATTICE_CLI" check ./example/content --config ./example/site.cfg &&
+node "$LATTICE_CLI" build ./example/content -o ./dist --config ./example/site.cfg
 ```
 
-### Check content without rendering
-
-```bash
-moon run cmd/main -- check ./example/content --config ./example/site.cfg
-```
-
-### Start the dev server
-
-```bash
-moon run cmd/main -- serve ./example/content --config ./example/site.cfg
-```
+`check` prepares and validates pages without writing output. Run it before `build` for strict wikilink validation; `build` alone treats broken wikilinks as warnings.
 
 ### Scaffold a new site
 
-```bash
-moon run cmd/main -- init my-site
-cd my-site
-moon run cmd/main -- build content dist --config content/lattice.conf
-```
-
-### Create a new post from the collection schema
+Choose a destination that does not exist. From the repository root:
 
 ```bash
-moon run cmd/main -- new posts --name my-first-post --config content/lattice.conf
-# Generates content/posts/my-first-post.md with correct frontmatter stubs
+node "$LATTICE_CLI" init ../my-site
+cd ../my-site
 ```
+
+### Create and publish a new post
+
+```bash
+node "$LATTICE_CLI" new posts --name my-first-post
+```
+
+Edit `content/posts/my-first-post.md`, replacing its placeholders with your own writing. The [frontmatter example below](#frontmatter) is a complete replacement you can copy. Then validate and build from `my-site/`:
+
+```bash
+node "$LATTICE_CLI" check && node "$LATTICE_CLI" build
+```
+
+Preview the result over local HTTP:
+
+```bash
+python3 -m http.server 8000 --directory dist
+```
+
+Open `http://localhost:8000/posts/my-first-post/`. Stop the server with Ctrl+C. Repeat check and build after edits; this server does not rebuild. These commands only prepare local output and start a local preview, without deploying it.
+
+The CLI reference below uses `lattice` as shorthand for an installed executable; from this source checkout, substitute `node "$LATTICE_CLI"`. The native-only `serve` command requires a working native compiler; it is not part of the verified JavaScript workflow.
 
 String and enum stubs are quoted, including array members, so choices such as
 `"true"`, `"42"`, or `"draft # review"` retain their text in YAML. Review placeholders
@@ -228,26 +240,26 @@ The `example/` directory exercises the full feature set:
 Build it:
 
 ```bash
-moon run cmd/main -- build ./example/content --config ./example/site.cfg
+moon run cmd/main --target js -- build ./example/content --config ./example/site.cfg
 ```
 
 ## Content Format
 
 ### Frontmatter
 
-Fenced with `---`, using key-value assignments:
+YAML frontmatter uses `---` fences and `key: value` assignments. The example below is ready to copy into the scaffolded post. To use TOML instead, switch to `+++` fences and `key = value` assignments.
 
 ```markdown
 ---
-title = My First Post
-date = 2024-01-15
-tags = [intro, lattice, demo]
-draft = false
+title: My First Post
+date: 2024-01-15
+tags: [intro, lattice, demo]
+draft: false
 ---
 
 # Hello World
 
-Content goes here. Wikilinks like [[my-other-post]] are validated at build time.
+Content goes here. Return to [[welcome|the welcome post]].
 ```
 
 ### Schema Declaration
