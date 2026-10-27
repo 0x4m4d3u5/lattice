@@ -29,7 +29,7 @@ to the generated modules. This is a portable-core smoke test, not certification
 of the filesystem builder or the complete WASM test suite. The full JavaScript
 baseline remains a separate required CI step.
 
-Verified locally on Linux x86_64 with Node `26.10.0`, compiler
+Verified locally on Linux x86_64 with Node `26.12.1`, compiler
 `v0.10.14+7d59c7ec9`, and Moon CLI/Moonrun `914d7da`. Both generated targets pass
 all five fixtures; the full warning-free JS baseline also passes. A Node worker
 was tested. These fixed fixture exports remain Node-only. The separate

@@ -4,7 +4,12 @@ Base: `9b92727962a61cbd45020afe97fbce5553aa9e33` (remote HEAD at checkout).
 The final patch has a passing baseline on a fresh isolated Mac copy, with no
 previous `_build`, `.mooncakes`, or synthetic test outputs. No real vault was processed.
 
-## Current supported JavaScript profile — 2026-10-11
+## Current supported JavaScript profile — 2026-10-26
+
+Node is pinned to the [26.12.1 security release](https://nodejs.org/en/blog/release/v26.12.1),
+which fixes CVE-2026-111497 among other vulnerabilities. The workflow, installer,
+cache verifier and cache key all require this version; older Node versions are
+rejected even when reusing an existing Moon toolchain.
 
 Repository setup lives in `scripts/install-ci-toolchain.sh`; CI invokes that same
 installer. It downloads and verifies official archives, installs the durable WASM
@@ -18,7 +23,7 @@ prebuilt installer or workflow-specific toolchain setup path.
 - Compiler: `v0.10.14+7d59c7ec9`, official tagged WASM distribution, including core.
 - Moon CLI: `914d7da08562120ae4d9ef181cdda58c4ff0c191`, official Linux x86_64 binary.
   Its SHA-256 is `6da4919f45f4abf7c6d7f3cf8d9a457de77dca430d6fb811d21b27ae1ac8e11d`.
-- Host: Linux x86_64; Node: `26.10.0`. No Rust toolchain is required.
+- Host: Linux x86_64; Node: `26.12.1`. No Rust toolchain is required.
 - Dependencies: `moonbitlang/x 0.5.5` and the local MIT-licensed `clap 0.2.6`
   compatibility copy. `moon.work` selects the vendored module; the registry copy
   is not substituted for it.
@@ -46,13 +51,13 @@ runs the same installer; it never silently upgrades to a different version.
 Upstream download availability remains an external dependency; absence or a
 checksum change fails visibly.
 
-Fresh local installation took 12.6 seconds; reuse took 0.37 seconds. The earlier
+The original October 11 local installation took 12.6 seconds; reuse took 0.37 seconds. The earlier
 hosted source installation took 309 seconds, of which Rust compilation took 278
 seconds. Hosted results for this profile are recorded on the cleanup PR.
 
 ## Reproduce
 
-With Node `26.10.0`, curl, tar and the standard Linux utilities available:
+With Node `26.12.1`, curl, tar and the standard Linux utilities available:
 
 ```bash
 export MOON_HOME="$PWD/.ci-moon"
