@@ -97,6 +97,41 @@ function syncNavigationLayout() {
 mobileLayout.addEventListener('change', syncNavigationLayout);
 if (new URL(overview.href).pathname === location.pathname) overview.setAttribute('aria-current', 'page');
 
+function addSectionLinks() {
+  // Link to published DOM targets, never a second heading-slug algorithm.
+  // Count all IDs: a template or raw HTML element can own the same target.
+  const counts = new Map();
+  for (const element of document.querySelectorAll('[id]')) {
+    counts.set(element.id, (counts.get(element.id) || 0) + 1);
+  }
+  const namedTargets = new Set([...document.querySelectorAll('a[name]')].map(anchor => anchor.getAttribute('name')));
+  for (const heading of document.querySelectorAll('article h2[id], article h3[id], article h4[id], article h5[id], article h6[id]')) {
+    const id = heading.id;
+    const label = heading.textContent.trim();
+    if (!id.trim() || !label || counts.get(id) !== 1 || heading.closest('a')) continue;
+    const fragment = encodeURIComponent(id);
+    // Native navigation tries the literal fragment before percent-decoding it.
+    if (fragment !== id && (counts.has(fragment) || namedTargets.has(fragment))) continue;
+    const hasSelfLink = [...heading.querySelectorAll('a[href]')].some(link => {
+      try {
+        const url = new URL(link.getAttribute('href'), document.baseURI);
+        return url.origin === location.origin && url.pathname === location.pathname &&
+          url.search === location.search && (url.hash.slice(1) === id || decodeURIComponent(url.hash.slice(1)) === id);
+      } catch { return false; }
+    });
+    if (hasSelfLink) continue;
+    const link = document.createElement('a');
+    link.className = 'section-permalink';
+    link.setAttribute('href', `#${fragment}`);
+    link.setAttribute('aria-label', `Link to section: ${label}`);
+    link.title = `Link to section: ${label}`;
+    link.textContent = '#';
+    heading.append(document.createTextNode(' '), link);
+  }
+}
+// Reading and section sharing do not depend on the index or search runtime.
+addSectionLinks();
+
 function renderCatalogue(entries) {
   const pages = buildCatalogue(entries, document.baseURI, overview.href);
   const groups = new Map();

@@ -14,6 +14,27 @@ const content = join(root, 'content');
 const output = join(root, 'dist');
 const templates = join(root, 'templates');
 cpSync(new URL('./fixtures/wiki', import.meta.url), content, { recursive: true });
+const sharingNote = join(content, 'guides/publishing-a-note.md');
+writeFileSync(sharingNote, readFileSync(sharingNote, 'utf8').replace('toc: true', 'toc: false') + `
+## Repeated section
+
+First passage.
+
+## Repeated section
+
+Second passage.
+
+<h3 id="☕ 50%:a/b">A custom section with punctuation</h3>
+<h3 id="already-linked"><a href="#already-linked">Existing section link</a></h3>
+<h3 id="discount-50%"><a href="#discount-50%">Existing percent section link</a></h3>
+<h3 id="lattice-query">Ambiguous with the search input</h3>
+<h3 id="linked-label"><a href="/wiki/static/search/">An authored link</a> stays intact</h3>
+<h3 id="">No target</h3>
+<h3 id="space target">Shadowed encoded ID</h3>
+<div id="space%20target">Another raw fragment target</div>
+<h3 id="named space">Shadowed encoded name</h3>
+<a name="named%20space">Legacy named target</a>
+`);
 mkdirSync(templates);
 mkdirSync(join(content, 'static'));
 mkdirSync(join(content, 'data'));
@@ -122,6 +143,55 @@ try {
       assert.equal(await page.locator('article').isVisible(), menuState !== 'true');
     }
   };
+  // Sharing a section should not require a TOC, a guessed slug or clipboard access.
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto(`${origin}${urlFor('Publishing a note')}`); await ready();
+    assert.equal(await page.locator('article .contents').count(), 0);
+    const section = page.getByRole('link', { name: 'Link to section: Start with the question', exact: true });
+    assert.equal(await section.count(), 1, 'A note without TOC needs a visible section permalink');
+    const expectedHash = '#' + encodeURIComponent(await section.evaluate(link => link.parentElement.id));
+    assert.equal(await section.getAttribute('href'), expectedHash);
+    await section.focus(); await page.keyboard.press('Tab'); await page.keyboard.press('Shift+Tab');
+    assert.equal(await section.evaluate(link => document.activeElement === link && getComputedStyle(link).outlineStyle !== 'none'), true);
+    const box = await section.boundingBox();
+    assert.ok(box.width >= 24 && box.height >= 24, 'Permalink needs a usable touch target');
+    await page.keyboard.press('Enter');
+    assert.equal(new URL(page.url()).hash, expectedHash);
+    await page.goBack();
+    assert.equal(new URL(page.url()).hash, '');
+    const repeats = page.getByRole('link', { name: 'Link to section: Repeated section', exact: true });
+    assert.equal(await repeats.count(), 2);
+    const repeatTargets = await repeats.evaluateAll(links => links.map(link => link.getAttribute('href')));
+    assert.equal(new Set(repeatTargets).size, 2, 'Use separately emitted IDs for repeated heading text');
+    const custom = page.getByRole('link', { name: 'Link to section: A custom section with punctuation', exact: true });
+    assert.equal(await custom.getAttribute('href'), '#' + encodeURIComponent('☕ 50%:a/b'));
+    await custom.click();
+    assert.equal(decodeURIComponent(new URL(page.url()).hash.slice(1)), '☕ 50%:a/b');
+    assert.equal(await page.locator('#already-linked a').count(), 1, 'Do not duplicate an authored self-link');
+    assert.equal(await page.locator('[id="discount-50%"] a').count(), 1, 'A literal percent in an authored self-link is valid');
+    assert.equal(await page.locator('h3[id="lattice-query"] a').count(), 0, 'An ID duplicated outside the article is ambiguous');
+    assert.equal(await page.locator('#linked-label a').count(), 2);
+    assert.equal(await page.locator('#linked-label a a').count(), 0, 'Do not nest anchors');
+    assert.equal(await page.locator('h3[id=""] a').count(), 0);
+    assert.equal(await page.locator('h3[id="space target"] a').count(), 0, 'An encoded fragment must not resolve to another literal ID');
+    assert.equal(await page.locator('h3[id="named space"] a').count(), 0, 'An encoded fragment must not resolve to a legacy named anchor');
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+    await custom.focus();
+    await save(`section-links-${width}.png`);
+    await page.emulateMedia({ forcedColors: 'active' });
+    assert.equal(await custom.evaluate(link => getComputedStyle(link).color !== getComputedStyle(document.body).backgroundColor), true);
+    await page.emulateMedia({ forcedColors: 'none', media: 'print' });
+    assert.equal(await custom.isHidden(), true);
+    await page.emulateMedia({ media: 'screen' });
+    if (width === 1440) {
+      const [opened] = await Promise.all([context.waitForEvent('page'), section.click({ button: 'middle' })]);
+      await opened.waitForLoadState();
+      assert.equal(new URL(opened.url()).hash, expectedHash);
+      await opened.close();
+    }
+  }
+  await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto(`${origin}/wiki/static/search/`); await ready();
   assert.equal(await page.getByRole('searchbox').inputValue(), '');
   assert.equal(await page.locator('#lattice-collections .collection').count(), 3);
@@ -279,6 +349,7 @@ try {
   await page.locator('#lattice-collections').getByRole('link', { name: 'Getting started', exact: true }).click();
   await page.locator('article').waitFor();
   assert.ok((await page.locator('article').textContent()).includes('Find your way around'));
+  assert.equal(await page.getByRole('link', { name: 'Link to section: Find your way around', exact: true }).count(), 1, 'Section links must survive search runtime failure');
   failWasm = false;
   // Optional browser storage and JavaScript are not prerequisites for page reading.
   const restricted = await context.newPage();
@@ -289,6 +360,7 @@ try {
   const noJS = await browser.newContext({ javaScriptEnabled: false });
   const plain = await noJS.newPage();
   await plain.goto(`${origin}${urlFor('Getting started')}`);
+  assert.equal(await plain.locator('.section-permalink').count(), 0, 'No-JS reading keeps the original published content');
   assert.ok((await plain.locator('article').textContent()).includes('Find your way around'));
   await plain.locator('article').getByRole('link', { name: 'publishing-a-note', exact: true }).click();
   assert.equal(new URL(plain.url()).pathname, urlFor('Publishing a note'));
