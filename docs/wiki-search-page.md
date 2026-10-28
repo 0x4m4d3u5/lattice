@@ -31,6 +31,12 @@ Visit `http://localhost:8000/` for the welcome note, or
 `http://localhost:8000/static/search/` for the library and search. Stop the local
 server with Ctrl+C. Generation does not start a server or deploy anything.
 
+For automatic rebuild and browser reload while editing, replace the Python
+server command with `node "$LATTICE_CLI" serve` and visit
+`http://127.0.0.1:4321/` (or `/static/search/`). The Node preview is loopback-only
+and keeps the previous output after validation failures; see
+[the editing workflow](getting-started.md#rebuild-while-editing).
+
 The destination must not exist, even as an empty directory; its parent must
 already exist. All reader inputs, including the built WASM runtime, are read
 before the destination is created. The command does not download or compile

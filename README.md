@@ -120,7 +120,7 @@ python3 -m http.server 8000 --directory dist
 
 Open `http://localhost:8000/posts/my-first-post/`. Stop the server with Ctrl+C. Repeat check and build after edits; this server does not rebuild. These commands only prepare local output and start a local preview, without deploying it.
 
-The CLI reference below uses `lattice` as shorthand for an installed executable; from this source checkout, substitute `node "$LATTICE_CLI"`. The native-only `serve` command requires a working native compiler; it is not part of the verified JavaScript workflow.
+The CLI reference below uses `lattice` as shorthand for an installed executable; from this source checkout, substitute `node "$LATTICE_CLI"`. For an editing preview with automatic rebuild and browser reload, run `node "$LATTICE_CLI" serve` and open `http://127.0.0.1:4321/`. The Node preview binds loopback only; stop it with Ctrl+C. Native builds retain their existing server backend.
 
 String and enum stubs are quoted, including array members, so choices such as
 `"true"`, `"42"`, or `"draft # review"` retain their text in YAML. Review placeholders
@@ -219,7 +219,7 @@ copied wholesale. Use `check` for strict wikilink validation before publishing. 
 | `manifest` | Build manifest for reproducible output verification |
 | `graph` | Shared typed page graph structures for emitters |
 | `assets` | Static file validation/copy |
-| `serve` | Dev server with live reload (native backend) |
+| `serve` | Dev server with live reload (Node and native backends) |
 | `watch` | File-system polling watcher |
 | `vault` | Obsidian vault import support |
 | `strutil` | Shared string/char utilities (eliminates 15+ duplicate implementations) |

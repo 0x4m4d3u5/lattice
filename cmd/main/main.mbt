@@ -997,7 +997,7 @@ fn run_watch(options : CliOptions, initial_state : CliState) -> Unit {
       "[lattice] initial build finished with errors; watching for changes",
     )
   }
-  if options.serve_mode {
+  if options.serve_mode && initial_result == 0 {
     @serve.broadcast_reload()
   }
 
@@ -1046,7 +1046,7 @@ fn run_watch(options : CliOptions, initial_state : CliState) -> Unit {
     )
     match load_cli_state(options) {
       Ok(state) => {
-        let _ = run_once(
+        let result = run_once(
           state.build_config,
           options.check_mode,
           options.check_json,
@@ -1054,7 +1054,7 @@ fn run_watch(options : CliOptions, initial_state : CliState) -> Unit {
         )
         current_roots = state.watch_roots
         current_source_dirs = state.watch_source_dirs
-        if options.serve_mode {
+        if options.serve_mode && result == 0 {
           @serve.broadcast_reload()
         }
       }
@@ -1735,14 +1735,14 @@ fn run_main() -> Unit {
         cli_error(
           "failed to start dev server on port " +
           options.serve_port.to_string() +
-          " — is the port already in use?",
+          " — port unavailable or server unsupported by this runtime",
         ),
       )
       @sys.exit(1)
       return
     }
     println(
-      "[lattice] dev server listening on http://localhost:" +
+      "[lattice] dev server listening on http://127.0.0.1:" +
       options.serve_port.to_string() +
       "  (serving " +
       output_dir +

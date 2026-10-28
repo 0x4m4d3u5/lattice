@@ -243,8 +243,27 @@ lattice build ./content -o ./dist --config ./lattice.toml --collections ./collec
 
 ## Rebuild while editing
 
-The JavaScript CLI can keep an existing site preview up to date. From your
-site directory, run:
+For a one-terminal editing preview on the pinned Node runtime, run:
+
+```sh
+node "$LATTICE_CLI" serve
+```
+
+Open `http://127.0.0.1:4321/`. `-p 8000` selects another port; use your usual
+`--config`, `--collections`, `-o` and `--drafts` options when needed. The server
+binds loopback only, serves the selected output directory, and injects browser
+live reload into HTML responses without changing files on disk. Successful builds
+reload connected pages; failed validation keeps the previous output and waits for
+a corrected edit. Stop with Ctrl+C. This is a local development preview, not a
+deployment server. Ordinary build wikilink-warning behavior still applies.
+
+The HTTP worker stays responsive while the CLI polls or builds. It serves JS/WASM
+and binary assets, returns 404 for missing files, and refuses paths or symlinks
+that escape the output root. Native builds retain their existing server backend;
+WASM-only CLI targets do not provide a server.
+
+If you prefer a separate HTTP server or `build --strict-wikilinks --watch`, the
+JavaScript CLI can also keep that preview up to date. From your site directory, run:
 
 ```sh
 node "$LATTICE_CLI" build --watch

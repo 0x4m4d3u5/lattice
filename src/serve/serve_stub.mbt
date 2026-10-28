@@ -1,7 +1,7 @@
 ///|
-/// Stub implementations for non-native targets (JS, WASM).
-/// The dev server requires OS-level sockets, so it is only available
-/// when compiled to native. These stubs satisfy the type-checker.
+/// Stub implementations for WASM targets.
+/// Node and native have separate socket adapters. These stubs satisfy the
+/// type-checker for standalone WASM without a host socket integration.
 
 ///|
 pub fn start(_port : Int, _root : String) -> Bool {

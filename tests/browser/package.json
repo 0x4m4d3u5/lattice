@@ -2,6 +2,6 @@
   "name": "lattice-browser-note-proof",
   "private": true,
   "type": "module",
-  "scripts": { "test": "node catalogue.mjs && node run.mjs && node search.mjs && node reader.mjs && node wiki-starter.mjs && node native-assets.mjs" },
+  "scripts": { "test": "node catalogue.mjs && node run.mjs && node search.mjs && node reader.mjs && node wiki-starter.mjs && node native-assets.mjs && node js-serve.mjs" },
   "devDependencies": { "playwright": "1.63.0" }
 }
