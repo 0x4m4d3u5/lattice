@@ -1,6 +1,24 @@
 # Schema Syntax
 
-Schemas define which frontmatter fields a collection accepts and what types those fields must have. lattice validates each document against that contract before rendering it. A schema failure skips that document and makes the build fail; other valid documents can still be written, and previous output can remain.
+Schemas define which frontmatter fields a collection accepts and what types those fields must have. Lattice validates each document against that contract before publication. A schema failure prevents publication of the prepared build; previous output remains. See [build safety](build-safety.md) for the boundary of that guarantee.
+
+## Finding an invalid array item
+
+`check` and `build` identify the first invalid item in an array field, using
+item numbers starting at **1**. For example, with
+`topics:Array[Enum["guide","journal"]]`, the value `["guide", "guid"]` reports:
+
+```text
+topics: expected Array[Enum["guide","journal"]] but got incompatible value; item 2: expected one of Enum["guide","journal"], got "guid"
+```
+
+Fix that item and check again. Nested arrays report an item number at each
+level. Diagnostics retain the root field's assignment line, rather than claiming
+an exact item column. Text and JSON output carry the same detail, with one
+structural type violation per invalid field; reference resolution can report
+additional errors. A value that is not an array still reports
+the expected array type. This does not change which values a schema accepts or
+rewrite any source content. `lattice explain E002` also describes this workflow.
 
 ## Where schemas are declared
 

@@ -1144,10 +1144,11 @@ pub fn explain_error_code(code : String) -> String? {
         "  Causes:\n" +
         "    • A field has the wrong type (e.g. string where int was expected)\n" +
         "    • A value is out of range (e.g. negative page_size)\n" +
-        "    • A required sub-field within a complex type is absent\n\n" +
+        "    • An array item fails its element type or constraint\n\n" +
         "  Fix:\n" +
         "    • Run `lattice check` to see the field name and expected type\n" +
         "    • Compare the value in the .md file against the collection schema definition\n" +
+        "    • For arrays, item numbers start at 1; fix the first reported item and check again\n" +
         "    • Ensure string values are quoted and numeric values are unquoted\n\n" +
         "  Example:\n" +
         "    content/posts/hello.md:3:1: schema error: 'date' expected type Date, got \"yesterday\"\n" +

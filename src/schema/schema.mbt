@@ -324,6 +324,128 @@ fn is_valid_slug(s : String) -> Bool {
   ok
 }
 
+///|
+// Optional wrappers do not change a present array item's constraint. Keep this
+// unwrapping local to item diagnostics so existing scalar messages stay stable.
+fn array_item_type(field_type : FieldType) -> FieldType {
+  match field_type {
+    TOptional(inner) => array_item_type(inner)
+    other => other
+  }
+}
+
+///|
+// Describe a known mismatch. Arrays retain the existing field-level message and
+// add the first invalid item's one-based position and scalar constraint detail.
+fn type_mismatch_message(
+  val : @frontmatter.FrontmatterValue,
+  expected : FieldType,
+) -> String {
+  match (expected, val) {
+    (TArray(inner), @frontmatter.FArray(items)) => {
+      let prefix = "expected " +
+        field_type_name(expected) +
+        " but got incompatible value"
+      for i, item in items {
+        if !type_matches(item, inner) {
+          return prefix +
+            "; item " +
+            (i + 1).to_string() +
+            ": " +
+            type_mismatch_message(item, array_item_type(inner))
+        }
+      }
+      prefix // Called only after type_matches rejects the value.
+    }
+    (TString(minlen, maxlen), @frontmatter.FStr(s)) => {
+      // Construct a length constraint description for the error message.
+      // Truncate the actual value to ~30 chars for actionability.
+      let display = if s.length() > 30 {
+        @strutil.substr(s, 0, 30) + "..."
+      } else {
+        s
+      }
+      let constraint = match (minlen, maxlen) {
+        (Some(lo), Some(hi)) =>
+          "minlen=" + lo.to_string() + ", maxlen=" + hi.to_string()
+        (Some(lo), None) => "minlen=" + lo.to_string()
+        (None, Some(hi)) => "maxlen=" + hi.to_string()
+        (None, None) => "" // unreachable: TString(None,None) matches everything
+      }
+      "expected String with " +
+      constraint +
+      ", got length " +
+      s.length().to_string() +
+      ": \"" +
+      display +
+      "\""
+    }
+    (TEnum(_), @frontmatter.FStr(s)) =>
+      "expected one of " + field_type_name(expected) + ", got \"" + s + "\""
+    (TSlug, @frontmatter.FStr(s)) =>
+      "expected a URL slug (lowercase alphanumeric and hyphens), got: \"" +
+      s +
+      "\""
+    (TRef(_), @frontmatter.FStr(s)) =>
+      "expected a valid slug reference, got: \"" + s + "\""
+    (TDateTime(after, before), @frontmatter.FStr(s)) =>
+      // If the value isn't even a valid datetime, say so.
+      // Otherwise, construct a temporal range description.
+      if !is_valid_iso8601_datetime(s) {
+        "expected ISO 8601 datetime (YYYY-MM-DDTHH:MM:SS[Z|+HH:MM]), got: \"" +
+        s +
+        "\""
+      } else {
+        let range = match (after, before) {
+          (Some(lo), Some(hi)) => "after " + lo + " and before " + hi
+          (Some(lo), None) => "after " + lo
+          (None, Some(hi)) => "before " + hi
+          (None, None) => "" // unreachable
+        }
+        "expected DateTime " + range + ", got: " + s
+      }
+    (TDateTime(_), @frontmatter.FDate(s)) =>
+      "expected ISO 8601 datetime (YYYY-MM-DDTHH:MM:SS[Z|+HH:MM]), got date-only value: " +
+      s
+    (TDate(after, before), @frontmatter.FDate(s)) => {
+      // Construct a temporal range description for the error message.
+      // "expected Date after 2020-01-01, got: 2019-12-31"
+      let range = match (after, before) {
+        (Some(lo), Some(hi)) => "after " + lo + " and before " + hi
+        (Some(lo), None) => "after " + lo
+        (None, Some(hi)) => "before " + hi
+        (None, None) => "" // unreachable: TDate(None,None) matches everything
+      }
+      "expected Date " + range + ", got: " + s
+    }
+    (TInt(min, max), @frontmatter.FInt(n)) => {
+      // Construct a range description for the error message.
+      // "expected Int in range [1, 100], got: 0"
+      let range = match (min, max) {
+        (Some(lo), Some(hi)) =>
+          "[" + lo.to_string() + ", " + hi.to_string() + "]"
+        (Some(lo), None) => "[" + lo.to_string() + ", ∞)"
+        (None, Some(hi)) => "(-∞, " + hi.to_string() + "]"
+        (None, None) => "" // unreachable: TInt(None,None) matches everything
+      }
+      "expected Int in range " + range + ", got: " + n.to_string()
+    }
+    (TFloat(min, max), @frontmatter.FFloat(n)) => {
+      // Construct a range description for the error message.
+      // "expected Float in range [0.0, 5.0], got: -1.0"
+      let range = match (min, max) {
+        (Some(lo), Some(hi)) =>
+          "[" + lo.to_string() + ", " + hi.to_string() + "]"
+        (Some(lo), None) => "[" + lo.to_string() + ", ∞)"
+        (None, Some(hi)) => "(-∞, " + hi.to_string() + "]"
+        (None, None) => "" // unreachable: TFloat(None,None) matches everything
+      }
+      "expected Float in range " + range + ", got: " + n.to_string()
+    }
+    _ => "expected " + field_type_name(expected) + " but got incompatible value"
+  }
+}
+
 // ── public API ────────────────────────────────────────────────────────────────
 
 ///|
@@ -352,102 +474,7 @@ pub fn validate(
           t => t
         }
         if !type_matches(val, expected) {
-          // Specialized error message for enum and slug mismatches
-          let error_msg = match (expected, val) {
-            (TString(minlen, maxlen), @frontmatter.FStr(s)) => {
-              // Construct a length constraint description for the error message.
-              // Truncate the actual value to ~30 chars for actionability.
-              let display = if s.length() > 30 {
-                @strutil.substr(s, 0, 30) + "..."
-              } else {
-                s
-              }
-              let constraint = match (minlen, maxlen) {
-                (Some(lo), Some(hi)) =>
-                  "minlen=" + lo.to_string() + ", maxlen=" + hi.to_string()
-                (Some(lo), None) => "minlen=" + lo.to_string()
-                (None, Some(hi)) => "maxlen=" + hi.to_string()
-                (None, None) => "" // unreachable: TString(None,None) matches everything
-              }
-              "expected String with " +
-              constraint +
-              ", got length " +
-              s.length().to_string() +
-              ": \"" +
-              display +
-              "\""
-            }
-            (TEnum(_), @frontmatter.FStr(s)) =>
-              "expected one of " +
-              field_type_name(expected) +
-              ", got \"" +
-              s +
-              "\""
-            (TSlug, @frontmatter.FStr(s)) =>
-              "expected a URL slug (lowercase alphanumeric and hyphens), got: \"" +
-              s +
-              "\""
-            (TRef(_), @frontmatter.FStr(s)) =>
-              "expected a valid slug reference, got: \"" + s + "\""
-            (TDateTime(after, before), @frontmatter.FStr(s)) =>
-              // If the value isn't even a valid datetime, say so.
-              // Otherwise, construct a temporal range description.
-              if !is_valid_iso8601_datetime(s) {
-                "expected ISO 8601 datetime (YYYY-MM-DDTHH:MM:SS[Z|+HH:MM]), got: \"" +
-                s +
-                "\""
-              } else {
-                let range = match (after, before) {
-                  (Some(lo), Some(hi)) => "after " + lo + " and before " + hi
-                  (Some(lo), None) => "after " + lo
-                  (None, Some(hi)) => "before " + hi
-                  (None, None) => "" // unreachable
-                }
-                "expected DateTime " + range + ", got: " + s
-              }
-            (TDateTime(_), @frontmatter.FDate(s)) =>
-              "expected ISO 8601 datetime (YYYY-MM-DDTHH:MM:SS[Z|+HH:MM]), got date-only value: " +
-              s
-            (TDate(after, before), @frontmatter.FDate(s)) => {
-              // Construct a temporal range description for the error message.
-              // "expected Date after 2020-01-01, got: 2019-12-31"
-              let range = match (after, before) {
-                (Some(lo), Some(hi)) => "after " + lo + " and before " + hi
-                (Some(lo), None) => "after " + lo
-                (None, Some(hi)) => "before " + hi
-                (None, None) => "" // unreachable: TDate(None,None) matches everything
-              }
-              "expected Date " + range + ", got: " + s
-            }
-            (TInt(min, max), @frontmatter.FInt(n)) => {
-              // Construct a range description for the error message.
-              // "expected Int in range [1, 100], got: 0"
-              let range = match (min, max) {
-                (Some(lo), Some(hi)) =>
-                  "[" + lo.to_string() + ", " + hi.to_string() + "]"
-                (Some(lo), None) => "[" + lo.to_string() + ", ∞)"
-                (None, Some(hi)) => "(-∞, " + hi.to_string() + "]"
-                (None, None) => "" // unreachable: TInt(None,None) matches everything
-              }
-              "expected Int in range " + range + ", got: " + n.to_string()
-            }
-            (TFloat(min, max), @frontmatter.FFloat(n)) => {
-              // Construct a range description for the error message.
-              // "expected Float in range [0.0, 5.0], got: -1.0"
-              let range = match (min, max) {
-                (Some(lo), Some(hi)) =>
-                  "[" + lo.to_string() + ", " + hi.to_string() + "]"
-                (Some(lo), None) => "[" + lo.to_string() + ", ∞)"
-                (None, Some(hi)) => "(-∞, " + hi.to_string() + "]"
-                (None, None) => "" // unreachable: TFloat(None,None) matches everything
-              }
-              "expected Float in range " + range + ", got: " + n.to_string()
-            }
-            _ =>
-              "expected " +
-              field_type_name(expected) +
-              " but got incompatible value"
-          }
+          let error_msg = type_mismatch_message(val, expected)
           errors.push({ field: fdef.name, message: error_msg })
         }
       }
