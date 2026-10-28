@@ -232,3 +232,9 @@ test "ymd_pad4 one digit" {
 test "ymd_pad4 five digits no truncation" {
   assert_eq(@watch.ymd_pad4(12345), "12345")
 }
+
+///|
+test "nonpositive polling delays return immediately" {
+  @watch.sleep_ms(0)
+  @watch.sleep_ms(-1)
+}
