@@ -241,9 +241,9 @@ If you prefer not to set `collections_file` in the config, pass it explicitly:
 lattice build ./content -o ./dist --config ./lattice.toml --collections ./collections.cfg
 ```
 
-## Rebuild while editing a collection
+## Rebuild while editing
 
-The JavaScript CLI can keep an existing collection preview up to date. From your
+The JavaScript CLI can keep an existing site preview up to date. From your
 site directory, run:
 
 ```sh
@@ -257,8 +257,12 @@ needed. In a second terminal, serve the output:
 python3 -m http.server 8000 --directory dist
 ```
 
-Edit a file in a configured collection, then reload the browser after the watcher
-reports a completed build. It also watches the selected config, collections file,
+Edit a root note such as `content/index.md`, a file in the standalone directory,
+or a configured collection, then reload the browser after the watcher reports a
+completed build. Root and standalone Markdown files are discovered on every poll,
+including additions, renames and removals. The standalone directory defaults to
+`content/standalone`; `standalone_dir` selects another directory, and changing it
+updates the watcher. It also watches the selected config, collections file,
 template, data and static directories. This polling workflow does not inject
 browser live reload or start an HTTP server. Stop each process with Ctrl+C.
 `--watch-interval 1000` changes the default 500 ms polling interval. The Node
@@ -268,9 +272,13 @@ still require work proportional to the site.
 Validation errors preserve the last good output, and the watcher continues so a
 corrected edit can rebuild. Broken wikilinks remain build warnings; use `check
 --watch` for strict validation without publication. Existing stale-output and
-non-atomic disk-write limits still apply. The current watch roots cover configured
-collections, not root or standalone Markdown pages outside those collections;
-run a one-shot check/build for edits to those pages.
+non-atomic disk-write limits still apply. Root and standalone discovery covers immediate `.md` files (case-insensitive),
+matching the builder; it does not recursively discover nested Markdown pages.
+The shallow scan excludes directory timestamps and non-Markdown output, so an
+output directory nested under the content root does not become a new watch root.
+Existing recursive collection/template/data/static watches are unchanged; avoid
+placing generated output inside those watched input directories. Removing a
+source updates generated indexes but does not delete previously published files.
 
 ## Machine-readable checks
 

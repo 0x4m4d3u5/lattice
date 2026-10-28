@@ -19,6 +19,8 @@ echo "Running machine-readable CLI check fixture"
 node scripts/check-cli-json.mjs || status=1
 echo "Running JavaScript watch author workflow"
 node scripts/check-js-watch.mjs || status=1
+echo "Running root and standalone watch workflow"
+node scripts/check-watch-pages.mjs || status=1
 echo "Running schema-driven new-content fixture"
 node scripts/check-new-content.mjs || status=1
 echo "Running CLI cross-note heading fixture"
