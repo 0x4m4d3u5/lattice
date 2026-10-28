@@ -68,4 +68,31 @@ assert.ok(cleanText.stdout.includes('[lattice] checking content') && cleanText.s
 const invalidText = run(['-c', 'invalid.cfg']);
 assert.equal(invalidText.status, 1);
 assert.ok(invalidText.stdout.includes('invalid.cfg') && invalidText.stdout.includes("missing required field 'title'"));
-console.log('CLI JSON: clean/content/config/collections/I/O results, locations, summaries, escaping, text compatibility and read-only output passed');
+// Authors need the failing array item, not just the enclosing array type.
+// Keep the root field's source line and the existing one-violation-per-field contract.
+write('collections.cfg', '[posts]\ndir = content/posts\nschema = title:String, topics:Optional[Array[Enum["guide","journal"]]], scores:Optional[Array[Int(min=1,max=5)]], grid:Optional[Array[Array[Bool]]]\n');
+for (const [fence, separator] of [['---', ':'], ['+++', '=']]) {
+  for (const [field, value, detail] of [
+    ['topics', '["guide", "guid", "journl"]', 'topics: expected Array[Enum["guide","journal"]] but got incompatible value; item 2: expected one of Enum["guide","journal"], got "guid"'],
+    ['scores', '[1, 9, 0]', 'scores: expected Array[Int(min=1, max=5)] but got incompatible value; item 2: expected Int in range [1, 5], got: 9'],
+    ['grid', '[[true], [false, "no"]]', 'grid: expected Array[Array[Bool]] but got incompatible value; item 2: expected Array[Bool] but got incompatible value; item 2: expected Bool but got incompatible value'],
+    ['scores', '"wrong container"', 'scores: expected Array[Int(min=1, max=5)] but got incompatible value'],
+  ]) {
+    write('content/posts/note.md', `${fence}\ntitle ${separator} "Note"\n${field} ${separator} ${value}\n${fence}\nBody.\n`);
+    const report = json([], 1, 'schema', 'content/posts/note.md', 3);
+    assert.equal(report.violations[0].message, detail);
+    const text = run([]);
+    assert.equal(text.status, 1);
+    assert.ok(text.stdout.includes(detail), text.stdout);
+    if (field === 'topics') {
+      const build = spawnSync(process.execPath, [cli, 'build', 'content', '-c', 'site.cfg'], { cwd: root, encoding: 'utf8', timeout: 30_000 });
+      assert.ifError(build.error);
+      assert.equal(build.status, 1, build.stdout + build.stderr);
+      assert.ok((build.stdout + build.stderr).includes(detail), build.stdout + build.stderr);
+      assert.deepEqual(outputSnapshot(), before, 'invalid array must not replace published output');
+    }
+  }
+  write('content/posts/note.md', `${fence}\ntitle ${separator} "Note"\ntopics ${separator} ["guide", "journal"]\nscores ${separator} [1, 5]\ngrid ${separator} [[true], []]\n${fence}\nBody.\n`);
+  json([], 0);
+}
+console.log('CLI JSON: clean/content/config/collections/I/O results, array item diagnostics, locations, summaries, escaping, text compatibility and read-only output passed');
