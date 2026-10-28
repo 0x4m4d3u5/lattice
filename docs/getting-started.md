@@ -241,6 +241,37 @@ If you prefer not to set `collections_file` in the config, pass it explicitly:
 lattice build ./content -o ./dist --config ./lattice.toml --collections ./collections.cfg
 ```
 
+## Rebuild while editing a collection
+
+The JavaScript CLI can keep an existing collection preview up to date. From your
+site directory, run:
+
+```sh
+node "$LATTICE_CLI" build --watch
+```
+
+Use the same `--config` and `--collections` options as your one-shot build when
+needed. In a second terminal, serve the output:
+
+```sh
+python3 -m http.server 8000 --directory dist
+```
+
+Edit a file in a configured collection, then reload the browser after the watcher
+reports a completed build. It also watches the selected config, collections file,
+template, data and static directories. This polling workflow does not inject
+browser live reload or start an HTTP server. Stop each process with Ctrl+C.
+`--watch-interval 1000` changes the default 500 ms polling interval. The Node
+watcher sleeps between polls rather than spinning the CPU; scanning and rebuilding
+still require work proportional to the site.
+
+Validation errors preserve the last good output, and the watcher continues so a
+corrected edit can rebuild. Broken wikilinks remain build warnings; use `check
+--watch` for strict validation without publication. Existing stale-output and
+non-atomic disk-write limits still apply. The current watch roots cover configured
+collections, not root or standalone Markdown pages outside those collections;
+run a one-shot check/build for edits to those pages.
+
 ## Machine-readable checks
 
 For an editor or CI consumer, run a one-shot check with JSON output:

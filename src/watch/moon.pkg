@@ -8,5 +8,7 @@ options(
   targets: {
     "watch_native.mbt": [ "native", "llvm" ],
     "watch_stub.mbt": [ "js", "wasm", "wasm-gc" ],
+    "watch_sleep_js.mbt": [ "js" ],
+    "watch_sleep_wasm.mbt": [ "wasm", "wasm-gc" ],
   },
 )
