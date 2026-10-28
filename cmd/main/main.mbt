@@ -38,6 +38,7 @@ pub(all) struct CliOptions {
 priv struct CliState {
   build_config : @builder.BuildConfig
   watch_roots : Array[String]
+  watch_source_dirs : Array[String]
 }
 
 ///|
@@ -827,7 +828,11 @@ fn load_cli_state(
     watch_roots.push(collections[i].content_dir)
     i = i + 1
   }
-  Ok({ build_config, watch_roots, })
+  let watch_source_dirs = [
+    options.content_dir,
+    site.standalone_dir.unwrap_or(options.content_dir + "/standalone"),
+  ]
+  Ok({ build_config, watch_roots, watch_source_dirs, })
 }
 
 ///|
@@ -987,7 +992,11 @@ fn run_watch(options : CliOptions, initial_state : CliState) -> Unit {
   }
 
   let mut current_roots = initial_state.watch_roots
-  let mut snapshot = @watch.take_snapshot(current_roots) catch {
+  let mut current_source_dirs = initial_state.watch_source_dirs
+  let mut snapshot = @watch.take_snapshot(
+    current_roots,
+    source_dirs=current_source_dirs,
+  ) catch {
     @watch.IOError(msg) => {
       print_diagnostic_main(cli_error("watch snapshot failed: " + msg))
       @sys.exit(1)
@@ -1004,7 +1013,10 @@ fn run_watch(options : CliOptions, initial_state : CliState) -> Unit {
       }
       return
     }
-    let next_snapshot = @watch.take_snapshot(current_roots) catch {
+    let next_snapshot = @watch.take_snapshot(
+      current_roots,
+      source_dirs=current_source_dirs,
+    ) catch {
       @watch.IOError(msg) => {
         print_diagnostic_main(cli_warning("watch snapshot failed: " + msg))
         continue
@@ -1030,13 +1042,17 @@ fn run_watch(options : CliOptions, initial_state : CliState) -> Unit {
           options.check_json,
         )
         current_roots = state.watch_roots
+        current_source_dirs = state.watch_source_dirs
         if options.serve_mode {
           @serve.broadcast_reload()
         }
       }
       Err(_) => ()
     }
-    snapshot = @watch.take_snapshot(current_roots) catch {
+    snapshot = @watch.take_snapshot(
+      current_roots,
+      source_dirs=current_source_dirs,
+    ) catch {
       @watch.IOError(msg) => {
         print_diagnostic_main(
           cli_warning("watch snapshot failed after rebuild: " + msg),

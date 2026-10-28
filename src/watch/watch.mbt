@@ -48,8 +48,43 @@ fn collect_snapshot_entries(
 }
 
 ///|
+// Match the builder's shallow Markdown source collection. Do not stamp the
+// directory itself: output or unrelated nested files may share this directory.
+fn collect_markdown_snapshot_entries(
+  path : String,
+  entries : Array[SnapshotEntry],
+) -> Unit raise WatchError {
+  if !@fs.path_exists(path) {
+    return
+  }
+  let is_dir = @fs.is_dir(path) catch {
+    @fs.IOError(msg) => raise IOError("cannot stat " + path + ": " + msg)
+  }
+  if !is_dir {
+    return
+  }
+  let children = @fs.read_dir(path) catch {
+    @fs.IOError(msg) => raise IOError("cannot read directory " + path + ": " + msg)
+  }
+  for child in children {
+    if child.to_lower().has_suffix(".md") {
+      let child_path = path + "/" + child
+      let is_dir = @fs.is_dir(child_path) catch {
+        @fs.IOError(msg) => raise IOError("cannot stat " + child_path + ": " + msg)
+      }
+      if !is_dir {
+        entries.push({ path: child_path, stamp: file_mtime_millis(child_path) })
+      }
+    }
+  }
+}
+
+///|
+/// Snapshot recursive dependencies and optional shallow Markdown source dirs.
+/// Missing source directories are rescanned so later files are discovered.
 pub fn take_snapshot(
   paths : Array[String],
+  source_dirs? : Array[String] = [],
 ) -> Array[SnapshotEntry] raise WatchError {
   let roots : Array[String] = []
   let mut i = 0
@@ -72,7 +107,19 @@ pub fn take_snapshot(
     collect_snapshot_entries(deduped[i], entries)
     i = i + 1
   }
-  entries
+  for path in source_dirs {
+    collect_markdown_snapshot_entries(path, entries)
+  }
+  // diff_paths expects global path order, including overlapping roots. Use the
+  // standard array sort rather than relying on recursive traversal order.
+  entries.sort_by_key(entry => entry.path)
+  let unique : Array[SnapshotEntry] = []
+  for i in 0..<entries.length() {
+    if i == 0 || entries[i].path != entries[i - 1].path {
+      unique.push(entries[i])
+    }
+  }
+  unique
 }
 
 ///|
