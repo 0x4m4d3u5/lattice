@@ -968,6 +968,26 @@ fn parse_inlines_with_code_ranges(
       }
       text_start = i
     } else if c == '[' {
+      // A clickable thumbnail has one image as the complete link label.
+      // Recognize it only in active inline text, using the existing literal
+      // alt and balanced destination matchers. Other labels keep their grammar.
+      if i + 2 < to && @strutil.char_at(s, i + 1) == '!' &&
+        @strutil.char_at(s, i + 2) == '[' {
+        let alt_close = label_close_at(i + 2)
+        if alt_close >= 0 && alt_close + 1 < to &&
+          @strutil.char_at(s, alt_close + 1) == '(' &&
+          destination_at(alt_close + 1) is Some((image_url, image_end)) &&
+          image_end + 2 < to && @strutil.char_at(s, image_end + 1) == ']' &&
+          @strutil.char_at(s, image_end + 2) == '(' &&
+          destination_at(image_end + 2) is Some((link_url, link_end)) {
+          if text_start < i { result.push(Text(@strutil.substr(s, text_start, i))) }
+          let alt = decode_link_punctuation(s, i + 3, alt_close)
+          result.push(Link([Image(alt, image_url)], link_url))
+          i = link_end + 1
+          text_start = i
+          continue
+        }
+      }
       // Check for footnote reference: [^label]
       if i + 2 < to && @strutil.char_at(s, i + 1) == '^' {
         let bracket_close = @strutil.find_char(s, i + 2, ']', to)

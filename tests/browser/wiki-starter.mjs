@@ -63,7 +63,10 @@ run(cli, ['new', 'Guides', '--name', 'field-journal'], starter);
 const journal = join(starter, 'content/guides/field-journal.md');
 assert.ok(readFileSync(journal, 'utf8').includes('title:'));
 const authoredExample = readme.match(/```md\n([\s\S]*?)```/)[1];
-writeFileSync(journal, authoredExample);
+writeFileSync(journal, authoredExample + '\n[![Garden map](/static/map.svg)](/static/map-large.svg)\n');
+const mapSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="160" height="80" viewBox="0 0 160 80"><rect width="160" height="80" fill="#28734a"/><path d="M0 40H160" stroke="white" stroke-width="6"/></svg>';
+writeFileSync(join(starter, 'content/static/map.svg'), mapSvg);
+writeFileSync(join(starter, 'content/static/map-large.svg'), mapSvg.replace('width="160" height="80"', 'width="640" height="320"'));
 writeFileSync(guide, readFileSync(guide, 'utf8') + '\n[[field-journal|Field journal]]\n');
 const authored = snapshot(starter);
 assert.deepEqual(check().violations, []);
@@ -82,7 +85,7 @@ function register(directory, prefix = '') {
   }
 }
 register(output);
-const mime = { '.html': 'text/html', '.css': 'text/css', '.js': 'text/javascript', '.json': 'application/json', '.wasm': 'application/wasm' };
+const mime = { '.svg': 'image/svg+xml', '.html': 'text/html', '.css': 'text/css', '.js': 'text/javascript', '.json': 'application/json', '.wasm': 'application/wasm' };
 const server = createServer((request, response) => {
   const file = assets.get(new URL(request.url, 'http://localhost').pathname);
   if (!file) { response.writeHead(404); response.end(); return; }
@@ -113,6 +116,24 @@ try {
       assert.equal(await meta.count(), 1);
       assert.equal(await meta.getAttribute('content'), value);
     }
+  }
+  for (const width of [1440, 390]) {
+    await published.setViewportSize({ width, height: 900 });
+    await published.goto(origin + urlFor('Field journal'));
+    const thumbnail = published.getByRole('img', { name: 'Garden map', exact: true });
+    await thumbnail.waitFor();
+    assert.equal(await thumbnail.evaluate(img => img.complete && img.naturalWidth > 0), true);
+    assert.equal(await published.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+    const link = published.getByRole('link', { name: 'Garden map', exact: true });
+    assert.equal(await link.getAttribute('href'), '/static/map-large.svg');
+    await link.focus();
+    if (process.env.LATTICE_PREVIEW_DIR) {
+      mkdirSync(process.env.LATTICE_PREVIEW_DIR, { recursive: true });
+      await published.screenshot({ path: join(process.env.LATTICE_PREVIEW_DIR, `linked-thumbnail-${width}.png`) });
+    }
+    await Promise.all([published.waitForURL(origin + '/static/map-large.svg'), link.press('Enter')]);
+    await published.goBack();
+    assert.equal(new URL(published.url()).pathname, urlFor('Field journal'));
   }
   await noJS.close();
   const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });

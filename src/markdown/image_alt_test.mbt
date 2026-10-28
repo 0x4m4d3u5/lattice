@@ -41,12 +41,12 @@ test "missing image alt excludes code math raw HTML and explicit decorative shor
     ] {
     assert_eq(@markdown.missing_image_alt_urls(body), [])
   }
-  // Current parser does not render linked-image syntax as an Image node.
+  // Linked inline images use the same Image node and alt policy.
   assert_eq(
     @markdown.missing_image_alt_urls("[![](/linked.png)](/destination)"),
-    [],
+    ["/linked.png"],
   )
-  assert_false(
+  assert_true(
     @markdown.render("[![](/linked.png)](/destination)", Map([])).contains(
       "<img",
     ),

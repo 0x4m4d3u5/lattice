@@ -92,6 +92,25 @@ server running, reload the overview, open **Field journal** under **Guides**,
 or search for **copperleaf**. Follow the note's link back to **Getting started**.
 Repeat check and build after editing; the plain HTTP server does not rebuild.
 
+## Publish a clickable image
+
+Put a thumbnail and its larger image under `content/static/`, then use an inline
+image as the complete link label in your note:
+
+```md
+[![Garden map showing the walking paths](/static/map.png)](/static/map-large.png)
+```
+
+This thumbnail form supports one inline image as the whole label. Mixed
+text/image labels and reference-style images are outside this support.
+
+Check and build as usual. Readers can activate the image with a pointer or
+keyboard, including without JavaScript. The image alt text names the link; use a
+useful description. With `require_image_alt = true`, blank alt text in linked
+images fails the same [editorial check](editorial-checks.md) as ordinary images.
+The source and destination files still need to exist; this syntax does not copy
+images from arbitrary source locations or check remote image availability.
+
 ## Add the reader to an existing site
 
 Enable `content_index_file = content-index.json` in your site's configuration.

@@ -183,3 +183,34 @@ test "shortcode image alt policy keeps explicit decoration and native shortcode 
     )
   }
 }
+
+///|
+test "linked thumbnail publishes and alt failure preserves the previous build" {
+  let config = image_alt_policy(publication_fixture("linked_thumbnail"))
+  let source = config.content_dir + "/posts/alpha.md"
+  let valid = "---\ntitle: Alpha\ndate: 2026-01-02\n---\n[![Garden map](/static/map.svg)](/static/map-large.svg)\n"
+  @fs.write_string_to_file(source, valid)
+  assert_eq(@builder.check(config).violations.length(), 0)
+  publication_seed_success(config)
+  assert_true(
+    @fs.read_file_to_string(config.output_dir + "/posts/alpha/index.html").contains(
+      "<a href=\"/static/map-large.svg\"><img src=\"/static/map.svg\" alt=\"Garden map\" /></a>",
+    ),
+  )
+  let snapshot = publication_snapshot(config.output_dir)
+  @fs.write_string_to_file(
+    source,
+    valid.replace_all(old="![Garden map]", new="![]"),
+  )
+  let checked = @builder.check(config)
+  assert_eq(
+    checked.violations.filter(v => v.kind == @lint.MissingImageAlt).length(),
+    1,
+  )
+  assert_true(
+    @lint.format_violations_json(checked).contains("missing_image_alt"),
+  )
+  assert_eq(publication_snapshot(config.output_dir), snapshot)
+  assert_true(@builder.build(config, publication_load_cache(config)).errors > 0)
+  assert_eq(publication_snapshot(config.output_dir), snapshot)
+}
