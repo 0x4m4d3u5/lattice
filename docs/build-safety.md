@@ -27,6 +27,23 @@ and broken wikilinks still render as text in
 ordered overwrite behavior. `check` remains stricter about wikilinks. This change
 does not add new content-discovery, draft-filtering, or URL-collision policies.
 
+## Strict wikilink publication
+
+Use `lattice build --strict-wikilinks` to reject unresolved wiki page and fragment
+targets before any output, cache or manifest writes. It resolves the published
+source pages against the page index and validates fragments against the final
+prepared HTML, including template IDs and output overwrites. Hidden drafts are
+skipped unless `--drafts` is supplied. Normal `build` keeps its existing warning
+policy.
+
+Strict mode rebuilds all pages so cached HTML cannot hide a missing fragment.
+It uses the same prepared output that is published, rather than invoking a
+separate `check` followed by `build`. The flag also applies to each `build --watch`
+rebuild; a failed rebuild leaves the last published output intact. This is not
+an audit of ordinary Markdown links, external URLs or every `check` diagnostic.
+Use `check` for read-only linting and its suggestions. Publication I/O remains
+subject to the limits below.
+
 ## What this does not guarantee
 
 This is a preparation gate, **not an atomic filesystem transaction**. The pinned

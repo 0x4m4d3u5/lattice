@@ -151,6 +151,69 @@ fn published_html_fragments(
 }
 
 ///|
+/// Validate visible authored wikilinks against one complete publication plan.
+/// Resolution retains the existing lookup aliases; actual final files decide
+/// whether a resolved destination (including a hidden draft) will be published.
+fn check_output_wikilinks(
+  collections : Array[CollectionSources],
+  page_index : Map[String, String],
+  source_urls : Map[String, String],
+  config : BuildConfig,
+  output : OutputPlan,
+  violations : Array[@lint.LintViolation],
+) -> Unit {
+  let final_paths : Map[String, Bool] = Map([])
+  for (path, _) in output.files {
+    final_paths.set(path, true)
+  }
+  for collection in collections {
+    for source in collection.sources {
+      if !source_is_visible(source, config.include_drafts) {
+        continue
+      }
+      let body = match @frontmatter.parse(source.content) {
+        Ok(fm) => fm.body
+        Err(_) => continue
+      }
+      let (links, errors) = @wikilink.resolve(
+        @wikilink.extract(body, source.path), page_index,
+      )
+      for error in errors {
+        let (line, column) = fragment_link_location(source.content, error.link)
+        violations.push({
+          path: source.path,
+          line,
+          column,
+          kind: @lint.BrokenWikilink,
+          message: "[[" + error.link.target + "]]: " + error.message,
+        })
+      }
+      for link in links {
+        // Fragment validation below also rejects absent final destination files.
+        if link.url.contains("#") {
+          continue
+        }
+        let path = output_path_key(config.output_dir + link.url + "index.html")
+        if !final_paths.contains(path) {
+          let (line, column) = fragment_link_location(source.content, link.raw)
+          violations.push({
+            path: source.path,
+            line,
+            column,
+            kind: @lint.BrokenWikilink,
+            message: "[[" + link.raw.target + "]]: destination '" +
+            link.url + "' is not in the publication plan",
+          })
+        }
+      }
+    }
+  }
+  check_output_fragments(
+    collections, page_index, source_urls, config, output, violations,
+  )
+}
+
+///|
 fn check_output_fragments(
   collections : Array[CollectionSources],
   page_index : Map[String, String],
