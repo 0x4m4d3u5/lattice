@@ -163,6 +163,18 @@ through native browser navigation. Older indexes and uncertain targets keep the
 page-only link; heading labels are never converted into guessed slugs. A same-page
 passage link closes mobile navigation before the browser scrolls to the target. Other or
 malformed URLs remain non-navigable text.
+
+Published article headings also gain a small **#** section link when JavaScript
+is available, including in notes without a table of contents. Activate it with
+the keyboard or pointer, or use the browser's copy-link/open-in-new-tab action
+to share that passage. These links use the actual published IDs on headings
+H2–H6; they do not guess IDs from heading text. Ambiguous duplicate IDs, encoded
+fragments shadowed by another ID or named anchor, empty targets and existing
+heading self-links are left alone. The links work even if
+search fails, are hidden in print, and do not change no-JavaScript reading or
+existing table-of-contents links. Renaming or removing a heading can still change
+its URL; these links do not create redirects or persistent anchor aliases.
+
 Explicit `sections: []` entries stay excluded. An unavailable or malformed index,
 unsupported runtime or worker failure shows a retry control. Retry reloads the
 index and starts a fresh worker; queries reuse that worker until failure or
