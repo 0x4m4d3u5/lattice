@@ -100,6 +100,10 @@ python3 -m http.server 8000 --directory dist
 Visit http://localhost:8000/ for the welcome note and
 http://localhost:8000/static/search/ for the library and section search.
 Serving is optional and separate from generation; this starter does not deploy.
+For automatic rebuild and browser reload on Node, use
+\`node "$LATTICE_CLI" serve\` instead of Python and visit http://127.0.0.1:4321/.
+This preview binds loopback only. Validation failures keep the last good output;
+fix the source to resume successful rebuilds. Stop with Ctrl+C.
 
 ## Add your first note
 

@@ -10,7 +10,7 @@
 ///   connected browser tab, triggering `location.reload()`.
 ///
 /// The native implementation lives in serve_native.c (pthreads + POSIX sockets).
-/// serve_stub.mbt provides no-op fallbacks for JS/WASM targets.
+/// serve_js.mbt uses a Node Worker. serve_stub.mbt provides WASM fallbacks.
 
 ///|
 pub(all) struct ServeConfig {
