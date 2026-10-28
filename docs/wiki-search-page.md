@@ -156,7 +156,13 @@ non-ASCII case variants remain distinct, matching the retrieval core.
 Selected filters survive ASCII capitalization changes in a reloaded index,
 including when retrying search.
 Only the latest submitted query can update the results; submitting an empty
-query clears them. Search returns up to ten sections. Snippets and titles are
+query clears them. Search initially shows ten sections; **Show more results**
+reveals the next ten in the same ranked order and moves keyboard focus to the
+first newly shown result. At most fifty sections are available per query, matching
+the retrieval core limit. When fifty are returned, the status asks you to refine
+the query or tags; it does not claim that fifty is the total number of matches.
+Submitting another query, clearing it, or retrying search resets the visible batch.
+Snippets and titles are
 inserted as text. HTTP and HTTPS title links use the returned page URL plus an
 encoded publisher-verified fragment when available, opening the matching passage
 through native browser navigation. Older indexes and uncertain targets keep the

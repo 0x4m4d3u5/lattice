@@ -32,7 +32,7 @@ self.addEventListener('message', async ({ data }) => {
       const tags = [...names.values()].sort();
       self.postMessage({ id: data.id, type: 'ready', tags });
     } else if (data.type === 'search') {
-      const response = search(indexJson, data.query, JSON.stringify(data.tags), 10);
+      const response = search(indexJson, data.query, JSON.stringify(data.tags), 50);
       if (response.error !== null) throw new Error('Search failed');
       self.postMessage({ id: data.id, type: 'results', results: response.results });
     }
