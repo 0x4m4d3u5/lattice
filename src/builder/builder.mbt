@@ -4785,9 +4785,10 @@ fn mark_backlink_targets_changed(
 pub fn build(
   config : BuildConfig,
   cache_store : @cache.CacheStore,
+  strict_wikilinks? : Bool = false,
 ) -> BuildResult {
   let output = OutputPlan::new(config.output_dir)
-  let result = prepare_output(config, cache_store, output)
+  let result = prepare_output(config, cache_store, output, strict_wikilinks~)
   if result.errors > 0 {
     return result
   }
@@ -4822,7 +4823,15 @@ fn prepare_output(
   config : BuildConfig,
   cache_store : @cache.CacheStore,
   output : OutputPlan,
+  strict_wikilinks? : Bool = false,
 ) -> BuildResult {
+  // Strict validation needs every final HTML file in this exact preparation.
+  // Incremental skips deliberately omit unchanged authored writes from the plan.
+  let config = if strict_wikilinks {
+    { ..config, force_rebuild: true }
+  } else {
+    config
+  }
   let messages : Array[String] = []
   messages.push(
     "[lattice] building " + config.content_dir + " → " + config.output_dir,
@@ -5212,6 +5221,7 @@ fn prepare_output(
   let content_fragments_by_url : Map[String, Map[Int, String]] = Map([])
   let content_links_by_url : Map[String, Array[@wikilink.ResolvedWikilink]] = Map([],
   )
+  let source_urls : Map[String, String] = Map([])
   let source_output_marks : Map[String, (String, Int)] = Map([])
   // Reserve tag routes in their original write order; render once after ownership
   // is complete, including assets and configurable index destinations.
@@ -5298,6 +5308,7 @@ fn prepare_output(
     while j < coll.sources.length() {
       let src = coll.sources[j]
       let page_url = collection_page_url(coll.definition.name, src.slug)
+      source_urls.set(src.path, page_url)
       let page_context = coll.definition.name + "/" + src.slug
       let out_path = page_output_path(config, coll.definition.name, src.slug)
       let root_out_path = root_page_output_path(config)
@@ -5548,6 +5559,7 @@ fn prepare_output(
     while si < standalone_sources.length() {
       let src = standalone_sources[si]
       let page_url = standalone_page_url(src.slug)
+      source_urls.set(src.path, page_url)
       let out_path = standalone_output_path(config.output_dir, src.slug)
       let page_backlinks_html = match backlink_index.get(src.slug) {
         Some(refs) => render_backlinks_html(refs)
@@ -5698,6 +5710,7 @@ fn prepare_output(
     while ri < root_sources.length() {
       let src = root_sources[ri]
       let page_url = root_page_url(src.slug)
+      source_urls.set(src.path, page_url)
       let out_path = root_output_path(config.output_dir, src.slug)
       let page_backlinks_html = match backlink_index.get(src.slug) {
         Some(refs) => render_backlinks_html(refs)
@@ -6769,6 +6782,33 @@ fn prepare_output(
       )
     }
     output.prune_files(dropped_slots)
+    if strict_wikilinks {
+      let violations : Array[@lint.LintViolation] = []
+      check_output_wikilinks(
+        all_sources_for_backlinks, page_index, source_urls, config, output, violations,
+      )
+      // Replace build's permissive unresolved-link warnings with the precise
+      // strict diagnostics. Hidden drafts are not publication candidates.
+      let retained = diagnostics.filter(fn(diagnostic) {
+        !(diagnostic.severity == @diagnostic.Warning &&
+          diagnostic.message.has_prefix("unresolved wikilink [["))
+      })
+      diagnostics.clear()
+      for diagnostic in retained {
+        diagnostics.push(diagnostic)
+      }
+      for violation in violations {
+        diagnostics.push({
+          severity: @diagnostic.Error,
+          code: Some("E004"),
+          path: Some(violation.path),
+          line: violation.line,
+          column: violation.column,
+          message: violation.message,
+          note: None,
+        })
+      }
+    }
     error_count = @diagnostic.count_errors(diagnostics)
   }
   if error_count > 0 {

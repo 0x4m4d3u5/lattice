@@ -26,6 +26,7 @@ pub(all) struct CliOptions {
   collections_path : String?
   check_mode : Bool
   check_json : Bool
+  strict_wikilinks : Bool
   force_rebuild : Bool
   watch_mode : Bool
   watch_interval_ms : Int
@@ -225,6 +226,9 @@ fn build_parser() -> @clap.Parser {
             help="Override collections config file",
           ),
           "drafts": @clap.Arg::flag(help="Include draft posts in the build"),
+          "strict-wikilinks": @clap.Arg::flag(
+            help="Reject unresolved wiki page and fragment targets before publishing",
+          ),
           "force": @clap.Arg::flag(
             help="Ignore incremental cache and rebuild everything",
           ),
@@ -529,6 +533,7 @@ fn cli_options_from_clap(
         collections_path,
         check_mode: false,
         check_json: false,
+        strict_wikilinks: sv.get_flag("strict-wikilinks").unwrap_or(false),
         force_rebuild,
         watch_mode,
         watch_interval_ms,
@@ -555,6 +560,7 @@ fn cli_options_from_clap(
         collections_path,
         check_mode: true,
         check_json,
+        strict_wikilinks: false,
         force_rebuild: false,
         watch_mode,
         watch_interval_ms,
@@ -581,6 +587,7 @@ fn cli_options_from_clap(
         collections_path,
         check_mode: false,
         check_json: false,
+        strict_wikilinks: false,
         force_rebuild: false,
         watch_mode: true,
         watch_interval_ms: 500,
@@ -597,6 +604,7 @@ fn cli_options_from_clap(
         collections_path,
         check_mode: false,
         check_json: false,
+        strict_wikilinks: false,
         force_rebuild: false,
         watch_mode: false,
         watch_interval_ms: 500,
@@ -863,6 +871,7 @@ fn run_once(
   build_config : @builder.BuildConfig,
   check_mode : Bool,
   check_json : Bool,
+  strict_wikilinks : Bool,
 ) -> Int {
   let start_ms = @watch.current_millis()
   if check_mode {
@@ -911,7 +920,7 @@ fn run_once(
         @cache.empty(build_config.output_dir)
       }
     }
-    let result = @builder.build(build_config, cache_store)
+    let result = @builder.build(build_config, cache_store, strict_wikilinks~)
     // Print accumulated progress messages
     let mut mi = 0
     while mi < result.messages.length() {
@@ -981,6 +990,7 @@ fn run_watch(options : CliOptions, initial_state : CliState) -> Unit {
     initial_state.build_config,
     options.check_mode,
     options.check_json,
+    options.strict_wikilinks,
   )
   if initial_result > 0 {
     println(
@@ -1040,6 +1050,7 @@ fn run_watch(options : CliOptions, initial_state : CliState) -> Unit {
           state.build_config,
           options.check_mode,
           options.check_json,
+          options.strict_wikilinks,
         )
         current_roots = state.watch_roots
         current_source_dirs = state.watch_source_dirs
@@ -1751,6 +1762,7 @@ fn run_main() -> Unit {
     state.build_config,
     options.check_mode,
     options.check_json,
+    options.strict_wikilinks,
   )
   if exit_code > 0 {
     @sys.exit(1)

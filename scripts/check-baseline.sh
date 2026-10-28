@@ -23,6 +23,8 @@ echo "Running root and standalone watch workflow"
 node scripts/check-watch-pages.mjs || status=1
 echo "Running schema-driven new-content fixture"
 node scripts/check-new-content.mjs || status=1
+echo "Running strict build publication gate"
+node scripts/check-strict-build.mjs || status=1
 echo "Running CLI cross-note heading fixture"
 node scripts/check-wikilink-headings.mjs || status=1
 echo "Running final HTML wikilink fragment fixture"
