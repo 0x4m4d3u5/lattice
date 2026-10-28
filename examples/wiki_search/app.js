@@ -137,8 +137,47 @@ function addSectionLinks() {
     heading.append(document.createTextNode(' '), link);
   }
 }
-// Reading and section sharing do not depend on the index or search runtime.
+function addCodeCopyControls() {
+  // Native clipboard writes require an explicit reader action. Unsupported
+  // browsers keep the original code and their normal text-selection behavior.
+  if (typeof navigator.clipboard?.writeText !== 'function') return;
+  for (const code of document.querySelectorAll('article pre > code')) {
+    const pre = code.parentElement;
+    if (pre.closest('a, button') || pre.querySelectorAll(':scope > code').length !== 1) continue;
+    const toolbar = document.createElement('div');
+    toolbar.className = 'code-copy-controls';
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = 'Copy code';
+    const feedback = document.createElement('span');
+    feedback.className = 'code-copy-status';
+    feedback.setAttribute('role', 'status');
+    feedback.setAttribute('aria-live', 'polite');
+    let pending = false;
+    button.addEventListener('click', async () => {
+      if (pending) return;
+      pending = true;
+      // aria-disabled keeps keyboard focus on the control during the write.
+      button.setAttribute('aria-disabled', 'true');
+      feedback.textContent = 'Copying code…';
+      try {
+        await navigator.clipboard.writeText(code.textContent);
+        feedback.textContent = 'Code copied.';
+      } catch {
+        feedback.textContent = 'Could not copy. Select the code and copy it manually.';
+      } finally {
+        pending = false;
+        button.removeAttribute('aria-disabled');
+      }
+    });
+    toolbar.append(button, feedback);
+    // Keep the code DOM and its selectable text unchanged, including whitespace.
+    pre.before(toolbar);
+  }
+}
+// Reading enhancements do not depend on the index or search runtime.
 addSectionLinks();
+addCodeCopyControls();
 
 function renderCatalogue(entries) {
   const pages = buildCatalogue(entries, document.baseURI, overview.href);

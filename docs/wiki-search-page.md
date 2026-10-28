@@ -181,6 +181,14 @@ search fails, are hidden in print, and do not change no-JavaScript reading or
 existing table-of-contents links. Renaming or removing a heading can still change
 its URL; these links do not create redirects or persistent anchor aliases.
 
+Published code blocks gain a **Copy code** button when the browser exposes its
+clipboard write API (normally on HTTPS or local preview). Activating it copies
+the displayed code text, including indentation and line breaks, without executing
+it. Inline feedback reports success or asks you to select and copy manually if
+the browser refuses access. The controls work independently of search, stay out
+of printed pages, and do not alter the code itself. Without JavaScript or clipboard
+support, ordinary text selection remains available.
+
 Explicit `sections: []` entries stay excluded. An unavailable or malformed index,
 unsupported runtime or worker failure shows a retry control. Retry reloads the
 index and starts a fresh worker; queries reuse that worker until failure or
