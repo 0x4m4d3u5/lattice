@@ -8,6 +8,14 @@ const filters = document.querySelector('#lattice-filters');
 const clearTags = document.querySelector('#lattice-clear-tags');
 const status = document.querySelector('#lattice-status');
 const results = document.querySelector('#lattice-results');
+// Create the enhancement here so asset upgrades also work with older templates.
+const moreResults = document.createElement('button');
+moreResults.id = 'lattice-more-results';
+moreResults.type = 'button';
+moreResults.textContent = 'Show more results';
+moreResults.setAttribute('aria-controls', 'lattice-results');
+moreResults.hidden = true;
+results.after(moreResults);
 const retry = document.querySelector('#lattice-retry');
 const navigation = document.querySelector('#lattice-navigation');
 const toggle = document.querySelector('#lattice-navigation-toggle');
@@ -182,6 +190,15 @@ function renderCatalogue(entries) {
 let activeWorker;
 let request = 0;
 let timer;
+let matchingHits = [];
+let shownHits = 0;
+
+function clearResults() {
+  matchingHits = [];
+  shownHits = 0;
+  results.replaceChildren();
+  moreResults.hidden = true;
+}
 
 function stop() {
   clearTimeout(timer);
@@ -192,7 +209,7 @@ function stop() {
 function fail() {
   stop();
   controls.disabled = true;
-  results.replaceChildren();
+  clearResults();
   results.setAttribute('aria-busy', 'false');
   status.textContent = 'Search is unavailable. Retry loading search.';
   if (catalogueStatus && !catalogueLoaded) catalogueStatus.textContent = 'The page directory is unavailable. Retry loading the wiki using the navigation panel.';
@@ -210,8 +227,15 @@ function send(type, payload) {
 }
 
 function renderHits(hits) {
-  results.replaceChildren();
-  for (const hit of hits) {
+  clearResults();
+  matchingHits = hits;
+  appendHits();
+}
+
+function appendHits(focusNew = false) {
+  const firstNew = shownHits;
+  const end = Math.min(shownHits + 10, matchingHits.length);
+  for (const hit of matchingHits.slice(shownHits, end)) {
     const item = document.createElement('li');
     const heading = document.createElement('h2');
     const title = document.createElement('a');
@@ -241,7 +265,17 @@ function renderHits(hits) {
     }
     results.append(item);
   }
-  status.textContent = hits.length ? `Showing ${hits.length} matching sections (up to 10).` : 'No matching sections.';
+  shownHits = end;
+  moreResults.hidden = shownHits >= matchingHits.length;
+  status.textContent = !matchingHits.length ? 'No matching sections.'
+    : matchingHits.length === 50 ? `Showing ${shownHits} of the first 50 matching sections. Refine your query or tags to narrow the search.`
+    : `Showing ${shownHits} of ${matchingHits.length} matching sections.`;
+  if (focusNew && shownHits > firstNew) {
+    const item = results.children[firstNew];
+    const target = item.querySelector('a[href]') || item;
+    if (target === item) item.tabIndex = -1;
+    target.focus();
+  }
 }
 
 function start() {
@@ -249,7 +283,7 @@ function start() {
   // Keep an activated retry focusable while loading; native disabled would blur it.
   retry.setAttribute('aria-disabled', 'true');
   controls.disabled = true;
-  results.replaceChildren();
+  clearResults();
   status.textContent = 'Loading search…';
   try {
     const worker = new Worker(new URL('./worker.js', import.meta.url), { type: 'module' });
@@ -301,7 +335,7 @@ function start() {
 form.addEventListener('submit', event => {
   event.preventDefault();
   if (controls.disabled) return;
-  results.replaceChildren();
+  clearResults();
   if (!query.value.trim()) {
     ++request; // Clearing invalidates any pending result, too.
     clearTimeout(timer);
@@ -313,6 +347,7 @@ form.addEventListener('submit', event => {
   status.textContent = 'Searching…';
   send('search', { query: query.value, tags: [...tags.querySelectorAll('input:checked')].map(input => input.value) });
 });
+moreResults.addEventListener('click', () => appendHits(true));
 retry.addEventListener('click', () => {
   if (retry.getAttribute('aria-disabled') !== 'true') start();
 });

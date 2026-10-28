@@ -54,6 +54,16 @@ for (const url of ['javascript:window.hacked=true', 'data:text/html,bad', 'http:
   entries.push({ title: 'Citation probe', url, tags: [], sections: [{ heading: 'Citation', body: 'citationprobe' }] });
 }
 entries.push({ title: 'Legacyprobe', url: '/legacy/', tags: ['Legacy'], body: '' });
+// More matches than the first screen: ranking must stay stable as batches append.
+for (const [term, count] of [['batchprobe', 23], ['capprobe', 55]]) {
+  for (let i = 0; i < count; i++) {
+    const number = String(i).padStart(2, '0');
+    entries.push({ title: `Passage ${number}`, url: `/${term}/${number}/`, tags: i < 12 ? ['Data'] : [],
+      sections: [{ heading: 'A matching passage', body: term, fragment: `section-${number}` }] });
+  }
+}
+entries.push({ title: 'Non-navigation batch', url: 'javascript:void(0)', tags: [],
+  sections: Array.from({ length: 11 }, (_, i) => ({ heading: `Section ${i}`, body: 'nonlinkbatchprobe' })) });
 const validIndex = JSON.stringify(entries);
 const changedTagIndex = JSON.stringify(entries.map(entry => ({ ...entry, tags: entry.tags.map(tag => tag.replace(/[A-Z]/g, letter => letter.toLowerCase())) })));
 const assets = new Map([
@@ -180,6 +190,63 @@ try {
   assert.deepEqual(await urls(), ['/notes/case-b/']);
   await page.getByLabel('équipe', { exact: true }).uncheck();
 
+  const more = page.getByRole('button', { name: 'Show more results', exact: true });
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: 844 }); await ready();
+    await query('batchprobe'); await complete();
+    assert.equal(await page.locator('#lattice-results > li').count(), 10);
+    assert.equal(await more.count(), 1, 'Readers need access to matching sections after the first ten');
+    assert.equal(await more.isVisible(), true);
+    await page.evaluate(() => { window.firstSearchResult = document.querySelector('#lattice-results > li'); });
+    await more.focus(); await more.scrollIntoViewIfNeeded();
+    if (process.env.LATTICE_PREVIEW_DIR) await page.screenshot({ path: join(process.env.LATTICE_PREVIEW_DIR, `search-more-button-${width}.png`) });
+    await page.keyboard.press('Enter');
+    assert.equal(await page.locator('#lattice-results > li').count(), 20);
+    assert.equal(await page.evaluate(() => window.firstSearchResult === document.querySelector('#lattice-results > li')), true,
+      'Showing another batch must preserve existing result nodes');
+    assert.equal(await page.locator('#lattice-results h2 a').nth(10).evaluate(link => link === document.activeElement), true);
+    assert.equal(await page.locator('#lattice-results h2 a').nth(10).getAttribute('href'), '/batchprobe/10/#section-10');
+    if (process.env.LATTICE_PREVIEW_DIR) await page.screenshot({ path: join(process.env.LATTICE_PREVIEW_DIR, `search-more-${width}.png`) });
+    await more.focus(); await page.keyboard.press('Enter');
+    assert.equal(await page.locator('#lattice-results > li').count(), 23);
+    assert.deepEqual(await urls(), Array.from({ length: 23 }, (_, i) => `/batchprobe/${String(i).padStart(2, '0')}/`));
+    assert.equal(await page.locator('#lattice-results h2 a').nth(20).evaluate(link => link === document.activeElement), true);
+    assert.equal(await more.isHidden(), true);
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+    await query(''); await complete();
+    assert.equal(await more.isHidden(), true);
+    assert.equal(await page.locator('#lattice-results > li').count(), 0);
+  }
+  await page.setViewportSize({ width: 1280, height: 720 }); await ready();
+  await query('nonlinkbatchprobe'); await complete();
+  await more.focus(); await page.keyboard.press('Enter');
+  assert.equal(await page.locator('#lattice-results > li').count(), 11);
+  assert.equal(await page.locator('#lattice-results > li').nth(10).evaluate(item => item === document.activeElement), true);
+  assert.equal(await page.locator('#lattice-results a[href]').count(), 0);
+  await query('capprobe'); await complete();
+  for (let count = 20; count <= 50; count += 10) {
+    await more.click();
+    assert.equal(await page.locator('#lattice-results > li').count(), count);
+  }
+  assert.equal(await more.isHidden(), true);
+  assert.match(await page.locator('#lattice-status').textContent(), /50/);
+  assert.match(await page.locator('#lattice-status').textContent(), /refine/i);
+  await page.getByLabel('Data', { exact: true }).check();
+  await query('batchprobe'); await complete();
+  assert.equal(await page.locator('#lattice-results > li').count(), 10);
+  await more.click();
+  assert.equal(await page.locator('#lattice-results > li').count(), 12);
+  assert.equal(await more.isHidden(), true);
+  await page.getByLabel('Data', { exact: true }).uncheck();
+  await page.evaluate(() => { window.holdNextResult = true; });
+  await query('batchprobe');
+  await page.waitForFunction(() => window.heldResults.length === 1);
+  assert.equal(await more.isHidden(), true, 'A new request hides the previous batch control');
+  await query('notfoundprobe'); await complete();
+  await page.evaluate(() => window.heldResults.shift()());
+  assert.equal(await more.isHidden(), true, 'Stale results must not restore a batch control');
+  assert.equal(await page.locator('#lattice-results > li').count(), 0);
+
   await query('recovery'); await complete();
   const expected = ['/notes/ops/', '/notes/guide/', '/notes/model/'];
   assert.deepEqual(await page.locator('#lattice-results h2 a').evaluateAll(links => links.map(link => link.getAttribute('href'))),
@@ -234,6 +301,8 @@ try {
   assert.equal(await page.locator('#lattice-results li').count(), 0);
   assert.equal(indexRequests, 4); // Queries reuse the loaded index and worker.
   assert.equal(await page.evaluate(() => window.searchWorkers.length), 4);
+  await query('batchprobe'); await complete();
+  assert.equal(await more.isVisible(), true);
   await page.getByLabel('Database', { exact: true }).check();
   // Real worker error followed by retry, then a stale error from the old worker.
   await page.evaluate(() => {
@@ -241,6 +310,7 @@ try {
     window.oldWorker.dispatchEvent(new ErrorEvent('error'));
   });
   await status(unavailable);
+  assert.equal(await more.isHidden(), true, 'Worker failure clears the batch control');
   await page.evaluate(() => { window.holdNextReady = true; });
   await page.getByRole('button', { name: 'Retry loading search' }).click();
   await page.waitForFunction(() => window.heldReady.length === 1);
@@ -267,6 +337,7 @@ try {
   await page.getByRole('button', { name: 'Browse & search' }).click();
   await page.evaluate(() => window.searchWorkers.at(-1).dispatchEvent(new ErrorEvent('error')));
   await status(unavailable);
+  assert.equal(await more.isHidden(), true, 'Worker failure clears the batch control');
   await page.evaluate(() => { window.holdNextReady = true; });
   await page.getByRole('button', { name: 'Retry loading search' }).focus();
   await page.keyboard.press('Enter');
@@ -379,7 +450,7 @@ try {
     await query('recovery'); await complete(); await status('No matching sections.');
   }
   assert.deepEqual(errors, []);
-  console.log(`${browser.version()}: packaged published wiki search passed loading, retries, tags, DOM safety, stale replies, clearing and navigation`);
+  console.log(`${browser.version()}: packaged published wiki search passed result batches/cap/focus, loading, retries, tags, DOM safety, stale replies, clearing and navigation`);
 } finally {
   releaseFirst();
   if (browser) await browser.close();

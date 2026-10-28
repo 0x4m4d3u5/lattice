@@ -156,7 +156,7 @@ try {
     assert.equal(await section.evaluate(link => document.activeElement === link && getComputedStyle(link).outlineStyle !== 'none'), true);
     const box = await section.boundingBox();
     assert.ok(box.width >= 24 && box.height >= 24, 'Permalink needs a usable touch target');
-    await page.keyboard.press('Enter');
+    await Promise.all([page.waitForURL(url => url.hash === expectedHash), page.keyboard.press('Enter')]);
     assert.equal(new URL(page.url()).hash, expectedHash);
     await page.goBack();
     assert.equal(new URL(page.url()).hash, '');

@@ -72,6 +72,7 @@ input[type=checkbox] { accent-color: var(--action-fill); }
 #lattice-status { font-size: var(--type-metadata); color: var(--text-metadata); padding-top: var(--space-sm); }
 #lattice-results { list-style: none; padding: 0; margin: 0; }
 #lattice-results li { padding: var(--space-lg) 0; border-bottom: 1px solid var(--border-subtle); }
+#lattice-more-results { margin-top: var(--space-md); font-size: var(--type-navigation); }
 #lattice-results h2 { font-size: 1rem; margin: 0 0 .2rem; line-height: 1.4; }
 #lattice-results h2 a { text-decoration: none; color: var(--text-reading); }
 #lattice-results p { margin: var(--space-xs) 0; overflow-wrap: anywhere; }
