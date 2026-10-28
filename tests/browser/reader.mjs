@@ -35,6 +35,8 @@ Second passage.
 <h3 id="named space">Shadowed encoded name</h3>
 <a name="named%20space">Legacy named target</a>
 `);
+const copySource = 'let greeting = "café <world> & friends"\n\tprintln(greeting)\n';
+writeFileSync(sharingNote, readFileSync(sharingNote, 'utf8') + '\n## Copy an example\n\n```moonbit\n' + copySource + '```\n\n```text\n  keep indentation\n\nlast line\n```\n');
 mkdirSync(templates);
 mkdirSync(join(content, 'static'));
 mkdirSync(join(content, 'data'));
@@ -143,6 +145,56 @@ try {
       assert.equal(await page.locator('article').isVisible(), menuState !== 'true');
     }
   };
+  // Clipboard contents must be exactly the published code, never control labels.
+  await context.grantPermissions(['clipboard-read', 'clipboard-write'], { origin });
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto(`${origin}${urlFor('Publishing a note')}`); await ready();
+    const copy = page.locator('article').getByRole('button', { name: 'Copy code', exact: true }).first();
+    assert.equal(await copy.count(), 1, 'Readers need a copy control for code examples');
+    const code = page.locator('article pre > code').first();
+    const publishedText = await code.textContent();
+    assert.equal(publishedText, copySource.slice(0, -1));
+    assert.ok(await code.locator('span').count() > 0, 'Exercise syntax-highlighted code');
+    await copy.focus(); await page.keyboard.press('Tab'); await page.keyboard.press('Shift+Tab');
+    assert.equal(await copy.evaluate(button => document.activeElement === button && getComputedStyle(button).outlineStyle !== 'none'), true);
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(() => [...document.querySelectorAll('article [role="status"]')].some(node => node.textContent === 'Code copied.'));
+    assert.equal(await page.evaluate(() => navigator.clipboard.readText()), publishedText);
+    assert.equal(await code.textContent(), publishedText);
+    assert.equal(await copy.evaluate(button => document.activeElement === button), true);
+    await copy.scrollIntoViewIfNeeded(); await save(`copy-code-${width}.png`);
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+    await page.emulateMedia({ forcedColors: 'active' });
+    assert.equal(await copy.evaluate(button => getComputedStyle(button).outlineStyle !== 'none'), true);
+    await page.emulateMedia({ forcedColors: 'none', media: 'print' });
+    assert.equal(await copy.isHidden(), true);
+    assert.equal(await code.isVisible(), true);
+    await page.emulateMedia({ media: 'screen' });
+  }
+  const copy = page.locator('article').getByRole('button', { name: 'Copy code', exact: true }).first();
+  await page.evaluate(() => {
+    window.copyCalls = [];
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: {
+      writeText(text) { window.copyCalls.push(text); return new Promise((resolve, reject) => { window.finishCopy = { resolve, reject }; }); },
+    } });
+  });
+  await copy.focus(); await page.keyboard.press('Enter'); await page.keyboard.press('Enter');
+  assert.equal(await page.evaluate(() => window.copyCalls.length), 1, 'Pending copy must ignore duplicate activation');
+  assert.equal(await copy.evaluate(button => document.activeElement === button), true);
+  await page.evaluate(() => window.finishCopy.reject(new Error('Clipboard denied')));
+  await page.waitForFunction(() => [...document.querySelectorAll('article [role="status"]')].some(node => /select.*copy.*manually/i.test(node.textContent)));
+  await page.keyboard.press('Enter');
+  assert.equal(await page.evaluate(() => window.copyCalls.length), 2, 'A denied copy can be retried');
+  await page.evaluate(() => window.finishCopy.resolve());
+  await page.waitForFunction(() => [...document.querySelectorAll('article [role="status"]')].some(node => node.textContent === 'Code copied.'));
+  const unsupported = await context.newPage();
+  await unsupported.addInitScript(() => Object.defineProperty(navigator, 'clipboard', { value: undefined }));
+  await unsupported.goto(`${origin}${urlFor('Publishing a note')}`);
+  await unsupported.waitForFunction(() => !document.querySelector('#lattice-controls').disabled);
+  assert.equal(await unsupported.locator('article').getByRole('button', { name: 'Copy code', exact: true }).count(), 0);
+  assert.equal(await unsupported.locator('article pre > code').first().textContent(), copySource.slice(0, -1));
+  await unsupported.close();
   // Sharing a section should not require a TOC, a guessed slug or clipboard access.
   for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: 900 });
@@ -348,8 +400,12 @@ try {
   assert.equal(await page.locator('#lattice-collections a').count(), 6);
   await page.locator('#lattice-collections').getByRole('link', { name: 'Getting started', exact: true }).click();
   await page.locator('article').waitFor();
+  await page.waitForFunction(() => document.querySelector('#lattice-status').textContent.startsWith('Search is unavailable'));
   assert.ok((await page.locator('article').textContent()).includes('Find your way around'));
   assert.equal(await page.getByRole('link', { name: 'Link to section: Find your way around', exact: true }).count(), 1, 'Section links must survive search runtime failure');
+  await page.goto(`${origin}${urlFor('Publishing a note')}`);
+  await page.waitForFunction(() => document.querySelector('#lattice-status').textContent.startsWith('Search is unavailable'));
+  assert.equal(await page.locator('article').getByRole('button', { name: 'Copy code', exact: true }).count(), 2, 'Copy controls must survive search failure');
   failWasm = false;
   // Optional browser storage and JavaScript are not prerequisites for page reading.
   const restricted = await context.newPage();
@@ -364,6 +420,8 @@ try {
   assert.ok((await plain.locator('article').textContent()).includes('Find your way around'));
   await plain.locator('article').getByRole('link', { name: 'publishing-a-note', exact: true }).click();
   assert.equal(new URL(plain.url()).pathname, urlFor('Publishing a note'));
+  assert.equal(await plain.locator('article').getByRole('button', { name: 'Copy code', exact: true }).count(), 0);
+  assert.equal(await plain.locator('article pre > code').first().textContent(), copySource.slice(0, -1));
   await plain.setViewportSize({ width: 320, height: 800 });
   const previous = plain.getByRole('navigation', { name: 'Collection reading order' }).locator('a');
   assert.ok((await previous.textContent()).includes('Getting started'));
@@ -376,7 +434,7 @@ try {
   }
   await noJS.close();
   assert.deepEqual(errors, []);
-  console.log(`${browser.version()}: reader landing, collections, wiki/fragment links, history, mobile, keyboard, contrast/type/reflow, search-runtime failure and no-JS reading passed (${root})`);
+  console.log(`${browser.version()}: reader code-copy success/denial/focus, landing, collections, wiki/fragment links, history, mobile, keyboard, contrast/type/reflow, search-runtime failure and no-JS reading passed (${root})`);
 } finally {
   if (browser) await browser.close();
   await new Promise(resolve => server.close(resolve));
