@@ -276,7 +276,7 @@ try {
     assert.equal(await custom.evaluate(link => getComputedStyle(link).color !== getComputedStyle(document.body).backgroundColor), true);
     await page.emulateMedia({ forcedColors: 'none', media: 'print' });
     assert.equal(await custom.isHidden(), true);
-    assert.equal(await custom.evaluate(link => getComputedStyle(link.parentElement).paddingInlineEnd), '0px', 'print must not reserve an empty link gutter');
+    assert.equal(await page.locator('[id="☕ 50%:a/b"]').evaluate(heading => getComputedStyle(heading).paddingInlineEnd), '0px', 'print must not reserve an empty link gutter');
     await page.emulateMedia({ media: 'screen' });
     if (width === 1440) {
       const [opened] = await Promise.all([context.waitForEvent('page'), section.click({ button: 'middle' })]);
