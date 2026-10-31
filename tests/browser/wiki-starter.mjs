@@ -165,6 +165,9 @@ try {
   const ready = () => page.waitForFunction(() => !document.querySelector('#lattice-controls').disabled);
   await page.goto(origin); await ready();
   assert.equal(await page.locator('article > header > h1').textContent(), 'Welcome to your wiki');
+  assert.equal(await page.locator('#lattice-current-collection').textContent(), 'Pages');
+  assert.equal(await page.locator('#lattice-page-navigation summary').filter({ hasText: /^Pages/ }).count(), 1);
+  assert.equal(await page.locator('#lattice-page-navigation').getByText('_root', { exact: false }).count(), 0);
   assert.equal(await page.locator('.reading-navigation').isVisible(), false, 'a root page has no collection neighbors');
   await page.locator('article').getByRole('link', { name: 'Getting started', exact: true }).click(); await ready();
   assert.equal(new URL(page.url()).pathname, urlFor('Getting started'));

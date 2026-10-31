@@ -232,7 +232,8 @@ substitute for the content index.
 ## Landing page and collection navigation
 
 The landing page lists readable published notes by the index's `collection`
-metadata, with their titles and descriptions. Standalone pages use a Pages group.
+metadata, with their titles and descriptions. Root and standalone pages share a
+Pages group; internal publisher group names are not shown to readers.
 The sidebar offers the same directory without requiring a search. It excludes
 external/invalid URLs, duplicate canonical URLs and explicit `sections: []`
 entries, including generated indexes and overwritten source pages. Legacy
