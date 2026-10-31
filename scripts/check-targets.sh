@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# Test generated targets using the pinned native-hosted compiler.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+bash scripts/verify-ci-toolchain.sh
+export PATH="$MOON_HOME/bin:$PATH"
+for target in wasm wasm-gc native; do
+  moon -C "$MOON_HOME/lib/core" bundle --target "$target" --deny-warn
+  flags=()
+  # Native currently reports the existing JS/WASM-only env import in watch.
+  # Preserve that visible warning; JS and both WASM targets deny warnings.
+  [[ "$target" == native ]] || flags+=(--deny-warn)
+  for gate in check test build; do
+    moon "$gate" --target "$target" "${flags[@]}"
+  done
+  moon -C vendor/clap test --target "$target" "${flags[@]}" -p TheWaWaR/clap
+done
+node scripts/check-native-cli.mjs

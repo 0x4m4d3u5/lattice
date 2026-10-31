@@ -30,6 +30,8 @@ jobs:
         run: moon update
       - name: Check, test, and build
         run: bash scripts/check-baseline.sh
+      - name: Conventional WASM and native suites
+        run: bash scripts/check-targets.sh
       - name: Portable WASM core smoke test
         run: bash scripts/check-wasm-core.sh
       - name: Supplied-text WASM GC note renderer
