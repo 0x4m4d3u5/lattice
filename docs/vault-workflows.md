@@ -54,7 +54,9 @@ Other notes can write `[[Field Guide]]` or
 `[[Research Handbook#Evidence|the evidence]]`. Aliases use the same case, spacing
 and `.md` normalization as ordinary wikilinks. They apply to collection, standalone
 and root notes. Backlinks and graph edges retain the destination's canonical page
-identity; aliases do not create extra pages, redirects or search entries.
+identity; aliases do not create extra pages, redirects or duplicate search entries.
+With the content index enabled, the bundled [section search](section-search.md)
+also finds alternate names and returns the canonical note.
 
 Resolution is disabled by default so existing sites using aliases as ordinary
 template metadata retain their behavior. When enabled, declare an array of

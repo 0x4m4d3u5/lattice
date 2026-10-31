@@ -72,14 +72,33 @@ For WASM, `createContentSearcher(bytes)` in `examples/wasm_note/host.mjs` return
 `searchContent`. The existing `createNoteRenderer` interface remains callable.
 The WASM host validates string arguments and a signed 32-bit integer limit.
 
-All distinct query terms must occur in the page title, section heading or that
-section's body. Matching uses ASCII case folding and splits on ASCII punctuation,
+All distinct query terms must occur in the page title, section heading, that
+section's body or an enabled alternate name. Matching uses ASCII case folding
+and splits on ASCII punctuation,
 whitespace and control characters. Other Unicode text stays intact; there is no
 stemming, accent folding or language-specific segmentation. Each term scores 12
 for a heading match, 6 for a title match, and 1 plus body frequency capped at 3
 for a body match. Scores add across fields; repeated query terms do not add
 weight. Equal scores sort by URL, then section order. Required tags are exact
 ASCII case-insensitive AND filters, with surrounding filter whitespace ignored.
+
+With `wikilink_aliases = true`, retained authored pages also carry an optional
+`aliases` array in the content index. The bundled search and portable engine use
+these names while displaying canonical titles and URLs. Alias-only term matches
+score 3; an alias never boosts a term already found in the title, heading or body.
+A query fully satisfied by alternate names and the title adds at most one fallback
+hit at the first section, and only when no ordinary passage matches. Queries that
+combine an alternate name with passage text can return multiple relevant sections.
+Duplicate declarations do not create duplicate documents or increase scores.
+
+Aliases remain absent when the option is disabled, for hidden drafts, generated
+pages, overwritten sources and entries without searchable sections. Existing
+indexes and typed `SearchDocument` constructors remain compatible; typed callers
+can supply the optional `aliases` map keyed by canonical URL to `retrieve_sections`.
+Malformed alias arrays fail the JSON request, and ambiguous duplicate URL records
+ignore alias metadata. Matching follows the same lexical rules as ordinary text,
+not the wikilink resolver's filename normalization. The excerpt-only
+`search-index.json` format is unchanged.
 
 Results include plaintext snippets of up to 240 Unicode scalars plus ellipses,
 starting near the earliest body query occurrence when possible. Empty queries

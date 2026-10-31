@@ -86,7 +86,26 @@ export function runSearchCases(search, assert) {
   equal(run('recovery', [], 10, [{ ...legacy[0], body: prefixed }]).results[0].snippet.includes('restore recovery procedure'), true);
   const many = Array.from({ length: 70 }, (_, i) => ({ ...legacy[0], url: `/page-${i}/` }));
   equal(run('recovery', [], 1000, many).results.length, 50);
+  const alternate = [{ title: 'Operations', url: '/ops/', tags: ['Reliability'], aliases: ['Field Guide', 'FIELD GUIDE', 'Café 🌱'], sections: [
+    { heading: 'Overview', body: 'Practice safely.' },
+    { heading: 'Restore', body: 'Verify checksums.', fragment: 'restore' },
+  ] }];
+  equal(run('field guide', [], 10, alternate).results.map(hit => [hit.title, hit.url, hit.section_index]), [['Operations', '/ops/', 0]]);
+  equal(run('field checksums', [], 10, alternate).results.map(hit => [hit.url, hit.fragment]), [['/ops/', 'restore']]);
+  equal(run('café 🌱', ['reliability'], 10, alternate).results.length, 1);
+  equal(run('field', [], 10, [...alternate, ...alternate]).results, []);
+  equal(run('field', ['Other'], 10, alternate).results, []);
+  equal(run('field', [], 10, [{ ...alternate[0], sections: [] }]).results, []);
+  equal(run('field', [], 10, [{ ...alternate[0], aliases: [] }]).results, []);
+  equal(run('checksums', [], 10, alternate).results, run('checksums', [], 10, [{ ...alternate[0], aliases: [] }]).results);
+  const overlapping = [{ ...alternate[0], sections: [{ heading: 'Field Guide', body: 'First.' }, { heading: 'Field Guide', body: 'Second.' }] }];
+  equal(run('field guide', [], 10, overlapping).results, run('field guide', [], 10, [{ ...overlapping[0], aliases: [] }]).results);
+  const titleMatch = { title: 'Field Guide', url: '/title/', tags: [], sections: [{ heading: '', body: 'Introduction.' }] };
+  equal(run('field guide', [], 10, [...alternate, titleMatch]).results.map(hit => hit.url), ['/title/', '/ops/']);
+  equal(run('field guide', [], 1, alternate).results.length, 1);
   const invalid = [
+    [JSON.stringify([{ ...alternate[0], aliases: 'Guide' }]), '[]', 'aliases must be an array of strings'],
+    [JSON.stringify([{ ...alternate[0], aliases: [42] }]), '[]', 'aliases must be an array of strings'],
     ['{', '[]', 'invalid content-index JSON'],
     ['{}', '[]', 'expected a content-index array'],
     ['[]', '{', 'invalid tag-filter JSON'],

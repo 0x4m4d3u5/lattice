@@ -13,9 +13,10 @@ const standalone = join(content, 'standalone');
 const templates = join(root, 'templates');
 const output = join(root, 'dist');
 for (const path of [posts, standalone, templates, join(content, 'data')]) mkdirSync(path, { recursive: true });
-writeFileSync(join(content, 'index.md'), '---\ntitle: Knowledge\n---\nIntroductory notes.\n');
+writeFileSync(join(content, 'index.md'), '---\ntitle: Knowledge\naliases: ["Welcome Desk"]\n---\nIntroductory notes.\n');
 writeFileSync(join(posts, 'ops.md'), `---
 title: Operations handbook
+aliases: ["Continuity Manual", "Continuity Manual"]
 tags: [Reliability, Database]
 ---
 # Operations
@@ -41,23 +42,23 @@ Record elapsed time after each exercise.
 ## This is example code
 ~~~
 `);
-writeFileSync(join(standalone, 'guide.md'), '---\ntitle: Recovery checklist\ntags: [Reliability]\n---\n## Preparation\nAssign a commander. Check database backups.\n');
-writeFileSync(join(standalone, 'hidden.md'), '---\ntitle: Hidden\ndraft: true\n---\n## Private drill\nSynthetic draft marker.\n');
-writeFileSync(join(standalone, 'comments.md'), '---\ntitle: Comments\n---\n<!--\n\n## Private heading\n\nprivatemarker\n\n-->\n\n## Public\n\nvisible\n');
+writeFileSync(join(standalone, 'guide.md'), '---\ntitle: Recovery checklist\naliases: ["Emergency Steps"]\ntags: [Reliability]\n---\n## Preparation\nAssign a commander. Check database backups.\n');
+writeFileSync(join(standalone, 'hidden.md'), '---\ntitle: Hidden\naliases: ["Secret Ledger"]\ndraft: true\n---\n## Private drill\nSynthetic draft marker.\n');
+writeFileSync(join(standalone, 'comments.md'), '---\ntitle: Comments\naliases: ["Invisible Entry"]\n---\n<!--\n\n## Private heading\n\nprivatemarker\n\n-->\n\n## Public\n\nvisible\n');
 writeFileSync(join(standalone, 'closed.md'), '---\ntitle: Closed comments\n---\nBefore.\n\n<!--\n\n## Hidden\n\nprivatemarker\n\n<div>--></div>\n\n## Public\n\nvisible\n');
 writeFileSync(join(standalone, 'references.md'), '---\ntitle: References\n---\n## Recovery\nSee procedure[^1].\n\n[^1]: Restore encrypted snapshots.\n[^1]: Shadowedmarker [[missing]].\n');
 writeFileSync(join(standalone, 'unfinished.md'), '---\ntitle: Unfinished formula\n---\n$$\nPreamble retained.\n\n## Preserved\nUnfinishedmarker read [[guide|the checklist]].\n\n~~~\n[[missing]]\n~~~\n');
 // The generated /posts/ page supersedes this source; do not retrieve its text.
-writeFileSync(join(content, 'posts.md'), '---\ntitle: Old index\n---\n## Obsolete\nObsolete recovery instructions.\n');
+writeFileSync(join(content, 'posts.md'), '---\ntitle: Old index\naliases: ["Obsolete Directory"]\n---\n## Obsolete\nObsolete recovery instructions.\n');
 writeFileSync(join(templates, 'page.html'), '<article>{{body_no_h1}}</article>');
 writeFileSync(join(templates, '404.html'), '{{content}}');
 const collections = join(root, 'collections.cfg');
 writeFileSync(collections, `[posts]\nschema = title:String,tags:Optional[Array[String]]\ndir = ${posts}\n`);
 const config = join(root, 'site.cfg');
-writeFileSync(config, `title = Knowledge\nbase_url = https://example.test\ntemplates_dir = ${templates}\ncollections_file = ${collections}\ncontent_index_file = content-index.json\noutput_dir = ${output}\n`);
-const cli = process.env.LATTICE_CLI ?? fileURLToPath(new URL('../_build/js/debug/build/kurisu/lattice/cmd/main/main.js', import.meta.url));
+writeFileSync(config, `wikilink_aliases = true\ntitle = Knowledge\nbase_url = https://example.test\ntemplates_dir = ${templates}\ncollections_file = ${collections}\ncontent_index_file = content-index.json\noutput_dir = ${output}\n`);
+const cli = process.env.LATTICE_NATIVE_CLI ?? process.env.LATTICE_CLI ?? fileURLToPath(new URL('../_build/js/debug/build/kurisu/lattice/cmd/main/main.js', import.meta.url));
 const build = (flags = []) => {
-  const result = spawnSync(process.execPath, [cli, 'build', content, '-c', config, '--collections', collections, ...flags], { encoding: 'utf8', timeout: 30_000 });
+  const result = spawnSync(process.env.LATTICE_NATIVE_CLI ? cli : process.execPath, [...(process.env.LATTICE_NATIVE_CLI ? [] : [cli]), 'build', content, '-c', config, '--collections', collections, ...flags], { encoding: 'utf8', timeout: 30_000 });
   assert.equal(result.status, 0, result.stdout + result.stderr);
   return result.stdout;
 };
@@ -70,6 +71,12 @@ const expected = [
 const verify = (drafts = false) => {
   const index = JSON.parse(readFileSync(join(output, 'content-index.json'), 'utf8'));
   const ops = index.find(entry => entry.title === 'Operations handbook');
+  assert.deepEqual(ops.aliases, ['Continuity Manual']);
+  assert.deepEqual(index.find(entry => entry.url === '/').aliases, ['Welcome Desk']);
+  assert.deepEqual(index.find(entry => entry.url === '/guide/').aliases, ['Emergency Steps']);
+  assert.ok(index.filter(entry => entry.url === '/posts/').every(entry => !entry.aliases));
+  assert.equal(index.find(entry => entry.url === '/comments/').aliases, undefined);
+  assert.equal(index.some(entry => entry.aliases?.includes('Secret Ledger')), drafts);
   assert.deepEqual(ops.sections, expected); // Independent boundaries and rendered plaintext.
   assert.deepEqual(index.find(entry => entry.url === '/').sections, [{ heading: '', body: 'Introductory notes.' }]);
   assert.deepEqual(index.find(entry => entry.url === '/guide/').sections, [{ heading: 'Preparation', fragment: 'preparation', body: 'Assign a commander. Check database backups.' }]);
@@ -102,6 +109,12 @@ if (process.env.LATTICE_CLI) {
 } else {
   const { search_content: search } = await import(pathToFileURL(fileURLToPath(new URL('../_build/js/debug/build/kurisu/lattice/examples/wasm_note/wasm_note.js', import.meta.url))));
   const index = verify();
+  const lookup = (term, source = index) => JSON.parse(search(JSON.stringify(source), term, '[]', 10)).results;
+  assert.deepEqual(lookup('continuity manual').map(hit => hit.url), ['/posts/ops/']);
+  assert.deepEqual(lookup('continuity checksums').map(hit => [hit.url, hit.fragment]), [['/posts/ops/', 'recovery-drills']]);
+  assert.deepEqual(lookup('secret ledger'), []);
+  assert.deepEqual(lookup('obsolete directory'), []);
+  assert.deepEqual(lookup('invisible entry'), []);
   const result = JSON.parse(search(JSON.stringify(index), 'recovery', '["database"]', 10));
   assert.equal(result.error, null);
   assert.deepEqual(result.results.map(hit => [hit.url, hit.section_index]), [['/posts/ops/', 2], ['/posts/ops/', 3]]);
@@ -126,5 +139,35 @@ if (process.env.LATTICE_CLI) {
   build(['--force']); verify();
   build(['--drafts']); verify(true);
   build(); verify();
+  // Editing aliases updates the index on an otherwise cached build.
+  writeFileSync(join(posts, 'ops.md'), readFileSync(join(posts, 'ops.md'), 'utf8').replaceAll('Continuity Manual', 'Continuity Workbook'));
+  build();
+  const edited = JSON.parse(readFileSync(join(output, 'content-index.json'), 'utf8'));
+  assert.deepEqual(lookup('continuity manual', edited), []);
+  assert.deepEqual(lookup('continuity workbook', edited).map(hit => hit.url), ['/posts/ops/']);
+  // Later static ownership must suppress both passage text and alternate names.
+  writeFileSync(join(content, 'static.md'), '---\ntitle: Asset\naliases: ["Asset Handbook"]\n---\nOriginal prose.\n');
+  mkdirSync(join(content, 'static'), { recursive: true });
+  writeFileSync(join(content, 'static/index.html'), '<html>Replacement</html>');
+  build();
+  const replaced = JSON.parse(readFileSync(join(output, 'content-index.json'), 'utf8'));
+  assert.equal(replaced.find(entry => entry.url === '/static/').aliases, undefined);
+  assert.deepEqual(lookup('asset handbook', replaced), []);
+  // A hidden root draft can share a visible standalone URL without leaking names.
+  writeFileSync(join(content, 'guide.md'), '---\ntitle: Draft mirror\ndraft: true\naliases: ["Confidential Shortcut"]\n---\nSynthetic draft.\n');
+  build();
+  const mirrored = JSON.parse(readFileSync(join(output, 'content-index.json'), 'utf8'));
+  assert.ok(!JSON.stringify(mirrored).includes('Confidential Shortcut'));
+  assert.deepEqual(lookup('emergency steps', mirrored).map(hit => hit.url), ['/guide/']);
+  // Ordinary typed aliases remain non-searchable when the option is disabled.
+  for (const path of [join(content, 'index.md'), join(content, 'guide.md'), join(content, 'posts.md'), join(content, 'static.md'), ...['guide', 'hidden', 'comments'].map(name => join(standalone, `${name}.md`))]) {
+    writeFileSync(path, readFileSync(path, 'utf8').replace(/^aliases:.*\n/m, ''));
+  }
+  writeFileSync(collections, readFileSync(collections, 'utf8').replace('tags:Optional[Array[String]]', 'tags:Optional[Array[String]],aliases:Optional[Array[String]]'));
+  writeFileSync(config, readFileSync(config, 'utf8').replace('wikilink_aliases = true', 'wikilink_aliases = false'));
+  build();
+  const disabled = JSON.parse(readFileSync(join(output, 'content-index.json'), 'utf8'));
+  assert.ok(disabled.every(entry => !entry.aliases));
+  assert.deepEqual(lookup('continuity workbook', disabled), []);
   console.log('Published sections, cached/forced rebuilds, citations, filters and draft visibility passed');
 }
