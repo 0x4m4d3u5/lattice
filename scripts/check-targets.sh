@@ -19,3 +19,5 @@ node scripts/check-native-cli.mjs
 
 LATTICE_NATIVE_CLI="$PWD/_build/native/debug/build/kurisu/lattice/cmd/main/main.exe" node scripts/check-section-search.mjs
 LATTICE_NATIVE_CLI="$PWD/_build/native/debug/build/kurisu/lattice/cmd/main/main.exe" node scripts/check-image-embeds.mjs
+
+LATTICE_NATIVE_CLI="$PWD/_build/native/debug/build/kurisu/lattice/cmd/main/main.exe" node scripts/check-vault-acceptance.mjs

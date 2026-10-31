@@ -1,0 +1,94 @@
+import assert from 'node:assert/strict';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { spawnSync } from 'node:child_process';
+
+// A curated copy, not an importer or privacy filter. Never reads a real vault.
+export function vaultAcceptance() {
+  const repository = fileURLToPath(new URL('../', import.meta.url));
+  const root = mkdtempSync(join(tmpdir(), 'lattice-vault-acceptance-'));
+  const vault = join(root, 'original-vault');
+  const site = join(root, 'published-copy');
+  const cli = process.env.LATTICE_NATIVE_CLI ?? join(repository, '_build/js/debug/build/kurisu/lattice/cmd/main/main.js');
+  const invoke = (command, args, cwd) => {
+    const r = spawnSync(command, args, { cwd, encoding: 'utf8', timeout: 30_000 });
+    assert.ifError(r.error); return r;
+  };
+  const snapshot = dir => readdirSync(dir, { recursive: true, withFileTypes: true }).filter(e => e.isFile())
+    .map(e => [join(e.parentPath, e.name), readFileSync(join(e.parentPath, e.name)).toString('base64')]).sort();
+  const run = (args, success = true) => {
+    const before = snapshot(join(site, 'content'));
+    const r = invoke(process.env.LATTICE_NATIVE_CLI ? cli : process.execPath,
+      [...(process.env.LATTICE_NATIVE_CLI ? [] : [cli]), ...args], site);
+    assert.equal(r.status === 0, success, r.stdout + r.stderr);
+    assert.deepEqual(snapshot(join(site, 'content')), before, 'commands must not rewrite author sources');
+    assert.deepEqual(snapshot(vault), original, 'the original vault remains byte-for-byte unchanged');
+    return r;
+  };
+  mkdirSync(join(vault, 'notes'), { recursive: true });
+  mkdirSync(join(vault, 'attachments'));
+  const note = (title, extra, body) => `---\ntitle: ${title}\ndescription: Synthetic acceptance note\n${extra}---\n${body}\n`;
+  const evidence = note('Evidence notebook', 'aliases: ["Field Manual"]\n', '# Evidence notebook\n\n## Findings\n\nThe violet sensor measured seven samples.\n\n> [!question]- Method\n> Read the measurement carefully.\n\n![[sensor.png]]');
+  const overview = note('Study overview', '', '## Read the evidence\n\n> [!tip] Start here\n> Read [[Field Manual#Findings|the findings]].');
+  writeFileSync(join(vault, 'notes/evidence.md'), evidence);
+  writeFileSync(join(vault, 'notes/overview.md'), overview);
+  writeFileSync(join(vault, 'notes/draft.md'), note('Unpublished draft', 'draft: true\n', 'DRAFT_SENTINEL [[missing-note]]'));
+  writeFileSync(join(vault, 'attachments/sensor.png'), Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jS1sAAAAASUVORK5CYII=', 'base64'));
+  writeFileSync(join(vault, 'attachments/unreferenced.txt'), 'Static assets publish even without a note reference.');
+  const original = snapshot(vault);
+  const created = invoke(process.execPath, [join(repository, 'scripts/create-wiki.mjs'), site], root);
+  assert.equal(created.status, 0, created.stdout + created.stderr);
+  cpSync(join(vault, 'notes'), join(site, 'content/research'), { recursive: true });
+  cpSync(join(vault, 'attachments'), join(site, 'content/static'), { recursive: true });
+  const config = join(site, 'content/lattice.conf');
+  writeFileSync(config, readFileSync(config, 'utf8') + '\nwikilink_aliases = true\n');
+  const collections = join(site, 'collections.cfg');
+  writeFileSync(collections, readFileSync(collections, 'utf8') + '\n[Research]\ndir = content/research\nschema = title:String,description:String\n');
+  const output = join(site, 'dist');
+  const draftCheck = JSON.parse(run(['check', '--format', 'json'], false).stdout);
+  assert.ok(draftCheck.violations.some(v => v.path.endsWith('draft.md')));
+  writeFileSync(join(site, 'content/research/draft.md'), note('Unpublished draft', 'draft: true\n', 'DRAFT_SENTINEL'));
+  run(['check']);
+  const inventory = JSON.parse(run(['inventory', '--format', 'json']).stdout);
+  assert.equal(existsSync(output), false, 'preview commands must not publish');
+  assert.ok(JSON.stringify(inventory).includes('unreferenced.txt'));
+  run(['build', '--strict-wikilinks']);
+  const readIndex = () => JSON.parse(readFileSync(join(output, 'content-index.json')));
+  let index = readIndex();
+  const entry = index.find(e => e.title === 'Evidence notebook');
+  const overviewEntry = index.find(e => e.title === 'Study overview');
+  assert.ok(entry && overviewEntry);
+  const html = url => readFileSync(join(output, url, 'index.html'), 'utf8');
+  assert.ok(html(overviewEntry.url).includes(`${entry.url}#findings`));
+  assert.ok(html(entry.url).includes('src="/static/sensor.png"'));
+  assert.ok(html(entry.url).includes('<details'));
+  assert.equal(JSON.stringify(index).includes('DRAFT_SENTINEL'), false);
+  assert.equal(existsSync(join(output, 'Research/draft/index.html')), false);
+  assert.equal(readFileSync(join(output, 'static/unreferenced.txt'), 'utf8'), 'Static assets publish even without a note reference.');
+  const published = snapshot(output);
+  const workingEvidence = join(site, 'content/research/evidence.md');
+  writeFileSync(workingEvidence, evidence.replace('## Findings', '## Revised findings'));
+  const broken = JSON.parse(run(['check', '--format', 'json'], false).stdout);
+  assert.ok(broken.violations.some(v => v.kind === 'broken_wikilink' && v.path.endsWith('overview.md')));
+  run(['build', '--strict-wikilinks'], false);
+  assert.deepEqual(snapshot(output), published, 'failed preparation preserves output, cache and manifest');
+  writeFileSync(join(site, 'content/research/overview.md'), overview.replace('#Findings', '#Revised findings'));
+  run(['check']); run(['build', '--strict-wikilinks']);
+  index = readIndex();
+  assert.ok(html(overviewEntry.url).includes(`${entry.url}#revised-findings`));
+  assert.ok(html(entry.url).includes('id="revised-findings"'));
+  assert.ok(index.find(e => e.url === entry.url).sections.some(s => s.fragment === 'revised-findings'));
+  const repaired = snapshot(output);
+  writeFileSync(workingEvidence, readFileSync(workingEvidence, 'utf8') + '\n![[overview]]\n');
+  assert.ok(JSON.parse(run(['check', '--format', 'json'], false).stdout).violations.some(v => /unsupported target/.test(v.message)));
+  run(['build', '--strict-wikilinks'], false);
+  assert.deepEqual(snapshot(output), repaired);
+  writeFileSync(workingEvidence, evidence.replace('## Findings', '## Revised findings'));
+  run(['check']); run(['build']);
+  assert.deepEqual(snapshot(vault), original);
+  console.log('Vault acceptance: curated copy, source preservation, aliases/callouts/images, drafts, static inventory, heading repair and unsupported transclusion passed');
+  return { root, output, evidenceUrl: entry.url, overviewUrl: overviewEntry.url };
+}
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) vaultAcceptance();
