@@ -69,7 +69,7 @@ button:disabled, button[aria-disabled=true] { opacity: .5; cursor: wait; }
 #lattice-tags { display: flex; flex-wrap: wrap; gap: .35rem .7rem; margin: .5rem 0 1rem; }
 #lattice-tags label { font-weight: 400; overflow-wrap: anywhere; min-height: 24px; }
 input[type=checkbox] { accent-color: var(--action-fill); }
-#lattice-status { font-size: var(--type-metadata); color: var(--text-metadata); padding-top: var(--space-sm); }
+#lattice-status { min-block-size: calc(3em + var(--space-sm)); font-size: var(--type-metadata); color: var(--text-metadata); padding-top: var(--space-sm); }
 #lattice-results { list-style: none; padding: 0; margin: 0; }
 #lattice-results li { padding: var(--space-lg) 0; border-bottom: 1px solid var(--border-subtle); }
 #lattice-more-results { margin-top: var(--space-md); font-size: var(--type-navigation); }

@@ -238,6 +238,16 @@ function renderCatalogue(entries) {
 let activeWorker;
 let request = 0;
 let timer;
+let feedbackTimer;
+function setStatus(text) {
+  clearTimeout(feedbackTimer);
+  status.textContent = text;
+}
+function pendingStatus(text) {
+  // Reserve the region, but avoid announcing/painting a brief intermediate state.
+  setStatus('');
+  feedbackTimer = setTimeout(() => { status.textContent = text; }, 500);
+}
 let matchingHits = [];
 let shownHits = 0;
 
@@ -250,6 +260,7 @@ function clearResults() {
 
 function stop() {
   clearTimeout(timer);
+  clearTimeout(feedbackTimer);
   activeWorker?.terminate();
   activeWorker = undefined;
 }
@@ -259,7 +270,7 @@ function fail() {
   controls.disabled = true;
   clearResults();
   results.setAttribute('aria-busy', 'false');
-  status.textContent = 'Search is unavailable. Retry loading search.';
+  setStatus('Search is unavailable. Retry loading search.');
   if (catalogueStatus() && !catalogueLoaded) catalogueStatus().textContent = 'The page directory is unavailable. Retry loading the wiki using the navigation panel.';
   retry.hidden = false;
   retry.removeAttribute('aria-disabled');
@@ -315,9 +326,9 @@ function appendHits(focusNew = false) {
   }
   shownHits = end;
   moreResults.hidden = shownHits >= matchingHits.length;
-  status.textContent = !matchingHits.length ? 'No matching sections.'
+  setStatus(!matchingHits.length ? 'No matching sections.'
     : matchingHits.length === 50 ? `Showing ${shownHits} of the first 50 matching sections. Refine your query or tags to narrow the search.`
-    : `Showing ${shownHits} of ${matchingHits.length} matching sections.`;
+    : `Showing ${shownHits} of ${matchingHits.length} matching sections.`);
   if (focusNew && shownHits > firstNew) {
     const item = results.children[firstNew];
     const target = item.querySelector('a[href]') || item;
@@ -332,7 +343,7 @@ function start() {
   retry.setAttribute('aria-disabled', 'true');
   controls.disabled = true;
   clearResults();
-  status.textContent = 'Loading search…';
+  pendingStatus('Loading search…');
   try {
     const worker = new Worker(new URL('./worker.js', import.meta.url), { type: 'module' });
     activeWorker = worker;
@@ -367,8 +378,8 @@ function start() {
           if (document.activeElement === retry) query.focus({ preventScroll: true });
           retry.hidden = true;
           retry.removeAttribute('aria-disabled');
-          status.textContent = 'Enter a query to search this wiki.';
           if (query.value.trim()) form.requestSubmit();
+          else setStatus('Enter a query to search this wiki.');
         } else if (data.type === 'results') {
           renderHits(data.results);
         } else {
@@ -388,11 +399,11 @@ form.addEventListener('submit', event => {
     ++request; // Clearing invalidates any pending result, too.
     clearTimeout(timer);
     results.setAttribute('aria-busy', 'false');
-    status.textContent = 'Enter a query to search this wiki.';
+    setStatus('Enter a query to search this wiki.');
     return;
   }
   persist();
-  status.textContent = 'Searching…';
+  pendingStatus('Searching…');
   send('search', { query: query.value, tags: [...tags.querySelectorAll('input:checked')].map(input => input.value) });
 });
 moreResults.addEventListener('click', () => appendHits(true));

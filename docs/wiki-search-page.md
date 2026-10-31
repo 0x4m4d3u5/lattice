@@ -220,9 +220,12 @@ of printed pages, and do not alter the code itself. Without JavaScript or clipbo
 support, ordinary text selection remains available.
 
 Explicit `sections: []` entries stay excluded. An unavailable or malformed index,
-unsupported runtime or worker failure shows a retry control. Retry reloads the
+unsupported runtime or worker failure shows a retry control. Loading/searching
+messages appear only after half a second, so fast responses skip transient text.
+The status region reserves space; disabled controls and busy state update immediately,
+and errors are announced without that delay. Retry reloads the
 index and starts a fresh worker; queries reuse that worker until failure or
-navigation. An operation taking over 30 seconds also offers retry.
+full-page navigation. Shared-reader note navigation keeps the same worker. An operation taking over 30 seconds also offers retry.
 Retry stays focusable while loading and ignores duplicate activation. On success,
 focus returns to the search field only if it is still on Retry; moving elsewhere
 or closing mobile navigation keeps the reader's chosen focus.
