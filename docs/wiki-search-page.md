@@ -292,7 +292,7 @@ Queries, selected tags and collection disclosure state are retained for the tab
 using optional session storage, scoped to the index URL. Storage failure does not
 prevent reading or searching. On mobile, **Browse & search** opens the directory.
 The mobile masthead wraps the brand and button onto separate rows when enlarged
-text needs more space. Escape closes the directory and restores focus to the
+text needs more space; mobile fragment links reserve extra clearance below it. Escape closes the directory and restores focus to the
 button. **Skip to content** closes the mobile directory and moves focus to the page. Crossing between mobile and desktop
 resets the mobile menu and moves focus only when its navigation control becomes
 hidden. Normal links and published content

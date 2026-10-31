@@ -157,6 +157,8 @@ try {
       await scaled.keyboard.press('Escape');
       assert.equal(await navigation.getAttribute('aria-expanded'), 'false');
       assert.equal(await navigation.evaluate(element => element === document.activeElement), true);
+      await scaled.locator('#find-your-way-around .section-permalink').click();
+      assert.ok((await scaled.locator('#find-your-way-around').boundingBox()).y >= (await scaled.locator('.masthead').boundingBox()).height, 'fragment heading must clear the enlarged sticky masthead');
     }
   }
   await scaled.close();
@@ -510,6 +512,11 @@ try {
   await plain.setViewportSize({ width: 320, height: 800 });
   await plain.evaluate(() => document.documentElement.style.fontSize = '32px');
   await checkMasthead(plain);
+  await plain.locator('article').evaluate(article => {
+    const link = document.createElement('a'); link.href = '#repeat-the-question-not-the-snapshot'; link.textContent = 'Jump to section'; article.prepend(link);
+  });
+  await plain.getByRole('link', { name: 'Jump to section', exact: true }).click();
+  assert.ok((await plain.locator('#repeat-the-question-not-the-snapshot').boundingBox()).y >= (await plain.locator('.masthead').boundingBox()).height, 'native fragment navigation clears the enlarged masthead without JavaScript');
   await plain.evaluate(() => document.documentElement.style.fontSize = '');
   const previous = plain.getByRole('navigation', { name: 'Collection reading order' }).locator('a');
   assert.ok((await previous.textContent()).includes('Getting started'));
