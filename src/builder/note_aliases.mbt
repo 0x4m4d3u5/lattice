@@ -121,3 +121,20 @@ fn note_alias_schema(schema : @schema.Schema, enabled : Bool) -> @schema.Schema 
   })
   { name: schema.name, fields, }
 }
+
+///|
+/// Read names only from the source selected for publication, never a draft
+/// sharing another source's URL. Final output ownership filters this metadata.
+fn searchable_note_aliases(content : String) -> Array[String] {
+  guard @frontmatter.parse(content) is Ok(fm) else { return [] }
+  guard fm.fields.get("aliases") is Some(@frontmatter.FArray(values)) else { return [] }
+  let names : Array[String] = []
+  for value in values {
+    if value is @frontmatter.FStr(text) {
+      let name = text.trim().to_owned()
+      if !name.is_empty() && !names.contains(name) { names.push(name) }
+    }
+  }
+  names.sort()
+  names
+}

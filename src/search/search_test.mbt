@@ -440,3 +440,72 @@ test "navigation exports fragment URLs, escaped labels and repeated references" 
   assert_false(masked.contains("#local"))
   assert_false(masked.contains("Beta#Intro"))
 }
+
+///|
+test "alternate names retrieve canonical passages without duplicate name hits" {
+  let documents : Array[@search.SearchDocument] = [
+    {
+      title: "Operations",
+      url: "/ops/",
+      tags: ["Reliability"],
+      sections: [
+        { heading: "Overview", body: "Practice safely.", },
+        { heading: "Restore", body: "Verify checksums.", },
+      ],
+    },
+  ]
+  let aliases : Map[String, Array[String]] = Map([
+    ("/ops/", ["Field Guide", "FIELD GUIDE"]),
+  ])
+  assert_eq(
+    @search.retrieve_sections(documents, "field guide", [], 10).length(),
+    0,
+  )
+  let names = @search.retrieve_sections(
+    documents,
+    "field guide",
+    [],
+    10,
+    aliases~,
+  )
+  assert_eq(names.length(), 1)
+  assert_eq(names[0].url, "/ops/")
+  assert_eq(names[0].title, "Operations")
+  assert_eq(names[0].score, 6)
+  let passage = @search.retrieve_sections(
+    documents,
+    "field checksums",
+    [],
+    10,
+    aliases~,
+  )
+  assert_eq(passage.length(), 1)
+  assert_eq(passage[0].section_index, 1)
+  assert_eq(
+    @search.retrieve_sections(documents, "field", ["Private"], 10, aliases~).length(),
+    0,
+  )
+  let ordinary = @search.retrieve_sections(documents, "checksums", [], 10)
+  let enhanced = @search.retrieve_sections(
+    documents,
+    "checksums",
+    [],
+    10,
+    aliases~,
+  )
+  assert_eq(ordinary[0].score, enhanced[0].score)
+}
+
+///|
+test "alias index metadata is optional and malformed arrays fail closed" {
+  let index = "[{\"title\":\"Guide\",\"url\":\"/guide/\",\"tags\":[],\"body\":\"Intro\",\"aliases\":[\"Handbook\"]}]"
+  assert_true(
+    @search.search_content(index, "handbook", "[]", 10).contains("/guide/"),
+  )
+  let invalid = "[{\"title\":\"Guide\",\"url\":\"/guide/\",\"tags\":[],\"body\":\"Intro\",\"aliases\":[42]}]"
+  assert_true(
+    @search.search_content(invalid, "handbook", "[]", 10).contains(
+      "aliases must be an array of strings",
+    ),
+  )
+}

@@ -21,7 +21,7 @@ assert.equal(packaged.status, 0, packaged.stderr);
 writeFileSync(join(search, 'preserve.txt'), 'unrelated local content');
 assert.notEqual(run('scripts/package-search.mjs', [search]).status, 0);
 assert.equal(readFileSync(join(search, 'preserve.txt'), 'utf8'), 'unrelated local content');
-writeFileSync(join(notes, 'ops.md'), '---\ntitle: Operations\ndescription: A field guide to restoring services with confidence. Practice the sequence, record the evidence, and leave a clearer path for the next person.\ntoc: true\ntags: [Database, Reliability]\n---\n## Recovery drills\nRestore encrypted snapshots. Verify checksums. A backup is only useful when the team knows how to bring it back. Run this exercise in an isolated training environment before you need it during an incident.\n\n> The goal is repeatability: another person should be able to follow the record and reach the same result.\n\n### Before you begin\n\n1. Choose a snapshot and record its timestamp.\n2. Confirm that the restore target is isolated from production.\n3. Assign one person to run the exercise and another to capture observations.\n\n### Verify the result\n\nCompare the restored records with the manifest. Check both totals and a small sample of individual entries; a successful process exit is only the first signal.\n\n### Leave a useful record\n\nWrite down what surprised you, which step took longest, and what you would change in the runbook. Link the evidence from the exercise so the next reader can follow the decisions.\n\n## Training sandbox\n\nThe fictional basil dataset is used for these drills. It contains no customer records.\n');
+writeFileSync(join(notes, 'ops.md'), '---\ntitle: Operations\naliases: ["Disaster Playbook"]\ndescription: A field guide to restoring services with confidence. Practice the sequence, record the evidence, and leave a clearer path for the next person.\ntoc: true\ntags: [Database, Reliability]\n---\n## Recovery drills\nRestore encrypted snapshots. Verify checksums. A backup is only useful when the team knows how to bring it back. Run this exercise in an isolated training environment before you need it during an incident.\n\n> The goal is repeatability: another person should be able to follow the record and reach the same result.\n\n### Before you begin\n\n1. Choose a snapshot and record its timestamp.\n2. Confirm that the restore target is isolated from production.\n3. Assign one person to run the exercise and another to capture observations.\n\n### Verify the result\n\nCompare the restored records with the manifest. Check both totals and a small sample of individual entries; a successful process exit is only the first signal.\n\n### Leave a useful record\n\nWrite down what surprised you, which step took longest, and what you would change in the runbook. Link the evidence from the exercise so the next reader can follow the decisions.\n\n## Training sandbox\n\nThe fictional basil dataset is used for these drills. It contains no customer records.\n');
 writeFileSync(join(notes, 'retired.md'), '---\ntitle: Retired note\ntags: [RetiredOnly]\n---\n<!-- No published passage remains. -->\n');
 writeFileSync(join(notes, 'guide.md'), '---\ntitle: Recovery checklist\ntags: [Reliability]\n---\n## Preparation\nAssign a commander. See [[ops]] for the practice sequence.\n');
 writeFileSync(join(notes, 'priority.md'), '---\ntitle: Definition priority\n---\nTerm\n: definition\n## Priorities\n: priorityprobe\n');
@@ -37,7 +37,7 @@ writeFileSync(join(templates, '404.html'), '{{content}}');
 const collections = join(root, 'collections.cfg');
 writeFileSync(collections, `[notes]\nschema = title:String,tags:Optional[Array[String]],description:Optional[String]\ndir = ${notes}\n`);
 const config = join(root, 'site.cfg');
-writeFileSync(config, `title = Wiki\nbase_url = https://example.test\ntemplates_dir = ${templates}\ncollections_file = ${collections}\ncontent_index_file = content-index.json\noutput_dir = ${output}\n`);
+writeFileSync(config, `wikilink_aliases = true\ntitle = Wiki\nbase_url = https://example.test\ntemplates_dir = ${templates}\ncollections_file = ${collections}\ncontent_index_file = content-index.json\noutput_dir = ${output}\n`);
 const built = run('_build/js/debug/build/kurisu/lattice/cmd/main/main.js', ['build', content, '-c', config, '--collections', collections]);
 assert.equal(built.status, 0, built.stdout + built.stderr);
 for (const name of ['index.html', 'app.js', 'worker.js', 'host.js', 'renderer.wasm', 'page.css', 'shell.css', 'catalogue.js']) {
@@ -189,6 +189,16 @@ try {
   await query('tagprobe'); await complete();
   assert.deepEqual(await urls(), ['/notes/case-b/']);
   await page.getByLabel('équipe', { exact: true }).uncheck();
+
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: 844 }); await ready();
+    await query('disaster playbook'); await complete();
+    assert.deepEqual(await urls(), ['/notes/ops/']);
+    assert.equal(await page.locator('#lattice-results h2 a').textContent(), 'Operations');
+    await query('disaster checksums'); await complete();
+    assert.deepEqual(await urls(), ['/notes/ops/']);
+    assert.equal(await page.locator('#lattice-results h2 a').getAttribute('href'), '/notes/ops/#recovery-drills');
+  }
 
   const more = page.getByRole('button', { name: 'Show more results', exact: true });
   for (const width of [1440, 390]) {

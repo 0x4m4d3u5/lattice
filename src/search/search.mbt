@@ -184,6 +184,7 @@ pub fn render_content_index_with_sections(
   links : Map[String, Array[@wikilink.ResolvedWikilink]],
   sections : Map[String, Array[@markdown.TextSection]],
   fragments? : Map[String, Map[Int, String]] = Map([]),
+  aliases? : Map[String, Array[String]] = Map([]),
 ) -> String {
   render_content_entries(
     entries,
@@ -191,6 +192,7 @@ pub fn render_content_index_with_sections(
     Some(links),
     Some(sections),
     fragments~,
+    aliases~,
   )
 }
 
@@ -201,6 +203,7 @@ fn render_content_entries(
   links : Map[String, Array[@wikilink.ResolvedWikilink]]?,
   sections : Map[String, Array[@markdown.TextSection]]?,
   fragments? : Map[String, Map[Int, String]] = Map([]),
+  aliases? : Map[String, Array[String]] = Map([]),
 ) -> String {
   // Generated indexes overwrite authored pages at shared URLs. Do not advertise
   // authored navigation for any entry whose URL is occupied by such an index.
@@ -219,6 +222,11 @@ fn render_content_entries(
       entry.tags,
       entry.collection,
     )
+    if !generated_urls.contains(entry.url) && aliases.get(entry.url) is Some(names) && !names.is_empty() {
+      buf.write_string("    \"aliases\": ")
+      write_tags(buf, names)
+      buf.write_string(",\n")
+    }
     buf.write_string("    \"date\": ")
     @strutil.write_json_string(buf, entry.date)
     buf.write_string(",\n")

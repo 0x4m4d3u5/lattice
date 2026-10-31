@@ -13,15 +13,15 @@ pub(all) struct SectionHit {
   url : String
   tags : Array[String]
   section : String
-  section_index : Int
+  section_index : Int32
   snippet : String
-  score : Int
+  score : Int32
 }
 
 ///|
 // ASCII punctuation/whitespace delimit terms; non-ASCII text stays intact.
 // ASCII case folding deliberately has identical behavior on JS and WASM.
-fn scan_terms(text : String, record : (String, Int) -> Unit) -> Unit {
+fn scan_terms(text : String, record : (String, Int32) -> Unit) -> Unit {
   let mut word = StringBuilder()
   let mut position = 0
   let mut start = 0
@@ -48,8 +48,8 @@ fn scan_terms(text : String, record : (String, Int) -> Unit) -> Unit {
 }
 
 ///|
-fn frequencies(text : String) -> Map[String, Int] {
-  let counts : Map[String, Int] = Map([])
+fn frequencies(text : String) -> Map[String, Int32] {
+  let counts : Map[String, Int32] = Map([])
   scan_terms(text, fn(term, _) {
     // Saturating frequency prevents repeated keywords dominating headings.
     counts.set(term, (counts.get(term).unwrap_or(0) + 1).min(3))
@@ -59,7 +59,7 @@ fn frequencies(text : String) -> Map[String, Int] {
 
 ///|
 fn section_snippet(body : String, query : Array[String]) -> String {
-  let mut first : Int? = None
+  let mut first : Int32? = None
   scan_terms(body, fn(term, position) {
     if first is None && query.contains(term) {
       first = Some(position)
@@ -87,13 +87,16 @@ fn section_snippet(body : String, query : Array[String]) -> String {
 /// Deterministic AND lexical retrieval; required tags are exact, ASCII case
 /// insensitive AND filters. Empty queries/limits return no hits; limit caps at 50.
 /// Scores favor heading (12), title (6), body (1 + frequency capped at 3).
+/// Optional alternate names add 3 only for terms missing from these fields.
+/// Name-only fallback returns the first section once, unless ordinary text matches.
 /// Equal scores sort by canonical URL then section order. Snippets are plaintext,
 /// at most 240 Unicode scalars plus ellipses, centered near a body query term.
 pub fn retrieve_sections(
   documents : Array[SearchDocument],
   query : String,
   required_tags : Array[String],
-  limit : Int,
+  limit : Int32,
+  aliases~ : Map[String, Array[String]] = Map([]),
 ) -> Array[SectionHit] {
   let query_terms = frequencies(query).keys().to_array()
   if query_terms.is_empty() || limit <= 0 {
@@ -107,26 +110,47 @@ pub fn retrieve_sections(
       continue
     }
     let title = frequencies(document.title)
+    let names = frequencies(aliases.get(document.url).unwrap_or([]).join(" "))
+    // A complete alternate-name query is one page hit, not one per passage.
+    // Existing title-only retrieval retains its section behavior and scores.
+    let name_query = query_terms.all(fn(term) {
+        title.contains(term) || names.contains(term)
+      }) &&
+      query_terms.any(fn(term) { !title.contains(term) && names.contains(term) })
+    let has_text_match = name_query &&
+      document.sections.any(fn(section) {
+        let heading = frequencies(section.heading)
+        let body = frequencies(section.body)
+        query_terms.all(fn(term) {
+          title.contains(term) || heading.contains(term) || body.contains(term)
+        })
+      })
     for index = 0; index < document.sections.length(); index = index + 1 {
       let section = document.sections[index]
       let heading = frequencies(section.heading)
       let body = frequencies(section.body)
       let mut score = 0
       let mut matched = true
+      let mut used_alias = false
       for term in query_terms {
         let h = heading.contains(term)
         let t = title.contains(term)
         let b = body.get(term).unwrap_or(0)
-        if !h && !t && b == 0 {
+        let a = names.contains(term)
+        if !h && !t && b == 0 && !a {
           matched = false
           break
+        }
+        if a && !h && !t && b == 0 {
+          used_alias = true
         }
         score = score +
           (if h { 12 } else { 0 }) +
           (if t { 6 } else { 0 }) +
-          (if b > 0 { 1 + b } else { 0 })
+          (if b > 0 { 1 + b } else { 0 }) +
+          (if a && !h && !t && b == 0 { 3 } else { 0 })
       }
-      if matched {
+      if matched && !(name_query && used_alias && (has_text_match || index > 0)) {
         hits.push({
           title: document.title,
           url: document.url,
@@ -186,6 +210,11 @@ fn decode_documents(value : Json) -> Result[Array[SearchDocument], String] {
       Ok(tags) => tags
       Err(message) => return Err(message)
     }
+    if fields.get("aliases") is Some(value) {
+      if string_array(value) is Err(_) {
+        return Err("aliases must be an array of strings")
+      }
+    }
     let sections : Array[@markdown.TextSection] = []
     match fields.get("sections") {
       // Old indexes remain searchable as one page-sized section.
@@ -220,7 +249,7 @@ pub fn search_content(
   index_json : String,
   query : String,
   tags_json : String,
-  limit : Int,
+  limit : Int32,
 ) -> String {
   let index = @json.parse(index_json[:]) catch {
     _ => return search_response([], Some("invalid content-index JSON"))
@@ -238,17 +267,29 @@ pub fn search_content(
   }
   // Keep canonical page URLs and ranking unchanged. Ambiguous duplicate page
   // records deliberately retain page-only citations.
-  let fragments : Map[String, Map[Int, String]] = Map([])
+  let aliases : Map[String, Array[String]] = Map([])
+  let fragments : Map[String, Map[Int32, String]] = Map([])
   let seen : Map[String, Bool] = Map([])
   if index is Array(entries) {
     for entry in entries {
       if entry is Object(fields) && fields.get("url") is Some(String(url)) {
         if seen.contains(url) {
           fragments.remove(url)
+          aliases.remove(url)
           continue
         }
         seen.set(url, true)
-        let items : Map[Int, String] = Map([])
+        if fields.get("aliases") is Some(value) {
+          match string_array(value) {
+            Ok(names) => aliases.set(url, names)
+            Err(_) =>
+              return search_response(
+                [],
+                Some("aliases must be an array of strings"),
+              )
+          }
+        }
+        let items : Map[Int32, String] = Map([])
         if fields.get("sections") is Some(Array(sections)) {
           for i = 0; i < sections.length(); i = i + 1 {
             if sections[i] is Object(section) &&
@@ -263,7 +304,7 @@ pub fn search_content(
     }
   }
   search_response(
-    retrieve_sections(documents, query, tags, limit),
+    retrieve_sections(documents, query, tags, limit, aliases~),
     None,
     fragments~,
   )
@@ -273,7 +314,7 @@ pub fn search_content(
 fn search_response(
   hits : Array[SectionHit],
   error : String?,
-  fragments? : Map[String, Map[Int, String]] = Map([]),
+  fragments~ : Map[String, Map[Int32, String]] = Map([]),
 ) -> String {
   let results = hits.map(fn(hit) {
     let fields = Map([

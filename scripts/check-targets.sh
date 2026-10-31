@@ -16,3 +16,5 @@ for target in wasm wasm-gc native; do
   moon -C vendor/clap test --target "$target" "${flags[@]}" -p TheWaWaR/clap
 done
 node scripts/check-native-cli.mjs
+
+LATTICE_NATIVE_CLI="$PWD/_build/native/debug/build/kurisu/lattice/cmd/main/main.exe" node scripts/check-section-search.mjs

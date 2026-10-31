@@ -5239,6 +5239,7 @@ fn prepare_output(
   let graph_pages : Array[@graph.GraphPage] = []
   let search_entries : Array[@search.SearchEntry] = []
   let content_entries : Array[@search.ContentEntry] = []
+  let content_aliases_by_url : Map[String, Array[String]] = Map([])
   let collect_content_navigation = content_index_file_name(config.site) is Some(_)
   let content_headings_by_url : Map[String, Array[@markdown.TocEntry]] = Map([])
   let content_sections_by_url : Map[String, Array[@markdown.TextSection]] = Map([],
@@ -5530,6 +5531,9 @@ fn prepare_output(
                 source_output_marks.set(doc.url, (output_path_key(out_path), source_mark))
                 if collect_content_navigation {
                   content_sections_by_url.set(doc.url, doc.sections)
+                  content_aliases_by_url.set(doc.url, if config.site.wikilink_aliases == Some(true) && !doc.sections.is_empty() {
+                    searchable_note_aliases(src.content)
+                  } else { [] })
                   content_fragments_by_url.set(doc.url, doc.section_fragments)
                   content_headings_by_url.set(doc.url, doc.headings)
                   content_links_by_url.set(doc.url, doc.resolved_links)
@@ -5694,6 +5698,9 @@ fn prepare_output(
             source_output_marks.set(doc.url, (output_path_key(out_path), source_mark))
             if collect_content_navigation {
               content_sections_by_url.set(doc.url, doc.sections)
+              content_aliases_by_url.set(doc.url, if config.site.wikilink_aliases == Some(true) && !doc.sections.is_empty() {
+                searchable_note_aliases(src.content)
+              } else { [] })
               content_fragments_by_url.set(doc.url, doc.section_fragments)
               content_headings_by_url.set(doc.url, doc.headings)
               content_links_by_url.set(doc.url, doc.resolved_links)
@@ -5867,6 +5874,9 @@ fn prepare_output(
             source_output_marks.set(doc.url, (output_path_key(out_path), source_mark))
             if collect_content_navigation {
               content_sections_by_url.set(doc.url, doc.sections)
+              content_aliases_by_url.set(doc.url, if config.site.wikilink_aliases == Some(true) && !doc.sections.is_empty() {
+                searchable_note_aliases(src.content)
+              } else { [] })
               content_fragments_by_url.set(doc.url, doc.section_fragments)
               content_headings_by_url.set(doc.url, doc.headings)
               content_links_by_url.set(doc.url, doc.resolved_links)
@@ -6654,6 +6664,7 @@ fn prepare_output(
     let overwritten = superseded_source_urls(output, source_output_marks, dropped_slots)
     for (url, _) in overwritten {
       content_sections_by_url.remove(url)
+      content_aliases_by_url.remove(url)
       content_fragments_by_url.remove(url)
       content_headings_by_url.remove(url)
       content_links_by_url.remove(url)
@@ -6802,6 +6813,7 @@ fn prepare_output(
             content_links_by_url,
             content_sections_by_url,
             fragments=content_fragments_by_url,
+            aliases=content_aliases_by_url,
           ),
         ),
       )
