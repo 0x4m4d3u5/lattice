@@ -3,13 +3,14 @@
 export function installNavigation({ urls, enhance, readPosition }) {
   if (!document.querySelector('main[data-lattice-reader="1"]')) return;
   for (const link of document.querySelectorAll('link[rel="stylesheet"]')) link.href = link.href;
-  const scripts = (doc, base) => [...doc.scripts].filter(script => ['', 'module', 'text/javascript', 'application/javascript', 'importmap'].includes(script.type)).map(script => [script.type, script.hasAttribute('src') ? new URL(script.getAttribute('src'), base).href : script.textContent]);
+  const scripts = (doc, base) => [...doc.scripts].filter(script => script.type !== 'application/ld+json').map(script => [script.type, script.hasAttribute('src') ? new URL(script.getAttribute('src'), base).href : script.textContent]);
   const initialScripts = JSON.stringify(scripts(document, location.href));
   const key = 'latticeReader';
   let rendered = location.href;
   let pending;
   let frame;
   let sequence = 0;
+  let fragmentNavigation = false;
   const positions = new Map();
   const position = () => { const point = readPosition(); return { url: location.href, x: point.left, y: point.top }; };
   const cancel = () => { const active = pending; pending = undefined; active?.abort(); };
@@ -22,13 +23,20 @@ export function installNavigation({ urls, enhance, readPosition }) {
     positions.set(entry.id, entry);
     if (!known || persist) history.replaceState({ ...history.state, [key]: entry }, '');
   };
-  remember();
+  const initial = history.state?.[key];
+  if (initial?.url === location.href && typeof initial.id === 'string' && Number.isFinite(initial.x) && Number.isFinite(initial.y)) {
+    // A recreated history document must not overwrite its saved position with
+    // startup coordinates before the browser has had a chance to restore it.
+    positions.set(initial.id, initial);
+    window.scrollTo({ left: initial.x, top: initial.y, behavior: 'instant' });
+  } else remember();
   history.scrollRestoration = 'manual';
   window.addEventListener('scroll', () => {
     cancelAnimationFrame(frame);
     frame = requestAnimationFrame(() => { if (!pending) remember(); });
   }, { passive: true });
   window.addEventListener('hashchange', () => {
+    if (fragmentNavigation) { fragmentNavigation = false; return; }
     if (new URL(rendered).pathname !== location.pathname) return;
     cancel(); rendered = location.href; remember();
   });
@@ -73,9 +81,19 @@ export function installNavigation({ urls, enhance, readPosition }) {
       enhance();
       const current = document.querySelector('main[data-lattice-reader="1"]');
       current.focus({ preventScroll: true });
+      if (url.hash) {
+        // pushState alone does not update the native :target or fragment focus.
+        // Replace this entry's fragment through native navigation, preserving
+        // both its history state and the single entry created for this visit.
+        const state = history.state;
+        const bare = new URL(url); bare.hash = '';
+        fragmentNavigation = true;
+        history.replaceState(state, '', bare.href);
+        location.replace(url.href);
+        history.replaceState(state, '', url.href);
+      }
       if (restore) window.scrollTo({ left: restore.x, top: restore.y, behavior: 'instant' });
-      else if (fragment(url.hash)) fragment(url.hash).scrollIntoView();
-      else window.scrollTo({ left: 0, top: 0, behavior: 'instant' });
+      else if (!url.hash) window.scrollTo({ left: 0, top: 0, behavior: 'instant' });
       pending = undefined;
       remember();
     } catch {
@@ -92,13 +110,15 @@ export function installNavigation({ urls, enhance, readPosition }) {
     if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
     const link = event.target.closest('a[href]');
     if (!link || link.target || link.hasAttribute('download')) return;
-    const url = new URL(link.href);
+    // During a history fetch the address bar can precede the rendered article.
+    const url = new URL(link.getAttribute('href'), link.closest('main') ? rendered : document.baseURI);
     if (url.origin !== location.origin || url.username || url.password || url.search || !urls().has(url.origin + url.pathname)) return;
-    if (url.pathname === location.pathname) { cancel(); return; }
+    if (url.pathname === location.pathname && url.pathname === new URL(rendered).pathname) { cancel(); return; }
     event.preventDefault();
     navigate(url);
   });
   window.addEventListener('popstate', event => {
+    if (fragmentNavigation) return;
     const url = new URL(location.href);
     if (url.pathname === new URL(rendered).pathname) {
       cancel();

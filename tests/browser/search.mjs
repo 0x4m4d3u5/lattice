@@ -126,7 +126,7 @@ try {
   });
   const status = async text => page.waitForFunction(expected => document.querySelector('#lattice-status').textContent === expected, text);
   const ready = async () => {
-    await page.waitForFunction(() => !document.querySelector('#lattice-controls').disabled);
+    await page.waitForFunction(() => !document.querySelector('#lattice-controls').disabled && !document.querySelector('main[aria-busy="true"]'));
     if (await page.locator('#lattice-navigation').isHidden()) await page.getByRole('button', { name: 'Browse & search' }).click();
     if (await page.locator('#lattice-filters').isVisible() && !await page.locator('#lattice-filters').evaluate(element => element.open)) await page.locator('#lattice-filters summary').click();
   };
@@ -164,7 +164,7 @@ try {
   await page.keyboard.press('Enter');
   assert.equal(await page.evaluate(() => window.searchWorkers.length), 4, 'Loading retry cannot start another worker');
   await page.evaluate(() => window.heldReady.shift()());
-  await page.waitForFunction(() => !document.querySelector('#lattice-controls').disabled);
+  await page.waitForFunction(() => !document.querySelector('#lattice-controls').disabled && !document.querySelector('main[aria-busy="true"]'));
   assert.equal(await page.getByRole('searchbox', { name: 'Search notes' }).evaluate(input => input === document.activeElement), true,
     'Successful keyboard retry should return focus to search');
   await ready();
@@ -326,7 +326,7 @@ try {
   await page.waitForFunction(() => window.heldReady.length === 1);
   await page.locator('.overview-link').focus();
   await page.evaluate(() => window.heldReady.shift()());
-  await page.waitForFunction(() => !document.querySelector('#lattice-controls').disabled);
+  await page.waitForFunction(() => !document.querySelector('#lattice-controls').disabled && !document.querySelector('main[aria-busy="true"]'));
   assert.equal(await page.locator('.overview-link').evaluate(link => link === document.activeElement), true, 'Retry must not steal focus after the reader moves away');
   await ready();
   await page.evaluate(() => window.oldWorker.dispatchEvent(new ErrorEvent('error')));
@@ -355,7 +355,7 @@ try {
   if (process.env.LATTICE_PREVIEW_DIR) await page.screenshot({ path: join(process.env.LATTICE_PREVIEW_DIR, 'retry-loading-mobile.png') });
   await page.keyboard.press('Escape');
   await page.evaluate(() => window.heldReady.shift()());
-  await page.waitForFunction(() => !document.querySelector('#lattice-controls').disabled);
+  await page.waitForFunction(() => !document.querySelector('#lattice-controls').disabled && !document.querySelector('main[aria-busy="true"]'));
   assert.equal(await page.locator('#lattice-navigation').isHidden(), true);
   assert.equal(await page.locator('#lattice-navigation-toggle').evaluate(button => button === document.activeElement), true,
     'Completing retry after mobile dismissal must not focus hidden search');
@@ -374,9 +374,9 @@ try {
   const passageLink = page.locator('#lattice-results').getByRole('link', { name: 'Operations', exact: true });
   await passageLink.focus();
   await page.keyboard.press('Enter');
-  await page.waitForFunction(() => !document.querySelector('#lattice-controls').disabled);
+  await page.waitForFunction(() => !document.querySelector('#lattice-controls').disabled && !document.querySelector('main[aria-busy="true"]'));
   await complete();
-  assert.equal(await page.locator('#lattice-filters').evaluate(element => element.open), false);
+  assert.equal(await page.locator('#lattice-filters').evaluate(element => element.open), true, 'navigation retains the open tag disclosure');
   assert.equal(await page.locator('#lattice-filters summary').textContent(), 'Filter by tags (1 selected)');
   assert.equal(await page.getByRole('button', { name: 'Clear tag filters', exact: true }).isVisible(), true);
   await ready(); await complete();

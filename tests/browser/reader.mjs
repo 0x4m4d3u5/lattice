@@ -210,6 +210,31 @@ try {
   await reader.waitForFunction(() => document.querySelector('article h1')?.textContent === 'Publishing a note' && !document.querySelector('main[aria-busy="true"]'));
   assert.equal(await reader.evaluate(() => window.readerIdentity), 'retained');
   await reader.unroute(startURL);
+  // Recreated documents retain persisted positions, not their startup zero.
+  await reader.evaluate(() => scrollTo(0, 550));
+  await reader.reload();
+  await reader.waitForFunction(() => !document.querySelector('#lattice-controls').disabled && scrollY === 550);
+  await reader.evaluate(() => window.readerIdentity = 'retained');
+  // A fragment in the still-rendered article cannot cancel Back and leave the
+  // address bar describing a different article.
+  await reader.locator('#lattice-page-navigation').getByRole('link', { name: 'Getting started', exact: true }).click();
+  await reader.waitForURL(startURL);
+  let releaseHistory, sawHistory;
+  const historyGate = new Promise(resolve => releaseHistory = resolve);
+  const historySeen = new Promise(resolve => sawHistory = resolve);
+  await reader.route(publishingURL, async route => { sawHistory(); await historyGate; await route.continue().catch(() => {}); });
+  await reader.goBack(); await historySeen;
+  const oldFragment = reader.locator('article .section-permalink').first();
+  const oldHash = await oldFragment.getAttribute('href');
+  await oldFragment.click();
+  await reader.waitForURL(startURL + oldHash);
+  releaseHistory();
+  await reader.waitForFunction(() => document.querySelector('article h1')?.textContent === 'Getting started' && !document.querySelector('main[aria-busy="true"]'));
+  assert.equal(await reader.locator('article :target').count(), 1);
+  assert.equal(await reader.evaluate(() => window.readerIdentity), 'retained');
+  await reader.unroute(publishingURL);
+  await reader.locator('#lattice-page-navigation').getByRole('link', { name: 'Publishing a note', exact: true }).click();
+  await reader.waitForURL(publishingURL);
   // A shell with different executable scripts must use native navigation.
   await reader.route(startURL, async route => {
     if (route.request().resourceType() !== 'fetch') return route.continue();
