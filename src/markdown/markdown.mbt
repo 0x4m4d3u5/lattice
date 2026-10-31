@@ -67,6 +67,7 @@ pub enum Block {
   Paragraph(Array[Inline])
   FencedCode(String?, String) // optional language tag, code text
   BlockQuote(Array[Block])
+  Callout(String, Array[Inline], Bool?, Array[Block]) // type, title, folded open state, body
   UnorderedList(Array[ListItem]) // each item can have nested blocks
   OrderedList(Array[ListItem]) // each item can have nested blocks
   HRule
@@ -1597,6 +1598,9 @@ fn parse_blocks_with_code_lines(
         bq_lines.push(strip_blockquote_marker(ls[i]))
         i = i + 1
       }
+      let callout = parse_callout_header(bq_lines[0])
+      // Keep a blank header line so code diagnostics retain source offsets.
+      if callout is Some(_) { bq_lines[0] = "" }
       // blockquotes recurse: the stripped lines form their own block structure
       let (bq_blocks, nested_footnotes) = parse_blocks_with_code_lines(bq_lines,
         on_code.map(fn(report) { fn(start, end, prefix) { report(start + bq_start, end + bq_start, prefix + 2) } }),
@@ -1604,7 +1608,10 @@ fn parse_blocks_with_code_lines(
       for note in nested_footnotes {
         footnotes.push(note)
       }
-      result.push(BlockQuote(bq_blocks))
+      match callout {
+        Some((kind, title, expanded)) => result.push(Callout(kind, title, expanded, bq_blocks))
+        None => result.push(BlockQuote(bq_blocks))
+      }
     } else if is_unordered_item(line) {
       let items : Array[ListItem] = []
       // Single-pass: consume each item line then immediately consume its
@@ -1840,7 +1847,7 @@ fn collect_toc_entries_into(
           entries.push({ level, anchor, text })
         }
       }
-      BlockQuote(inner) =>
+      BlockQuote(inner) | Callout(_, _, _, inner) =>
         collect_toc_entries_into(inner, max_depth, counts, entries)
       UnorderedList(items) | OrderedList(items) =>
         for item in items {
@@ -2265,6 +2272,23 @@ fn render_block_with_issues(
         toc: [],
         footnotes: [],
       }
+    Callout(kind, title, expanded, inner_blocks) => {
+      let heading = render_inlines_with_issues(title, wl, fn_map)
+      let body = render_blocks_with_issues(inner_blocks, wl, heading_counts, fn_map, None, None)
+      let issues = heading.shortcode_errors
+      merge_shortcode_errors(issues, body.shortcode_errors)
+      let classes = " class=\"callout callout-" + @strutil.escape_html_body(kind) + "\""
+      let (opening, closing, title_tag) = match expanded {
+        Some(open) => ("<details" + classes + (if open { " open" } else { "" }) + ">\n", "</details>\n", "summary")
+        None => ("<div" + classes + ">\n", "</div>\n", "p")
+      }
+      {
+        html: opening + "<" + title_tag + " class=\"callout-title\">" + heading.html + "</" + title_tag + ">\n" + body.html + closing,
+        shortcode_errors: issues,
+        toc: [],
+        footnotes: [],
+      }
+    }
     BlockQuote(inner_blocks) => {
       let rendered = render_blocks_with_issues(
         inner_blocks, wl, heading_counts, fn_map, None, None,
@@ -2558,6 +2582,10 @@ fn visit_blocks(
       Heading(_, inlines) | Paragraph(inlines) =>
         visit_inlines(inlines, visit)
       BlockQuote(children) => visit_blocks(children, visit)
+      Callout(_, title, _, children) => {
+        visit_inlines(title, visit)
+        visit_blocks(children, visit)
+      }
       UnorderedList(items) | OrderedList(items) =>
         for item in items {
           visit_inlines(item.inlines, visit)

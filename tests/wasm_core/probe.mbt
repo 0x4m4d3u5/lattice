@@ -67,6 +67,13 @@ pub fn render_note() -> Int {
     "<p>&lt;https://example.test/a b&gt;</p>\n" {
     return -16
   }
+  let callout = @markdown.render(
+    "> [!note]- Evidence\n> [[soil|Source]]\n>\n> ## Method\n\n## Method", links,
+  )
+  if !callout.contains("<details class=\"callout callout-note\">") ||
+    !callout.contains("<summary class=\"callout-title\">Evidence</summary>") ||
+    !callout.contains("href=\"/notes/soil/\"") ||
+    !callout.contains("id=\"method-2\"") { return -17 }
   let html = @markdown.render(fm.body, links)
   let navigation = @search.render_content_index_with_navigation(
     [@search.new_content_entry("Garden", "garden", "/garden/", [], "", "", "", "page", None, "body")],

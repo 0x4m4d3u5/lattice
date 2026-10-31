@@ -7,6 +7,35 @@ build's final files and draft/overwrite exclusions without publishing. It includ
 static assets and does not interpret vault types as a publication filter. This is
 not an automatic vault importer, migration tool or privacy audit.
 
+## Obsidian callouts
+
+Quoted callouts publish without rewriting your notes:
+
+```md
+> [!warning] Check **the evidence**
+> Read [[research|the source note]] before drawing conclusions.
+>
+> - Record limitations.
+> - Keep supporting references.
+
+> [!question]- How was this measured?
+> This body starts collapsed; readers can expand it with mouse or keyboard.
+```
+
+The first quoted line declares the callout. Titles support inline Markdown and
+wikilinks; bodies support ordinary blocks, including nested callouts, lists,
+headings and code. Omit the title to use the type name. Identifiers are
+case-insensitive ASCII letters, digits, hyphens or underscores; custom types
+retain their names and use the same neutral reading style in the wiki starter.
+This does not import Obsidian themes, icons or plugin-specific behavior.
+
+A `+` or `-` immediately after `]` produces native HTML `details` and
+`summary`, initially expanded or collapsed respectively, without JavaScript.
+Without a sign the content stays visible. Ordinary quotes and fenced examples
+remain unchanged. Callout links still participate in strict validation, and
+headings use the document's shared ID numbering. Existing callout shortcodes
+remain supported.
+
 ## Vault metadata
 
 Vault notes use additional frontmatter fields beyond standard blog posts:
