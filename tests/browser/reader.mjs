@@ -22,6 +22,12 @@ writeFileSync(entryNote, readFileSync(entryNote, 'utf8').replace('[[publishing-a
 writeFileSync(sharingNote, readFileSync(sharingNote, 'utf8').replace('toc: true', 'toc: false\naliases: ["Contribution Guide"]') + `
 ![[diagram.png]]
 
+## Repeat the question, not the snapshot
+
+A heading from the public demo.
+
+<h3 id="unicode-long">長い見出しで読書体験を確認する方法と引用リンクの配置について考える 🌿 café résumé</h3>
+
 ## Repeated section
 
 First passage.
@@ -205,6 +211,31 @@ try {
   assert.equal(await unsupported.locator('article').getByRole('button', { name: 'Copy code', exact: true }).count(), 0);
   assert.equal(await unsupported.locator('article pre > code').first().textContent(), copySource.slice(0, -1));
   await unsupported.close();
+  // A section link must not become an orphan line or overlap long heading text.
+  for (const [width, fontSize] of [[390, 16], [320, 16], [390, 32], [1440, 16]]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto(`${origin}${urlFor('Publishing a note')}`); await ready();
+    await page.evaluate(size => document.documentElement.style.fontSize = `${size}px`, fontSize);
+    for (const id of ['repeat-the-question-not-the-snapshot', 'unicode-long']) {
+      const heading = page.locator(`[id="${id}"]`);
+      const link = heading.locator('.section-permalink');
+      await link.focus();
+      const layout = await heading.evaluate(element => {
+        const link = element.querySelector('.section-permalink');
+        const range = document.createRange(); range.selectNodeContents(element.firstChild);
+        const text = [...range.getClientRects()].map(rect => ({ top: rect.top, bottom: rect.bottom, right: rect.right }));
+        const box = link.getBoundingClientRect();
+        return { text, link: { top: box.top, bottom: box.bottom, left: box.left, width: box.width, height: box.height }, focused: document.activeElement === link && getComputedStyle(link).outlineStyle !== 'none' };
+      });
+      assert.ok(layout.link.top < layout.text[0].bottom && layout.link.bottom > layout.text[0].top, `section link must align with first heading line: ${width}/${fontSize}/${id}`);
+      assert.ok(layout.text.every(rect => rect.right <= layout.link.left), 'heading text must not overlap the link gutter');
+      assert.ok(layout.link.width >= 24 && layout.link.height >= 24 && layout.focused);
+      assert.equal(await link.getAttribute('href'), '#' + id);
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+      await save(`heading-link-${id}-${width}-${fontSize}.png`);
+    }
+  }
+  await page.evaluate(() => document.documentElement.style.fontSize = '');
   // Sharing a section should not require a TOC, a guessed slug or clipboard access.
   for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: 900 });
@@ -245,6 +276,7 @@ try {
     assert.equal(await custom.evaluate(link => getComputedStyle(link).color !== getComputedStyle(document.body).backgroundColor), true);
     await page.emulateMedia({ forcedColors: 'none', media: 'print' });
     assert.equal(await custom.isHidden(), true);
+    assert.equal(await page.locator('[id="☕ 50%:a/b"]').evaluate(heading => getComputedStyle(heading).paddingInlineEnd), '0px', 'print must not reserve an empty link gutter');
     await page.emulateMedia({ media: 'screen' });
     if (width === 1440) {
       const [opened] = await Promise.all([context.waitForEvent('page'), section.click({ button: 'middle' })]);
@@ -430,6 +462,7 @@ try {
   assert.ok((await plain.locator('article').textContent()).includes('Find your way around'));
   await plain.locator('article').getByRole('link', { name: 'publishing-a-note', exact: true }).click();
   assert.equal(new URL(plain.url()).pathname, urlFor('Publishing a note'));
+  assert.equal(await plain.locator('#repeat-the-question-not-the-snapshot').evaluate(heading => getComputedStyle(heading).paddingInlineEnd), '0px', 'no-JS headings retain their full reading width');
   await plain.locator('article img[alt="diagram.png"]').evaluate(image => image.decode());
   assert.equal(await plain.locator('article img[alt="diagram.png"]').evaluate(image => image.naturalWidth), 1);
   assert.equal(await plain.locator('article').getByRole('button', { name: 'Copy code', exact: true }).count(), 0);
