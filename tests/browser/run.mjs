@@ -74,7 +74,7 @@ try {
   assert.equal(result.ok, true, result.error);
   assert.equal(result.worker, true, 'cases did not execute in a real dedicated worker');
   assert.equal(result.count, 611);
-  assert.equal(result.searchCount, 130);
+  assert.equal(result.searchCount, 143);
   // DOM inspection needs no network, including image requests.
   await context.route('**/*', route => route.abort());
   const destinations = await page.evaluate((html) => {
