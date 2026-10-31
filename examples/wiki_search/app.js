@@ -221,7 +221,6 @@ function renderCatalogue(entries) {
       if (new URL(page.url).pathname === location.pathname) {
         link.setAttribute('aria-current', 'page');
         const label = document.querySelector('#lattice-current-collection'); if (label) label.textContent = name;
-        const heading = document.querySelector('article > header > h1'); if (heading) heading.textContent = page.title;
       }
       const card = document.createElement('li'); card.append(link.cloneNode(true));
       if (page.description) { const text = document.createElement('p'); text.textContent = page.description; card.append(text); }

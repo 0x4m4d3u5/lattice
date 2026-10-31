@@ -49,6 +49,7 @@ Second passage.
 `);
 const copySource = 'let greeting = "café <world> & friends"\n\tprintln(greeting)\n';
 writeFileSync(sharingNote, readFileSync(sharingNote, 'utf8') + '\n## Copy an example\n\n```moonbit\n' + copySource + '```\n\n```text\n  keep indentation\n\nlast line\n```\n');
+writeFileSync(join(content, 'punctuation.md'), '---\ntitle: Pipes | Fieldnotes & <notes>\n---\n# Pipes\n\nAuthored punctuation.\n');
 mkdirSync(templates);
 mkdirSync(join(content, 'static'), { recursive: true });
 mkdirSync(join(content, 'data'));
@@ -61,7 +62,7 @@ for (const name of ['page.html', 'wiki-navigation.html']) {
   writeFileSync(join(templates, name), readFileSync(new URL(`examples/wiki_search/${name}`, repository), 'utf8')
     .replaceAll('/static/search/', '/wiki/static/search/').replace('/content-index.json', '/wiki/content-index.json'));
 }
-writeFileSync(join(templates, '404.html'), '{{content}}');
+cpSync(join(templates, 'page.html'), join(templates, 'index.html'));
 const collections = join(root, 'collections.cfg');
 writeFileSync(collections, ['Guides', 'Systems', 'Practices'].map(name => `[${name}]\ndir = ${join(content, name.toLowerCase())}\nschema = title:String,description:String,tags:Optional[Array[String]]\n`).join('\n'));
 const config = join(root, 'site.cfg');
@@ -128,12 +129,31 @@ try {
   await cold.route('**/app.js', async route => { await moduleGate; await route.continue(); });
   await cold.goto(`${origin}${urlFor('Getting started')}`, { waitUntil: 'commit' });
   await cold.locator('article h1').waitFor();
+  assert.equal(await cold.locator('article h1').textContent(), 'Getting started', 'published heading must not depend on search initialization');
+  assert.equal(await cold.title(), 'Getting started | Fieldnotes');
   assert.equal(await cold.locator('#lattice-current-collection').innerText(), 'Guides');
   assert.equal(await cold.locator('#lattice-navigation').isVisible(), false, 'mobile sidebar must not flash before modules load');
   await save('reader-cold-module-delay.png', cold);
   releaseModule();
   await cold.waitForFunction(() => !document.querySelector('#lattice-controls').disabled);
+  assert.equal(await cold.locator('article h1').textContent(), 'Getting started');
   await coldContext.close();
+  const plainContext = await browser.newContext({ javaScriptEnabled: false });
+  const unloaded = await plainContext.newPage();
+  for (const [path, heading, documentTitle] of [
+    [urlFor('Getting started'), 'Getting started', 'Getting started | Fieldnotes'],
+    [urlFor('Pipes | Fieldnotes & <notes>'), 'Pipes | Fieldnotes & <notes>', 'Pipes | Fieldnotes & <notes> | Fieldnotes'],
+    ['/wiki/Guides/', 'Guides index', 'Guides index | Fieldnotes'],
+    ['/wiki/tags/', 'tags', 'tags | Fieldnotes'],
+    ['/wiki/404.html', 'Page Not Found', 'Page Not Found | Fieldnotes'],
+  ]) {
+    await unloaded.goto(origin + path);
+    assert.equal(await unloaded.locator('article > header > h1').textContent(), heading);
+    assert.equal(await unloaded.title(), documentTitle);
+    await unloaded.reload();
+    assert.equal(await unloaded.locator('article > header > h1').textContent(), heading);
+  }
+  await plainContext.close();
 
   const continuity = await browser.newContext({ viewport: { width: 1440, height: 900 } });
   const reader = await continuity.newPage();
@@ -469,9 +489,9 @@ try {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto(`${origin}/wiki/static/search/`); await ready();
   assert.equal(await page.getByRole('searchbox').inputValue(), '');
-  assert.equal(await page.locator('#lattice-collections .collection').count(), 3);
-  assert.equal(await page.locator('#lattice-page-navigation a').count(), 6);
-  assert.equal(await page.locator('#lattice-collections a').count(), 6);
+  assert.equal(await page.locator('#lattice-collections .collection').count(), 4);
+  assert.equal(await page.locator('#lattice-page-navigation a').count(), 7);
+  assert.equal(await page.locator('#lattice-collections a').count(), 7);
   await save('landing-desktop.png');
   await page.locator('.overview-link').focus();
   await page.keyboard.press('Tab'); await page.keyboard.press('Shift+Tab');
@@ -620,7 +640,7 @@ try {
   failWasm = true;
   await page.reload();
   await page.waitForFunction(() => document.querySelector('#lattice-status').textContent.startsWith('Search is unavailable'));
-  assert.equal(await page.locator('#lattice-collections a').count(), 6);
+  assert.equal(await page.locator('#lattice-collections a').count(), 7);
   await page.locator('#lattice-collections').getByRole('link', { name: 'Getting started', exact: true }).click();
   await page.locator('article').waitFor();
   await page.waitForFunction(() => document.querySelector('#lattice-status').textContent.startsWith('Search is unavailable'));

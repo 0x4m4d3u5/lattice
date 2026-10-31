@@ -26,7 +26,8 @@ The current implementation supports these built-in slots:
 
 ### Page metadata slots
 
-- `{{title}}` - page title from frontmatter
+- `{{title}}` - document title, including the site suffix for published pages; use in `<title>`
+- `{{page_title}}` - resolved page or generated-view title without an added site suffix; use for visible headings. Authored punctuation is preserved and HTML-escaped.
 - `{{content}}` - full rendered page content (including frontmatter in blog views)
 - `{{body}}` - markdown-rendered body only (excludes frontmatter, useful with custom frontmatter layout)
 - `{{date}}` - frontmatter date string
