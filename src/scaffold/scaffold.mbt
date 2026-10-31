@@ -1548,7 +1548,7 @@ fn frontmatter_stub(field_type : @schema.FieldType, today : String) -> String {
   match field_type {
     @schema.TOptional(inner) => frontmatter_stub(inner, today)
     @schema.TString(_, _) | @schema.TEnum(_) =>
-      stub_for_field_type(field_type, today).to_json().stringify()
+      Json(stub_for_field_type(field_type, today)).stringify()
     _ => stub_for_field_type(field_type, today)
   }
 }

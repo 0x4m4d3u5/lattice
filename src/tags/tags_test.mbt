@@ -278,7 +278,7 @@ test "render_tag_index HTML escaping" {
 ///|
 test "tag extraction rejects normalized dot path components" {
   for tag in [".", "..", "./Guide", "Guide/../Other", "Guide\\..\\Other", "..md", "...MD", "Guides/..MD", "Guides/...MD"] {
-    let fm = @frontmatter.parse("---\ntags: [" + tag.to_json().stringify() + "]\n---\n").unwrap()
+    let fm = @frontmatter.parse("---\ntags: [" + Json(tag).stringify() + "]\n---\n").unwrap()
     match @tags.extract(fm, "tags") {
       Err(message) => assert_true(message.contains("dot path component"))
       Ok(_) => fail("accepted traversal tag: " + tag)

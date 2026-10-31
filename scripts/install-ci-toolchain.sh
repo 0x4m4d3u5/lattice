@@ -15,7 +15,7 @@ fi
 work_dir=$(mktemp -d)
 staging_dir=''
 trap 'rm -rf "$work_dir"; [[ -z "$staging_dir" ]] || rm -rf "$staging_dir"' EXIT
-version='0.10.14%2B7d59c7ec9'
+version='0.10.18%2B6c83a7f62'
 curl --fail --location --silent --show-error \
   "https://github.com/moonbitlang/moonbit-compiler/releases/download/v$version/moonbit-wasm.tar.gz" \
   -o "$work_dir/compiler.tar.gz"
@@ -24,12 +24,12 @@ curl --fail --location --silent --show-error \
   "https://cli.moonbitlang.com/binaries/$version/moonbit-linux-x86_64.tar.gz" \
   -o "$work_dir/cli.tar.gz"
 printf '%s  %s\n' \
-  '3c5d21564b0e8bbfcfda95d374eda90427f6a5e238ce4639b711b69f43391f62' "$work_dir/compiler.tar.gz" \
-  '9226694de9ff978db1ecf820b7710c4224e84ec7a76b19a222d96f0cd4e31b6a' "$work_dir/cli.tar.gz" \
+  'c666b3b45db79e2a1a477cc9e99812223700d645d33d9834c95216208926fed1' "$work_dir/compiler.tar.gz" \
+  '0e4cde1ace98e8ef00552a937738b59c6901c4b8a004ebad71ea0e63688f63f1' "$work_dir/cli.tar.gz" \
   | sha256sum --check --strict
 mkdir "$work_dir/compiler"
 tar xf "$work_dir/compiler.tar.gz" -C "$work_dir/compiler"
-[[ "$(cat "$work_dir/compiler/moon_version")" == '760759ca67539dd6b6ea59b1eba57731b3ef674a' ]] \
+[[ "$(cat "$work_dir/compiler/moon_version")" == '5439c5789965cd1d8f148317af21d85316663ff9' ]] \
   || { echo 'Unexpected compiler SDK revision' >&2; exit 1; }
 mkdir -p "$(dirname "$MOON_HOME")"
 staging_dir=$(mktemp -d "$MOON_HOME.install.XXXXXX")

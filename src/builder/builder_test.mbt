@@ -5829,7 +5829,7 @@ test "build content-index body_text populated on cache-hit rebuild" {
   assert_eq(result1.rebuilt_pages, 1)
 
   // Load the cache saved by the first build
-  let loaded_cache = match @cache.load(output_root) {
+  let loaded_cache = match (try Ok(@cache.load(output_root)) catch { err => Err(err) }) {
     Ok(store) => store
     Err(err) => {
       assert_true(false)

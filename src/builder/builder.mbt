@@ -489,6 +489,9 @@ fn build_backlink_index(
 /// Render an HTML backlinks section from a list of referring pages.
 /// Returns an empty string when there are no backlinks.
 fn render_backlinks_html(backlinks : Array[BacklinkRef]) -> String {
+  // Directory enumeration differs across runtimes; public URLs define a stable order.
+  let backlinks = backlinks.copy()
+  backlinks.sort_by_key(fn(entry) { entry.url })
   if backlinks.length() == 0 {
     return ""
   }

@@ -58,7 +58,7 @@ test "linked image matching respects slices escaped openers and malformed recove
     ),
   )
   let repeated = "[![Map](/map.png)](/full) ".repeat(1000)
-  assert_eq(@markdown.render(repeated, Map([])).split("<img ").length(), 1001)
+  assert_eq(@markdown.render(repeated, Map([])).split("<img ").count(), 1001)
 }
 
 ///|

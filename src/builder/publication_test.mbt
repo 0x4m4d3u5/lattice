@@ -146,7 +146,7 @@ fn publication_incremental(
 
 ///|
 fn publication_load_cache(config : @builder.BuildConfig) -> @cache.CacheStore {
-  match @cache.load(config.output_dir) {
+  match (try Ok(@cache.load(config.output_dir)) catch { err => Err(err) }) {
     Ok(cache) => cache
     Err(_) => abort("publication fixture cache could not be loaded")
   }
@@ -829,4 +829,41 @@ test "draft flag and frontmatter transitions keep cached publication equal to fu
     assert_eq(next.errors, 0)
     assert_eq(next.unchanged_pages, if visible { 3 } else { 2 })
   }
+}
+
+///|
+test "cache I/O raises typed errors and preserves round trips" {
+  let root = publication_fresh_root("cache_io")
+  let store = @cache.load(root)
+  assert_eq(@cache.lookup(store, "note"), None)
+  @cache.remember(store, "note", "fingerprint")
+  @cache.save(store)
+  assert_eq(@cache.lookup(@cache.load(root), "note"), Some("fingerprint"))
+  @fs.write_string_to_file(@cache.cache_path(root), "{invalid")
+  let malformed = try {
+    ignore(@cache.load(root))
+    false
+  } catch {
+    @cache.ParseError(_) => true
+    _ => false
+  }
+  assert_true(malformed)
+  @fs.write_string_to_file(@cache.cache_path(root), "{\"version\":2,\"entries\":[]}")
+  let unsupported = try {
+    ignore(@cache.load(root))
+    false
+  } catch {
+    @cache.ParseError(message) => message == "unsupported cache version 2"
+    _ => false
+  }
+  assert_true(unsupported)
+  let missing_parent = @cache.empty(root + "/missing")
+  let unwritable = try {
+    @cache.save(missing_parent)
+    false
+  } catch {
+    @cache.WriteError(_) => true
+    _ => false
+  }
+  assert_true(unwritable)
 }

@@ -20,6 +20,7 @@ test "layout cycle diagnostics preserve published workshop output and recover" {
   let expected = "<html><body><article><p>Original alpha.</p>\n</article></body></html>"
   assert_eq(@fs.read_file_to_string(output), expected)
   let snapshot = publication_snapshot(config.output_dir)
+  let initial_stamp = @watch.file_stamp(base)
   for mutual in [false, true] {
     @fs.write_string_to_file(
       base,
@@ -60,9 +61,18 @@ test "layout cycle diagnostics preserve published workshop output and recover" {
     publication_load_cache(config),
   )
   assert_eq(recovered.errors, 0)
-  assert_eq(recovered.unchanged_pages, 2)
+  // JS stamps file contents; native stamps modification time. Restoring the
+  // same bytes can legitimately trigger one dependency rebuild on native.
+  assert_eq(recovered.unchanged_pages, if @watch.file_stamp(base) == initial_stamp { 2 } else { 0 })
   assert_eq(@fs.read_file_to_string(output), expected)
-  assert_eq(publication_snapshot(config.output_dir), snapshot)
+  let recovered_snapshot = publication_snapshot(config.output_dir)
+  if @watch.file_stamp(base) == initial_stamp {
+    assert_eq(recovered_snapshot, snapshot)
+  }
+  let warm = @builder.build(publication_incremental(config), publication_load_cache(config))
+  assert_eq(warm.errors, 0)
+  assert_eq(warm.unchanged_pages, 2)
+  assert_eq(publication_snapshot(config.output_dir), recovered_snapshot)
 }
 
 ///|
