@@ -14,10 +14,14 @@ const content = join(root, 'content');
 const output = join(root, 'dist');
 const templates = join(root, 'templates');
 cpSync(new URL('./fixtures/wiki', import.meta.url), content, { recursive: true });
+mkdirSync(join(content, 'static'), { recursive: true });
+writeFileSync(join(content, 'static/diagram.png'), Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jS1sAAAAASUVORK5CYII=', 'base64'));
 const sharingNote = join(content, 'guides/publishing-a-note.md');
 const entryNote = join(content, 'guides/getting-started.md');
 writeFileSync(entryNote, readFileSync(entryNote, 'utf8').replace('[[publishing-a-note]]', '[[Contribution Guide|publishing-a-note]]'));
 writeFileSync(sharingNote, readFileSync(sharingNote, 'utf8').replace('toc: true', 'toc: false\naliases: ["Contribution Guide"]') + `
+![[diagram.png]]
+
 ## Repeated section
 
 First passage.
@@ -59,7 +63,7 @@ writeFileSync(config, `wikilink_aliases = true\ntitle = Fieldnotes\nbase_url = h
 run('_build/js/debug/build/kurisu/lattice/cmd/main/main.js', ['build', content, '-c', config, '--collections', collections]);
 const index = JSON.parse(readFileSync(join(output, 'content-index.json')));
 const urlFor = title => index.find(entry => entry.title === title).url;
-const mime = { '.html': 'text/html', '.css': 'text/css', '.js': 'text/javascript', '.json': 'application/json', '.wasm': 'application/wasm' };
+const mime = { '.png': 'image/png', '.html': 'text/html', '.css': 'text/css', '.js': 'text/javascript', '.json': 'application/json', '.wasm': 'application/wasm' };
 const assets = new Map();
 function register(directory, prefix = '') {
   for (const entry of readdirSync(directory, { withFileTypes: true })) {
@@ -152,6 +156,10 @@ try {
   for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: 900 });
     await page.goto(`${origin}${urlFor('Publishing a note')}`); await ready();
+    const attachment = page.locator('article img[alt="diagram.png"]');
+    await attachment.evaluate(image => image.decode());
+    assert.equal(await attachment.evaluate(image => image.naturalWidth), 1);
+    assert.equal(await attachment.getAttribute('src'), '/static/diagram.png');
     const copy = page.locator('article').getByRole('button', { name: 'Copy code', exact: true }).first();
     assert.equal(await copy.count(), 1, 'Readers need a copy control for code examples');
     const code = page.locator('article pre > code').first();
@@ -422,6 +430,8 @@ try {
   assert.ok((await plain.locator('article').textContent()).includes('Find your way around'));
   await plain.locator('article').getByRole('link', { name: 'publishing-a-note', exact: true }).click();
   assert.equal(new URL(plain.url()).pathname, urlFor('Publishing a note'));
+  await plain.locator('article img[alt="diagram.png"]').evaluate(image => image.decode());
+  assert.equal(await plain.locator('article img[alt="diagram.png"]').evaluate(image => image.naturalWidth), 1);
   assert.equal(await plain.locator('article').getByRole('button', { name: 'Copy code', exact: true }).count(), 0);
   assert.equal(await plain.locator('article pre > code').first().textContent(), copySource.slice(0, -1));
   await plain.setViewportSize({ width: 320, height: 800 });

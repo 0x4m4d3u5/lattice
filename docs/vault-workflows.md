@@ -7,6 +7,40 @@ build's final files and draft/overwrite exclusions without publishing. It includ
 static assets and does not interpret vault types as a publication filter. This is
 not an automatic vault importer, migration tool or privacy audit.
 
+## Local image attachments
+
+Write `![[diagram.png]]` to embed an image already inside the configured static
+asset directory (`content/static` by default). A bare filename must be unique.
+For nested files or ambiguous names, use a static-relative path such as
+`![[figures/diagram.png]]`, or qualify it with the configured directory name:
+`![[static/figures/diagram.png]]`. Paths are case-sensitive; spaces and Unicode
+are preserved and URL-encoded in published destinations. The target spelling
+becomes escaped alt text. Normal Markdown images remain available when you need
+custom alt text or other image syntax.
+
+This supports PNG, JPEG, GIF, WebP, AVIF and BMP attachments on collection,
+standalone, root and custom 404 pages. It does not implement note transclusion,
+SVG/PDF/audio/video embeds, remote URLs, sizing (`|300`), fragments or parent-path
+traversal. Unsupported, missing and ambiguous references fail `check` and
+`build` with source locations, including when an old output file still exists.
+Code examples, escaped syntax and raw HTML are not treated as embeds. Image
+references do not create page backlinks or graph edges.
+
+Resolution uses the existing static asset snapshot and confirms final output
+ownership before publication. It does not discover or copy files from elsewhere
+in a vault, fetch remote content, or change static publication policy. Static
+assets are still copied wholesale, including unreferenced files; this feature is
+not a privacy filter. Hidden draft references are excluded unless `--drafts` is
+used. Image bytes are preserved, not decoded, sanitized or transformed by the
+publisher; browser format support still applies.
+
+The portable `render_note` API has no filesystem. Its supplied link map may
+provide explicit destinations using keys such as
+`{"![[diagram.png]]":"/static/diagram.png"}`. These must be local root-relative
+URLs; absent destinations produce `image_embed` diagnostics. The host is
+responsible for supplying genuinely published image assets. Ordinary page-map
+keys and the function signature remain unchanged.
+
 ## Obsidian callouts
 
 Quoted callouts publish without rewriting your notes:

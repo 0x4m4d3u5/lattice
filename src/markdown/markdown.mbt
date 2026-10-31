@@ -26,6 +26,7 @@ pub enum Inline {
   InlineCode(String)
   Link(Array[Inline], String) // display inlines, url
   Image(String, String) // alt text, url
+  ImageEmbed(String) // local attachment target; resolved by the publisher
   WikiRef(String, String?) // target slug, optional display text
   FootnoteRef(String) // footnote label
   Shortcode(@shortcode.ShortcodeCall)
@@ -191,6 +192,7 @@ pub fn plain_text_inline(inline : Inline) -> String {
     InlineCode(code) => code
     Link(inlines, _) => plain_text_inlines(inlines)
     Image(alt, _) => alt
+    ImageEmbed(target) => target
     WikiRef(target, display) =>
       match display {
         Some(text) => text
@@ -923,6 +925,17 @@ fn parse_inlines_with_code_ranges(
         i = i + 3
       }
       text_start = i
+    } else if c == '!' && i + 2 < to &&
+      @strutil.char_at(s, i + 1) == '[' && @strutil.char_at(s, i + 2) == '[' {
+      let close = @strutil.find_str(s, i + 3, "]]", to)
+      if close >= 0 {
+        if text_start < i { result.push(Text(@strutil.substr(s, text_start, i))) }
+        result.push(ImageEmbed(@strutil.trim(@strutil.substr(s, i + 3, close))))
+        i = close + 2
+        text_start = i
+      } else {
+        i = i + 1
+      }
     } else if c == '!' && i + 1 < to && @strutil.char_at(s, i + 1) == '[' {
       // image: ![alt](url)
       let bracket_close = label_close_at(i + 1)
@@ -2120,6 +2133,12 @@ fn render_inline_with_issues(
         toc: [],
         footnotes: [],
       }
+    ImageEmbed(target) => {
+      match wl.get(image_embed_key(target)) {
+        Some(url) => render_inline_with_issues(Image(target, url), wl, fn_map)
+        None => render_inline_with_issues(Text(image_embed_key(target)), wl, fn_map)
+      }
+    }
     WikiRef(target, display) => {
       let text = match display {
         Some(d) => d
@@ -2566,7 +2585,7 @@ fn visit_inlines(
       | BoldItalic(inner)
       | Strikethrough(inner)
       | Link(inner, _) => visit_inlines(inner, visit)
-      Text(_) | InlineCode(_) | Image(_, _) | WikiRef(_, _) | FootnoteRef(_) |
+      Text(_) | InlineCode(_) | Image(_, _) | ImageEmbed(_) | WikiRef(_, _) | FootnoteRef(_) |
       Shortcode(_) | Math(_) | InlineHtml(_) | HardBreak => ()
     }
   }
@@ -2626,6 +2645,20 @@ fn visit_body_inlines(body : String, visit : (Inline) -> Unit) -> Unit {
       parse_inlines(footnote.text, 0, footnote.text.length()), visit,
     )
   }
+}
+
+///|
+/// Reserved map key for explicit asset destinations; cannot alias a page target.
+pub fn image_embed_key(target : String) -> String { "![[" + target + "]]" }
+
+///|
+/// Parsed attachment references, excluding code, math and raw HTML.
+pub fn extract_image_embeds(body : String) -> Array[String] {
+  let targets : Array[String] = []
+  visit_body_inlines(body, fn(inline) {
+    if inline is ImageEmbed(target) { targets.push(target) }
+  })
+  targets
 }
 
 ///|

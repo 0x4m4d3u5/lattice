@@ -1,4 +1,5 @@
 import {
+  "moonbitlang/core/encoding/percent" @percent,
   "moonbitlang/core/json" @json,
   "moonbitlang/core/diff" @diff,
   "kurisu/lattice/src/config" @config,
