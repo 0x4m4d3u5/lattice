@@ -5,13 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{title}}</title>
   {{head_meta}}
+  <script src="/static/search/boot.js"></script>
   <link rel="stylesheet" href="/static/search/shell.css">
   <link rel="stylesheet" href="/static/search/page.css">
 </head>
 <body>
   {{include: wiki-navigation.html}}
-  <main id="lattice-main-content" tabindex="-1">
-    <div class="document-bar"><a href="/static/search/">Overview</a> <span aria-hidden="true">/</span> <span id="lattice-current-collection">Published note</span></div>
+  <main id="lattice-main-content" data-lattice-reader="1" tabindex="-1">
+    <div class="document-bar"><a href="/static/search/">Overview</a> <span aria-hidden="true">/</span> <span id="lattice-current-collection" {{?collection}}data-collection="{{collection}}"{{/?collection}}>{{?collection}}<span class="collection-name">{{collection}}</span>{{/?collection}}<span class="collection-fallback">Pages</span></span></div>
     <article>
       <header><span class="eyebrow">From the wiki</span><h1>{{title}}</h1>{{?description}}<p class="lede">{{description}}</p>{{/?description}}</header>
       {{?table_of_contents}}<nav class="contents" aria-label="On this page"><details><summary>On this page</summary>{{table_of_contents}}</details></nav>{{/?table_of_contents}}

@@ -193,7 +193,7 @@ Submitting another query, clearing it, or retrying search resets the visible bat
 Snippets and titles are
 inserted as text. HTTP and HTTPS title links use the returned page URL plus an
 encoded publisher-verified fragment when available, opening the matching passage
-through native browser navigation. Older indexes and uncertain targets keep the
+at its published HTML target. Older indexes and uncertain targets keep the
 page-only link; heading labels are never converted into guessed slugs. A same-page
 passage link closes mobile navigation before the browser scrolls to the target. Other or
 malformed URLs remain non-navigable text.
@@ -272,11 +272,21 @@ files for your deployment prefix or chosen directory. The packaged landing page
 uses relative asset/index URLs. Keep its `data-index` equivalent to the published
 template's index URL so tab-local search state stays shared.
 
-All page links use normal navigation to the published HTML. There is no embedded
+All page links point to published HTML. With the current shared templates, ordinary
+same-site clicks load that HTML into the reading pane while keeping search, tag
+filters and the sidebar in place. The previous article stays readable while the
+next one loads; a later click supersedes a pending request. There is no embedded
 preview or second Markdown renderer. Wiki links, fragment links, contents and
 backlinks use the generator's existing URLs; native browser history and new-tab
 navigation work normally. Notes using the shared template retain the sidebar,
-current-page indication and collection label as you follow links.
+current-page indication and collection label as you follow links. Completed visits
+focus the main content and update the title and page metadata; Back/Forward restore
+the article and reading position. Failed requests, unknown pages and mismatched
+shells fall back to full-page navigation. Modified clicks and same-page fragments
+retain native browser behavior. Custom templates opt in with
+`data-lattice-reader="1"` on their main content and matching search-index,
+stylesheet and executable-script URLs; pages requiring custom script execution
+should keep ordinary full-page navigation instead.
 At the end of a collection note, previous/next links let readers continue through
 the collection without returning to the sidebar. They use the publisher's existing
 collection order and URLs, include the neighboring note titles, and work without
@@ -288,7 +298,7 @@ Existing site themes remain unchanged unless you opt into the template. Other
 templates still open normally, but need the shared navigation include, styles
 and app module to participate in this layout.
 
-Queries, selected tags and collection disclosure state are retained for the tab
+Queries, selected tags, tag-filter disclosure and collection disclosure state are retained for the tab
 using optional session storage, scoped to the index URL. Storage failure does not
 prevent reading or searching. On mobile, **Browse & search** opens the directory.
 The mobile masthead wraps the brand and button onto separate rows when enlarged

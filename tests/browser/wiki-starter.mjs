@@ -162,7 +162,7 @@ try {
   await context.route('**/*', route => new URL(route.request().url()).origin === origin ? route.continue() : route.abort());
   const page = await context.newPage();
   const errors = []; page.on('pageerror', error => errors.push(error.message));
-  const ready = () => page.waitForFunction(() => !document.querySelector('#lattice-controls').disabled);
+  const ready = () => page.waitForFunction(() => !document.querySelector('#lattice-controls').disabled && !document.querySelector('main[aria-busy="true"]'));
   await page.goto(origin); await ready();
   assert.equal(await page.locator('article > header > h1').textContent(), 'Welcome to your wiki');
   assert.equal(await page.locator('#lattice-current-collection').textContent(), 'Pages');

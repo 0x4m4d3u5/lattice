@@ -122,3 +122,7 @@ main:focus { outline: none; }
   .masthead, .skip, #lattice-navigation { display: none; }
   main, .js.navigation-open main { display: block; margin-left: 0; }
 }
+
+.collection-fallback { display: none; }
+:is(#lattice-current-collection:not([data-collection]), [data-collection=""], [data-collection="_root"], [data-collection="_standalone"]) > .collection-name { display: none; }
+:is(#lattice-current-collection:not([data-collection]), [data-collection=""], [data-collection="_root"], [data-collection="_standalone"]) > .collection-fallback { display: inline; }
