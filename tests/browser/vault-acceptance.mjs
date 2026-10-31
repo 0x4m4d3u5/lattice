@@ -30,6 +30,7 @@ try {
     const page = await context.newPage();
     await page.goto(origin + overviewUrl);
     await page.getByRole('link', { name: 'the findings', exact: true }).click();
+    await page.waitForURL(origin + evidenceUrl + '#revised-findings');
     assert.equal(new URL(page.url()).pathname, evidenceUrl);
     assert.equal(new URL(page.url()).hash, '#revised-findings');
     assert.equal(await page.locator('[id="revised-findings"]').count(), 1);

@@ -1,3 +1,4 @@
+import { installNavigation } from './navigation.js';
 import { buildCatalogue } from './catalogue.js';
 
 const form = document.querySelector('#lattice-search');
@@ -19,14 +20,19 @@ results.after(moreResults);
 const retry = document.querySelector('#lattice-retry');
 const navigation = document.querySelector('#lattice-navigation');
 const toggle = document.querySelector('#lattice-navigation-toggle');
-const catalogueStatus = document.querySelector('#lattice-catalogue-status');
+const catalogueStatus = () => document.querySelector('#lattice-catalogue-status');
 const overview = document.querySelector('.overview-link');
+// Keep shell-relative URLs stable when the reading pane changes location.
+for (const link of document.querySelectorAll('.masthead a[href], .overview-link')) link.href = link.href;
+form.dataset.index = new URL(form.dataset.index, document.baseURI).href;
 const stateKey = `lattice-reader:${new URL(form.dataset.index, document.baseURI).href}`;
 let saved = {};
 try { saved = JSON.parse(sessionStorage.getItem(stateKey)) || {}; } catch { /* Storage is optional. */ }
 query.value = typeof saved.query === 'string' ? saved.query : '';
 let groupState = saved.groups && typeof saved.groups === 'object' ? saved.groups : {};
 let catalogueLoaded = false;
+let catalogueEntries = [];
+filters.open = saved.filtersOpen === true;
 
 // Match the worker and retrieval core's ASCII-only tag identity.
 const tagKey = tag => tag.replace(/[A-Z]/g, letter => letter.toLowerCase());
@@ -40,7 +46,7 @@ function updateFilters() {
 function persist() {
   const selected = controls.disabled && !tags.children.length && Array.isArray(saved.tags)
     ? saved.tags : [...tags.querySelectorAll('input:checked')].map(input => input.value);
-  try { sessionStorage.setItem(stateKey, JSON.stringify({ query: query.value, tags: selected, groups: groupState })); } catch { /* Private/restricted storage must not break reading. */ }
+  try { sessionStorage.setItem(stateKey, JSON.stringify({ query: query.value, tags: selected, groups: groupState, filtersOpen: filters.open })); } catch { /* Private/restricted storage must not break reading. */ }
 }
 let readingPosition;
 function setNavigation(open, restorePosition = true) {
@@ -180,6 +186,8 @@ addSectionLinks();
 addCodeCopyControls();
 
 function renderCatalogue(entries) {
+  catalogueEntries = entries;
+  const navigationScroll = navigation.scrollTop;
   const pages = buildCatalogue(entries, document.baseURI, overview.href);
   const groups = new Map();
   for (const page of pages) {
@@ -223,7 +231,8 @@ function renderCatalogue(entries) {
     detail.addEventListener('toggle', () => { groupState[name] = detail.open; persist(); });
     section.append(cards); collections?.append(section);
   }
-  if (catalogueStatus) catalogueStatus.textContent = pages.length ? `${pages.length} published notes · ${groups.size} ${groups.size === 1 ? 'collection' : 'collections'}` : 'No readable pages are listed in this wiki yet.';
+  navigation.scrollTop = navigationScroll;
+  if (catalogueStatus()) catalogueStatus().textContent = pages.length ? `${pages.length} published notes · ${groups.size} ${groups.size === 1 ? 'collection' : 'collections'}` : 'No readable pages are listed in this wiki yet.';
 }
 
 let activeWorker;
@@ -251,7 +260,7 @@ function fail() {
   clearResults();
   results.setAttribute('aria-busy', 'false');
   status.textContent = 'Search is unavailable. Retry loading search.';
-  if (catalogueStatus && !catalogueLoaded) catalogueStatus.textContent = 'The page directory is unavailable. Retry loading the wiki using the navigation panel.';
+  if (catalogueStatus() && !catalogueLoaded) catalogueStatus().textContent = 'The page directory is unavailable. Retry loading the wiki using the navigation panel.';
   retry.hidden = false;
   retry.removeAttribute('aria-disabled');
 }
@@ -390,6 +399,7 @@ moreResults.addEventListener('click', () => appendHits(true));
 retry.addEventListener('click', () => {
   if (retry.getAttribute('aria-disabled') !== 'true') start();
 });
+filters.addEventListener('toggle', persist);
 tags.addEventListener('change', () => { updateFilters(); persist(); });
 clearTags.addEventListener('click', () => {
   for (const input of tags.querySelectorAll('input:checked')) input.checked = false;
@@ -401,3 +411,15 @@ clearTags.addEventListener('click', () => {
 window.addEventListener('pagehide', () => { persist(); stop(); });
 window.addEventListener('pageshow', event => { if (event.persisted) start(); });
 start();
+
+installNavigation({
+  readPosition: () => readingPosition || { left: scrollX, top: scrollY },
+  urls: () => new Set([new URL(overview.href).href, ...buildCatalogue(catalogueEntries, document.baseURI, overview.href).map(page => page.url)]),
+  enhance: () => {
+    setNavigation(false, false);
+    overview.toggleAttribute('aria-current', new URL(overview.href).pathname === location.pathname);
+    if (overview.hasAttribute('aria-current')) overview.setAttribute('aria-current', 'page');
+    renderCatalogue(catalogueEntries);
+    addSectionLinks(); addCodeCopyControls();
+  },
+});

@@ -8,6 +8,8 @@ export async function prepareWikiAssets() {
     ['shell.css', '../examples/wiki_search/shell.css'],
     ['page.css', '../examples/wiki_search/page.css'],
     ['catalogue.js', '../examples/wiki_search/catalogue.js'],
+    ['boot.js', '../examples/wiki_search/boot.js'],
+    ['navigation.js', '../examples/wiki_search/navigation.js'],
     ['app.js', '../examples/wiki_search/app.js'],
     ['worker.js', '../examples/wiki_search/worker.js'],
     ['host.js', '../examples/wasm_note/host.mjs'],
