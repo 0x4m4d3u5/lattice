@@ -7,6 +7,76 @@ build's final files and draft/overwrite exclusions without publishing. It includ
 static assets and does not interpret vault types as a publication filter. This is
 not an automatic vault importer, migration tool or privacy audit.
 
+## Bring a curated vault copy into the wiki starter
+
+Use a separate working copy so the original notes stay untouched. There is no
+automatic Obsidian importer: Lattice does not migrate plugins, rewrite links or
+select public content for you. Start with a deliberately selected set of notes
+and attachments, not a private vault copied wholesale.
+
+From a built Lattice checkout, create the [wiki starter](wiki-search-page.md#start-a-new-wiki):
+
+```sh
+node scripts/create-wiki.mjs ../vault-site
+```
+
+Copy the selected Markdown files into `../vault-site/content/research` and their
+selected raster attachments into `../vault-site/content/static`. Keep the original
+vault elsewhere. In the generated `collections.cfg`, add:
+
+```cfg
+[Research]
+dir = content/research
+schema = title:String,description:String
+```
+
+Supply those two frontmatter fields in the working copies, or deliberately choose
+a schema appropriate for your notes. Add `wikilink_aliases = true` to
+`content/lattice.conf` if the notes use aliases. The examples below use the absolute
+`LATTICE_CLI` path from the [source quick start](../README.md#build-from-source):
+
+```sh
+cd ../vault-site
+node "$LATTICE_CLI" check
+node "$LATTICE_CLI" inventory --format json
+node "$LATTICE_CLI" build --strict-wikilinks
+node "$LATTICE_CLI" serve
+```
+
+Inspect the inventory before publishing. `draft: true` excludes a note from the
+normal publication and search index, but `check` can still report ordinary broken
+wikilinks in draft sources. Fix those in the working copy rather than assuming
+draft status disables authoring diagnostics. Vault type/status helper values do
+not define a publication boundary. All configured static files, including
+unreferenced attachments, are copied; a draft note does not hide its attachments.
+
+After editing a heading, run `check` again. A link such as
+`[[Field Manual#Findings|the findings]]` needs updating when its actual published
+heading changes. `build --strict-wikilinks` rejects the broken reference before
+writing output. Repair the reference and rebuild; then inspect the resulting page
+and search citation. Aliases identify canonical notes, not historical headings,
+and do not create redirects. Use [inventory comparisons](publication-inventory.md)
+for public path changes; they do not track heading history.
+
+Supported syntax includes normal wikilinks, opt-in aliases, callouts and the local
+raster embeds described below. Note transclusion (`![[another-note]]`), plugin
+queries and Obsidian theme behavior are not imported. Unsupported image-embed
+forms produce diagnostics; other unsupported plugin syntax is not necessarily
+recognized or rejected. Review the rendered output rather than treating a clean
+check as proof of full Obsidian compatibility.
+
+Validation/render preparation failures preserve the previous output, cache and
+manifest. This is not an atomic filesystem transaction: I/O failure or interruption
+can leave partial output, and removed sources can leave stale files. Consult
+[build safety](build-safety.md) before replacing published output. Keep output
+outside the original vault; this workflow does not deploy or delete anything.
+
+The repository's `scripts/check-vault-acceptance.mjs` reproduces this workflow
+with generated synthetic notes, including a heading rename, rejected transclusion
+and repair. It checks source bytes before/after commands and retained output on
+validation failure. The browser acceptance uses its final publication to verify
+canonical citations, images and callout interaction.
+
 ## Local image attachments
 
 Write `![[diagram.png]]` to embed an image already inside the configured static
