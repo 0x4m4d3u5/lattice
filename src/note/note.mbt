@@ -75,6 +75,13 @@ pub fn render_note(
   for link in resolved {
     render_links.set(link.raw.target, link.url)
   }
+  for target in @markdown.extract_image_embeds(fm.body) {
+    let key = @markdown.image_embed_key(target)
+    match index.get(key) {
+      Some(url) if url.has_prefix("/") && !url.has_prefix("//") && !url.contains("\\") && !url.iter().any(fn(c) { c.is_control() }) => render_links.set(key, url)
+      _ => diagnostics.push(diagnostic("image_embed", source_file, "image embed " + key + " requires a local published asset destination"))
+    }
+  }
   let rendered = @markdown.render_with_diagnostics(fm.body, render_links)
   for issue in rendered.shortcode_errors {
     diagnostics.push(

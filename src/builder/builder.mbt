@@ -391,12 +391,18 @@ pub fn sort_collection_pages(
 ///|
 fn build_wikilink_map(
   resolved : Array[@wikilink.ResolvedWikilink],
+  body? : String = "",
+  page_index? : Map[String, String] = Map([]),
 ) -> Map[String, String] {
   let m : Map[String, String] = Map([])
   let mut i = 0
   while i < resolved.length() {
     m.set(resolved[i].raw.target, resolved[i].url)
     i = i + 1
+  }
+  for target in @markdown.extract_image_embeds(body) {
+    let key = @markdown.image_embed_key(target)
+    if page_index.get(key) is Some(url) && url != "" { m.set(key, url) }
   }
   m
 }
@@ -2876,6 +2882,7 @@ fn render_404_page(
   custom_css : String,
   data_store : @data.DataStore,
   authored? : Array[Bool] = [],
+  image_index? : Map[String, String] = Map([]),
 ) -> Result[String, String] {
   let page_path = config.content_dir + "/404.md"
   let has_custom_404 = @fs.path_exists(page_path)
@@ -2888,7 +2895,7 @@ fn render_404_page(
     match @frontmatter.parse(source) {
       Err(e) => return Err("404.md frontmatter: " + e)
       Ok(fm) => {
-        let wl_map = build_wikilink_map([])
+        let wl_map = build_wikilink_map([], body=fm.body, page_index=image_index)
         let (markdown_result, leading_h1_end) =
           @markdown.render_with_leading_h1_boundary(fm.body, wl_map)
         if markdown_result.shortcode_errors.length() > 0 {
@@ -3591,7 +3598,7 @@ fn process_document(
   if !render_page_html {
     // Body artifacts are needed even when page HTML is not requested.
     let (cache_markdown, _, cache_sections) = @markdown.render_with_text_sections(
-      fm.body, build_wikilink_map(resolved),
+      fm.body, build_wikilink_map(resolved, body=fm.body, page_index~),
     )
     let cache_body_text = @strutil.strip_html_tags(cache_markdown.html)
     return {
@@ -3615,7 +3622,7 @@ fn process_document(
       diagnostics,
     }
   }
-  let wl_map = build_wikilink_map(resolved)
+  let wl_map = build_wikilink_map(resolved, body=fm.body, page_index~)
   // Step 5: render markdown body to HTML fragment
   let section_offsets : Array[Int?] = []
   let (markdown_result, leading_h1_end, sections) = @markdown.render_with_text_sections(
@@ -4220,7 +4227,7 @@ fn process_document_for_lint(
     return { document: None, violations }
   }
 
-  let wl_map = build_wikilink_map(resolved)
+  let wl_map = build_wikilink_map(resolved, body=fm.body, page_index~)
   let section_offsets : Array[Int?] = []
   let (markdown_result, leading_h1_end, sections) = @markdown.render_with_text_sections(
     fm.body,
@@ -5131,6 +5138,7 @@ fn prepare_output(
       sources: root_sources,
     })
   }
+  register_image_assets(config, page_index, all_sources_for_backlinks)
   let alias_violations = if config.site.wikilink_aliases == Some(true) {
     register_note_aliases(all_sources_for_backlinks, page_index)
   } else { [] }
@@ -6542,6 +6550,7 @@ fn prepare_output(
           custom_css,
           data_store,
           authored~,
+          image_index=page_index,
         ) {
         Ok(html) => Some(html)
         Err(msg) => {
@@ -6819,6 +6828,9 @@ fn prepare_output(
       )
     }
     output.prune_files(dropped_slots)
+    let image_errors : Array[@lint.LintViolation] = []
+    check_image_embeds(all_sources_for_backlinks, config, page_index, output, image_errors)
+    for violation in image_errors { diagnostics.push(@diagnostic.of_lint_violation(violation)) }
     if strict_wikilinks {
       let violations : Array[@lint.LintViolation] = []
       check_output_wikilinks(
@@ -7112,6 +7124,7 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
       sources: root_sources,
     })
   }
+  register_image_assets(config, page_index, all_sources_for_backlinks)
   if config.site.wikilink_aliases == Some(true) {
     for violation in register_note_aliases(all_sources_for_backlinks, page_index) {
       violations.push(violation)
@@ -7563,7 +7576,7 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
   let error_template_path = templates_dir_for_build(config) + "/404.html"
   if @fs.path_exists(error_template_path) {
     match
-      render_404_page(config, templates, nav_links_html, custom_css, data_store) {
+      render_404_page(config, templates, nav_links_html, custom_css, data_store, image_index=page_index) {
       Ok(_) => ()
       Err(msg) =>
         violations.push(
@@ -7604,14 +7617,15 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
       check_output_fragments(
         all_sources_for_backlinks, page_index, source_urls, config, output, violations,
       )
-    } else if violations.is_empty() {
+    } else {
+      let include_other_errors = violations.is_empty()
       for diagnostic in prepared.diagnostics {
-        if diagnostic.severity == @diagnostic.Error {
+        if diagnostic.severity == @diagnostic.Error && (include_other_errors || diagnostic.message.has_prefix("image embed ")) {
           violations.push({
             path: diagnostic.path.unwrap_or(config.content_dir),
             line: diagnostic.line,
             column: diagnostic.column,
-            kind: @lint.IOError,
+            kind: if diagnostic.message.has_prefix("image embed ") { @lint.BrokenWikilink } else { @lint.IOError },
             message: diagnostic.message,
           })
         }

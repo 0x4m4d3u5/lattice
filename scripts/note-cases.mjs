@@ -13,6 +13,13 @@ export function runNoteCases(render, assert) {
   const ok = (html) => ({ html, diagnostics: [] });
   const issue = (kind, source, message) => ({ kind, source, message });
   const yaml = (body) => `---\ntitle: Garden\n---\n${body}`;
+  check(render(yaml('![[diagram.png]]'), 'image.md', '{"![[diagram.png]]":"/static/diagram.png"}'),
+    ok('<p><img src="/static/diagram.png" alt="diagram.png" /></p>\n'));
+  for (const links of ['{}', '{"![[diagram.png]]":"https://example.test/x.png"}']) {
+    check(render(yaml('![[diagram.png]]'), 'image.md', links), {
+      html: '', diagnostics: [issue('image_embed', 'image.md', 'image embed ![[diagram.png]] requires a local published asset destination')],
+    });
+  }
   check(render(fenceLanguageProbe.source, 'fence-language.md', '{}'), ok(fenceLanguageProbe.html));
   check(render(yaml('## Planting & Care\n\n## Planting & Care\n\nJump [[#Planting & Care|here]] or [[#planting-care-2]]. `[[#sample]]`.\n'), 'local.md', '{}'),
     ok('<h2 id="planting-care">Planting &amp; Care</h2>\n<h2 id="planting-care-2">Planting &amp; Care</h2>\n<p>Jump <a href="#planting-care">here</a> or <a href="#planting-care-2">#planting-care-2</a>. <code>[[#sample]]</code>.</p>\n'));
