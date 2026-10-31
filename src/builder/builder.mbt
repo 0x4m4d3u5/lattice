@@ -443,6 +443,14 @@ fn build_backlink_index(
   page_index : Map[String, String],
 ) -> Map[String, Array[BacklinkRef]] {
   let index : Map[String, Array[BacklinkRef]] = Map([])
+  let canonical_by_url : Map[String, String] = Map([])
+  for collection in collection_sources {
+    for source in collection.sources {
+      if page_index.get(source.slug) is Some(url) {
+        canonical_by_url.set(url, source.slug)
+      }
+    }
+  }
   let mut i = 0
   while i < collection_sources.length() {
     let coll = collection_sources[i]
@@ -462,7 +470,11 @@ fn build_backlink_index(
       let seen_targets : Map[String, Bool] = Map([])
       let mut k = 0
       while k < raw_links.length() {
-        let target = @wikilink.lookup_key(raw_links[k].target)
+        let key = @wikilink.lookup_key(raw_links[k].target)
+        let target = match page_index.get(key) {
+          Some(url) => canonical_by_url.get(url).unwrap_or(key)
+          None => key
+        }
         if target != "" && source_url != "" &&
           page_index.contains(target) &&
           !seen_targets.contains(target) {
@@ -2612,6 +2624,7 @@ fn collect_tag_catalog(
   collection_sources : Array[CollectionSources],
   tags_field : String,
   include_drafts? : Bool = true,
+  aliases_enabled? : Bool = false,
 ) -> TagCatalog {
   let ordered_slugs : Array[String] = []
   let name_by_slug : Map[String, String] = Map([])
@@ -2623,7 +2636,7 @@ fn collect_tag_catalog(
       let src = coll.sources[j]
       match @frontmatter.parse(src.content) {
         Ok(fm) => {
-          let schema_errors = @schema.validate(fm, coll.definition.schema)
+          let schema_errors = @schema.validate(fm, note_alias_schema(coll.definition.schema, aliases_enabled))
           if schema_errors.length() == 0 && (include_drafts || !is_draft(fm)) {
             match @tags.extract(fm, tags_field) {
               Ok(tag_refs) => {
@@ -3456,7 +3469,7 @@ fn process_document(
     diagnostics.push(@diagnostic.of_lint_violation(v))
     has_schema_errors = true
   }
-  let schema_errors = @schema.validate(fm, schema)
+  let schema_errors = @schema.validate(fm, note_alias_schema(schema, site.wikilink_aliases == Some(true)))
   if schema_errors.length() > 0 {
     has_schema_errors = true
     let mut i = 0
@@ -4119,7 +4132,7 @@ fn process_document_for_lint(
     None => page_template
   }
 
-  let schema_errors = @schema.validate(fm, schema)
+  let schema_errors = @schema.validate(fm, note_alias_schema(schema, site.wikilink_aliases == Some(true)))
   let mut i = 0
   while i < schema_errors.length() {
     let err = schema_errors[i]
@@ -5121,12 +5134,19 @@ fn prepare_output(
       sources: root_sources,
     })
   }
+  let alias_violations = if config.site.wikilink_aliases == Some(true) {
+    register_note_aliases(all_sources_for_backlinks, page_index)
+  } else { [] }
+  for violation in alias_violations {
+    diagnostics.push(@diagnostic.of_lint_violation(violation))
+  }
   // Validation knows every authored tag, including tags unique to hidden drafts.
-  let known_tags = collect_tag_catalog(all_sources_for_backlinks, tags_field).name_by_slug
+  let known_tags = collect_tag_catalog(all_sources_for_backlinks, tags_field, aliases_enabled=config.site.wikilink_aliases == Some(true)).name_by_slug
   let tag_catalog = collect_tag_catalog(
     all_sources_for_backlinks,
     tags_field,
     include_drafts=config.include_drafts,
+    aliases_enabled=config.site.wikilink_aliases == Some(true),
   )
   // Keep URL validation and ownership complete; derivations use published URLs.
   let published_page_index : Map[String, String] = Map([])
@@ -5139,6 +5159,11 @@ fn prepare_output(
         }
       }
     }
+  }
+  let visible_urls : Map[String, Bool] = Map([])
+  for (_, url) in published_page_index { visible_urls.set(url, true) }
+  for (key, url) in page_index {
+    if visible_urls.contains(url) { published_page_index.set(key, url) }
   }
   let backlink_index = build_backlink_index(
     all_sources_for_backlinks, published_page_index,
@@ -5208,7 +5233,7 @@ fn prepare_output(
   }
 
   // Pass 2: render and write each page
-  let mut error_count = 0
+  let mut error_count = alias_violations.length()
   let mut rebuilt = 0
   let mut unchanged = 0
   let mut skipped_drafts = 0
@@ -7078,7 +7103,12 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
       sources: root_sources,
     })
   }
-  let tag_catalog = collect_tag_catalog(all_sources_for_backlinks, tags_field)
+  if config.site.wikilink_aliases == Some(true) {
+    for violation in register_note_aliases(all_sources_for_backlinks, page_index) {
+      violations.push(violation)
+    }
+  }
+  let tag_catalog = collect_tag_catalog(all_sources_for_backlinks, tags_field, aliases_enabled=config.site.wikilink_aliases == Some(true))
   let known_tags = tag_catalog.name_by_slug
   let backlink_index = build_backlink_index(
     all_sources_for_backlinks, page_index,
@@ -7806,7 +7836,7 @@ pub fn stats(config : BuildConfig) -> StatsResult {
 
   // Count unique tags across all collections
   let tags_field = tags_field_name(config.site)
-  let tag_catalog = collect_tag_catalog(collection_sources, tags_field)
+  let tag_catalog = collect_tag_catalog(collection_sources, tags_field, aliases_enabled=config.site.wikilink_aliases == Some(true))
   let unique_tags = tag_catalog.ordered_slugs.length()
 
   {

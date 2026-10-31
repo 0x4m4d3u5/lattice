@@ -47,6 +47,7 @@ pub struct SiteConfig {
   data_entries : Array[DataEntry]
   feed_limit : Int?
   site_feed_enabled : Bool?
+  wikilink_aliases : Bool?
   require_image_alt : Bool?
 }
 
@@ -192,6 +193,7 @@ pub fn parse(input : String) -> Result[SiteConfig, ConfigError] {
   let mut archive_pages : Bool? = None
   let mut feed_limit : Int? = None
   let mut site_feed_enabled : Bool? = None
+  let mut wikilink_aliases : Bool? = None
   let mut require_image_alt : Bool? = None
 
   let collections : Array[CollectionEntry] = []
@@ -488,6 +490,11 @@ pub fn parse(input : String) -> Result[SiteConfig, ConfigError] {
                 ),
               )
           }
+        } else if key == "wikilink_aliases" {
+          match parse_bool_config(value) {
+            Some(parsed) => wikilink_aliases = Some(parsed)
+            None => return Err(InvalidValue("wikilink_aliases", "must be true/false, yes/no, 1/0, or on/off"))
+          }
         } else if key == "require_image_alt" {
           match parse_bool_config(value) {
             Some(parsed) => require_image_alt = Some(parsed)
@@ -566,6 +573,7 @@ pub fn parse(input : String) -> Result[SiteConfig, ConfigError] {
     data_entries,
     feed_limit,
     site_feed_enabled,
+    wikilink_aliases,
     require_image_alt,
   })
 }

@@ -611,3 +611,10 @@ test "require_image_alt defaults off and uses existing boolean grammar" {
     }
   }
 }
+
+///|
+test "wikilink aliases are explicitly enabled with a validated boolean" {
+  assert_eq(@config.parse("title = Wiki\nbase_url = https://example.test\n").unwrap().wikilink_aliases, None)
+  assert_eq(@config.parse("title = Wiki\nbase_url = https://example.test\nwikilink_aliases = true\n").unwrap().wikilink_aliases, Some(true))
+  assert_true(@config.parse("title = Wiki\nbase_url = https://example.test\nwikilink_aliases = maybe\n") is Err(_))
+}
