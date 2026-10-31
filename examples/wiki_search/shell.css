@@ -103,11 +103,12 @@ main:focus { outline: none; }
 .collection p { font-size: var(--type-navigation); color: var(--text-metadata); margin: .4rem 0 0; }
 .document-bar { padding: 1rem clamp(1.4rem, 5vw, 4rem); border-bottom: 1px solid var(--border-subtle); font-size: var(--type-navigation); color: var(--text-metadata); }
 @media (max-width: 800px) {
-  .masthead { height: 62px; padding: 0 1.2rem; gap: var(--space-md); }
-  .brand { min-width: 0; }
+  .masthead { height: auto; min-height: 62px; padding: .5rem 1.2rem; gap: var(--space-md); flex-wrap: wrap; }
+  .brand { min-width: 0; max-width: 100%; flex-shrink: 0; }
+  .brand > :last-child { min-width: 0; overflow-wrap: anywhere; }
   .mark, #lattice-navigation-toggle { flex-shrink: 0; }
   .edition { display: none; }
-  #lattice-navigation-toggle { font-size: var(--type-navigation); background: transparent; color: var(--action-fill); border-color: var(--border-control); }
+  #lattice-navigation-toggle { max-width: 100%; overflow-wrap: anywhere; font-size: var(--type-navigation); background: transparent; color: var(--action-fill); border-color: var(--border-control); }
   .search-column { position: static; width: 100%; border-right: 0; border-bottom: 1px solid var(--border-subtle); }
   .js .search-column { display: none; }
   .js.navigation-open .search-column { display: block; }

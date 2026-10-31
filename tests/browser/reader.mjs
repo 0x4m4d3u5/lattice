@@ -115,11 +115,51 @@ try {
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
   const ready = () => page.waitForFunction(() => !document.querySelector('#lattice-controls').disabled);
-  const save = async name => {
+  const save = async (name, target = page) => {
     if (!process.env.LATTICE_PREVIEW_DIR) return;
     mkdirSync(process.env.LATTICE_PREVIEW_DIR, { recursive: true });
-    await page.screenshot({ path: join(process.env.LATTICE_PREVIEW_DIR, name), fullPage: name.includes('landing') });
+    await target.screenshot({ path: join(process.env.LATTICE_PREVIEW_DIR, name), fullPage: name.includes('landing') });
   };
+  const checkMasthead = async target => {
+    const layout = await target.locator('.masthead').evaluate(header => {
+      const bounds = header.getBoundingClientRect();
+      const brand = header.querySelector('.brand');
+      const button = header.querySelector('#lattice-navigation-toggle');
+      const elements = [brand, ...(button.getClientRects().length ? [button] : [])];
+      const rects = elements.map(element => element.getBoundingClientRect());
+      const range = document.createRange(); range.selectNodeContents(brand.lastElementChild);
+      return {
+        contained: [...rects, ...range.getClientRects()].every(rect => rect.left >= bounds.left && rect.right <= bounds.right && rect.top >= bounds.top && rect.bottom <= bounds.bottom),
+        separate: rects.length === 1 || rects[0].right <= rects[1].left || rects[0].bottom <= rects[1].top,
+        targets: rects.every(rect => rect.width >= 24 && rect.height >= 24),
+        overflow: document.documentElement.scrollWidth > innerWidth,
+      };
+    });
+    assert.deepEqual(layout, { contained: true, separate: true, targets: true, overflow: false }, 'masthead labels and controls must fit without overlap');
+  };
+  const scaled = await context.newPage();
+  for (const [width, fontSize] of [[390, 32], [320, 32], [320, 16], [390, 16], [800, 32], [1440, 16]]) {
+    await scaled.setViewportSize({ width, height: 900 });
+    await scaled.goto(`${origin}${urlFor('Getting started')}`); await scaled.waitForFunction(() => !document.querySelector('#lattice-controls').disabled);
+    await scaled.evaluate(size => document.documentElement.style.fontSize = `${size}px`, fontSize);
+    await save(`masthead-${width}-${fontSize}.png`, scaled);
+    await checkMasthead(scaled);
+    if (width <= 800) {
+      const navigation = scaled.getByRole('button', { name: 'Browse & search' });
+      await navigation.focus();
+      assert.notEqual(await navigation.evaluate(element => getComputedStyle(element).outlineStyle), 'none');
+      await navigation.press('Enter');
+      assert.equal(await navigation.getAttribute('aria-expanded'), 'true');
+      await scaled.getByRole('searchbox').fill('publishing');
+      await scaled.getByRole('button', { name: 'Search', exact: true }).click();
+      await scaled.locator('#lattice-results a').first().waitFor();
+      await checkMasthead(scaled);
+      await scaled.keyboard.press('Escape');
+      assert.equal(await navigation.getAttribute('aria-expanded'), 'false');
+      assert.equal(await navigation.evaluate(element => element === document.activeElement), true);
+    }
+  }
+  await scaled.close();
   const checkForcedColors = async name => {
     await page.emulateMedia({ forcedColors: 'active' });
     const current = page.locator('#lattice-navigation [aria-current=page]');
@@ -468,6 +508,9 @@ try {
   assert.equal(await plain.locator('article').getByRole('button', { name: 'Copy code', exact: true }).count(), 0);
   assert.equal(await plain.locator('article pre > code').first().textContent(), copySource.slice(0, -1));
   await plain.setViewportSize({ width: 320, height: 800 });
+  await plain.evaluate(() => document.documentElement.style.fontSize = '32px');
+  await checkMasthead(plain);
+  await plain.evaluate(() => document.documentElement.style.fontSize = '');
   const previous = plain.getByRole('navigation', { name: 'Collection reading order' }).locator('a');
   assert.ok((await previous.textContent()).includes('Getting started'));
   await previous.click();

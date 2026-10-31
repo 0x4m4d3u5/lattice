@@ -52,7 +52,7 @@ export async function checkReaderStyle(page) {
   if (await page.locator('#lattice-navigation-toggle').isVisible()) {
     const brand = await page.locator('.brand').boundingBox();
     const toggle = await page.locator('#lattice-navigation-toggle').boundingBox();
-    assert.ok(brand.x + brand.width + 8 <= toggle.x, 'Mobile brand and menu control need separation');
+    assert.ok(brand.x + brand.width + 8 <= toggle.x || brand.y + brand.height + 8 <= toggle.y, 'Mobile brand and menu control need separation');
   }
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'Page must reflow without horizontal scrolling');
 }
