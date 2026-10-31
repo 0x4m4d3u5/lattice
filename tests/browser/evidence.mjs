@@ -39,9 +39,9 @@ const search = await createContentSearcher(readFileSync(join(repository, '_build
 const browser = await chromium.launch({ chromiumSandbox: true, ...(process.env.LATTICE_BROWSER_CHANNEL ? { channel: process.env.LATTICE_BROWSER_CHANNEL } : {}) });
 try {
   const context = await browser.newContext({ javaScriptEnabled: false });
-  const page = await context.newPage(); let validations = 0;
+  let validations = 0;
   const collect = (query, data = indexJson) => collectEvidence({ indexJson: data, query, search, origin,
-    validateTarget: async (url, fragment) => { validations++; return validatePublishedTarget(page, url, fragment); } });
+    validateTarget: async (url, fragment) => { validations++; return validatePublishedTarget(context, url, fragment); } });
   const ready = await collect('isolated checksum');
   assert.equal(ready.status, 'ready');
   assert.equal(ready.candidates[0].passage, entry.sections[0].body);

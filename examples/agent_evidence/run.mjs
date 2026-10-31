@@ -11,9 +11,8 @@ const search = await createContentSearcher(bytes);
 const browser = await chromium.launch({ chromiumSandbox: true, ...(process.env.LATTICE_BROWSER_CHANNEL ? { channel: process.env.LATTICE_BROWSER_CHANNEL } : {}) });
 try {
   const context = await browser.newContext({ javaScriptEnabled: false });
-  const page = await context.newPage();
   const result = await collectEvidence({ indexJson, query: process.argv[4], origin: process.argv[3], search,
-    validateTarget: (url, fragment) => validatePublishedTarget(page, url, fragment) });
+    validateTarget: (url, fragment) => validatePublishedTarget(context, url, fragment) });
   console.log(JSON.stringify(result, null, 2));
   if (result.status !== 'ready') process.exitCode = 2;
 } finally { await browser.close(); }

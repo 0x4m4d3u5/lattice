@@ -32,10 +32,11 @@ export async function collectEvidence({ indexJson, query, search, validateTarget
 }
 
 // Uses browser-parsed DOM, so comments and script text cannot masquerade as IDs.
-export async function validatePublishedTarget(page, url, fragment) {
+export async function validatePublishedTarget(context, url, fragment) {
+  let page;
   try {
-    // Force a document load even when successive candidates differ only by hash.
-    await page.goto('about:blank');
+    // Each target gets its own document lifecycle, including repeated fragments.
+    page = await context.newPage();
     const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 15_000 });
     if (!response || !response.ok() || !response.headers()['content-type']?.includes('text/html')) return { ok: false, reason: 'Target is not a successful HTML response' };
     const actual = new URL(page.url()); const expected = new URL(url);
@@ -46,5 +47,6 @@ export async function validatePublishedTarget(page, url, fragment) {
       if (count !== 1) return { ok: false, reason: 'Fragment is missing or not unique in published HTML' };
     }
     return { ok: true };
-  } catch { return { ok: false, reason: 'Target could not be loaded' }; }
+  } catch (error) { return { ok: false, reason: `Target could not be loaded: ${error.message}` }; }
+  finally { await page?.close(); }
 }
