@@ -23,7 +23,7 @@ const server = createServer((req, res) => {
 });
 await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
 const origin = `http://127.0.0.1:${server.address().port}`;
-const browser = await chromium.launch({ chromiumSandbox: true });
+const browser = await chromium.launch({ chromiumSandbox: true, ...(process.env.LATTICE_BROWSER_CHANNEL ? { channel: process.env.LATTICE_BROWSER_CHANNEL } : {}) });
 try {
   for (const javaScriptEnabled of [true, false]) {
     const context = await browser.newContext({ javaScriptEnabled, viewport: { width: javaScriptEnabled ? 1440 : 390, height: 900 } });

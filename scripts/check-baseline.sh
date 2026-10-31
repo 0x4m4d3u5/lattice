@@ -56,5 +56,7 @@ node scripts/check-note-aliases.mjs || status=1
 echo "Running saved inventory comparison fixture"
 node scripts/check-inventory-diff.mjs || status=1
 echo "Running synthetic vault acceptance"
-node scripts/check-vault-acceptance.mjs || status=1
+moon -C "$MOON_HOME/lib/core" bundle --target wasm-gc --deny-warn &&
+  moon build examples/wasm_note --target wasm-gc --deny-warn &&
+  node scripts/check-vault-acceptance.mjs || status=1
 exit "$status"
