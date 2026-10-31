@@ -3,7 +3,9 @@ import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { spawnSync } from 'node:child_process';
+import { spawnSync, spawn } from 'node:child_process';
+import { createServer } from 'node:net';
+import { once } from 'node:events';
 
 // Execute the actual guide snippets, not a second handwritten starter fixture.
 const guide = readFileSync(new URL('../docs/getting-started.md', import.meta.url), 'utf8');
@@ -47,6 +49,8 @@ try {
   write('content/posts/welcome-lattice.md', blocks(section(4), 'md')[0]);
   write('templates/page.html', namedBlock('templates/page.html', 'html'));
   write('templates/index.html', namedBlock('templates/index.html', 'html'));
+  const preview = blocks(guide.split('## Rebuild while editing')[1], 'sh')[0];
+  assert.ok(preview.includes('--config ./lattice.toml'), 'preview must use the config created by this guide');
   run(['check', '--config', './lattice.toml']);
   assert.ok(!existsSync(join(root, 'dist')), 'check must not publish');
   // The first command is the separate repository example; execute both new-site commands.
@@ -60,9 +64,9 @@ try {
     }
     // Each command must independently publish, without previous output or cache.
     rmSync(join(root, 'dist'), { recursive: true, force: true });
-    const tokens = command.trim().split(/\s+/);
-    assert.equal(tokens[0], 'lattice', 'expected the documented executable');
-    run(tokens.slice(1));
+    assert.ok(command.startsWith('node "$LATTICE_CLI" '), 'expected documented source CLI');
+    const tokens = command.trim().slice('node "$LATTICE_CLI" '.length).split(/\s+/);
+    run(tokens);
     verifyPublication();
   }
   // Exercise the optional retrieval output described in the guide.
@@ -75,6 +79,31 @@ try {
   assert.ok(citation?.body.includes('exercise the full lattice pipeline'));
   assert.deepEqual(citation.tags, ['intro', 'lattice', 'demo']);
   assert.ok(existsSync(join(root, 'dist', citation.url, 'index.html')));
+  // Execute the documented preview with its custom config, not just a build fixture.
+  const reserve = createServer();
+  reserve.listen(0, '127.0.0.1'); await once(reserve, 'listening');
+  const port = reserve.address().port;
+  await new Promise(resolve => reserve.close(resolve));
+  const previewArgs = preview.trim().slice('node "$LATTICE_CLI" '.length).split(/\s+/);
+  const child = spawn(process.execPath, [cli, ...previewArgs, '--port', String(port)], { cwd: root, stdio: ['ignore', 'pipe', 'pipe'] });
+  let diagnostics = ''; child.stdout.on('data', b => diagnostics += b); child.stderr.on('data', b => diagnostics += b);
+  try {
+    let served = false;
+    for (let attempt = 0; attempt < 100; attempt++) {
+      assert.equal(child.exitCode, null, diagnostics);
+      try {
+        const response = await fetch(`http://127.0.0.1:${port}${pageUrl}`, { signal: AbortSignal.timeout(1000) });
+        if (response.ok && (await response.text()).includes('Welcome to the Example Site')) { served = true; break; }
+      } catch { /* Wait for the preview to bind. */ }
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    assert.ok(served, `documented preview did not serve the guide site: ${diagnostics}`);
+  } finally {
+    if (child.exitCode === null && child.signalCode === null) {
+      const exited = once(child, 'exit');
+      child.kill('SIGTERM'); await exited;
+    }
+  }
   console.log('Copied getting-started files, CLI commands, check/build, templates, indexes and retrieval citation passed');
 } finally {
   rmSync(root, { recursive: true, force: true });

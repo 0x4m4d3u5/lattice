@@ -98,6 +98,28 @@ server running, reload the overview, open **Field journal** under **Guides**,
 or search for **copperleaf**. Follow the note's link back to **Getting started**.
 Repeat check and build after editing; the plain HTTP server does not rebuild.
 
+## Retrieve evidence from your wiki
+
+The reader search above runs locally in a compatible browser. To exercise the
+same retrieval from an agent host, follow the browser-harness prerequisites in
+[the evidence example](agent-evidence.md#run-it-against-a-publication), then,
+from the repository root while your wiki's HTTP server is running:
+
+```sh
+node examples/agent_evidence/run.mjs \
+  ../my-wiki/dist/content-index.json http://127.0.0.1:8000 "copperleaf"
+```
+
+After adding the Field journal example, this returns its full indexed passage
+and a validated citation ending in `#first-observation`. It is retrieval, not
+proof that the observation is true. No matches or multiple matching passages
+produce an abstention rather than an invented or arbitrarily chosen citation.
+
+Change `copperleaf` to `silverfern` in the note, run check and build again from
+the wiki directory, then repeat the query with `silverfern`. The new index and
+HTML should agree; the old query should no longer find that passage. Keep the
+index and output from the same build. The HTTP server alone does not rebuild.
+
 ## Publish a clickable image
 
 Put a thumbnail and its larger image under `content/static/`, then use an inline

@@ -4,6 +4,32 @@ This guide walks through the smallest useful lattice site using the same syntax 
 
 The core idea is simple: define site metadata, declare at least one collection with a schema, add Markdown files that satisfy that schema, then render everything through HTML templates. If a page violates the schema, lattice reports a build error and leaves existing output unchanged. Run `lattice check` first for validation without output writes.
 
+## Prerequisites and source CLI
+
+Start from a checkout of this repository. The pinned bootstrap supports **Linux
+x86_64** and requires Node **26.12.1**, Bash, curl, tar, Git and standard GNU
+utilities (including `sha256sum` and `realpath`). Follow the
+[pinned installation steps](reliability-baseline.md#reproduce), including
+`moon update`, before continuing. They install into the chosen `MOON_HOME`, not
+into a global Moon installation. Other platforms need their own compatible
+MoonBit toolchain; this Linux installer does not certify those installations.
+Official SDK downloads have a retention window; see the linked instructions
+before relying on a future fresh install. Python 3 is needed only for the
+separate HTTP-server examples; the Node `serve` command does not require it.
+
+From the repository root, build the CLI and retain its absolute path:
+
+```bash
+moon build cmd/main --target js --deny-warn
+export LATTICE_CLI="$PWD/_build/js/debug/build/kurisu/lattice/cmd/main/main.js"
+```
+
+Keep this terminal open when changing directories. No installed `lattice`
+command is required. A new terminal needs the same absolute `LATTICE_CLI` path.
+For a ready-made connected wiki with browser search, start with the
+[wiki starter](wiki-search-page.md#start-a-new-wiki); the manual site below
+teaches configuration and templates and does not include that search UI.
+
 ## Directory layout
 
 For a minimal site, create a layout like this:
@@ -223,10 +249,10 @@ From repo root, the example site builds with:
 moon run cmd/main --target js -- build ./example/content -o ./dist --config ./example/site.cfg
 ```
 
-For your own site, run the `lattice` executable from `my-site/`. If `collections_file = ./collections.cfg` is set in `lattice.toml`, build with:
+For your own site, run the source CLI from `my-site/` in the same terminal. If `collections_file = ./collections.cfg` is set in `lattice.toml`, build with:
 
 ```bash
-lattice build --config ./lattice.toml
+node "$LATTICE_CLI" build --config ./lattice.toml
 ```
 
 That works because the CLI defaults to:
@@ -238,15 +264,19 @@ That works because the CLI defaults to:
 If you prefer not to set `collections_file` in the config, pass it explicitly:
 
 ```bash
-lattice build ./content -o ./dist --config ./lattice.toml --collections ./collections.cfg
+node "$LATTICE_CLI" build ./content -o ./dist --config ./lattice.toml --collections ./collections.cfg
 ```
+
+The custom config filename in this guide must also be passed to `check`,
+`serve` and watch commands. Without `--config`, Lattice looks for
+`content/lattice.conf`, as used by the generated wiki starter.
 
 ## Rebuild while editing
 
 For a one-terminal editing preview on the pinned Node runtime, run:
 
 ```sh
-node "$LATTICE_CLI" serve
+node "$LATTICE_CLI" serve --config ./lattice.toml
 ```
 
 Open `http://127.0.0.1:4321/`. `-p 8000` selects another port; use your usual
@@ -266,7 +296,7 @@ If you prefer a separate HTTP server or `build --strict-wikilinks --watch`, the
 JavaScript CLI can also keep that preview up to date. From your site directory, run:
 
 ```sh
-node "$LATTICE_CLI" build --watch
+node "$LATTICE_CLI" build --config ./lattice.toml --watch
 ```
 
 Use the same `--config` and `--collections` options as your one-shot build when
@@ -304,7 +334,7 @@ source updates generated indexes but does not delete previously published files.
 For an editor or CI consumer, run a one-shot check with JSON output:
 
 ```bash
-lattice check ./content --config ./lattice.toml --format json
+node "$LATTICE_CLI" check ./content --config ./lattice.toml --format json
 ```
 
 Stdout is one JSON object containing `violations` and `summary`, with no progress
@@ -345,9 +375,17 @@ dist/
 ```
 
 If `static_dir` exists, lattice also copies those files into `dist/static/`.
+That directory is copied wholesale, not filtered by note draft flags or vault
+metadata. Keep private attachments outside it. Removing a source does not remove
+its old published file; use a new output directory when you need a fresh output
+set, then review it before publishing. Publication writes are not atomic.
 
 For full-text knowledge retrieval, enable the optional
 [content index](content-index.md) with `content_index_file = content-index.json`.
+
+For a complete source-passage and validated citation example, see
+[retrieval, evidence and published citations](agent-evidence.md). The wiki
+starter already enables the content index required by that example.
 
 ## robots.txt and sitemap
 

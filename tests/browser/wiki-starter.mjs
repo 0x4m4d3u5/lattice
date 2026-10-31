@@ -7,6 +7,8 @@ import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { createServer } from 'node:http';
 import { chromium } from 'playwright';
+import { createContentSearcher } from '../../examples/wasm_note/host.mjs';
+import { collectEvidence, validatePublishedTarget } from '../../examples/agent_evidence/evidence.mjs';
 
 const root = mkdtempSync(join(tmpdir(), 'lattice-wiki-starter-'));
 const starter = join(root, 'my wiki');
@@ -203,6 +205,30 @@ try {
   assert.equal(await page.locator('article > header > h1').textContent(), 'Getting started');
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
   if (process.env.LATTICE_PREVIEW_DIR) await page.screenshot({ path: join(process.env.LATTICE_PREVIEW_DIR, 'wiki-starter-mobile.png') });
+  // Complete the new-author loop with the same citation policy as the documented host.
+  const search = await createContentSearcher(readFileSync(new URL('_build/wasm-gc/debug/build/kurisu/lattice/examples/wasm_note/wasm_note.wasm', repository)));
+  const validation = await browser.newContext({ javaScriptEnabled: false });
+  const evidence = query => collectEvidence({ indexJson: readFileSync(join(output, 'content-index.json'), 'utf8'), query, search, origin,
+    validateTarget: (url, fragment) => validatePublishedTarget(validation, url, fragment) });
+  const first = await evidence('copperleaf');
+  assert.equal(first.status, 'ready');
+  assert.ok(first.candidates[0].passage.includes('copperleaf'));
+  assert.equal(first.citation.url, origin + urlFor('Field journal') + '#first-observation');
+  const beforeEdit = readFileSync(journal, 'utf8');
+  writeFileSync(journal, beforeEdit.replace('copperleaf', 'silverfern'));
+  const beforeCheck = snapshot(starter);
+  assert.deepEqual(check().violations, []);
+  assert.deepEqual(snapshot(starter), beforeCheck, 'check after editing must not write output');
+  run(cli, ['build', '--strict-wikilinks'], starter);
+  assert.equal((await evidence('copperleaf')).status, 'no_results');
+  const updated = await evidence('silverfern');
+  assert.equal(updated.status, 'ready');
+  assert.equal(updated.citation.url, first.citation.url);
+  assert.ok(updated.candidates[0].passage.includes('silverfern'));
+  await page.goto(updated.citation.url); await ready();
+  assert.ok((await page.locator('article').textContent()).includes('silverfern'));
+  assert.equal(new URL(page.url()).hash, '#first-observation');
+  await validation.close();
   assert.deepEqual(errors, []);
   console.log(`${browser.version()}: fresh wiki starter, README authoring/rebuild, refusal/preflight, read-only check, typed schema, wikilinks, no-JS publishing metadata, desktop/mobile navigation and real WASM search passed (${root})`);
 } finally {
