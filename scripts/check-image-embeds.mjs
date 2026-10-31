@@ -54,6 +54,11 @@ for (const [target, message] of [['missing.png', /not found/], ['../secret.png',
   assert.notEqual(run('build').status, 0);
   assert.deepEqual(snapshot(output), before);
 }
+writeFileSync(source, '---\ntitle: Guide\n---\n`before\n![[missing.png]]\nafter`\n\n![[missing.png]]\n');
+const multiline = JSON.parse(run('check', ['--format', 'json']).stdout);
+assert.equal(multiline.violations.find(v => v.message.includes('image embed')).line, 8);
+assert.notEqual(run('build').status, 0);
+assert.deepEqual(snapshot(output), before);
 writeFileSync(source, '---\ntitle: Guide\n---\n![[diagram.png]]\n');
 writeFileSync(join(content, 'attachments/figures/diagram.png'), png);
 mkdirSync(join(content, 'attachments/attachments'));

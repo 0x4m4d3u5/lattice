@@ -87,24 +87,17 @@ fn image_embed_location(source : String, target : String) -> (Int32?, Int32?) {
     if end < 0 {
       break
     }
-    let newline = @strutil.find_str(source, end + 2, "\n", source.length())
-    let line_end = if newline < 0 { source.length() } else { newline }
-    let prefix = source[:line_end].to_owned()
-    let masked = source[:start].to_owned() +
-      " " +
-      source[start + 1:line_end].to_owned()
+    let masked = source[:start].to_owned() + " " + source[start + 1:].to_owned()
     fn count(text : String) -> Int32 {
       let body = match @frontmatter.parse(text) {
         Ok(fm) => fm.body
         Err(_) => text
       }
-      @markdown.extract_image_embeds(body)
-      .filter(fn(item) { item == target })
-      .length()
+      @markdown.extract_image_embeds(body).filter(fn(item) { item == target }).length()
     }
-    // Include the whole line so a closing backtick remains visible. Masking
-    // just this bang tests whether this candidate actually contributed a node.
-    if count(prefix) > count(masked) {
+    // Preserve the complete parser context, including multiline code and
+    // retained footnote definitions. Mask only this candidate's image marker.
+    if count(source) > count(masked) {
       let lines = source[:start].split("\n").to_array()
       return (
         Some(lines.length()),

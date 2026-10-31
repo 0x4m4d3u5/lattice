@@ -44,7 +44,7 @@ Second passage.
 const copySource = 'let greeting = "café <world> & friends"\n\tprintln(greeting)\n';
 writeFileSync(sharingNote, readFileSync(sharingNote, 'utf8') + '\n## Copy an example\n\n```moonbit\n' + copySource + '```\n\n```text\n  keep indentation\n\nlast line\n```\n');
 mkdirSync(templates);
-mkdirSync(join(content, 'static'));
+mkdirSync(join(content, 'static'), { recursive: true });
 mkdirSync(join(content, 'data'));
 const run = (path, args) => {
   const result = spawnSync(process.execPath, [fileURLToPath(new URL(path, repository)), ...args], { cwd: root, encoding: 'utf8', timeout: 30_000 });

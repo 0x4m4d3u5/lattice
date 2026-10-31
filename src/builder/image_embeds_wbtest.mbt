@@ -39,3 +39,9 @@ test "image diagnostic locations ignore code and escaped markers" {
   let source = "---\ntitle: Note\n---\n`![[missing.png]]`\n\n~~~\n![[missing.png]]\n~~~\n\nText ![[missing.png]]\n"
   assert_eq(image_embed_location(source, "missing.png"), (Some(10), Some(6)))
 }
+
+///|
+test "image diagnostic locations retain multiline code context" {
+  let source = "---\ntitle: Note\n---\n`before\n![[missing.png]]\nafter`\n\n![[missing.png]]\n"
+  assert_eq(image_embed_location(source, "missing.png"), (Some(8), Some(1)))
+}
