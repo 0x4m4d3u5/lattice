@@ -11,9 +11,12 @@ export function buildCatalogue(entries, base, overview) {
       const url = new URL(entry.url, base);
       if (!['http:', 'https:'].includes(url.protocol) || url.origin !== new URL(base).origin || url.username || url.password) continue;
       if (url.pathname === new URL(overview, base).pathname || url.search || url.hash) continue;
+      const collection = typeof entry.collection === 'string' ? entry.collection.trim() : '';
+      // These are publisher source groups, not reader-facing collection names.
+      const label = !collection || collection === '_root' || collection === '_standalone' ? 'Pages' : collection;
       if (!pages.has(url.href)) pages.set(url.href, {
         title: entry.title, url: url.href,
-        collection: typeof entry.collection === 'string' && entry.collection.trim() ? entry.collection.trim() : 'Pages',
+        collection: label,
         description: typeof entry.description === 'string' ? entry.description : '',
       });
     } catch { /* Invalid index URLs never become navigation. */ }
