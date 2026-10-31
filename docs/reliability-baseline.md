@@ -4,74 +4,61 @@ Base: `9b92727962a61cbd45020afe97fbce5553aa9e33` (remote HEAD at checkout).
 The final patch has a passing baseline on a fresh isolated Mac copy, with no
 previous `_build`, `.mooncakes`, or synthetic test outputs. No real vault was processed.
 
-## Current supported JavaScript profile
+## Current compiler profile
 
-Node is pinned to the [26.12.1 security release](https://nodejs.org/en/blog/release/v26.12.1),
-which fixes CVE-2026-111497 among other vulnerabilities. The workflow, installer,
-cache verifier and cache key all require this version; older Node versions are
-rejected even when reusing an existing Moon toolchain.
+Repository bootstrap and CI use the official **native-hosted compiler** on Linux
+x86_64. Compiler host and generated target are separate: this compiler produces
+JavaScript, WASM, WASM-GC and native executables. Node remains pinned to 26.12.1.
 
-Repository setup lives in `scripts/install-ci-toolchain.sh`; CI invokes that same
-installer. It downloads and verifies official archives, installs the durable WASM
-compiler release and **the open-source Moon CLI and Moonrun** from the Linux archive, and
-bundles core for JavaScript. It never extracts or executes the expiring native
-compiler. JavaScript tests run through Node. No Rust compilation is needed. The CLI eagerly
-resolves `moonrun` even for JS commands, so its official bundled runtime is retained
-and checksum-verified; JS tests do not execute it. There is no separate
-prebuilt installer or workflow-specific toolchain setup path.
-
-- Compiler: `v0.10.18+6c83a7f62` (October 28), official tagged WASM distribution.
-- Core: `0.1.20261028+6c83a7f62`, bundled with that compiler archive.
-- Moon CLI: `0.1.20261028` (`e1e1f15`), with matching Moonrun from the official Linux x86_64 archive.
-  Its SHA-256 is `82d578b85d7ae9ee0e312c94bad613fa6125c6f03d7e1de0a1a539d78bfdb68b`.
-- Host: Linux x86_64; Node: `26.12.1`. No Rust toolchain is required.
-- Dependencies: `moonbitlang/x 0.5.5` and the local MIT-licensed `clap 0.2.6`
-  compatibility copy. `moon.work` selects the vendored module; the registry copy
-  is not substituted for it.
+- Moon CLI and Moonrun: `0.1.20261028` (`e1e1f15`).
+- Compiler: `0.10.18+6c83a7f62`.
+- Core: `0.1.20261028+6c83a7f62`, extracted from the matching tagged compiler archive.
+- Dependencies remain `moonbitlang/x 0.5.5` and the vendored `clap 0.2.6` compatibility copy.
 
 | Official input | Verified SHA-256 |
 | --- | --- |
-| Tagged `moonbit-wasm.tar.gz`, compiler and core | `c666b3b45db79e2a1a477cc9e99812223700d645d33d9834c95216208926fed1` |
-| Linux archive, extracting `bin/moon` and `bin/moonrun` | `0e4cde1ace98e8ef00552a937738b59c6901c4b8a004ebad71ea0e63688f63f1` |
+| Linux SDK, including native compiler and C runtime | `0e4cde1ace98e8ef00552a937738b59c6901c4b8a004ebad71ea0e63688f63f1` |
+| Tagged compiler archive, used for matching core | `c666b3b45db79e2a1a477cc9e99812223700d645d33d9834c95216208926fed1` |
 
-[Compiler release](https://github.com/moonbitlang/moonbit-compiler/releases/tag/v0.10.18%2B6c83a7f62),
-[official installer distribution paths](https://cli.moonbitlang.com/install/unix.sh),
-and [Moon CLI source revision](https://github.com/moonbitlang/moon/commit/e1e1f15).
-The compiler archive records SDK Moon revision `5439c578`; the shipped CLI
-reports `e1e1f15`. Both are verified explicitly rather than inferring the compiler
-version from the CLI date. The earlier source-built profile is retained as
-historical evidence below, not as a second installer path.
+[Official SDK distribution path](https://cli.moonbitlang.com/binaries/0.10.18%2B6c83a7f62/moonbit-linux-x86_64.tar.gz)
+and [tagged core source archive](https://github.com/moonbitlang/moonbit-compiler/releases/tag/v0.10.18%2B6c83a7f62).
+The latter archive also contains a WASM-hosted compiler; bootstrap does not install
+that compiler. Its SDK revision metadata is checked independently of the CLI version.
 
-Archives are checked before extraction. Installation uses a temporary sibling
-and promotes only after verification and bundling succeed. An existing valid
-installation is reused; an invalid one is rejected without overwriting it.
-`scripts/verify-ci-toolchain.sh` checks the installed CLI/runtime pair, compiler wrappers,
-WASM assets, bundled core module metadata and expected versions, including on cache hits. CI's exact cache key
-includes OS, architecture, Node version and both setup scripts. A cache miss
-runs the same installer; it never silently upgrades to a different version.
-Upstream download availability remains an external dependency; absence or a
-checksum change fails visibly.
+The installer verifies archives before extraction, stages the installation, bundles
+JS core, and verifies installed tools before promotion. Cache reuse checks the
+installed hashes and versions. The cache key includes both setup scripts. Existing
+invalid installations are rejected without modification; use a new `MOON_HOME`
+when changing compiler profiles. A local `moon upgrade` does not alter these pins.
 
-The CLI and compiler are pinned as a pair. A separate local `moon upgrade` does
-not update these repository pins. To switch an existing checkout, choose a new
-`MOON_HOME` directory; the installer deliberately refuses to replace an old or
-modified installation.
+### Reproducibility and download retention
 
-## Native compilation
+The SDK download's HTTP `x-amz-expiration` header advertises deletion on
+**December 29, 2026**, under `delete binaries every 60days`. This is remote object
+retention, not evidence that the downloaded executable expires at runtime. Fresh
+installation after removal is not guaranteed; retained installations/caches do not
+provide permanent artifact availability either. Missing downloads or changed hashes
+fail explicitly. Update and revalidate the official pin before its retention window
+ends; bootstrap never substitutes `latest` or the WASM-hosted compiler silently.
 
-The durable compiler profile is for JavaScript builds and the explicit portable
-WASM gates. Native target checking is available after bundling core for native,
-but native CLI linking with the WASM-hosted compiler currently fails with
-`literal array length is out of range`. Installing C runtime sources does not
-resolve that compiler-host limitation.
+The previous durable compiler choice avoided dependence on a short-lived native
+SDK download, but its generated WASM interpolation and native linking failed.
+The same standalone interpolation source, compiler/core version and Node runner
+works on both WASM targets when compiled with the native-hosted distribution.
+This motivates the host change; it does not establish the compiler's internal bug.
 
-For native CLI builds, use the full official Linux SDK for
-`0.10.18+6c83a7f62`, including its matching core, C headers and runtime sources.
-The matching native compiler builds and executes the CLI; it is tested separately
-from the durable CI profile. The repository installer still excludes the native
-compiler and does not claim a non-expiring native distribution. Native file stamps
-use modification times; the JS watcher uses content hashes, so restoring identical
-file contents can trigger one additional dependency rebuild on native.
+### Target coverage
+
+`check-baseline.sh` retains the warning-free JS suite and CLI/publishing checks.
+`check-targets.sh` runs conventional check/test/build and vendored tests for WASM,
+WASM-GC and native, then executes the native CLI's init/check/strict-build/inventory
+workflow. Native retains its visible unused-import warning; JS and WASM gates deny
+warnings. Portable no-host-import exports, supplied-note workers and real browser
+reader/search tests remain independent required gates. A successful native target
+check alone is never treated as native CLI execution.
+
+Native file stamps use modification times; the JS watcher hashes contents, so
+restoring identical bytes can cause one additional dependency rebuild on native.
 
 ## Source compatibility
 
@@ -92,9 +79,10 @@ bash scripts/install-ci-toolchain.sh
 export PATH="$MOON_HOME/bin:$PATH"
 moon update
 bash scripts/check-baseline.sh
+bash scripts/check-targets.sh
 ```
 
-Every compiler gate treats warnings as errors, runs independently and preserves
+Every JS compiler gate treats warnings as errors, runs independently and preserves
 failure status:
 
 ```bash
@@ -124,19 +112,17 @@ Hosted Linux results are reported on the draft PR rather than asserted here.
 The native compiler snapshot of the same compiler version independently passed
 all 1,262 project tests and 15 clap tests with default WebAssembly targeting.
 Fresh native check reported 2,244 warnings and build reported 288; counts vary with
-rebuilt packages. The official native archives advertise expiration on November
-20, 2026. The initial baseline therefore chose source installation. The current profile
-uses the durable WASM compiler and extracts only the non-expiring open-source
-Moon CLI from the verified archive; the expiring native compiler is excluded.
+rebuilt packages. The then-current native archive advertised download-object deletion on November
+20, 2026. The initial baseline therefore chose source installation, followed by
+the WASM-hosted compiler. This described artifact retention, not a demonstrated
+runtime expiry. The current native-hosted profile above supersedes that choice.
 
 **The tagged WASM compiler distribution does not pass the WebAssembly baseline.**
 Its wasm/wasm-gc output generated an interpolation StringBuilder size hint of
 `2147483647`, causing allocator traps before assertions. This was reproduced on
 Node 26 and Node 22 with fresh bundled core; the same source passes on JavaScript
-and with the native compiler. CI's explicit JavaScript backend establishes a
-reproducible source/behavior baseline; it does not certify WebAssembly compilation
-by this distribution. A full-suite backend gate requires an upstream compiler fix or
-a durable native compiler distribution. The separate [portable core smoke gate](wasm-core.md)
+and with the native compiler. The former JS-only conventional gate did not certify WebAssembly compilation
+by that distribution. The current native-hosted profile runs both full WASM suites. The separate [portable core smoke gate](wasm-core.md)
 executes five real parser/validation/rendering fixtures on both generated WASM
 targets without that test driver; it does not certify the filesystem CLI or
 general interpolation.

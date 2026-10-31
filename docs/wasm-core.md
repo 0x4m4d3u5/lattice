@@ -1,10 +1,8 @@
 # Portable WASM core smoke test
 
 MoonBit provides [first-class WebAssembly support](https://docs.moonbitlang.com/en/latest/toolchain/wasm/index.html).
-Two different WASM uses matter here: our pinned compiler itself runs as WASM
-through a Node wrapper; `--target wasm` and `--target wasm-gc` generate WASM
-applications. A compiler running as WASM does not establish that its generated
-WASM applications work.
+Our pinned compiler runs natively; `--target wasm` and `--target wasm-gc`
+generate WebAssembly applications. Compiler host and output target are independent.
 
 ## Verified scope
 
@@ -36,10 +34,9 @@ was tested. These fixed fixture exports remain Node-only. The separate
 [supplied-note browser gate](wasm-note.md#real-browser-worker-gate) now verifies
 the documented WASM GC string boundary in a real Chrome/Chromium Web Worker.
 
-## Remaining compiler limitation
+## Compiler-host regression coverage
 
-The pinned compiler emits a StringBuilder capacity hint of `2147483647` for
-this minimal exported function, independently of Lattice:
+The previous WASM-hosted compiler distribution failed this standalone probe:
 
 ```moonbit
 pub fn interpolated(n : Int) -> Int {
@@ -47,27 +44,20 @@ pub fn interpolated(n : Int) -> Int {
 }
 ```
 
-Calling `interpolated(42)` directly through Node's WebAssembly API still traps
-with the October 28 compiler/core in debug builds: `wasm` reports memory access
-out of bounds and `wasm-gc` reports an oversized array allocation. Earlier
-pins also failed in release builds. There are no module imports or test driver in
-that reproduction. Concatenation and an explicit StringBuilder return the
-expected length 4 on both targets; interpolation also returns 4 on JS. The
-generated WAT places the large hint at the interpolation's constructor call.
+With compiler `0.10.18+6c83a7f62` and matching core, calling the generated export
+with `42` under Node 26.12.1 returns `4` for both WASM targets when compiled by the
+native-hosted compiler. The WASM-hosted distribution instead traps with memory
+access out of bounds (`wasm`) or oversized array allocation (`wasm-gc`). The
+comparison uses identical source and runner, without host imports. Earlier emitted
+WAT inspection found a huge interpolation capacity hint; the internal cause has
+not been established or confirmed by upstream maintainers.
 
-The broad `moon test` driver uses interpolation before running assertions, so
-all 103 selected strutil tests trap in that driver on both WASM targets. The
-official [v0.10.15+943464bfa WASM compiler archive](https://github.com/moonbitlang/moonbit-compiler/releases/tag/v0.10.15%2B943464bfa),
-released 2026-10-12, was also checked in isolation with its bundled core: the
-minimal `wasm` interpolation still traps. Its archive SHA-256 matched GitHub's
-published digest `907644982d00b1db3a4d882626c448987f383b9faebe873d605a92cc78c14625`.
-The October 28 pin retains this limitation. No compiler/core patch or Lattice
-interpolation rewrite is part of this smoke gate.
-
-AI-assisted diagnosis separated compiler host, generated target, core,
-Moonrun/test driver and a direct Node host. Small control functions and emitted
-WAT established the interpolation failure; independent site literals and the
-wrong-URL mutation established sensitivity of the portable-core fixtures.
+Bootstrap now selects the native-hosted compiler. `scripts/check-targets.sh`
+runs the conventional WASM and WASM-GC test suites, whose test driver exercises
+interpolation, in addition to these independent portable exports. The historical
+host-specific failure does not mean MoonBit's WASM targets are generally broken.
+See [toolchain retention and coverage](reliability-baseline.md#current-compiler-profile)
+for reproducibility limits.
 
 ## Supplied-text boundary
 
@@ -75,6 +65,6 @@ The additive [note-rendering proof](wasm-note.md) now accepts host-supplied
 strings using the documented WASM GC JavaScript string ABI. It has its own
 required CI gate; these five fixed fixtures and both existing target checks
 remain unchanged. The new boundary verifies arbitrary synthetic notes in a
-Node worker and a separate Chrome/Chromium Web Worker gate. Full WASM-suite
-certification remains open and still requires fixing compiler interpolation
-lowering and rerunning the normal test harness.
+Node worker and a separate Chrome/Chromium Web Worker gate. The conventional
+target suites now run separately with the native-hosted compiler;
+these worker checks continue to verify the actual browser integration.

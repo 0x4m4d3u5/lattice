@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Exercise generated application WASM without the interpolation-broken test driver.
+# Exercise portable application exports independently of the conventional test driver.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 bash scripts/verify-ci-toolchain.sh
