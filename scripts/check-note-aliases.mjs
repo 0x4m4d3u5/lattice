@@ -6,17 +6,17 @@ import { spawnSync } from 'node:child_process';
 const root = mkdtempSync(join(tmpdir(), 'lattice-note-aliases-'));
 const cli = resolve('_build/js/debug/build/kurisu/lattice/cmd/main/main.js');
 const content = join(root, 'content');
-mkdirSync(join(content, 'notes'), { recursive: true });
+mkdirSync(join(content, 'research'), { recursive: true });
 mkdirSync(join(root, 'templates'));
 mkdirSync(join(content, 'data'));
 writeFileSync(join(root, 'templates/page.html'), '<html><body>{{content}}{{backlinks}}</body></html>');
-writeFileSync(join(root, 'collections.cfg'), `[notes]\nschema = title:String,tags:Optional[Array[String]]\ndir = ${content}/notes\n`);
+writeFileSync(join(root, 'collections.cfg'), `[notes]\nschema = title:String,tags:Optional[Array[String]]\ndir = ${content}/research\n`);
 const config = join(root, 'site.cfg');
 writeFileSync(config, `wikilink_aliases = true\ntitle = Knowledge\nbase_url = https://example.test\ntemplate_dir = ${root}/templates\ncollections_file = ${root}/collections.cfg\n`);
 const output = join(root, 'dist');
-const note = join(content, 'notes/research.md');
+const note = join(content, 'research/research.md');
 writeFileSync(note, '---\ntitle: Research\ntags: [Research]\naliases: ["Field Guide", "Research Handbook"]\n---\n## Evidence\n\nMeasured results.\n');
-writeFileSync(join(content, 'notes/hub.md'), '---\ntitle: Hub\n---\nRead [[Field Guide#Evidence|the evidence]] and [[Research Handbook]].\n');
+writeFileSync(join(content, 'research/hub.md'), '---\ntitle: Hub\n---\nRead [[Field Guide#Evidence|the evidence]] and [[Research Handbook]].\n');
 function run(command, extra = []) {
  return spawnSync(process.execPath, [cli, command, content, '-o', output, '--config', config, ...extra], { cwd: root, encoding: 'utf8' });
 }
@@ -32,7 +32,7 @@ const graph = JSON.parse(readFileSync(join(output, 'graph.json'), 'utf8'));
 assert.deepEqual(graph.edges, [{ source: 'hub', target: 'research' }]);
 console.log('Note aliases: canonical links, fragments, backlinks and graph identity passed');
 // Alias edits must update cached referring pages and strict final fragments.
-writeFileSync(note, '---\ntitle: Research\ntags: [Research]\naliases: ["Field Guide", "Research Handbook", "Research.MD"]\n---\n## Evidence\n\nChanged results.\n');
+writeFileSync(note, '---\ntitle: Research\ntags: [Research]\naliases: ["Field Guide", "Research Handbook", "FIELD GUIDE"]\n---\n## Evidence\n\nChanged results.\n');
 assert.equal(run('build').status, 0);
 assert.equal(run('check').status, 0);
 writeFileSync(note, '---\ntitle: Research\ntags: [Research]\naliases: ["Different Name"]\n---\n## Evidence\n');
@@ -59,18 +59,18 @@ writeFileSync(note, '---\ntitle: Research\ntags: [Research]\ndraft: true\naliase
 assert.notEqual(run('check').status, 0);
 assert.equal(run('check', ['--drafts']).status, 0);
 writeFileSync(note, '---\ntitle: Research\ntags: [Research]\naliases: ["Field Guide", "Research Handbook"]\n---\n## Evidence\n');
-writeFileSync(join(content, 'notes/other.md'), '---\ntitle: Other\naliases: ["FIELD GUIDE"]\n---\nOther.\n');
+writeFileSync(join(content, 'research/other.md'), '---\ntitle: Other\naliases: ["FIELD GUIDE"]\n---\nOther.\n');
 const collision = run('check', ['--format', 'json']);
 assert.notEqual(collision.status, 0);
 assert.match(collision.stdout, /declared by multiple pages/);
 assert.notEqual(run('build').status, 0);
 console.log('Alias collisions, malformed metadata, draft policy, cached edits and strict fragment checks passed');
 
-unlinkSync(join(content, 'notes/other.md'));
+unlinkSync(join(content, 'research/other.md'));
 mkdirSync(join(content, 'standalone'));
 writeFileSync(join(content, 'index.md'), '---\ntitle: Home\naliases: ["Start Here"]\n---\nWelcome.\n');
 writeFileSync(join(content, 'standalone/manual.md'), '---\ntitle: Manual\naliases: ["User Handbook"]\n---\n## Setup\nInstructions.\n');
-writeFileSync(join(content, 'notes/hub.md'), '---\ntitle: Hub\n---\n[[Start Here]] [[User Handbook#Setup]] [[Field Guide#Evidence]]\n');
+writeFileSync(join(content, 'research/hub.md'), '---\ntitle: Hub\n---\n[[Start Here]] [[User Handbook#Setup]] [[Field Guide#Evidence]]\n');
 assert.equal(run('check').status, 0);
 assert.equal(run('build', ['--strict-wikilinks']).status, 0);
 const hub = readFileSync(join(output, 'notes/hub/index.html'), 'utf8');

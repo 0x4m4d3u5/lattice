@@ -85,3 +85,12 @@ test "alias metadata schema extension is opt in and preserves declared constrain
   }
   assert_eq(@schema.validate(fm, note_alias_schema(declared, true)).length(), 1)
 }
+
+///|
+test "alias destinations use authored ownership when a directory key shadows the slug" {
+  let sources = alias_test_sources([("research", "[\"Field Guide\"]")])
+  let index = Map([("research", "/notes/")])
+  assert_eq(register_note_aliases(sources, index).length(), 0)
+  assert_eq(index.get("research"), Some("/notes/"))
+  assert_eq(index.get("field-guide"), Some("/notes/research/"))
+}

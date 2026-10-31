@@ -446,9 +446,7 @@ fn build_backlink_index(
   let canonical_by_url : Map[String, String] = Map([])
   for collection in collection_sources {
     for source in collection.sources {
-      if page_index.get(source.slug) is Some(url) {
-        canonical_by_url.set(url, source.slug)
-      }
+      canonical_by_url.set(authored_source_url(collection.definition.name, source.slug), source.slug)
     }
   }
   let mut i = 0
@@ -457,10 +455,9 @@ fn build_backlink_index(
     let mut j = 0
     while j < coll.sources.length() {
       let src = coll.sources[j]
-      let source_url = match page_index.get(src.slug) {
-        Some(url) => url
-        None => ""
-      }
+      let source_url = if page_index.contains(src.slug) {
+        authored_source_url(coll.definition.name, src.slug)
+      } else { "" }
       let (source_title, body) = match @frontmatter.parse(src.content) {
         Ok(fm) => (extract_title(fm), fm.body)
         Err(_) => (src.slug, src.content)
@@ -5150,9 +5147,11 @@ fn prepare_output(
   )
   // Keep URL validation and ownership complete; derivations use published URLs.
   let published_page_index : Map[String, String] = Map([])
+  let visible_urls : Map[String, Bool] = Map([])
   for coll in all_sources_for_backlinks {
     for src in coll.sources {
       if source_is_visible(src, config.include_drafts) {
+        visible_urls.set(authored_source_url(coll.definition.name, src.slug), true)
         match page_index.get(src.slug) {
           Some(url) => published_page_index.set(src.slug, url)
           None => ()
@@ -5160,8 +5159,6 @@ fn prepare_output(
       }
     }
   }
-  let visible_urls : Map[String, Bool] = Map([])
-  for (_, url) in published_page_index { visible_urls.set(url, true) }
   for (key, url) in page_index {
     if visible_urls.contains(url) { published_page_index.set(key, url) }
   }

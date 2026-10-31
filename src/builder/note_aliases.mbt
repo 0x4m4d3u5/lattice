@@ -1,4 +1,13 @@
 ///|
+fn authored_source_url(collection_name : String, slug : String) -> String {
+  match collection_name {
+    "_root" => root_page_url(slug)
+    "_standalone" => standalone_page_url(slug)
+    _ => collection_page_url(collection_name, slug)
+  }
+}
+
+///|
 /// Register alternate note names only after all canonical keys are known.
 /// Collisions are errors, never traversal-order-dependent winners.
 fn register_note_aliases(
@@ -9,24 +18,20 @@ fn register_note_aliases(
   let canonical = page_index.copy()
   let owners : Map[String, String] = Map([])
   let ambiguous : Map[String, Bool] = Map([])
-  let sources : Array[SourceFile] = []
+  let sources : Array[(SourceFile, String)] = []
   for collection in collections {
     for source in collection.sources {
-      sources.push(source)
+      sources.push((source, authored_source_url(collection.definition.name, source.slug)))
     }
   }
-  sources.sort_by_key(fn(source) { source.path })
-  for source in sources {
+  sources.sort_by_key(fn(pair) { pair.0.path })
+  for (source, url) in sources {
     let fm = match @frontmatter.parse(source.content) {
       Ok(fm) => fm
       Err(_) => continue
     }
     let value = match fm.fields.get("aliases") {
       Some(value) => value
-      None => continue
-    }
-    let url = match canonical.get(source.slug) {
-      Some(url) => url
       None => continue
     }
     fn report(message : String) -> Unit {
