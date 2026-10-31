@@ -30,7 +30,7 @@ of the filesystem builder or the complete WASM test suite. The full JavaScript
 baseline remains a separate required CI step.
 
 Verified locally on Linux x86_64 with Node `26.12.1`, compiler
-`v0.10.14+7d59c7ec9`, and Moon CLI/Moonrun `914d7da`. Both generated targets pass
+`v0.10.18+6c83a7f62`, and Moon CLI/Moonrun `e1e1f15`. Both generated targets pass
 all five fixtures; the full warning-free JS baseline also passes. A Node worker
 was tested. These fixed fixture exports remain Node-only. The separate
 [supplied-note browser gate](wasm-note.md#real-browser-worker-gate) now verifies
@@ -47,9 +47,10 @@ pub fn interpolated(n : Int) -> Int {
 }
 ```
 
-Calling `interpolated(42)` directly through Node's WebAssembly API traps on
-`wasm` (`RuntimeError: unreachable`) and `wasm-gc` (array allocation too large),
-in both debug and release builds. There are no module imports or test driver in
+Calling `interpolated(42)` directly through Node's WebAssembly API still traps
+with the October 28 compiler/core in debug builds: `wasm` reports memory access
+out of bounds and `wasm-gc` reports an oversized array allocation. Earlier
+pins also failed in release builds. There are no module imports or test driver in
 that reproduction. Concatenation and an explicit StringBuilder return the
 expected length 4 on both targets; interpolation also returns 4 on JS. The
 generated WAT places the large hint at the interpolation's constructor call.
@@ -60,8 +61,8 @@ official [v0.10.15+943464bfa WASM compiler archive](https://github.com/moonbitla
 released 2026-10-12, was also checked in isolation with its bundled core: the
 minimal `wasm` interpolation still traps. Its archive SHA-256 matched GitHub's
 published digest `907644982d00b1db3a4d882626c448987f383b9faebe873d605a92cc78c14625`.
-No compiler/core patch, compiler upgrade or Lattice interpolation rewrite is
-part of this smoke gate.
+The October 28 pin retains this limitation. No compiler/core patch or Lattice
+interpolation rewrite is part of this smoke gate.
 
 AI-assisted diagnosis separated compiler host, generated target, core,
 Moonrun/test driver and a direct Node host. Small control functions and emitted

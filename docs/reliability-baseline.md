@@ -4,7 +4,7 @@ Base: `9b92727962a61cbd45020afe97fbce5553aa9e33` (remote HEAD at checkout).
 The final patch has a passing baseline on a fresh isolated Mac copy, with no
 previous `_build`, `.mooncakes`, or synthetic test outputs. No real vault was processed.
 
-## Current supported JavaScript profile — 2026-10-26
+## Current supported JavaScript profile
 
 Node is pinned to the [26.12.1 security release](https://nodejs.org/en/blog/release/v26.12.1),
 which fixes CVE-2026-111497 among other vulnerabilities. The workflow, installer,
@@ -20,9 +20,10 @@ resolves `moonrun` even for JS commands, so its official bundled runtime is reta
 and checksum-verified; JS tests do not execute it. There is no separate
 prebuilt installer or workflow-specific toolchain setup path.
 
-- Compiler: `v0.10.14+7d59c7ec9`, official tagged WASM distribution, including core.
-- Moon CLI: `914d7da08562120ae4d9ef181cdda58c4ff0c191`, official Linux x86_64 binary.
-  Its SHA-256 is `6da4919f45f4abf7c6d7f3cf8d9a457de77dca430d6fb811d21b27ae1ac8e11d`.
+- Compiler: `v0.10.18+6c83a7f62` (October 28), official tagged WASM distribution.
+- Core: `0.1.20261028+6c83a7f62`, bundled with that compiler archive.
+- Moon CLI: `0.1.20261028` (`e1e1f15`), with matching Moonrun from the official Linux x86_64 archive.
+  Its SHA-256 is `82d578b85d7ae9ee0e312c94bad613fa6125c6f03d7e1de0a1a539d78bfdb68b`.
 - Host: Linux x86_64; Node: `26.12.1`. No Rust toolchain is required.
 - Dependencies: `moonbitlang/x 0.5.5` and the local MIT-licensed `clap 0.2.6`
   compatibility copy. `moon.work` selects the vendored module; the registry copy
@@ -30,30 +31,56 @@ prebuilt installer or workflow-specific toolchain setup path.
 
 | Official input | Verified SHA-256 |
 | --- | --- |
-| Tagged `moonbit-wasm.tar.gz`, compiler and core | `3c5d21564b0e8bbfcfda95d374eda90427f6a5e238ce4639b711b69f43391f62` |
-| Linux archive, extracting `bin/moon` and `bin/moonrun` | `9226694de9ff978db1ecf820b7710c4224e84ec7a76b19a222d96f0cd4e31b6a` |
+| Tagged `moonbit-wasm.tar.gz`, compiler and core | `c666b3b45db79e2a1a477cc9e99812223700d645d33d9834c95216208926fed1` |
+| Linux archive, extracting `bin/moon` and `bin/moonrun` | `0e4cde1ace98e8ef00552a937738b59c6901c4b8a004ebad71ea0e63688f63f1` |
 
-[Compiler release](https://github.com/moonbitlang/moonbit-compiler/releases/tag/v0.10.14%2B7d59c7ec9),
+[Compiler release](https://github.com/moonbitlang/moonbit-compiler/releases/tag/v0.10.18%2B6c83a7f62),
 [official installer distribution paths](https://cli.moonbitlang.com/install/unix.sh),
-and [Moon CLI source revision](https://github.com/moonbitlang/moon/tree/914d7da08562120ae4d9ef181cdda58c4ff0c191).
-The compiler archive records SDK Moon revision `760759ca`; the independently
-pinned prebuilt CLI revision above is the tested profile. The earlier baseline
-rebuilt that SDK revision from Rust on every job. It is retained as historical
-evidence below, not as a second installer path.
+and [Moon CLI source revision](https://github.com/moonbitlang/moon/commit/e1e1f15).
+The compiler archive records SDK Moon revision `5439c578`; the shipped CLI
+reports `e1e1f15`. Both are verified explicitly rather than inferring the compiler
+version from the CLI date. The earlier source-built profile is retained as
+historical evidence below, not as a second installer path.
 
 Archives are checked before extraction. Installation uses a temporary sibling
 and promotes only after verification and bundling succeed. An existing valid
 installation is reused; an invalid one is rejected without overwriting it.
 `scripts/verify-ci-toolchain.sh` checks the installed CLI/runtime pair, compiler wrappers,
-WASM assets and expected versions, including on cache hits. CI's exact cache key
+WASM assets, bundled core module metadata and expected versions, including on cache hits. CI's exact cache key
 includes OS, architecture, Node version and both setup scripts. A cache miss
 runs the same installer; it never silently upgrades to a different version.
 Upstream download availability remains an external dependency; absence or a
 checksum change fails visibly.
 
-The original October 11 local installation took 12.6 seconds; reuse took 0.37 seconds. The earlier
-hosted source installation took 309 seconds, of which Rust compilation took 278
-seconds. Hosted results for this profile are recorded on the cleanup PR.
+The CLI and compiler are pinned as a pair. A separate local `moon upgrade` does
+not update these repository pins. To switch an existing checkout, choose a new
+`MOON_HOME` directory; the installer deliberately refuses to replace an old or
+modified installation.
+
+## Native compilation
+
+The durable compiler profile is for JavaScript builds and the explicit portable
+WASM gates. Native target checking is available after bundling core for native,
+but native CLI linking with the WASM-hosted compiler currently fails with
+`literal array length is out of range`. Installing C runtime sources does not
+resolve that compiler-host limitation.
+
+For native CLI builds, use the full official Linux SDK for
+`0.10.18+6c83a7f62`, including its matching core, C headers and runtime sources.
+The matching native compiler builds and executes the CLI; it is tested separately
+from the durable CI profile. The repository installer still excludes the native
+compiler and does not claim a non-expiring native distribution. Native file stamps
+use modification times; the JS watcher uses content hashes, so restoring identical
+file contents can trigger one additional dependency rebuild on native.
+
+## Source compatibility
+
+The October 28 compiler uses `Json(value)` instead of deprecated `to_json()`
+and `Iter::count` instead of `Iter::length`. Cache I/O now follows typed
+raising APIs: `cache.load` returns `CacheStore raise CacheError`, and
+`cache.save` returns `Unit raise CacheError`. Library callers should catch
+`CacheError`; CLI cache warnings and fallback behavior are unchanged.
+Warnings-as-errors remains enabled.
 
 ## Reproduce
 

@@ -8,16 +8,17 @@ export MOON_HOME
 [[ "$(node --version)" == 'v26.12.1' ]] || { echo 'Expected Node 26.12.1' >&2; exit 1; }
 cd "$MOON_HOME"
 sha256sum --check --strict <<'HASHES'
-6da4919f45f4abf7c6d7f3cf8d9a457de77dca430d6fb811d21b27ae1ac8e11d  bin/moon
-1b22f489621059b8c22ee4acdaddc5f5d1781f62529d3000a24c03d45032d0e2  bin/moonrun
-7b3c7e35077a44be528044f1823fdaadf0e0917cc0fbab082b279d00dae98038  bin/moonc
-fcba7920f54f899b913ab43e1ffc813162430ddbc218f86af475e9923b61dc96  bin/moonfmt
-a02b12e005b7fd3fa3a9172e5a9160ff5e808e7a98f8b0577bab0084e7dc4d96  bin/mooninfo
-fa088fbc9d6801eabe8643fd83ebe205b28022497679372cdefa343883ea54b1  bin/moonc.assets/code-76b97363c4e10c5b1392.wasm
-05104875ac81d1a9a362bad303353d3f8930764e443d976128210cfb29796e0b  bin/moonfmt.assets/code-5316c345641f48b71257.wasm
-fbd9c8d140ce698d60f1584730a684c4f590828ae1f5638e859d71437c5dec38  bin/mooninfo.assets/code-8945dda8c778bf3d2f7f.wasm
+82d578b85d7ae9ee0e312c94bad613fa6125c6f03d7e1de0a1a539d78bfdb68b  bin/moon
+f02eeee7b77a7f581dfbb0c3788f8de4396b57c950219f40d08cc038479a12fb  bin/moonrun
+e09423bf0a3e854f12feb4fd89e26a30a85a7e67b85bbd23542fa4d0e3e40c4f  bin/moonc
+48052dcb835f9ce82d3e9f3561c04cbd47968bce06092ded64b111a827bcf35c  bin/moonfmt
+8b162c965308664c391a9700a7299f96aa07db44069f2ac0116b4dc09855df7c  bin/mooninfo
+0bb2dcc3ff2d47ff7fb47c7db52bb5f177f86e0735fedb912ea7e60ceed30791  bin/moonc.assets/code-0e02823df004193f552b.wasm
+66ee24e71521baae35f4f9afb6f6022795db0d0276a68840ae1927ebe091a1f0  bin/moonfmt.assets/code-8b2a10061e50c725b1a3.wasm
+b86d79575da65f6d00a821710f5df86dcb5bcf3dda05d4123c6d247684a5e2e1  bin/mooninfo.assets/code-5dea568b86861b90270b.wasm
+91afee2c0641615349367de11818c5d6bef0b39744acc611def89b07a1d2804e  lib/core/moon.mod
 HASHES
 [[ -f lib/core/_build/js/release/bundle/builtin/builtin.core ]] || { echo 'Missing bundled JS core' >&2; exit 1; }
 version=$(bin/moon version --all)
-[[ "$version" == *'moonc v0.10.14+7d59c7ec9'* && "$version" == *'(914d7da'* ]] || { echo 'Unexpected toolchain version' >&2; exit 1; }
+[[ "$version" == *'moonc v0.10.18+6c83a7f62'* && "$version" == *'(e1e1f15'* ]] || { echo 'Unexpected toolchain version' >&2; exit 1; }
 printf '%s\n' "$version"

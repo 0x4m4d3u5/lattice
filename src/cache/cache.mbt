@@ -120,23 +120,21 @@ fn from_file(output_dir : String, file : CacheFile) -> CacheStore {
 }
 
 ///|
-pub fn load(output_dir : String) -> Result[CacheStore, CacheError] {
+pub fn load(output_dir : String) -> CacheStore raise CacheError {
   let path = cache_path(output_dir)
   if !@fs.path_exists(path) {
-    return Ok(empty(output_dir))
+    return empty(output_dir)
   }
   let source = @fs.read_file_to_string(path) catch {
-    @fs.IOError(msg) => return Err(ReadError(msg))
+    @fs.IOError(msg) => raise ReadError(msg)
   }
   let parsed = parse(source) catch {
-    ParseFailure(msg) => return Err(ParseError(msg))
+    ParseFailure(msg) => raise ParseError(msg)
   }
   if parsed.version != CACHE_VERSION {
-    return Err(
-      ParseError("unsupported cache version " + parsed.version.to_string()),
-    )
+    raise ParseError("unsupported cache version " + parsed.version.to_string())
   }
-  Ok(from_file(output_dir, parsed))
+  from_file(output_dir, parsed)
 }
 
 ///|
@@ -146,14 +144,13 @@ pub fn render_store(store : CacheStore) -> String {
 }
 
 ///|
-pub fn save(store : CacheStore) -> Result[Unit, CacheError] {
+pub fn save(store : CacheStore) -> Unit raise CacheError {
   let path = cache_path(store.output_dir)
   let payload = render_store(store)
   try {
     @fs.write_string_to_file(path, payload)
-    Ok(())
   } catch {
-    @fs.IOError(msg) => Err(WriteError(msg))
+    @fs.IOError(msg) => raise WriteError(msg)
   }
 }
 

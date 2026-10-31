@@ -156,7 +156,7 @@ test "incremental build skips each page exactly once — no doubled [skip] messa
   assert_eq(count_messages_with_prefix(result1.messages, "[skip]"), 0)
 
   // Second build: incremental — load the cache written by the first build
-  let cache2 = match @cache.load(output_root) {
+  let cache2 = match (try Ok(@cache.load(output_root)) catch { err => Err(err) }) {
     Ok(c) => c
     Err(_) => @cache.empty(output_root)
   }

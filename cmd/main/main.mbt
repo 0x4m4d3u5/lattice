@@ -906,7 +906,7 @@ fn run_once(
     )
     0
   } else {
-    let cache_store = match @cache.load(build_config.output_dir) {
+    let cache_store = match (try Ok(@cache.load(build_config.output_dir)) catch { err => Err(err) }) {
       Ok(store) => store
       Err(err) => {
         print_diagnostic_main(
