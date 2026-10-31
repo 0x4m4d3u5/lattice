@@ -1911,9 +1911,11 @@ fn build_template_slots(
   tag_count : String,
   base_url : String,
   og_type? : String = "article",
+  page_title? : String? = None,
 ) -> Map[@template.TemplateSlot, String] {
   let slots : Map[@template.TemplateSlot, String] = Map([])
   slots.set(@template.Title, title)
+  slots.set(@template.PageTitle, @html.escape_html_body(page_title.unwrap_or(title)))
   slots.set(@template.Content, content)
   slots.set(@template.BodyNoH1, @html.strip_leading_h1(content))
   let canonical = @strutil.absolute_url(base_url, url)
@@ -2721,6 +2723,7 @@ fn render_tag_page_html(
         page.tag,
         page.pages.length().to_string(),
         site.base_url,
+        page_title=Some("tag: " + page.tag + title_suffix),
       )
       set_pagination_slots(
         slots,
@@ -2817,6 +2820,7 @@ fn render_tags_index_html(
         index.tags.length().to_string(),
         site.base_url,
         og_type="website",
+        page_title=Some("tags" + title_suffix),
       )
       set_pagination_slots(
         slots,
@@ -2951,6 +2955,7 @@ fn render_404_page(
         "",
         config.site.base_url,
         og_type="website",
+        page_title=Some(title),
       )
       slots.set(
         @template.BodyNoH1,
@@ -3137,6 +3142,7 @@ fn render_collection_index(
         "",
         site.base_url,
         og_type="website",
+        page_title=Some(collection_name + " index" + title_suffix),
       )
       set_pagination_slots(
         slots,
@@ -3706,6 +3712,7 @@ fn process_document(
           "",
           site.base_url,
           og_type="website",
+          page_title=Some(title),
         )
         slots.set(@template.BodyNoH1, body_no_h1)
         slots.set(@template.Backlinks, backlinks_html)
@@ -4301,6 +4308,7 @@ fn process_document_for_lint(
         "",
         "",
         site.base_url,
+        page_title=Some(title),
       )
       slots.set(@template.BodyNoH1, body_no_h1)
       slots.set(@template.Backlinks, backlinks_html)
