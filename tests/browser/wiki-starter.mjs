@@ -68,6 +68,7 @@ const mapSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="160" height="80" 
 writeFileSync(join(starter, 'content/static/map.svg'), mapSvg);
 writeFileSync(join(starter, 'content/static/map-large.svg'), mapSvg.replace('width="160" height="80"', 'width="640" height="320"'));
 writeFileSync(guide, readFileSync(guide, 'utf8') + '\n[[field-journal|Field journal]]\n');
+writeFileSync(journal, readFileSync(journal, 'utf8') + '\n> [!warning] Evidence has **limits**\n> Keep the observation in context.\n>\n> > [!tip] Nested note\n> > Read the source.\n\n> [!question]- Measurement method\n> The hidden measurement explanation.\n>\n> ### Measurement evidence\n> A linked detail.\n\n> [!note]+ Open explanation\n> Visible by default.\n');
 const authored = snapshot(starter);
 assert.deepEqual(check().violations, []);
 assert.deepEqual(snapshot(starter), authored, 'authoring check must preserve the previous build');
@@ -120,6 +121,25 @@ try {
   for (const width of [1440, 390]) {
     await published.setViewportSize({ width, height: 900 });
     await published.goto(origin + urlFor('Field journal'));
+    const callout = published.locator('details.callout-question');
+    assert.equal(await callout.getAttribute('open'), null);
+    const summary = callout.locator('summary');
+    await summary.focus();
+    await summary.press('Enter');
+    assert.notEqual(await callout.getAttribute('open'), null);
+    assert.equal(await published.getByText('The hidden measurement explanation.', { exact: true }).isVisible(), true);
+    await summary.press('Space');
+    assert.equal(await callout.getAttribute('open'), null);
+    assert.notEqual(await published.locator('details.callout-note').getAttribute('open'), null);
+    assert.equal(await published.locator('.callout-warning > .callout-title strong').textContent(), 'limits');
+    assert.equal(await published.locator('.callout-warning .callout-tip').count(), 1);
+    if (process.env.LATTICE_PREVIEW_DIR) {
+      mkdirSync(process.env.LATTICE_PREVIEW_DIR, { recursive: true });
+      await published.locator('.callout-warning').scrollIntoViewIfNeeded();
+      await published.screenshot({ path: join(process.env.LATTICE_PREVIEW_DIR, `callouts-${width}.png`) });
+    }
+    await published.goto(origin + urlFor('Field journal') + '#measurement-evidence');
+    assert.equal(await published.locator('#measurement-evidence').isVisible(), true, 'native fragment navigation reveals folded evidence');
     const thumbnail = published.getByRole('img', { name: 'Garden map', exact: true });
     await thumbnail.waitFor();
     assert.equal(await thumbnail.evaluate(img => img.complete && img.naturalWidth > 0), true);

@@ -20,6 +20,11 @@ article .section-permalink:hover { color: var(--text-link); text-decoration: und
 .contents a { text-decoration: none; }
 .contents a:hover { text-decoration: underline; }
 article blockquote { margin: var(--space-xl) 0; padding: var(--space-xs) var(--space-lg); border-left: 3px solid var(--border-control); background: var(--surface-subtle); color: var(--text-metadata); }
+/* Callouts preserve the reading palette; titles identify type without color. */
+article .callout { margin: var(--space-xl) 0; padding: var(--space-md) var(--space-lg); border: 1px solid var(--border-control); border-inline-start: 3px solid var(--border-control); border-radius: 5px; background: var(--surface-subtle); }
+article .callout > .callout-title { margin: 0; font: 600 1rem/1.5 var(--font-interface); }
+article details.callout > summary { cursor: pointer; min-height: 24px; }
+article .callout > :last-child:not(.callout-title) { margin-bottom: 0; }
 article pre { overflow: auto; padding: var(--space-lg); background: var(--surface-subtle); border: 1px solid var(--border-subtle); border-radius: 5px; font-size: var(--type-navigation); }
 article code { font-size: .85em; }
 article pre code { font: inherit; }
