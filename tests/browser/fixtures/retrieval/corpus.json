@@ -1,0 +1,22 @@
+{
+  "notes": {
+    "operations": "---\ntitle: Operations handbook\naliases: [Continuity Manual]\n---\n## Scope\n\nThis handbook covers the database service.\n\n## Recovery drill\n\nRestore a backup into an isolated cluster. Compare checksums before promotion.\n\n## Storage\n\nKeep encrypted copies offsite.\n",
+    "archive": "---\ntitle: Archive desk\n---\n## Recovery request\n\nRestore archived correspondence after obtaining the records owner's consent.\n",
+    "credentials": "---\ntitle: Service credentials\n---\n## Rotation\n\nRotate the signing key after revoking the previous credential.\n",
+    "draft": "---\ntitle: Unapproved retention proposal\ndraft: true\naliases: [Retention Decision]\n---\n## Proposed period\n\nRetention duration is ninety days in this unapproved synthetic proposal.\n"
+  },
+  "cases": [
+    {"question":"What must be checked before promoting a restored backup?", "query":"isolated checksums", "status":"ready", "targets":["/notes/operations/#recovery-drill"], "passage":"Compare checksums before promotion.", "assessment":"relevant"},
+    {"question":"Find that procedure using the handbook's alternate name.", "query":"continuity checksums", "status":"ready", "targets":["/notes/operations/#recovery-drill"], "passage":"Restore a backup into an isolated cluster.", "assessment":"relevant"},
+    {"question":"Find the same procedure with punctuation and mixed case.", "query":"ISOLATED, CHECKSUMS!", "status":"ready", "targets":["/notes/operations/#recovery-drill"], "passage":"Compare checksums before promotion.", "assessment":"relevant"},
+    {"question":"Which restore procedure should I use?", "query":"restore", "status":"ambiguous", "targets":["/notes/archive/#recovery-request","/notes/operations/#recovery-drill"], "assessment":"needs-context"},
+    {"question":"How is correspondence restored?", "query":"correspondence consent", "status":"ready", "targets":["/notes/archive/#recovery-request"], "passage":"records owner's consent", "assessment":"relevant"},
+    {"question":"What happens before changing the signing key?", "query":"signing key", "status":"ready", "targets":["/notes/credentials/#rotation"], "passage":"after revoking the previous credential", "assessment":"relevant"},
+    {"question":"What retention duration is approved?", "query":"retention duration", "status":"no_results", "targets":[], "assessment":"no-published-evidence"},
+    {"question":"Find the draft's alternate name.", "query":"retention decision", "status":"no_results", "targets":[], "assessment":"no-published-evidence"},
+    {"question":"Does the search stem singular checksum to checksums?", "query":"isolated checksum", "status":"no_results", "targets":[], "assessment":"lexical-limit"},
+    {"question":"Can terms in separate passages establish one answer?", "query":"isolated offsite", "status":"no_results", "targets":[], "assessment":"separate-passages"},
+    {"question":"Where is the continuity manual?", "query":"continuity manual", "status":"ready", "targets":["/notes/operations/#scope"], "passage":"This handbook covers the database service.", "assessment":"navigation-only"},
+    {"question":"How many days must encrypted copies be retained?", "query":"encrypted copies", "status":"ready", "targets":["/notes/operations/#storage"], "passage":"Keep encrypted copies offsite.", "assessment":"insufficient-to-answer"}
+  ]
+}

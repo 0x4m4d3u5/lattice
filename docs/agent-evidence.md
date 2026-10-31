@@ -91,3 +91,27 @@ Run `node tests/browser/evidence.mjs` after building the JS CLI and WASM runtime
 exercise the complete synthetic question → retrieval → passage → citation flow.
 It publishes fresh notes, tests abstention and invalid targets, and runs the same
 executable shown above. The regular browser gate includes this acceptance scenario.
+
+## Assess relevance separately from a valid link
+
+A `ready` citation is not an answerability decision. For example, asking how many
+days encrypted copies must be retained and querying `encrypted copies` can
+retrieve “Keep encrypted copies offsite.” The passage is on topic and its link
+works, but it does not supply a retention duration. A host must inspect whether
+retrieved evidence actually supports the requested answer, and abstain when it
+does not. An alias-only query may similarly locate a handbook's opening section
+without finding a specific procedure.
+
+The small [synthetic corpus](../tests/browser/fixtures/retrieval/corpus.json)
+records questions, explicit lexical queries, expected passage targets and human
+assessments separately. It covers competing restore procedures, an alternate
+handbook name, excluded draft proposals, case/punctuation variation, missing
+stemming, terms split across passages and insufficient evidence. These examples
+are acceptance scenarios, not a general relevance score or semantic benchmark.
+
+After the normal JS CLI and portable runtime builds, run
+`node tests/browser/retrieval-acceptance.mjs` with the existing browser harness.
+It compares JS and WASM retrieval against those expectations and checks real
+published citation targets. Negative controls confirm that empty-result behavior,
+choosing only the top ambiguous hit, and accidentally including a draft would be
+detected. No external model evaluates the passages or generates an answer.
