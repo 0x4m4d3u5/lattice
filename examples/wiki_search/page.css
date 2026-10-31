@@ -43,7 +43,13 @@ article th, article td { border-bottom: 1px solid var(--border-subtle); padding:
 .reading-navigation:empty { display: none; }
 .reading-navigation a { flex: 1 1 12rem; min-width: 0; }
 .reading-navigation span { display: block; color: var(--text-metadata); font-size: var(--type-metadata); }
-@media (max-width: 480px) { article { padding-top: var(--space-section); } }
+/* Narrow screens spend space on readable text rather than scaling indentation. */
+@media (max-width: 480px) {
+  article { padding-top: var(--space-section); padding-inline: min(1.25rem, 5vw); }
+  article :is(blockquote, .callout, pre) { padding-inline: min(1rem, 4vw); }
+  article .contents { padding-inline-start: min(1rem, 4vw); }
+  article :is(ul, ol) { padding-inline-start: min(2rem, 8vw); }
+}
 article [id] { scroll-margin-top: 6rem; }
 /* Leave room for the mobile brand and control to wrap with enlarged text. */
 @media (max-width: 800px) { article [id] { scroll-margin-top: 10rem; } }

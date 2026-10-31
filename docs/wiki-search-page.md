@@ -300,6 +300,10 @@ remain usable without JavaScript, while the directory/search need JavaScript.
 Printing shows the main content without the navigation panel, including when
 the mobile menu is open. Returning from print preserves the screen's menu state.
 
+On narrow screens, reading gutters and nested indentation are bounded by the
+viewport so enlarged text keeps useful line width. Long URLs and identifiers
+still wrap when necessary; code blocks retain whitespace and horizontal scrolling.
+
 Contents and backlinks appear only when supplied by Lattice. Enable `toc: true`
 in a note's frontmatter for contents navigation. The browser fixture in
 `tests/browser/fixtures/wiki` builds a fictional six-note library with three
