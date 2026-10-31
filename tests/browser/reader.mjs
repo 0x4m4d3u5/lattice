@@ -15,7 +15,9 @@ const output = join(root, 'dist');
 const templates = join(root, 'templates');
 cpSync(new URL('./fixtures/wiki', import.meta.url), content, { recursive: true });
 const sharingNote = join(content, 'guides/publishing-a-note.md');
-writeFileSync(sharingNote, readFileSync(sharingNote, 'utf8').replace('toc: true', 'toc: false') + `
+const entryNote = join(content, 'guides/getting-started.md');
+writeFileSync(entryNote, readFileSync(entryNote, 'utf8').replace('[[publishing-a-note]]', '[[Contribution Guide|publishing-a-note]]'));
+writeFileSync(sharingNote, readFileSync(sharingNote, 'utf8').replace('toc: true', 'toc: false\naliases: ["Contribution Guide"]') + `
 ## Repeated section
 
 First passage.
@@ -53,7 +55,7 @@ writeFileSync(join(templates, '404.html'), '{{content}}');
 const collections = join(root, 'collections.cfg');
 writeFileSync(collections, ['Guides', 'Systems', 'Practices'].map(name => `[${name}]\ndir = ${join(content, name.toLowerCase())}\nschema = title:String,description:String,tags:Optional[Array[String]]\n`).join('\n'));
 const config = join(root, 'site.cfg');
-writeFileSync(config, `title = Fieldnotes\nbase_url = https://example.test\ntemplates_dir = ${templates}\ncollections_file = ${collections}\ncontent_index_file = content-index.json\noutput_dir = ${output}\n`);
+writeFileSync(config, `wikilink_aliases = true\ntitle = Fieldnotes\nbase_url = https://example.test\ntemplates_dir = ${templates}\ncollections_file = ${collections}\ncontent_index_file = content-index.json\noutput_dir = ${output}\n`);
 run('_build/js/debug/build/kurisu/lattice/cmd/main/main.js', ['build', content, '-c', config, '--collections', collections]);
 const index = JSON.parse(readFileSync(join(output, 'content-index.json')));
 const urlFor = title => index.find(entry => entry.title === title).url;

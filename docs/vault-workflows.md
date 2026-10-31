@@ -36,6 +36,40 @@ remain unchanged. Callout links still participate in strict validation, and
 headings use the document's shared ID numbering. Existing callout shortcodes
 remain supported.
 
+## Alternate note names
+
+Enable `wikilink_aliases = true` in the site configuration, then use an `aliases`
+array to link to a note by familiar names without changing its
+filename or published URL:
+
+```md
+---
+title: Research
+aliases: ["Field Guide", "Research Handbook"]
+---
+## Evidence
+```
+
+Other notes can write `[[Field Guide]]` or
+`[[Research Handbook#Evidence|the evidence]]`. Aliases use the same case, spacing
+and `.md` normalization as ordinary wikilinks. They apply to collection, standalone
+and root notes. Backlinks and graph edges retain the destination's canonical page
+identity; aliases do not create extra pages, redirects or search entries.
+
+Resolution is disabled by default so existing sites using aliases as ordinary
+template metadata retain their behavior. When enabled, declare an array of
+non-empty strings, even for a single name. Names containing
+wiki delimiters (`#`, `|`, `[` or `]`) or line breaks are rejected. A normalized
+name cannot belong to two notes or replace an existing page/collection lookup key.
+Repeated spellings on the same note are harmless. Ambiguous or invalid declarations
+fail both `check` and `build`, with the declaration's source location.
+
+Aliases do not include drafts in publication. `check` and `build --strict-wikilinks`
+validate their destinations and heading fragments against the final output plan;
+ordinary build retains its existing broken-link warning policy. Renaming an alias
+can break existing references, so run `check` after editing it. There is no automatic
+source rewrite, URL redirect or alias-history migration.
+
 ## Vault metadata
 
 Vault notes use additional frontmatter fields beyond standard blog posts:

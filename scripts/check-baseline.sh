@@ -49,6 +49,8 @@ echo "Running read-only publication inventory fixture"
 node scripts/check-publication-inventory.mjs || status=1
 echo "Running conservative link suggestion fixture"
 node scripts/check-link-suggestions.mjs || status=1
+echo "Running alternate note name workflow"
+node scripts/check-note-aliases.mjs || status=1
 echo "Running saved inventory comparison fixture"
 node scripts/check-inventory-diff.mjs || status=1
 exit "$status"

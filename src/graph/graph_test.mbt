@@ -419,3 +419,20 @@ test "render_graph_json deduplicates parallel edges from same source" {
   }
   inspect(count, content="1")
 }
+
+///|
+test "graph aliases and heading links retain canonical node identity" {
+  let (links, errors) = @wikilink.resolve(
+    @wikilink.extract("[[Field Guide#Evidence]] [[Research]]", "hub.md"),
+    Map([("field-guide", "/notes/research/"), ("research", "/notes/research/")]),
+  )
+  assert_eq(errors.length(), 0)
+  let pages : Array[@graph.GraphPage] = [
+    { slug: "hub", title: "Hub", url: "/hub/", description: None,
+      date: None, weight: None, content_html: "", outgoing: links },
+    { slug: "research", title: "Research", url: "/notes/research/", description: None,
+      date: None, weight: None, content_html: "", outgoing: [] },
+  ]
+  let graph = @graph.render_graph_json(pages)
+  assert_true(graph.contains("\"edges\": [\n    {\"source\": \"hub\", \"target\": \"research\"}\n  ]"))
+}

@@ -48,9 +48,11 @@ pub fn render_graph_json(pages : Array[GraphPage]) -> String {
   // Build a set of all node slugs so we can skip edges that point to
   // draft/excluded pages not present in the nodes array.
   let slug_set : Map[String, Bool] = Map([])
+  let slug_by_url : Map[String, String] = Map([])
   i = 0
   while i < pages.length() {
     slug_set[pages[i].slug] = true
+    slug_by_url.set(pages[i].url, pages[i].slug)
     i = i + 1
   }
   buf.write_string("  \"edges\": [\n")
@@ -67,7 +69,11 @@ pub fn render_graph_json(pages : Array[GraphPage]) -> String {
       let edge = page.outgoing[j]
       // Resolution accepts title/case/filename variants; use its canonical key
       // for node membership, edge identity, and output as well.
-      let target = @wikilink.lookup_key(edge.raw.target)
+      let destination = match edge.url.split_once("#") {
+        Some((url, _)) => url.to_owned()
+        None => edge.url
+      }
+      let target = slug_by_url.get(destination).unwrap_or(@wikilink.lookup_key(edge.raw.target))
       // Skip edges whose target is not a node in the graph (e.g. drafts)
       if slug_set.contains(target) {
         let edge_key = (page.slug, target)

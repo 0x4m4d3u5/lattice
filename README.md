@@ -89,7 +89,7 @@ node "$LATTICE_CLI" check ./example/content --config ./example/site.cfg &&
 node "$LATTICE_CLI" build ./example/content -o ./dist --config ./example/site.cfg
 ```
 
-`check` prepares and validates pages without writing output. Run it before `build` for strict wikilink validation; ordinary `build` treats broken wikilinks as warnings. For a single publication command that rejects unresolved wiki page and fragment targets, use `node "$LATTICE_CLI" build --strict-wikilinks`. This opt-in rebuilds all pages and validates links against the final prepared HTML before writing output; ordinary `build` keeps its warning policy. `check` remains the read-only lint workflow. Nearby one-character page typos can include [valid wikilink suggestions](docs/link-suggestions.md), with labels and verified fragments preserved; choose a target and edit the source yourself.
+`check` prepares and validates pages without writing output. Run it before `build` for strict wikilink validation; ordinary `build` treats broken wikilinks as warnings. For a single publication command that rejects unresolved wiki page and fragment targets, use `node "$LATTICE_CLI" build --strict-wikilinks`. This opt-in rebuilds all pages and validates links against the final prepared HTML before writing output; ordinary `build` keeps its warning policy. `check` remains the read-only lint workflow. Enable `wikilink_aliases = true` to declare [alternate names in frontmatter](docs/vault-workflows.md#alternate-note-names) for wikilinks without changing their published URLs. Nearby one-character page typos can include [valid wikilink suggestions](docs/link-suggestions.md), with labels and verified fragments preserved; choose a target and edit the source yourself.
 
 ### Scaffold a new site
 
