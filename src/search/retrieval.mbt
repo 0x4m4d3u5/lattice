@@ -103,7 +103,7 @@ pub fn retrieve_sections(
     return []
   }
   let filters = required_tags.map(fn(tag) { tag.trim().to_owned().to_lower() })
-  let hits : Array[SectionHit] = []
+  let hits : Array[(SectionHit, String)] = []
   for document in documents {
     let tags = document.tags.map(fn(tag) { tag.to_lower() })
     if !filters.iter().all(fn(tag) { tags.contains(tag) }) {
@@ -151,19 +151,21 @@ pub fn retrieve_sections(
           (if a && !h && !t && b == 0 { 3 } else { 0 })
       }
       if matched && !(name_query && used_alias && (has_text_match || index > 0)) {
-        hits.push({
+        hits.push(({
           title: document.title,
           url: document.url,
           tags: document.tags,
           section: section.heading,
           section_index: index,
-          snippet: section_snippet(section.body, query_terms),
+          snippet: "",
           score,
-        })
+        }, section.body))
       }
     }
   }
-  hits.sort_by(fn(a, b) {
+  hits.sort_by(fn(left, right) {
+    let a = left.0
+    let b = right.0
     let score = b.score.compare(a.score)
     if score != 0 {
       return score
@@ -174,7 +176,11 @@ pub fn retrieve_sections(
     }
     a.section_index.compare(b.section_index)
   })
-  hits.iter().take(limit.min(50)).to_array()
+  // Rank first: snippet scanning is only useful for the retained results.
+  hits.iter().take(limit.min(50)).map(fn(candidate) {
+    let (hit, body) = candidate
+    { ..hit, snippet: section_snippet(body, query_terms) }
+  }).to_array()
 }
 
 ///|

@@ -509,3 +509,25 @@ test "alias index metadata is optional and malformed arrays fail closed" {
     ),
   )
 }
+
+///|
+test "ranked snippet selection preserves late winners and duplicate URLs" {
+  let documents : Array[@search.SearchDocument] = []
+  for i = 0; i < 80; i = i + 1 {
+    documents.push({ title: "Archive", url: "/same/", tags: [], sections: [{ heading: "", body: "needle low " + i.to_string() }] })
+  }
+  documents.push({ title: "needle", url: "/winner/", tags: ["Ops"], sections: [
+    { heading: "needle", body: "🌱 needle winner one" },
+    { heading: "needle", body: "🌱 needle winner two" },
+  ] })
+  let hits = @search.retrieve_sections(documents, "needle", [], 100)
+  assert_eq(hits.length(), 50)
+  assert_eq(hits[0].url, "/winner/")
+  assert_eq(hits[0].snippet, "🌱 needle winner one")
+  assert_eq(hits[1].snippet, "🌱 needle winner two")
+  assert_true(hits.iter().drop(2).all(fn(hit) { hit.snippet.has_prefix("needle low ") }))
+  let one = @search.retrieve_sections(documents, "needle", ["ops"], 1)
+  assert_eq(one.length(), 1)
+  assert_eq(one[0].snippet, hits[0].snippet)
+  assert_eq(@search.retrieve_sections(documents, "needle", [], 0).length(), 0)
+}
