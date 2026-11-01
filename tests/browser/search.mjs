@@ -434,6 +434,7 @@ try {
   assert.equal(await page.evaluate(() => window.searchWorkers.length), workersBeforeJump);
   if (process.env.LATTICE_PREVIEW_DIR) await page.screenshot({ path: join(process.env.LATTICE_PREVIEW_DIR, 'passage-mobile.png') });
   await page.goBack();
+  await page.waitForURL(url => url.hash === '#recovery-drills');
   assert.equal(new URL(page.url()).hash, '#recovery-drills');
   await ready();
   await query('recovery'); await complete();
