@@ -1,0 +1,17 @@
+import {
+  "kurisu/lattice/src/search",
+}
+
+options(
+  link: {
+    "js": {
+      "exports": [ "replace_index", "query_index", "clear_index" ],
+      "format": "esm",
+    },
+    "wasm-gc": {
+      "exports": [ "replace_index", "query_index", "clear_index" ],
+      "use-js-builtin-string": true,
+      "imported-string-constants": "_",
+    },
+  },
+)

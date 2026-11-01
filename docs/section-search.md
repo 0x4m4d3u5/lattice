@@ -113,3 +113,32 @@ The content index follows existing draft inclusion (`--drafts`) and publishing
 rules. This is not a private-vault export filter: review what you publish,
 including templates, copied assets and previously generated output. Treat
 snippets as text when displaying them in a browser.
+
+## Repeated queries with one prepared index
+
+The bundled reader uses a separate prepared-search WASM runtime. It parses the
+index and computes term frequencies once, then reuses them for queries. Ranking,
+filters, snippets and citation addresses match stateless search. This trades
+initial preparation and retained memory proportional to the supplied index for
+less repeated work; it does not keep query or result history.
+
+MoonBit consumers can call `@search.prepare_search(index_json)` and, on success,
+`prepared.search(query, tags_json, limit)`. A prepared value owns its decoded
+strings and private frequency maps. Drop it when the index is no longer needed.
+The existing `search_content` function and note-renderer exports remain unchanged.
+
+After `bash scripts/check-wasm-note.sh`, JavaScript hosts can instantiate
+`examples/prepared_search/host.mjs` with the separately built
+`examples/prepared_search/prepared_search.wasm` artifact. Its
+`createPreparedSearcher(bytes)` returns `replace(index_json)`,
+`search(query, tags_json, limit)` and `clear()`. Each instance owns one index.
+Replacement clears the old index **before** validating the new one; malformed
+replacement leaves queries unavailable, never silently using stale content.
+`clear()` is idempotent. Discard the runtime (or terminate its worker) to release
+all instance state. There is no fixed byte quota: hosts handling untrusted or
+very large indexes should enforce their own input-size limit before preparation.
+
+The reader invalidates its current runtime when loading another index and ignores
+superseded asynchronous loads. A new page/worker must prepare again. This is not
+an across-page cache, and preparation does not verify indexed claims against
+published HTML or establish factual truth.

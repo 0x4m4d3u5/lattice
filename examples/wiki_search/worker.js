@@ -1,13 +1,17 @@
-import { createContentSearcher } from './host.js';
+import { createPreparedSearcher } from './host.js';
 
-let indexJson;
 let search;
+let generation = 0;
 self.addEventListener('message', async ({ data }) => {
+  const token = data.type === 'load' ? ++generation : generation;
   try {
     if (data.type === 'load') {
+      search?.clear();
+      search = undefined;
       const index = await fetch(data.indexUrl, { cache: 'no-store' });
       if (!index.ok) throw new Error('Index unavailable');
-      indexJson = await index.text();
+      const indexJson = await index.text();
+      if (token !== generation) return;
       const entries = JSON.parse(indexJson);
       if (!Array.isArray(entries)) throw new Error('Invalid index');
       self.postMessage({ id: data.id, type: 'catalogue', entries: entries.map(entry => ({
@@ -18,9 +22,10 @@ self.addEventListener('message', async ({ data }) => {
       })) });
       const wasm = await fetch(new URL('./renderer.wasm', import.meta.url), { cache: 'no-store' });
       if (!wasm.ok) throw new Error('Search runtime unavailable');
-      search = await createContentSearcher(await wasm.arrayBuffer());
-      // Validate with the MoonBit decoder, including explicit empty sections.
-      if (search(indexJson, '', '[]', 0).error !== null) throw new Error('Invalid content index');
+      const prepared = await createPreparedSearcher(await wasm.arrayBuffer());
+      if (token !== generation) return;
+      prepared.replace(indexJson);
+      search = prepared;
       const names = new Map();
       // Explicitly empty sections never participate in retrieval. Missing sections
       // are legacy page-sized passages, even when only their title can match.
@@ -32,11 +37,12 @@ self.addEventListener('message', async ({ data }) => {
       const tags = [...names.values()].sort();
       self.postMessage({ id: data.id, type: 'ready', tags });
     } else if (data.type === 'search') {
-      const response = search(indexJson, data.query, JSON.stringify(data.tags), 50);
+      const response = search.search(data.query, JSON.stringify(data.tags), 50);
       if (response.error !== null) throw new Error('Search failed');
       self.postMessage({ id: data.id, type: 'results', results: response.results });
     }
   } catch {
+    if (token !== generation) return;
     self.postMessage({ id: data.id, type: 'error' });
   }
 });

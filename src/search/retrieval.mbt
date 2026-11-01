@@ -19,6 +19,24 @@ pub(all) struct SectionHit {
 }
 
 ///|
+struct PreparedDocument {
+  title : Map[String, Int32]
+  names : Map[String, Int32]
+  headings : Array[Map[String, Int32]]
+  bodies : Array[Map[String, Int32]]
+}
+
+///|
+/// An explicitly owned index; preparation decodes strings and creates private maps.
+/// Retained data scales with the index, never with query history.
+pub struct PreparedSearch {
+  documents : Array[SearchDocument]
+  aliases : Map[String, Array[String]]
+  fragments : Map[String, Map[Int32, String]]
+  terms : Array[PreparedDocument]
+}
+
+///|
 // ASCII punctuation/whitespace delimit terms; non-ASCII text stays intact.
 // ASCII case folding deliberately has identical behavior on JS and WASM.
 fn scan_terms(text : String, record : (String, Int32) -> Unit) -> Unit {
@@ -98,37 +116,79 @@ pub fn retrieve_sections(
   limit : Int32,
   aliases~ : Map[String, Array[String]] = Map([]),
 ) -> Array[SectionHit] {
+  retrieve_impl(documents, query, required_tags, limit, aliases~, None)
+}
+
+///|
+fn retrieve_impl(
+  documents : Array[SearchDocument],
+  query : String,
+  required_tags : Array[String],
+  limit : Int32,
+  aliases~ : Map[String, Array[String]],
+  prepared : Array[PreparedDocument]?,
+) -> Array[SectionHit] {
   let query_terms = frequencies(query).keys().to_array()
   if query_terms.is_empty() || limit <= 0 {
     return []
   }
   let filters = required_tags.map(fn(tag) { tag.trim().to_owned().to_lower() })
   let hits : Array[(SectionHit, String)] = []
-  for document in documents {
+  for document_index = 0
+      document_index < documents.length()
+      document_index = document_index + 1 {
+    let document = documents[document_index]
+    let prepared_document = prepared.map(fn(items) { items[document_index] })
     let tags = document.tags.map(fn(tag) { tag.to_lower() })
     if !filters.iter().all(fn(tag) { tags.contains(tag) }) {
       continue
     }
-    let title = frequencies(document.title)
-    let names = frequencies(aliases.get(document.url).unwrap_or([]).join(" "))
+    let title = match prepared_document {
+      Some(item) => item.title
+      None => frequencies(document.title)
+    }
+    let names = match prepared_document {
+      Some(item) => item.names
+      None => frequencies(aliases.get(document.url).unwrap_or([]).join(" "))
+    }
     // A complete alternate-name query is one page hit, not one per passage.
     // Existing title-only retrieval retains its section behavior and scores.
     let name_query = query_terms.all(fn(term) {
         title.contains(term) || names.contains(term)
       }) &&
       query_terms.any(fn(term) { !title.contains(term) && names.contains(term) })
-    let has_text_match = name_query &&
-      document.sections.any(fn(section) {
-        let heading = frequencies(section.heading)
-        let body = frequencies(section.body)
-        query_terms.all(fn(term) {
-          title.contains(term) || heading.contains(term) || body.contains(term)
-        })
-      })
+    let mut has_text_match = false
+    if name_query {
+      for i = 0; i < document.sections.length(); i = i + 1 {
+        let section = document.sections[i]
+        let heading = match prepared_document {
+          Some(item) => item.headings[i]
+          None => frequencies(section.heading)
+        }
+        let body = match prepared_document {
+          Some(item) => item.bodies[i]
+          None => frequencies(section.body)
+        }
+        if query_terms.all(fn(term) {
+            title.contains(term) ||
+            heading.contains(term) ||
+            body.contains(term)
+          }) {
+          has_text_match = true
+          break
+        }
+      }
+    }
     for index = 0; index < document.sections.length(); index = index + 1 {
       let section = document.sections[index]
-      let heading = frequencies(section.heading)
-      let body = frequencies(section.body)
+      let heading = match prepared_document {
+        Some(item) => item.headings[index]
+        None => frequencies(section.heading)
+      }
+      let body = match prepared_document {
+        Some(item) => item.bodies[index]
+        None => frequencies(section.body)
+      }
       let mut score = 0
       let mut matched = true
       let mut used_alias = false
@@ -151,15 +211,20 @@ pub fn retrieve_sections(
           (if a && !h && !t && b == 0 { 3 } else { 0 })
       }
       if matched && !(name_query && used_alias && (has_text_match || index > 0)) {
-        hits.push(({
-          title: document.title,
-          url: document.url,
-          tags: document.tags,
-          section: section.heading,
-          section_index: index,
-          snippet: "",
-          score,
-        }, section.body))
+        hits.push(
+          (
+            {
+              title: document.title,
+              url: document.url,
+              tags: document.tags,
+              section: section.heading,
+              section_index: index,
+              snippet: "",
+              score,
+            },
+            section.body,
+          ),
+        )
       }
     }
   }
@@ -177,10 +242,14 @@ pub fn retrieve_sections(
     a.section_index.compare(b.section_index)
   })
   // Rank first: snippet scanning is only useful for the retained results.
-  hits.iter().take(limit.min(50)).map(fn(candidate) {
+  hits
+  .iter()
+  .take(limit.min(50))
+  .map(fn(candidate) {
     let (hit, body) = candidate
-    { ..hit, snippet: section_snippet(body, query_terms) }
-  }).to_array()
+    { ..hit, snippet: section_snippet(body, query_terms), }
+  })
+  .to_array()
 }
 
 ///|
@@ -267,9 +336,31 @@ pub fn search_content(
     Ok(tags) => tags
     Err(message) => return search_response([], Some(message))
   }
+  let (documents, aliases, fragments) = match decode_index(index) {
+    Ok(value) => value
+    Err(message) => return search_response([], Some(message))
+  }
+  search_response(
+    retrieve_sections(documents, query, tags, limit, aliases~),
+    None,
+    fragments~,
+  )
+}
+
+///|
+fn decode_index(
+  index : Json,
+) -> Result[
+  (
+    Array[SearchDocument],
+    Map[String, Array[String]],
+    Map[String, Map[Int32, String]],
+  ),
+  String,
+] {
   let documents = match decode_documents(index) {
     Ok(documents) => documents
-    Err(message) => return search_response([], Some(message))
+    Err(message) => return Err(message)
   }
   // Keep canonical page URLs and ranking unchanged. Ambiguous duplicate page
   // records deliberately retain page-only citations.
@@ -288,11 +379,7 @@ pub fn search_content(
         if fields.get("aliases") is Some(value) {
           match string_array(value) {
             Ok(names) => aliases.set(url, names)
-            Err(_) =>
-              return search_response(
-                [],
-                Some("aliases must be an array of strings"),
-              )
+            Err(_) => return Err("aliases must be an array of strings")
           }
         }
         let items : Map[Int32, String] = Map([])
@@ -309,10 +396,58 @@ pub fn search_content(
       }
     }
   }
+  Ok((documents, aliases, fragments))
+}
+
+///|
+/// Parse and prepare one index. Invalid input yields no partially usable index.
+pub fn prepare_search(index_json : String) -> Result[PreparedSearch, String] {
+  let index = @json.parse(index_json[:]) catch {
+    _ => return Err("invalid content-index JSON")
+  }
+  let (documents, aliases, fragments) = match decode_index(index) {
+    Ok(value) => value
+    Err(message) => return Err(message)
+  }
+  let terms = documents.map(fn(document) {
+    {
+      title: frequencies(document.title),
+      names: frequencies(aliases.get(document.url).unwrap_or([]).join(" ")),
+      headings: document.sections.map(fn(section) {
+        frequencies(section.heading)
+      }),
+      bodies: document.sections.map(fn(section) { frequencies(section.body) }),
+    }
+  })
+  Ok({ documents, aliases, fragments, terms, })
+}
+
+///|
+/// Reuse an explicitly prepared index without retaining queries or results.
+pub fn PreparedSearch::search(
+  self : PreparedSearch,
+  query : String,
+  tags_json : String,
+  limit : Int32,
+) -> String {
+  let tags = @json.parse(tags_json[:]) catch {
+    _ => return search_response([], Some("invalid tag-filter JSON"))
+  }
+  let tags = match string_array(tags) {
+    Ok(tags) => tags
+    Err(message) => return search_response([], Some(message))
+  }
   search_response(
-    retrieve_sections(documents, query, tags, limit, aliases~),
+    retrieve_impl(
+      self.documents,
+      query,
+      tags,
+      limit,
+      aliases=self.aliases,
+      Some(self.terms),
+    ),
     None,
-    fragments~,
+    fragments=self.fragments,
   )
 }
 

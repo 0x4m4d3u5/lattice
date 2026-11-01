@@ -15,8 +15,8 @@ export async function prepareWikiAssets() {
     ['graph-worker.js', '../examples/wiki_search/graph-worker.js'],
     ['graph-core.js', '../_build/js/debug/build/kurisu/lattice/examples/local_graph/local_graph.js'],
     ['worker.js', '../examples/wiki_search/worker.js'],
-    ['host.js', '../examples/wasm_note/host.mjs'],
-    ['renderer.wasm', '../_build/wasm-gc/debug/build/kurisu/lattice/examples/wasm_note/wasm_note.wasm'],
+    ['host.js', '../examples/prepared_search/host.mjs'],
+    ['renderer.wasm', '../_build/wasm-gc/debug/build/kurisu/lattice/examples/prepared_search/prepared_search.wasm'],
   ];
   const files = await Promise.all(sources.map(async ([name, source]) => [name, await readFile(new URL(source, import.meta.url))]));
   const navigation = (await readFile(new URL('../examples/wiki_search/wiki-navigation.html', import.meta.url), 'utf8'))
