@@ -347,7 +347,10 @@ the header displays their calendar day. Missing dates stay absent from the heade
 
 The authored update is exported as optional `updated` in the content index,
 `dateModified` on BlogPosting JSON-LD, feed modification time, and sitemap
-`lastmod`. Publication dates and feed ordering remain unchanged. Without an
-explicit update, existing feed/sitemap publication-date fallbacks remain; these
+`lastmod`. Publication dates and feed ordering remain unchanged. Feeds normalize
+the update day to midnight UTC, but retain the
+publication timestamp if that instant would be earlier than publication (including
+timezone offsets). This does not add time precision to the authored update date.
+Without an explicit update, existing feed/sitemap publication-date fallbacks remain; these
 are not editing-history evidence. Builds never derive dates from the clock, file
 mtime or Git. Rebuilding an unchanged note does not advance its dates.

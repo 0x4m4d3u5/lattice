@@ -888,3 +888,26 @@ test "authored updated dates change modification metadata without changing publi
   assert_true(json.contains("\"date_modified\": \"2026-02-03T00:00:00Z\""))
   assert_true(json.contains("\"date_published\": \"2024-01-15T00:00:00Z\""))
 }
+
+///|
+test "authored feed updates never precede the publication instant" {
+  let cases = [
+    ("2026-02-03T12:00:00Z", "2026-02-03", "2026-02-03T12:00:00Z"),
+    ("2026-02-03T23:30:00-02:00", "2026-02-04", "2026-02-03T23:30:00-02:00"),
+    ("2026-02-03T00:30:00+02:00", "2026-02-03", "2026-02-03T00:00:00Z"),
+    ("2026-02-03T00:00:00Z", "2026-02-03", "2026-02-03T00:00:00Z"),
+    ("2026-02-03T12:00:00Z", "2026-02-04", "2026-02-04T00:00:00Z"),
+  ]
+  for (published, updated, expected) in cases {
+    let page = instant_page("Example", Some(published))
+    let dates = Map([(page.url, updated)])
+    let atom = @rss.render_feed("Site", "https://example.test", [page], None, updated_dates=dates)
+    let parts = atom.split("<entry>").collect()
+    assert_true(parts[0].contains("<updated>" + expected + "</updated>"))
+    assert_true(parts[1].contains("<updated>" + expected + "</updated>"))
+    assert_true(parts[1].contains("<published>" + published + "</published>"))
+    let json = @rss.render_json_feed_from_pages("Site", "https://example.test", [page], None, "/feed.json", updated_dates=dates)
+    assert_true(json.contains("\"date_modified\": \"" + expected + "\""))
+    assert_true(json.contains("\"date_published\": \"" + published + "\""))
+  }
+}

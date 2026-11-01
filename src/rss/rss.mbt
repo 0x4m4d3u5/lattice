@@ -182,7 +182,15 @@ fn to_feed_item(base_url : String, page : @graph.GraphPage, updated_dates : Map[
     content_html: page.content_html,
     summary: page.description,
     updated: match normalize_feed_datetime(updated_dates.get(page.url)) {
-      Some(value) => Some(value)
+      Some(value) =>
+        // An authored calendar day becomes midnight UTC in feeds. Keep the
+        // publication instant if that midnight is earlier, including offsets
+        // that place publication on the following UTC day.
+        match normalized_date {
+          Some(published) if feed_instant(value) < feed_instant(published) =>
+            normalized_date
+          _ => Some(value)
+        }
       None => normalized_date
     },
     published: normalized_date,

@@ -61,4 +61,21 @@ writeFileSync(join(root,'templates/page.html'),template.replace('{{backlinks}}',
 for (const wrapper of ['<!-- {{backlinks}} -->', '<template>{{backlinks}}</template>']) {
  writeFileSync(join(root,'templates/page.html'),template.replace('{{backlinks}}',wrapper));run('build');assert.equal(read('notes/alpha/index.html').includes('Backlinks (1)'),false);
 }
-console.log('Reader metadata: authored dates, validation, cache/rebuild, exports, drafts, tags, canonical backlinks and collision-safe/omitted targets passed');
+// DateTime publication retains its instant when an equal-day update normalizes
+// to an earlier midnight. Subsequent authored days still advance the feed.
+writeFileSync(join(root,'templates/page.html'),template);
+writeFileSync(join(root,'collections.cfg'),'[notes]\ndir = content/notes\nschema = title:String,date:Optional[DateTime],updated:Optional[Date],tags:Optional[Array[String]]\n');
+for (const [updated, expected] of [['2026-01-02','2026-01-02T12:00:00Z'],['2026-01-03','2026-01-03T00:00:00Z']]) {
+ writeFileSync(target,source(updated).replace('date: 2026-01-02\n','date: 2026-01-02T12:00:00Z\n'));
+ run('check');run('build');
+ const verifyTimestamp=()=>{
+  const feed=JSON.parse(read('notes/feed.json')).items.find(x=>x.url==='https://example.test/notes/alpha/');
+  assert.equal(feed.date_published,'2026-01-02T12:00:00Z');assert.equal(feed.date_modified,expected);
+  const entry=read('notes/feed.xml').split('<entry>').find(x=>x.includes('<id>https://example.test/notes/alpha/</id>'));
+  assert.ok(entry.includes(`<updated>${expected}</updated>`));
+  assert.equal(read('notes/alpha/index.html').includes('Updated <time'),updated!=='2026-01-02');
+  assert.equal(objects(read('notes/alpha/index.html')).find(x=>x['@type']==='BlogPosting').dateModified,updated);
+ };
+ verifyTimestamp();const saved=snapshot();run('build');verifyTimestamp();assert.deepEqual(snapshot(),saved);
+}
+console.log('Reader metadata: authored dates, timestamp-safe feeds, validation, cache/rebuild, exports, drafts, tags, canonical backlinks and collision-safe/omitted targets passed');
