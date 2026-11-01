@@ -23,7 +23,7 @@ const run = (command, flags = []) => spawnSync(native ? cli : process.execPath,
   { cwd: root, encoding: 'utf8', timeout: 30000 });
 const ok = (command, flags = []) => { const r = run(command, flags); assert.equal(r.status, 0, r.stdout + r.stderr); return r; };
 const snapshot = (dir = join(root, 'dist')) => Object.fromEntries(readdirSync(dir, { recursive: true, withFileTypes: true }).filter(e => e.isFile()).map(e => [join(e.parentPath, e.name), readFileSync(join(e.parentPath, e.name), 'hex')]));
-const valid = '[Sibling](../target/#visible)\n\n[Root](/wiki/notes/target/?view=1#r%C3%A9sum%C3%A9:2026)\n\n[File](../target/index.html#visible)\n\n[Asset](../../static/a%20b.pdf#page=1)\n\n[External](https://invalid.example/missing) [Network](//invalid.example/missing) [Email](mailto:nobody@example.test)\n\n## Here\n[Self](#here) [Query](?q=1#here)\n\n`[Example](../missing/)`\n';
+const valid = '[Stylesheet](/wiki/style.css)\n\n[Sibling](../target/#visible)\n\n[Root](/wiki/notes/target/?view=1#r%C3%A9sum%C3%A9:2026)\n\n[File](../target/index.html#visible)\n\n[Asset](../../static/a%20b.pdf#page=1)\n\n[External](https://invalid.example/missing) [Network](//invalid.example/missing) [Email](mailto:nobody@example.test)\n\n## Here\n[Self](#here) [Query](?q=1#here)\n\n`[Example](../missing/)`\n';
 put('source', valid);
 const before = snapshot(); ok('check', ['--local-links', '--format', 'json']); assert.deepEqual(snapshot(), before);
 ok('build', ['--strict-local-links']); const built = snapshot(); ok('build', ['--strict-local-links']); assert.deepEqual(snapshot(), built); ok('build', ['--strict-local-links', '--force']); assert.deepEqual(snapshot(), built);
@@ -36,6 +36,7 @@ const invalid = [
  ['../bad%ZZ/', 'malformed percent'],
  ['../target%2findex.html', 'encoded separators'],
  ['../target%09/', 'control characters'],
+ ['/wiki/notes//target/', 'repeated path separators'],
 ];
 for (const [url, message] of invalid) {
  put('source', `[Broken](${url})`);
@@ -58,6 +59,14 @@ assert.equal(run('check', ['--local-links']).status, 1); assert.deepEqual(snapsh
 writeFileSync(join(root, 'templates/page.html'), template.replace('<head>', '<head><base href="/elsewhere/">'));
 const base = run('check', ['--local-links']); assert.equal(base.status, 1); assert.match(base.stdout, /base elements/);
 writeFileSync(join(root, 'templates/page.html'), template);
+// Root-relative base URLs generate the same mounted public paths.
+const site = readFileSync(join(root, 'site.cfg'), 'utf8');
+writeFileSync(join(root, 'site.cfg'), site.replace('https://example.test/wiki', '/wiki'));
+put('source', '[Mounted](/wiki/notes/target/#visible) [CSS](/wiki/style.css)'); ok('check', ['--local-links']);
+writeFileSync(join(root, 'site.cfg'), site);
+// Retaining style.css must not make arbitrary stale files valid destinations.
+writeFileSync(join(root, 'dist/stale.html'), '<h2 id="old">Old publication</h2>');
+put('source', '[Stale](/wiki/stale.html#old)'); assert.equal(run('check', ['--local-links']).status, 1);
 // Final static ownership can replace a target. Only the replacement's fragment counts.
 writeFileSync(join(root, 'site.cfg'), readFileSync(join(root, 'site.cfg'), 'utf8') + 'static_dir = notes\n');
 mkdirSync(join(root, 'content/notes/target'), { recursive: true });

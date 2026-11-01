@@ -34,3 +34,11 @@ test "local URLs resolve from published routes and mounted base paths" {
     assert_eq(local_link_destination(url, "/notes/source/", ""), Ok(None))
   }
 }
+
+///|
+test "publication base paths include root-relative configuration" {
+  assert_eq(local_link_base_path("/wiki/"), "/wiki")
+  assert_eq(local_link_base_path("https://example.test/wiki/"), "/wiki")
+  assert_eq(local_link_base_path("/"), "")
+  assert_eq(local_link_path("/wiki//target/"), Err("repeated path separators are not supported"))
+}

@@ -15,13 +15,14 @@ rebuilds. It can be combined with `--strict-wikilinks`.
 Use published URLs, not paths to Markdown source files. From `/notes/source/`,
 `../target/#details` means `/notes/target/#details`; `target.md` is not rewritten
 into a note route. Directory destinations map to `index.html`; explicit file
-URLs must name a planned file. Query strings do not change the file checked.
+URLs must name a planned file or the explicitly retained default stylesheet.
+Other pre-existing output files are not accepted as current publication. Query strings do not change the file checked.
 
-If `base_url` is `https://example.test/wiki`, relative URLs resolve from
+If `base_url` is `https://example.test/wiki` or `/wiki`, relative URLs resolve from
 `/wiki/notes/source/`, and a root-relative link must include `/wiki/`.
 `/notes/target/` is outside that publication and produces an error. Percent-encoded
 UTF-8 path segments and fragments are decoded once; dot segments are normalized.
-Encoded separators, backslashes, control characters and malformed escapes are
+Repeated path separators, encoded separators, backslashes, control characters and malformed escapes are
 rejected rather than guessing hosting-specific behavior. Fragment-only URLs
 refer to the source's canonical published page.
 

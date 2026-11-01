@@ -8,7 +8,12 @@ fn local_link_base_path(base : String) -> String {
         Some((_, path)) => "/" + path.trim_end(chars="/").to_owned()
         None => ""
       }
-    None => ""
+    None =>
+      if base.has_prefix("/") && !base.has_prefix("//") {
+        base.trim_end(chars="/").to_owned()
+      } else {
+        ""
+      }
   }
 }
 
@@ -16,6 +21,9 @@ fn local_link_base_path(base : String) -> String {
 /// Normalize URL segments before mapping them into the output directory. Reject
 /// encoded separators and backslashes rather than inventing server semantics.
 fn local_link_path(path : String) -> Result[String, String] {
+  if path.contains("//") {
+    return Err("repeated path separators are not supported")
+  }
   let parts : Array[String] = []
   for raw in path.split("/") {
     let segment = @percent.decode(raw) catch {
@@ -24,7 +32,9 @@ fn local_link_path(path : String) -> Result[String, String] {
     if segment.contains("/") ||
       segment.contains("\\") ||
       segment.iter().any(c => c.is_ascii_control()) {
-      return Err("encoded separators, backslashes and control characters are not supported")
+      return Err(
+        "encoded separators, backslashes and control characters are not supported",
+      )
     }
     match segment {
       "" | "." => ()
@@ -143,6 +153,20 @@ fn check_output_local_links(
     let (path, contents) = output.files[i]
     files.set(output_path_key(path), contents)
     owners.set(output_path_key(path), output.origins[i])
+  }
+  // Only this explicitly retained publication asset is eligible. Never accept
+  // arbitrary old output files, which may be stale or previously private pages.
+  let stylesheet = output_path_key(config.output_dir + "/style.css")
+  if !files.contains(stylesheet) &&
+    output.excluded.any(entry => {
+      entry.path == "style.css" &&
+      entry.kind == "generated" &&
+      entry.reason == "existing optional stylesheet retained"
+    }) {
+    let exists = @fs.is_file(stylesheet) catch { _ => false }
+    if exists {
+      files.set(stylesheet, OptionalText(""))
+    }
   }
   let base = local_link_base_path(config.site.base_url)
   for collection in collections {
