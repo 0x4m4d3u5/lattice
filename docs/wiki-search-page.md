@@ -324,3 +324,30 @@ collections and checks desktop/mobile browsing, keyboard controls, wiki/fragment
 links, history, runtime failures and no-JavaScript reading. CI retains its landing,
 reading and mobile-navigation screenshots. No external fonts or UI framework are
 needed.
+
+### Authored reader metadata
+
+The article header shows available publication/revision dates, tag links and a
+shortcut to the existing backlinks section. Everything is published HTML: it is
+available without JavaScript and stays the same during reader navigation. Empty
+metadata and unavailable backlink shortcuts are omitted.
+
+`date` remains the publication date. Optional `updated: YYYY-MM-DD` declares the
+last meaningful revision chosen by the author; it is not a build timestamp or a
+claim that the note was automatically reviewed. Collection schemas should declare
+`date:Optional[Date],updated:Optional[Date]`; newly initialized wikis include these
+fields. Standalone/root notes accept the optional update date too.
+
+An update without a publication date is allowed and displays only Updated. Equal
+calendar days display Published once. An update before the publication day, an
+impossible date, or a non-date value fails `check` and `build`; publication with an
+update also requires a valid `date` if that field is supplied. `updated` accepts
+calendar dates, not timestamps. Existing publication timestamps keep their values;
+the header displays their calendar day. Missing dates stay absent from the header.
+
+The authored update is exported as optional `updated` in the content index,
+`dateModified` on BlogPosting JSON-LD, feed modification time, and sitemap
+`lastmod`. Publication dates and feed ordering remain unchanged. Without an
+explicit update, existing feed/sitemap publication-date fallbacks remain; these
+are not editing-history evidence. Builds never derive dates from the clock, file
+mtime or Git. Rebuilding an unchanged note does not advance its dates.

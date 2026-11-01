@@ -185,6 +185,7 @@ pub fn render_content_index_with_sections(
   sections : Map[String, Array[@markdown.TextSection]],
   fragments? : Map[String, Map[Int, String]] = Map([]),
   aliases? : Map[String, Array[String]] = Map([]),
+  updated_dates? : Map[String, String] = Map([]),
 ) -> String {
   render_content_entries(
     entries,
@@ -193,6 +194,7 @@ pub fn render_content_index_with_sections(
     Some(sections),
     fragments~,
     aliases~,
+    updated_dates~,
   )
 }
 
@@ -204,6 +206,7 @@ fn render_content_entries(
   sections : Map[String, Array[@markdown.TextSection]]?,
   fragments? : Map[String, Map[Int, String]] = Map([]),
   aliases? : Map[String, Array[String]] = Map([]),
+  updated_dates? : Map[String, String] = Map([]),
 ) -> String {
   // Generated indexes overwrite authored pages at shared URLs. Do not advertise
   // authored navigation for any entry whose URL is occupied by such an index.
@@ -225,6 +228,11 @@ fn render_content_entries(
     if !generated_urls.contains(entry.url) && aliases.get(entry.url) is Some(names) && !names.is_empty() {
       buf.write_string("    \"aliases\": ")
       write_tags(buf, names)
+      buf.write_string(",\n")
+    }
+    if !generated_urls.contains(entry.url) && updated_dates.get(entry.url) is Some(value) {
+      buf.write_string("    \"updated\": ")
+      @strutil.write_json_string(buf, value)
       buf.write_string(",\n")
     }
     buf.write_string("    \"date\": ")

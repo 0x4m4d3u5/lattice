@@ -50,6 +50,8 @@ Second passage.
 const copySource = 'let greeting = "café <world> & friends"\n\tprintln(greeting)\n';
 writeFileSync(sharingNote, readFileSync(sharingNote, 'utf8') + '\n## Copy an example\n\n```moonbit\n' + copySource + '```\n\n```text\n  keep indentation\n\nlast line\n```\n');
 writeFileSync(join(content, 'punctuation.md'), '---\ntitle: Pipes | Fieldnotes & <notes>\n---\n# Pipes\n\nAuthored punctuation.\n');
+const datedNote = join(content, 'guides/getting-started.md');
+writeFileSync(datedNote, readFileSync(datedNote, 'utf8').replace('title: Getting started', 'title: Getting started\ndate: 2026-01-02\nupdated: 2026-02-03'));
 mkdirSync(templates);
 mkdirSync(join(content, 'static'), { recursive: true });
 mkdirSync(join(content, 'data'));
@@ -64,7 +66,7 @@ for (const name of ['page.html', 'wiki-navigation.html']) {
 }
 cpSync(join(templates, 'page.html'), join(templates, 'index.html'));
 const collections = join(root, 'collections.cfg');
-writeFileSync(collections, ['Guides', 'Systems', 'Practices'].map(name => `[${name}]\ndir = ${join(content, name.toLowerCase())}\nschema = title:String,description:String,tags:Optional[Array[String]]\n`).join('\n'));
+writeFileSync(collections, ['Guides', 'Systems', 'Practices'].map(name => `[${name}]\ndir = ${join(content, name.toLowerCase())}\nschema = title:String,description:String,date:Optional[Date],updated:Optional[Date],tags:Optional[Array[String]]\n`).join('\n'));
 const config = join(root, 'site.cfg');
 writeFileSync(config, `wikilink_aliases = true\ntitle = Fieldnotes\nbase_url = https://example.test\ntemplates_dir = ${templates}\ncollections_file = ${collections}\ncontent_index_file = content-index.json\noutput_dir = ${output}\n`);
 run('_build/js/debug/build/kurisu/lattice/cmd/main/main.js', ['build', content, '-c', config, '--collections', collections]);
@@ -131,11 +133,28 @@ try {
   await cold.locator('article h1').waitFor();
   assert.equal(await cold.locator('article h1').textContent(), 'Getting started', 'published heading must not depend on search initialization');
   assert.equal(await cold.title(), 'Getting started | Fieldnotes');
+  const metadataText = (await cold.locator('.reader-metadata').innerText()).replace(/\s+/g, ' ');
+  assert.match(metadataText, /Published 2026-01-02/);
+  assert.match(metadataText, /Updated 2026-02-03/);
+  assert.match(metadataText, /Tags: Orientation/);
+  assert.match(metadataText, /Backlinks \(\d+\)/);
+
   assert.equal(await cold.locator('#lattice-current-collection').innerText(), 'Guides');
   assert.equal(await cold.locator('#lattice-navigation').isVisible(), false, 'mobile sidebar must not flash before modules load');
   await save('reader-cold-module-delay.png', cold);
   releaseModule();
   await cold.waitForFunction(() => !document.querySelector('#lattice-controls').disabled);
+  assert.equal((await cold.locator('.reader-metadata').innerText()).replace(/\s+/g, ' '), metadataText);
+  const shortcut = cold.locator('.reader-metadata').getByRole('link', { name: /^Backlinks/ });
+  await shortcut.focus(); await shortcut.press('Enter');
+  assert.equal(await cold.locator('.backlinks').evaluate(element => element === document.activeElement), true);
+  for (const width of [320, 390, 1440]) {
+    await cold.setViewportSize({ width, height: 900 });
+    await cold.evaluate(() => document.documentElement.style.fontSize = '200%');
+    assert.equal(await cold.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+    assert.equal(await cold.locator('.reader-metadata').evaluate(element => element.scrollWidth <= element.clientWidth), true);
+  }
+
   assert.equal(await cold.locator('article h1').textContent(), 'Getting started');
   await coldContext.close();
   const plainContext = await browser.newContext({ javaScriptEnabled: false });
@@ -150,6 +169,8 @@ try {
     await unloaded.goto(origin + path);
     assert.equal(await unloaded.locator('article > header > h1').textContent(), heading);
     assert.equal(await unloaded.title(), documentTitle);
+    if (heading === 'Getting started') assert.equal((await unloaded.locator('.reader-metadata').innerText()).replace(/\s+/g, ' '), metadataText);
+
     await unloaded.reload();
     assert.equal(await unloaded.locator('article > header > h1').textContent(), heading);
   }
@@ -188,6 +209,8 @@ try {
   assert.equal(await reader.locator('meta[property="og:title"]').getAttribute('content'), 'Publishing a note | Fieldnotes');
   assert.ok((await reader.locator('script[type="application/ld+json"]').textContent()).includes('Publishing a note'));
   await reader.goBack(); await reader.waitForURL(`${origin}${urlFor('Getting started')}`);
+  await reader.waitForFunction(() => document.querySelector('article h1')?.textContent === 'Getting started');
+  assert.equal((await reader.locator('.reader-metadata').innerText()).replace(/\s+/g, ' '), metadataText);
   await reader.waitForFunction(() => document.querySelector('article h1').textContent === 'Getting started');
   await reader.goForward(); await reader.waitForURL(publishingURL);
   await reader.waitForFunction(() => document.querySelector('article h1').textContent === 'Publishing a note');

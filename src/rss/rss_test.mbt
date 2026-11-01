@@ -877,3 +877,14 @@ test "Atom entry URLs remove repeated trailing base slashes" {
   )
   assert_false(feed.contains("https://example.test/wiki//"))
 }
+
+///|
+test "authored updated dates change modification metadata without changing publication" {
+  let dates = Map([("/posts/first-post/", "2026-02-03")])
+  let atom = @rss.render_feed("Site", "https://example.test", test_pages(), None, updated_dates=dates)
+  assert_true(atom.contains("<updated>2026-02-03T00:00:00Z</updated>"))
+  assert_true(atom.contains("<published>2024-01-15T00:00:00Z</published>"))
+  let json = @rss.render_json_feed_from_pages("Site", "https://example.test", test_pages(), None, "/feed.json", updated_dates=dates)
+  assert_true(json.contains("\"date_modified\": \"2026-02-03T00:00:00Z\""))
+  assert_true(json.contains("\"date_published\": \"2024-01-15T00:00:00Z\""))
+}

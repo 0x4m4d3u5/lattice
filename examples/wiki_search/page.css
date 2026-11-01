@@ -57,3 +57,9 @@ article [id] { scroll-margin-top: 6rem; }
   article .section-permalink, article .code-copy-controls { display: none; }
   article :is(h2, h3, h4, h5, h6):has(> .section-permalink) { padding-inline-end: 0; }
 }
+
+/* Authored metadata stays in normal reading order, including without scripts. */
+.reader-metadata { display: flex; flex-wrap: wrap; align-items: baseline; gap: .35rem 1rem; margin: var(--space-md) 0; color: var(--text-metadata); font: .875rem/1.6 var(--font-interface); }
+.reader-metadata > * { min-width: 0; overflow-wrap: anywhere; }
+.reader-tags { display: inline-flex; flex-wrap: wrap; gap: .25em .6em; }
+.backlinks:target { scroll-margin-top: 6rem; }

@@ -338,3 +338,11 @@ provided by an included partial follows the same rule.
 Partials may still be shared between a page and its layout, or included multiple
 times in separate branches. Failed template loading preserves the last successful
 output, cache and manifest.
+
+`{{reader_metadata}}` renders the optional authored dates, tag links and backlink
+shortcut used by the bundled reader. Include it once in the article header and
+retain `{{?backlinks}}{{backlinks}}{{/?backlinks}}` for the destination. The builder
+selects a backlink ID that does not collide with emitted IDs; if the backlink
+section is omitted or repeated, its shortcut is omitted. See
+[authored reader metadata](wiki-search-page.md#authored-reader-metadata) for date
+semantics. This slot is empty for generated index/error views.
