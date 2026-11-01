@@ -86,3 +86,18 @@ presentation. It never calls `OutputPlan::publish` and does not change `build`,
 
 Compare two saved JSON inventories with [`inventory-diff`](inventory-comparison.md)
 to review planned HTML path additions/removals without inferring moves or anchors.
+
+## Verified HTML targets
+
+CLI JSON inventories add an optional `fragments` member to final planned HTML
+entries. It contains sorted unique IDs/legacy anchor names from the actual final
+HTML, or `null` when the scanner cannot establish the set. Excluded/non-HTML
+entries omit it. An empty array is known empty; absent legacy metadata is unknown.
+See [inventory comparison](inventory-comparison.md#published-fragment-changes)
+for scope and interpretation. Text inventories list the same metadata.
+
+The existing `PublicationInventory`/`InventoryEntry` records and `inventory` API
+remain intact. `inventory_with_fragments(config)` returns the inventory plus a
+map of output-relative paths to optional target arrays. Pass that map as the
+optional `fragments` argument to either inventory formatter. Without it, the
+existing formatters retain their original output.
