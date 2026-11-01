@@ -24,7 +24,7 @@ test "local URLs resolve from published routes and mounted base paths" {
   )
   assert_eq(
     local_link_destination("../target%2Findex.html", "/notes/source/", ""),
-    Err("encoded separators, backslashes and NUL are not supported"),
+    Err("encoded separators, backslashes and control characters are not supported"),
   )
   for
     url in [

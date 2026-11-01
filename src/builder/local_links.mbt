@@ -23,8 +23,8 @@ fn local_link_path(path : String) -> Result[String, String] {
     }
     if segment.contains("/") ||
       segment.contains("\\") ||
-      segment.contains("\u0000") {
-      return Err("encoded separators, backslashes and NUL are not supported")
+      segment.iter().any(c => c.is_ascii_control()) {
+      return Err("encoded separators, backslashes and control characters are not supported")
     }
     match segment {
       "" | "." => ()

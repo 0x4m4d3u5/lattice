@@ -35,6 +35,7 @@ const invalid = [
  ['../target.md', 'not in the publication plan'],
  ['../bad%ZZ/', 'malformed percent'],
  ['../target%2findex.html', 'encoded separators'],
+ ['../target%09/', 'control characters'],
 ];
 for (const [url, message] of invalid) {
  put('source', `[Broken](${url})`);

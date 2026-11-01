@@ -6,7 +6,7 @@ lattice check --local-links --format json
 lattice build --strict-local-links
 ```
 
-These opt-ins validate ordinary Markdown link destinations against the complete
+These opt-ins validate link destinations parsed by Lattice’s Markdown renderer against the complete
 publication plan. Defaults remain unchanged. `check` writes nothing; a strict
 build rejects errors before writing output, cache or manifest. Strict builds
 prepare every page even with a warm cache; the option also applies to watch
