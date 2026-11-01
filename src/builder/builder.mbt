@@ -560,6 +560,7 @@ priv struct ProcessedDocument {
   section_fragments : Map[Int, String]
   section_offsets : Array[Int?]
   wikilink_blocks : Array[(String, Int, Int)]
+  published_wikilink_blocks : Map[Int, Bool]
   resolved_links : Array[@wikilink.ResolvedWikilink]
   tags : Array[@tags.TagRef]
 }
@@ -3643,6 +3644,7 @@ fn process_document(
         section_fragments: Map([]),
         section_offsets: [],
         wikilink_blocks: [],
+        published_wikilink_blocks: Map([]),
         resolved_links: resolved,
         tags: page_tags,
       }),
@@ -3666,6 +3668,9 @@ fn process_document(
       rendered_body_no_h1(markdown_result.html, leading_h1_end).length(),
     ),
   )
+  add_backlink_slot_offsets(slot_offsets, wikilink_blocks, sections.length(),
+    markdown_result.html.length() - rendered_body_no_h1(markdown_result.html, leading_h1_end).length())
+  let mut published_wikilink_blocks : Map[Int, Bool] = Map([])
   let mut section_fragments : Map[Int, String] = Map([])
   if markdown_result.shortcode_errors.length() > 0 {
     let mut si = 0
@@ -3804,7 +3809,7 @@ fn process_document(
             rendered_offsets=emitted,
           ) {
           Ok(html) => {
-            let candidates = section_fragment_candidates(html, emitted)
+            let candidates = section_fragment_candidates(html, emitted.filter(origin => origin.0 < sections.length()))
             let published = bind_backlink_shortcut(
               @html.inject_head_markup(
                 html,
@@ -3813,6 +3818,7 @@ fn process_document(
               backlink_count,
             )
             if render_url == url {
+              published_wikilink_blocks = backlink_origin_blocks(html, emitted, sections.length())
               section_fragments = unique_section_fragments(
                 published, candidates,
               )
@@ -3842,7 +3848,8 @@ fn process_document(
           }
         })
         if render_url == url {
-          section_fragments = section_fragment_candidates(html, emitted)
+          published_wikilink_blocks = backlink_origin_blocks(html, emitted, sections.length())
+          section_fragments = section_fragment_candidates(html, emitted.filter(origin => origin.0 < sections.length()))
         }
         Ok(bind_backlink_shortcut(html, backlink_count))
       }
@@ -3922,6 +3929,7 @@ fn process_document(
       section_fragments,
       section_offsets,
       wikilink_blocks,
+      published_wikilink_blocks,
       resolved_links: resolved,
       tags: page_tags,
     }),
@@ -4293,6 +4301,9 @@ fn process_document_for_lint(
       rendered_body_no_h1(markdown_result.html, leading_h1_end).length(),
     ),
   )
+  add_backlink_slot_offsets(slot_offsets, wikilink_blocks, sections.length(),
+    markdown_result.html.length() - rendered_body_no_h1(markdown_result.html, leading_h1_end).length())
+  let mut published_wikilink_blocks : Map[Int, Bool] = Map([])
   let mut section_fragments : Map[Int, String] = Map([])
   i = 0
   while i < markdown_result.shortcode_errors.length() {
@@ -4424,7 +4435,8 @@ fn process_document_for_lint(
           rendered_offsets=emitted,
         ) {
         Ok(html) => {
-          section_fragments = section_fragment_candidates(html, emitted)
+          section_fragments = section_fragment_candidates(html, emitted.filter(origin => origin.0 < sections.length()))
+          published_wikilink_blocks = backlink_origin_blocks(html, emitted, sections.length())
           html
         }
         Err(e) => {
@@ -4469,7 +4481,8 @@ fn process_document_for_lint(
           emitted.push((index, offset + toc_html.length() + start))
         }
       })
-      section_fragments = section_fragment_candidates(html, emitted)
+      section_fragments = section_fragment_candidates(html, emitted.filter(origin => origin.0 < sections.length()))
+      published_wikilink_blocks = backlink_origin_blocks(html, emitted, sections.length())
       html
     }
   }
@@ -4491,6 +4504,7 @@ fn process_document_for_lint(
       section_fragments,
       section_offsets,
       wikilink_blocks,
+      published_wikilink_blocks,
       resolved_links: resolved,
       tags: page_tags,
     }),

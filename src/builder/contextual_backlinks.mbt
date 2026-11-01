@@ -1,4 +1,34 @@
 ///|
+/// Reuse the template's verbatim-slot provenance, with block IDs after section IDs.
+fn add_backlink_slot_offsets(
+  slots : Map[@template.TemplateSlot, Array[(Int, Int)]],
+  blocks : Array[(String, Int, Int)],
+  section_count : Int,
+  cut : Int,
+) -> Unit {
+  for slot in [@template.Content, @template.Body, @template.BodyNoH1] {
+    let offsets = slots.get(slot).unwrap_or([]).copy()
+    let trim = if slot == @template.BodyNoH1 { cut } else { 0 }
+    for i = 0; i < blocks.length(); i = i + 1 {
+      let (_, start, _) = blocks[i]
+      if start >= trim { offsets.push((section_count + i, start - trim)) }
+    }
+    slots.set(slot, offsets)
+  }
+}
+
+///|
+fn backlink_origin_blocks(html : String, origins : Array[(Int, Int)], section_count : Int) -> Map[Int, Bool] {
+  let active : Map[Int, Bool] = Map([])
+  let _ = published_html_fragments(html, on_tag=fn(offset, _, _, _) { active.set(offset, true) })
+  let result : Map[Int, Bool] = Map([])
+  for (index, offset) in origins {
+    if index >= section_count && active.contains(offset) { result.set(index - section_count, true) }
+  }
+  result
+}
+
+///|
 /// A context is selected only from a renderer-origin block retained verbatim in
 /// the final source page. No source Markdown or template-only text is quoted.
 fn backlink_context(
@@ -6,7 +36,9 @@ fn backlink_context(
   target_url : String,
   page_index : Map[String, String],
 ) -> (String, String?)? {
-  for (target, start, end) in doc.wikilink_blocks {
+  for i = 0; i < doc.wikilink_blocks.length(); i = i + 1 {
+    if !doc.published_wikilink_blocks.contains(i) { continue }
+    let (target, start, end) = doc.wikilink_blocks[i]
     if page_index.get(@wikilink.lookup_key(target)) != Some(target_url) { continue }
     let block = doc.content_html[start:end].to_owned()
     let occurrences = doc.html.split(block).collect()
@@ -25,7 +57,7 @@ fn backlink_context(
     if !active { continue }
     // These raw-text contexts are not suitable reader excerpts.
     let lower = block.to_lower()
-    if ["<script", "<style", "<template", "<textarea", "<noscript"].any(tag => lower.contains(tag)) { continue }
+    if ["<script", "<style", "<template", "<textarea", "<noscript", "<iframe", "<xmp", "<noembed", "<noframes", "<plaintext", "<select", "<title"].any(tag => lower.contains(tag)) { continue }
     let text = @strutil.strip_html_tags(block).trim().to_owned()
     if text == "" { continue }
     let mut section : Int? = None

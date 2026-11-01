@@ -39,6 +39,14 @@ put('source','## Why\n[[target]] '+ '🌱'.repeat(200) + ' & <b>tail</b>');run()
 // Footnote references retain canonical navigation but cannot quote appended template content.
 put('source','Text[^note].\n\n[^note]: Footnote [[target]] reason.');run();html=read();assert.match(html,/href="\/notes\/source\/"/);assert.equal(html.includes('backlink-context'),false);
 put('source','## Restored\nA published [[target]] reference.');run();assert.match(read(),/backlink-context/);
+// Identical template-only HTML is not renderer-origin publication.
+put('source','A [[target]] reference.');
+writeFileSync(join(root,'templates/page.html'),template.replace('{{body_no_h1}}','<p>A <a href="/notes/target/">target</a> reference.</p>\n'));run();assert.equal(read().includes('backlink-context'),false);
+writeFileSync(join(root,'templates/page.html'),template);
+for(const tag of ['iframe','xmp','noembed','noframes','textarea','noscript']) {
+ put('source',`Before <${tag}>[[target]]</${tag}>.`);run();assert.equal(read().includes('backlink-context'),false,tag);
+}
+put('source','## Restored\nA published [[target]] reference.');run();assert.match(read(),/backlink-context/);
 // A final static owner replaces the referrer; neither its private body nor link survives.
 writeFileSync(join(root,'site.cfg'),readFileSync(join(root,'site.cfg'),'utf8')+'static_dir = notes\n');mkdirSync(join(root,'content/notes/source'),{recursive:true});writeFileSync(join(root,'content/notes/source/index.html'),'<p>Replacement</p>');run();html=read();assert.equal(html.includes('backlink-context'),false);assert.equal(html.includes('Backlinks (1)'),false);
 console.log('Contextual backlinks: aliases, first retained block, nested references, escaping, draft/overwrite exclusion, omitted body and cached/forced parity passed');
