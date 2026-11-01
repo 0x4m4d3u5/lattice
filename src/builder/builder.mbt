@@ -6920,6 +6920,21 @@ fn prepare_output(
           )
       }
     }
+    let public_graph = graph_pages.filter(page => !overwritten.contains(page.url))
+    if graph_slot is Some(slot) {
+      let (path, _) = output.files[slot]
+      output.files[slot] = (path, Text(@graph.render_graph_json(public_graph)))
+    }
+    let local_graphs = if backlink_documents.values().any(doc => doc.html.contains("<!--lattice-local-graph-->")) { @graph.local_views(public_graph) } else { Map([]) }
+    // Retain prepared canonical HTML even when publication skips its disk write.
+    let publication_html : Map[String, String] = Map([])
+    for (url, doc) in backlink_documents { if !overwritten.contains(url) { publication_html.set(url, doc.html) } }
+    let context_skips = finalize_contextual_backlinks(
+      output, backlink_documents, backlink_sources, backlink_index, related_notes, local_graphs,
+      published_page_index, overwritten, source_output_marks, dropped_slots,
+      publication_html,
+      cache_store, next_cache_store, messages, config.force_rebuild || incremental.force_full_rebuild,
+    )
     if content_index_slot is Some(slot) {
       let (path, _) = output.files[slot]
       output.files[slot] = (
@@ -6933,21 +6948,11 @@ fn prepare_output(
             fragments=content_fragments_by_url,
             aliases=content_aliases_by_url,
             updated_dates~,
+            publication_digests=publication_html.map(fn(_, html) { publication_digest(html) }),
           ),
         ),
       )
     }
-    let public_graph = graph_pages.filter(page => !overwritten.contains(page.url))
-    if graph_slot is Some(slot) {
-      let (path, _) = output.files[slot]
-      output.files[slot] = (path, Text(@graph.render_graph_json(public_graph)))
-    }
-    let local_graphs = if backlink_documents.values().any(doc => doc.html.contains("<!--lattice-local-graph-->")) { @graph.local_views(public_graph) } else { Map([]) }
-    let context_skips = finalize_contextual_backlinks(
-      output, backlink_documents, backlink_sources, backlink_index, related_notes, local_graphs,
-      published_page_index, overwritten, source_output_marks, dropped_slots,
-      cache_store, next_cache_store, messages, config.force_rebuild || incremental.force_full_rebuild,
-    )
     rebuilt = rebuilt - context_skips
     unchanged = unchanged + context_skips
     if cache_slot is Some(slot) {

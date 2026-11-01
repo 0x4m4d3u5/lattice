@@ -143,6 +143,7 @@ fn finalize_contextual_backlinks(
   overwritten : Map[String, Bool],
   marks : Map[String, (String, Int)],
   dropped : Map[Int, Bool],
+  publication_html : Map[String, String],
   cache : @cache.CacheStore,
   next_cache : @cache.CacheStore,
   messages : Array[String],
@@ -173,6 +174,9 @@ fn finalize_contextual_backlinks(
       }
       let path = output.files[i].0
       output.files[i] = (path, Text(final_html))
+      if !overwritten.contains(url) && marks.get(url) is Some((canonical_path, _)) && path == canonical_path {
+        publication_html.set(url, final_html)
+      }
       // Only collection pages participate in this cache. Root/standalone pages
       // have no remembered entry, and root aliases must remain separate writes.
       if marks.get(url) is Some((canonical_path, _)) && path == canonical_path && @cache.lookup(next_cache, slug) is Some(_) {
