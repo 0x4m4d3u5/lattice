@@ -382,3 +382,11 @@ test "sitemap locations remove repeated trailing base slashes" {
   )
   assert_false(xml.contains("https://example.test/wiki//"))
 }
+
+///|
+test "authored updated dates override publication lastmod without a clock" {
+  let sitemap = @sitemap.render_sitemap("https://example.test", test_pages(), updated_dates=Map([("/posts/first-post/", "2026-02-03")]))
+  assert_true(sitemap.contains("<lastmod>2026-02-03</lastmod>"))
+  assert_false(sitemap.contains("<lastmod>2024-01-15</lastmod>"))
+  assert_true(sitemap.contains("<lastmod>2024-02-20</lastmod>"))
+}

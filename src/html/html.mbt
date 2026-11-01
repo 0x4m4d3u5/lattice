@@ -282,7 +282,7 @@ fn write_json_int_field_html(
 }
 
 ///|
-fn render_blog_posting_json_ld(data : BlogPostingData) -> String {
+fn render_blog_posting_json_ld(data : BlogPostingData, date_modified : String?) -> String {
   let buf = StringBuilder()
   buf.write_string("{")
   let mut wrote_field = false
@@ -324,6 +324,10 @@ fn render_blog_posting_json_ld(data : BlogPostingData) -> String {
       wrote_field = write_json_field_html(
         buf, true, "  ", "datePublished", date,
       )
+    None => ()
+  }
+  match date_modified {
+    Some(date) => wrote_field = write_json_field_html(buf, true, "  ", "dateModified", date)
     None => ()
   }
   match data.image {
@@ -453,23 +457,23 @@ fn render_website_json_ld(data : WebSiteData) -> String {
 }
 
 ///|
-fn render_structured_data_json(data : StructuredData) -> String {
+fn render_structured_data_json(data : StructuredData, date_modified : String?) -> String {
   match data {
-    BlogPosting(v) => render_blog_posting_json_ld(v)
+    BlogPosting(v) => render_blog_posting_json_ld(v, date_modified)
     BreadcrumbList(v) => render_breadcrumb_list_json_ld(v)
     WebSite(v) => render_website_json_ld(v)
   }
 }
 
 ///|
-pub fn render_structured_data_script(items : Array[StructuredData]) -> String {
+pub fn render_structured_data_script(items : Array[StructuredData], date_modified? : String? = None) -> String {
   if items.length() == 0 {
     return ""
   }
   let buf = StringBuilder()
   buf.write_string("  <script type=\"application/ld+json\">\n")
   if items.length() == 1 {
-    buf.write_string(render_structured_data_json(items[0]))
+    buf.write_string(render_structured_data_json(items[0], date_modified))
   } else {
     buf.write_string("[\n")
     let mut i = 0
@@ -477,7 +481,7 @@ pub fn render_structured_data_script(items : Array[StructuredData]) -> String {
       if i > 0 {
         buf.write_string(",\n")
       }
-      let json = render_structured_data_json(items[i])
+      let json = render_structured_data_json(items[i], date_modified)
       let mut j = 0
       while j < json.length() {
         if j == 0 || @strutil.char_at(json, j - 1) == '\n' {
@@ -541,10 +545,12 @@ pub fn render_feed_link_tag(title : String, feed_url : String) -> String {
 /// `meta.stylesheet` renders as a `<link rel="stylesheet">` tag.
 /// `body_html` is injected verbatim between `<body>` and `</body>`.
 /// The optional callback receives its UTF-16 insertion offset.
+/// date_modified applies only to BlogPosting JSON-LD, not site/breadcrumb metadata.
 pub fn render_page(
   meta : PageMeta,
   body_html : String,
   body_offset? : (Int) -> Unit = fn(_) { () },
+  date_modified? : String? = None,
 ) -> String {
   let lang = if meta.lang.length() > 0 { meta.lang } else { "en" }
   let desc_tag = match meta.description {
@@ -635,7 +641,7 @@ pub fn render_page(
     None => ""
   }
   let structured_data_script = render_structured_data_script(
-    meta.structured_data,
+    meta.structured_data, date_modified~,
   )
   let prefix = "<!doctype html>\n" +
     "<html lang=\"" +

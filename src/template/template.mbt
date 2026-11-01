@@ -2,6 +2,7 @@
 pub(all) enum TemplateSlot {
   Title
   PageTitle
+  ReaderMetadata
   Content
   Date
   Description
@@ -43,6 +44,7 @@ pub impl Show for TemplateSlot with fn output(self, logger) {
   match self {
     Title => logger.write_string("Title")
     PageTitle => logger.write_string("PageTitle")
+    ReaderMetadata => logger.write_string("ReaderMetadata")
     Content => logger.write_string("Content")
     Date => logger.write_string("Date")
     Description => logger.write_string("Description")
@@ -338,6 +340,9 @@ fn apply_filters(value : String, filters : Array[Filter]) -> String {
 
 ///|
 fn slot_from_name(name : String) -> Result[TemplateSlot, TemplateError] {
+  if name == "reader_metadata" {
+    return Ok(ReaderMetadata)
+  }
   if name == "page_title" {
     return Ok(PageTitle)
   }

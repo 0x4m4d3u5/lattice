@@ -48,9 +48,11 @@ fn normalize_lastmod(raw : String?) -> String? {
 
 ///|
 /// Render a sitemap.xml document from typed graph pages.
+/// Optional authored update dates are keyed by published page URL.
 pub fn render_sitemap(
   base_url : String,
   pages : Array[@graph.GraphPage],
+  updated_dates? : Map[String, String] = Map([]),
 ) -> String {
   let buf = StringBuilder()
   buf.write_string("<?xml version=\"1.0\" encoding=\"utf-8\"?>\n")
@@ -66,7 +68,11 @@ pub fn render_sitemap(
     buf.write_string("    <loc>")
     buf.write_string(@strutil.escape_html_body(loc))
     buf.write_string("</loc>\n")
-    match normalize_lastmod(page.date) {
+    let modified = match updated_dates.get(page.url) {
+      Some(value) => Some(value)
+      None => page.date
+    }
+    match normalize_lastmod(modified) {
       Some(lastmod) => {
         buf.write_string("    <lastmod>")
         buf.write_string(@strutil.escape_html_body(lastmod))

@@ -25,7 +25,7 @@ output_dir = dist
 `],
   ['collections.cfg', `[Guides]
 dir = content/guides
-schema = title:String,description:String,tags:Optional[Array[String]]
+schema = title:String,description:String,date:Optional[Date],updated:Optional[Date],tags:Optional[Array[String]]
 `],
   ['content/index.md', `---
 title: Welcome to your wiki

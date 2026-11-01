@@ -21,7 +21,7 @@ test "backlinks list each referring note once across repeated heading targets" {
   )
   assert_true(
     beta.contains(
-      "<section class=\"backlinks\">\n<h2>Backlinks</h2>\n<ul>\n<li><a href=\"/posts/alpha/\">Garden</a></li>\n<li><a href=\"/posts/gamma/\">Garden</a></li>\n</ul>\n</section>\n",
+      "<section class=\"backlinks\" id=\"lattice-backlinks\" tabindex=\"-1\">\n<h2>Backlinks</h2>\n<ul>\n<li><a href=\"/posts/alpha/\">Garden</a></li>\n<li><a href=\"/posts/gamma/\">Garden</a></li>\n</ul>\n</section>\n",
     ),
   )
 }

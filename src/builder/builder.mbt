@@ -511,7 +511,7 @@ fn render_backlinks_html(backlinks : Array[BacklinkRef]) -> String {
     return ""
   }
   let buf = StringBuilder()
-  buf.write_string("<section class=\"backlinks\">\n<h2>Backlinks</h2>\n<ul>\n")
+  buf.write_string("<section class=\"backlinks\" data-lattice-backlinks>\n<h2>Backlinks</h2>\n<ul>\n")
   let mut i = 0
   while i < backlinks.length() {
     let bl = backlinks[i]
@@ -550,6 +550,7 @@ priv struct ProcessedDocument {
   url : String
   description : String?
   date : String?
+  updated : String?
   weight : Int?
   excerpt : String
   content_html : String
@@ -1914,6 +1915,7 @@ fn build_template_slots(
   page_title? : String? = None,
 ) -> Map[@template.TemplateSlot, String] {
   let slots : Map[@template.TemplateSlot, String] = Map([])
+  slots.set(@template.ReaderMetadata, "")
   slots.set(@template.Title, title)
   slots.set(@template.PageTitle, @html.escape_html_body(page_title.unwrap_or(title)))
   slots.set(@template.Content, content)
@@ -2010,6 +2012,11 @@ fn standalone_default_schema(tag_field? : String = "tags") -> @schema.Schema {
       },
       {
         name: "date",
+        field_type: @schema.TOptional(@schema.TDate(None, None)),
+        required: false,
+      },
+      {
+        name: "updated",
         field_type: @schema.TOptional(@schema.TDate(None, None)),
         required: false,
       },
@@ -3410,6 +3417,7 @@ fn process_document(
   prev_post_title : String,
   next_post_url : String,
   next_post_title : String,
+  backlink_count? : Int = 0,
 ) -> BuildDocOutcome {
   let diagnostics : Array[@diagnostic.Diagnostic] = []
   // Step 1: parse frontmatter
@@ -3506,6 +3514,13 @@ fn process_document(
       i = i + 1
     }
   }
+  for (field, message) in updated_date_errors(fm) {
+    has_schema_errors = true
+    diagnostics.push(build_error(
+      Some(source_path), frontmatter_field_line(source, field), None,
+      field + ": " + message,
+    ))
+  }
   // Step 2a: validate TRef cross-references against the page slug index.
   // Runs even when schema errors exist — TRef checks are independent of
   // structural schema validation and catch different classes of problems
@@ -3593,6 +3608,7 @@ fn process_document(
   let title = extract_title(fm)
   let description_value = extract_description(fm)
   let date_value = extract_date(fm)
+  let updated_value = authored_updated(fm)
   let weight_value = extract_weight(fm)
   let author_value = extract_author(fm)
   let og_image_value = extract_og_image(fm)
@@ -3615,6 +3631,7 @@ fn process_document(
         url,
         description: description_value,
         date: date_value,
+        updated: updated_value,
         weight: weight_value,
         excerpt,
         content_html: cache_markdown.html,
@@ -3714,7 +3731,11 @@ fn process_document(
           og_type="website",
           page_title=Some(title),
         )
-        slots.set(@template.BodyNoH1, body_no_h1)
+        slots.set(
+          @template.ReaderMetadata,
+          reader_metadata_html(date_value, updated_value, page_tags, backlink_count),
+        )
+      slots.set(@template.BodyNoH1, body_no_h1)
         slots.set(@template.Backlinks, backlinks_html)
         slots.set(@template.TableOfContents, toc_html)
         slots.set(@template.WordCount, wc.to_string())
@@ -3778,9 +3799,12 @@ fn process_document(
           ) {
           Ok(html) => {
             let candidates = section_fragment_candidates(html, emitted)
-            let published = @html.inject_head_markup(
-              html,
-              @html.render_structured_data_script(structured_data),
+            let published = bind_backlink_shortcut(
+              @html.inject_head_markup(
+                html,
+                @html.render_structured_data_script(structured_data, date_modified=updated_value),
+              ),
+              backlink_count,
             )
             if render_url == url {
               section_fragments = unique_section_fragments(
@@ -3805,7 +3829,7 @@ fn process_document(
           structured_data,
         }
         let emitted : Array[(Int, Int)] = []
-        let html = @html.render_page(meta, page_body, body_offset=fn(offset) {
+        let html = @html.render_page(meta, page_body, date_modified=updated_value, body_offset=fn(offset) {
           for
             (index, start) in slot_offsets.get(@template.Content).unwrap_or([]) {
             emitted.push((index, offset + toc_html.length() + start))
@@ -3814,7 +3838,7 @@ fn process_document(
         if render_url == url {
           section_fragments = section_fragment_candidates(html, emitted)
         }
-        Ok(html)
+        Ok(bind_backlink_shortcut(html, backlink_count))
       }
     }
   }
@@ -3882,6 +3906,7 @@ fn process_document(
       url,
       description: description_value,
       date: date_value,
+      updated: updated_value,
       weight: weight_value,
       excerpt,
       content_html: markdown_result.html,
@@ -4081,6 +4106,7 @@ fn process_document_for_lint(
   prev_post_title : String,
   next_post_url : String,
   next_post_title : String,
+  backlink_count? : Int = 0,
 ) -> LintDocOutcome {
   let violations : Array[@lint.LintViolation] = []
   let fm = match @frontmatter.parse(source) {
@@ -4098,6 +4124,15 @@ fn process_document_for_lint(
     Ok(parsed) => parsed
   }
 
+  for (field, message) in updated_date_errors(fm) {
+    violations.push({
+      path: source_path,
+      line: frontmatter_field_line(source, field),
+      column: None,
+      kind: @lint.SchemaError,
+      message: field + ": " + message,
+    })
+  }
   for v in image_alt_violations(fm.body, source_path, site) {
     violations.push(v)
   }
@@ -4281,6 +4316,7 @@ fn process_document_for_lint(
   let full_title = page_title_builder(title, site.title)
   let description_value = extract_description(fm)
   let date_value = extract_date(fm)
+  let updated_value = authored_updated(fm)
   let weight_value = extract_weight(fm)
   let author_value = extract_author(fm)
   let og_image_value = extract_og_image(fm)
@@ -4309,6 +4345,10 @@ fn process_document_for_lint(
         "",
         site.base_url,
         page_title=Some(title),
+      )
+      slots.set(
+        @template.ReaderMetadata,
+        reader_metadata_html(date_value, updated_value, page_tags, backlink_count),
       )
       slots.set(@template.BodyNoH1, body_no_h1)
       slots.set(@template.Backlinks, backlinks_html)
@@ -4414,7 +4454,7 @@ fn process_document_for_lint(
         toc_html + body_html
       }
       let emitted : Array[(Int, Int)] = []
-      let html = @html.render_page(meta, page_body, body_offset=fn(offset) {
+      let html = @html.render_page(meta, page_body, date_modified=updated_value, body_offset=fn(offset) {
         for (index, start) in slot_offsets.get(@template.Content).unwrap_or([]) {
           emitted.push((index, offset + toc_html.length() + start))
         }
@@ -4425,12 +4465,13 @@ fn process_document_for_lint(
   }
   {
     document: Some({
-      html: page_html,
+      html: bind_backlink_shortcut(page_html, backlink_count),
       root_html: None,
       title,
       url,
       description: description_value,
       date: date_value,
+      updated: updated_value,
       weight: weight_value,
       excerpt,
       content_html: markdown_result.html,
@@ -5253,6 +5294,7 @@ fn prepare_output(
   let mut redirect_count = 0
   let redirect_sources : Array[RedirectSource] = []
   let graph_pages : Array[@graph.GraphPage] = []
+  let updated_dates : Map[String, String] = Map([])
   let search_entries : Array[@search.SearchEntry] = []
   let content_entries : Array[@search.ContentEntry] = []
   let content_aliases_by_url : Map[String, Array[String]] = Map([])
@@ -5385,6 +5427,7 @@ fn prepare_output(
         prev_post_title,
         next_post_url,
         next_post_title,
+        backlink_count=backlink_count_for(backlink_index, src.slug),
       )
       let mut diag_idx = 0
       while diag_idx < doc_outcome.diagnostics.length() {
@@ -5523,6 +5566,9 @@ fn prepare_output(
                 }
                 coll_pages.push(page)
                 graph_pages.push(page)
+                if doc.updated is Some(value) {
+                  updated_dates.set(doc.url, value)
+                }
                 add_tagged_page(doc, src.slug, tag_pages_by_slug)
                 let search_tags = doc.tags.map(fn(tag) { tag.value })
                 let collection_name = if coll.definition.name.length() == 0 {
@@ -5633,6 +5679,7 @@ fn prepare_output(
         "",
         "",
         "", // no prev/next for standalone pages
+        backlink_count=backlink_count_for(backlink_index, src.slug),
       )
       let mut diag_idx = 0
       while diag_idx < doc_outcome.diagnostics.length() {
@@ -5699,6 +5746,9 @@ fn prepare_output(
               outgoing: doc.resolved_links,
             }
             graph_pages.push(page)
+            if doc.updated is Some(value) {
+              updated_dates.set(doc.url, value)
+            }
             add_tagged_page(doc, src.slug, tag_pages_by_slug)
             let search_tags = doc.tags.map(fn(tag) { tag.value })
             search_entries.push(
@@ -5787,6 +5837,7 @@ fn prepare_output(
         "",
         "",
         "", // no prev/next for root pages
+        backlink_count=backlink_count_for(backlink_index, src.slug),
       )
       let mut diag_idx = 0
       while diag_idx < doc_outcome.diagnostics.length() {
@@ -5875,6 +5926,9 @@ fn prepare_output(
               outgoing: doc.resolved_links,
             }
             graph_pages.push(page)
+            if doc.updated is Some(value) {
+              updated_dates.set(doc.url, value)
+            }
             add_tagged_page(doc, src.slug, tag_pages_by_slug)
             let search_tags = doc.tags.map(fn(tag) { tag.value })
             search_entries.push(
@@ -5944,6 +5998,7 @@ fn prepare_output(
           config.site.base_url,
           coll.pages,
           config.site.feed_limit,
+          updated_dates~,
         )
         let out_path = coll_dir + "/feed.xml"
         output.write_text(out_path, feed_xml)
@@ -5977,6 +6032,7 @@ fn prepare_output(
           coll.pages,
           config.site.feed_limit,
           json_feed_url,
+          updated_dates~,
         )
         let json_out_path = coll_dir + "/feed.json"
         output.write_text(json_out_path, json_feed)
@@ -6325,6 +6381,7 @@ fn prepare_output(
             config.site.base_url,
             all_feed_pages,
             config.site.feed_limit,
+            updated_dates~,
           )
           let out_path = config.output_dir + "/feed.xml"
           output.write_text(out_path, site_feed_xml)
@@ -6358,6 +6415,7 @@ fn prepare_output(
             all_feed_pages,
             config.site.feed_limit,
             site_json_feed_url,
+            updated_dates~,
           )
           let json_out_path = config.output_dir + "/feed.json"
           output.write_text(json_out_path, site_json_feed)
@@ -6389,6 +6447,7 @@ fn prepare_output(
         let sitemap_xml = @sitemap.render_sitemap(
           config.site.base_url,
           graph_pages,
+          updated_dates~,
         )
         let out_path = config.output_dir + "/sitemap.xml"
         output.write_text(out_path, sitemap_xml)
@@ -6831,6 +6890,7 @@ fn prepare_output(
             content_sections_by_url,
             fragments=content_fragments_by_url,
             aliases=content_aliases_by_url,
+            updated_dates~,
           ),
         ),
       )
@@ -7146,6 +7206,7 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
 
   let source_urls : Map[String, String] = Map([])
   let graph_pages : Array[@graph.GraphPage] = []
+  let updated_dates : Map[String, String] = Map([])
   let tag_pages_by_slug : Map[String, Array[@tags.TaggedPage]] = Map([])
   let rendered_collections : Array[CollectionRenderResult] = []
   i = 0
@@ -7241,6 +7302,7 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
         prev_post_title,
         next_post_url,
         next_post_title,
+        backlink_count=backlink_count_for(backlink_index, src.slug),
       )
       let mut k = 0
       while k < lint_outcome.violations.length() {
@@ -7261,6 +7323,9 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
           }
           coll_pages.push(page)
           graph_pages.push(page)
+          if doc.updated is Some(value) {
+            updated_dates.set(doc.url, value)
+          }
           add_tagged_page(doc, src.slug, tag_pages_by_slug)
         }
         None => ()
@@ -7310,6 +7375,7 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
         "",
         "",
         "",
+        backlink_count=backlink_count_for(backlink_index, src.slug),
       )
       let mut k = 0
       while k < lint_outcome.violations.length() {
@@ -7319,6 +7385,9 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
       match lint_outcome.document {
         Some(doc) => {
           add_tagged_page(doc, src.slug, tag_pages_by_slug)
+          if doc.updated is Some(value) {
+            updated_dates.set(doc.url, value)
+          }
           graph_pages.push({
             slug: src.slug,
             title: doc.title,
@@ -7370,6 +7439,7 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
         "",
         "",
         "",
+        backlink_count=backlink_count_for(backlink_index, src.slug),
       )
       let mut k = 0
       while k < lint_outcome.violations.length() {
@@ -7379,6 +7449,9 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
       match lint_outcome.document {
         Some(doc) => {
           add_tagged_page(doc, src.slug, tag_pages_by_slug)
+          if doc.updated is Some(value) {
+            updated_dates.set(doc.url, value)
+          }
           graph_pages.push({
             slug: src.slug,
             title: doc.title,
@@ -7405,6 +7478,7 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
       config.site.base_url,
       coll.pages,
       config.site.feed_limit,
+      updated_dates~,
     )
     let _json_feed_xml = @rss.render_json_feed_from_pages(
       feed_title,
@@ -7415,6 +7489,7 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
         config.site.base_url,
         "/" + coll.name + "/feed.json",
       ),
+      updated_dates~,
     )
     let paginated_index_pages = paginate_with_optional_size(
       coll.pages,
@@ -7569,6 +7644,7 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
       config.site.base_url,
       all_lint_feed_pages,
       config.site.feed_limit,
+      updated_dates~,
     )
     let _site_json_feed_xml = @rss.render_json_feed_from_pages(
       config.site.title,
@@ -7576,6 +7652,7 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
       all_lint_feed_pages,
       config.site.feed_limit,
       @strutil.absolute_url(config.site.base_url, "/feed.json"),
+      updated_dates~,
     )
   }
 
@@ -7592,7 +7669,7 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
         )
     }
   }
-  let _sitemap_xml = @sitemap.render_sitemap(config.site.base_url, graph_pages)
+  let _sitemap_xml = @sitemap.render_sitemap(config.site.base_url, graph_pages, updated_dates~)
   let static_validation = @assets.check_static(
     config.content_dir,
     static_dir_name(config.site),

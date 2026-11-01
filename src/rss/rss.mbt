@@ -172,7 +172,7 @@ fn sort_pages_for_feed(
 }
 
 ///|
-fn to_feed_item(base_url : String, page : @graph.GraphPage) -> FeedItem {
+fn to_feed_item(base_url : String, page : @graph.GraphPage, updated_dates : Map[String, String]) -> FeedItem {
   let link = @strutil.absolute_url(base_url, page.url)
   let normalized_date = normalize_feed_datetime(page.date)
   {
@@ -181,7 +181,18 @@ fn to_feed_item(base_url : String, page : @graph.GraphPage) -> FeedItem {
     link,
     content_html: page.content_html,
     summary: page.description,
-    updated: normalized_date,
+    updated: match normalize_feed_datetime(updated_dates.get(page.url)) {
+      Some(value) =>
+        // An authored calendar day becomes midnight UTC in feeds. Keep the
+        // publication instant if that midnight is earlier, including offsets
+        // that place publication on the following UTC day.
+        match normalized_date {
+          Some(published) if feed_instant(value) < feed_instant(published) =>
+            normalized_date
+          _ => Some(value)
+        }
+      None => normalized_date
+    },
     published: normalized_date,
   }
 }
@@ -192,6 +203,7 @@ fn build_feed_channel(
   base_url : String,
   pages : Array[@graph.GraphPage],
   limit : Int?,
+  updated_dates : Map[String, String],
 ) -> FeedChannel {
   let sorted_pages = sort_pages_for_feed(pages)
   let items : Array[FeedItem] = []
@@ -201,7 +213,7 @@ fn build_feed_channel(
   }
   let mut i = 0
   while i < count {
-    items.push(to_feed_item(base_url, sorted_pages[i]))
+    items.push(to_feed_item(base_url, sorted_pages[i], updated_dates))
     i = i + 1
   }
 
@@ -322,13 +334,16 @@ fn render_atom(channel : FeedChannel) -> String {
 
 ///|
 /// Render a complete Atom feed XML document from typed graph pages.
+/// Optional authored update dates are keyed by published page URL.
+/// They change modification metadata, not publication dates or ordering.
 pub fn render_feed(
   title : String,
   base_url : String,
   pages : Array[@graph.GraphPage],
   limit : Int?,
+  updated_dates? : Map[String, String] = Map([]),
 ) -> String {
-  let channel = build_feed_channel(title, base_url, pages, limit)
+  let channel = build_feed_channel(title, base_url, pages, limit, updated_dates)
   render_atom(channel)
 }
 
@@ -411,7 +426,8 @@ pub fn render_json_feed_from_pages(
   pages : Array[@graph.GraphPage],
   limit : Int?,
   feed_url : String,
+  updated_dates? : Map[String, String] = Map([]),
 ) -> String {
-  let channel = build_feed_channel(title, base_url, pages, limit)
+  let channel = build_feed_channel(title, base_url, pages, limit, updated_dates)
   render_json_feed(channel, feed_url)
 }

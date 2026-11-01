@@ -59,4 +59,7 @@ echo "Running synthetic vault acceptance"
 moon -C "$MOON_HOME/lib/core" bundle --target wasm-gc --deny-warn &&
   moon build examples/wasm_note --target wasm-gc --deny-warn &&
   node scripts/check-vault-acceptance.mjs || status=1
+
+echo "Running authored reader metadata workflow"
+node scripts/check-reader-metadata.mjs || status=1
 exit "$status"
