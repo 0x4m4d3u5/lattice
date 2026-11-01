@@ -20,7 +20,8 @@ const server = createServer(async (req, res) => {
   res.end(req.url === '/invalid' ? '[{}]' : entry(req.url === '/slow' ? 'obsolete' : req.url.slice(1)));
 });
 await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
-const browser = await chromium.launch({ chromiumSandbox: true });
+const channel = process.env.LATTICE_BROWSER_CHANNEL;
+const browser = await chromium.launch({ chromiumSandbox: true, ...(channel === 'chrome' ? { channel } : {}) });
 try {
   const page = await browser.newPage(); await page.goto(`http://127.0.0.1:${server.address().port}`);
   await page.evaluate(() => {
