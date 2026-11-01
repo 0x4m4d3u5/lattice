@@ -531,3 +531,23 @@ test "ranked snippet selection preserves late winners and duplicate URLs" {
   assert_eq(one[0].snippet, hits[0].snippet)
   assert_eq(@search.retrieve_sections(documents, "needle", [], 0).length(), 0)
 }
+
+///|
+test "prepared search owns decoded input and preserves stateless results" {
+  let index = "[{\"title\":\"Guide\",\"url\":\"/guide/\",\"tags\":[\"Ops\"],\"aliases\":[\"Manual\"],\"sections\":[{\"heading\":\"Restore\",\"body\":\"Restore café backups\",\"fragment\":\"restore\"}]}]"
+  let prepared = @search.prepare_search(index).unwrap()
+  for query in ["restore", "manual", "café", "absent", ""] {
+    for tags in ["[]", "[\"ops\"]", "[\"other\"]", "{", "[1]"] {
+      assert_eq(
+        prepared.search(query, tags, 10),
+        @search.search_content(index, query, tags, 10),
+      )
+    }
+  }
+  assert_true(@search.prepare_search("{") is Err(_))
+  assert_true(@search.prepare_search("[{}]") is Err(_))
+  assert_eq(
+    prepared.search("restore", "[]", 10),
+    @search.search_content(index, "restore", "[]", 10),
+  )
+}

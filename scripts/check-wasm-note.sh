@@ -7,6 +7,7 @@ export PATH="$MOON_HOME/bin:$PATH"
 moon -C "$MOON_HOME/lib/core" bundle --target wasm-gc --deny-warn
 for target in js wasm-gc; do
   moon build examples/wasm_note --target "$target" --deny-warn
+  moon build examples/prepared_search --target "$target" --deny-warn
 done
 node scripts/run-wasm-note.mjs \
   _build/wasm-gc/debug/build/kurisu/lattice/examples/wasm_note/wasm_note.wasm \
@@ -17,3 +18,5 @@ for target in js wasm-gc; do
   moon build examples/local_graph --target "$target" --deny-warn
 done
 node scripts/check-local-graph.mjs
+
+node scripts/check-prepared-search.mjs
