@@ -46,4 +46,9 @@ setSchema(schema);put('source','Guide','related: [first, second]\n');
 writeFileSync(join(root,'site.cfg'),readFileSync(join(root,'site.cfg'),'utf8')+'static_dir = notes\n');mkdirSync(join(root,'content/notes/first'),{recursive:true});writeFileSync(join(root,'content/notes/first/index.html'),'<p>Replacement</p>');run();
 assert.deepEqual([...related(read('source')).matchAll(/href="([^"]+)"/g)].map(m=>m[1]),['/notes/second/']);
 const final=read('source');run();assert.equal(read('source'),final);run('build',['--force']);assert.equal(read('source'),final);
+// A retained root alias is its own output even if its canonical page is replaced.
+writeFileSync(join(root,'site.cfg'),readFileSync(join(root,'site.cfg'),'utf8')+'root_page = source\n');
+mkdirSync(join(root,'content/notes/source'),{recursive:true});writeFileSync(join(root,'content/notes/source/index.html'),'<p>Replaced canonical source</p>');
+run();const homepage=readFileSync(join(root,'dist/index.html'),'utf8');assert.match(related(homepage),/Second choice/);assert.ok(!homepage.includes('<!--lattice-related-notes-->'));assert.equal(related(read('source')),'');
+run();assert.equal(readFileSync(join(root,'dist/index.html'),'utf8'),homepage);run('build',['--force']);assert.equal(readFileSync(join(root,'dist/index.html'),'utf8'),homepage);
 console.log('Authored related notes: typed opt-in, canonical order, escaping, graph separation, draft/overwrite exclusion and rebuild parity passed');

@@ -147,18 +147,26 @@ fn finalize_contextual_backlinks(
   messages : Array[String],
   force : Bool,
 ) -> Int {
+  let last_write : Map[String, Int] = Map([])
+  for i = 0; i < output.files.length(); i = i + 1 {
+    if !dropped.contains(i) { last_write.set(output_path_key(output.files[i].0), i) }
+  }
   let mut skipped = 0
   for i = 0; i < output.files.length(); i = i + 1 {
-    if dropped.contains(i) { continue }
+    if dropped.contains(i) || last_write.get(output_path_key(output.files[i].0)) != Some(i) { continue }
     if output.origins[i] is Page(source) && sources.get(source) is Some((slug, url, context)) &&
-      !overwritten.contains(url) && (index.contains(slug) || related.contains(source)) && output.files[i].1 is Text(html) {
+      (index.contains(slug) || related.contains(source)) && output.files[i].1 is Text(html) {
       let with_related = html.replace_all(old="<!--lattice-related-notes-->", new=related_notes_html(related.get(source).unwrap_or([]), url, documents, page_index, overwritten))
-      let final_html = match index.get(slug) {
-        Some(refs) => {
-          let (items, count) = contextual_backlink_items(refs, url, documents, page_index, overwritten)
-          contextual_backlink_html(with_related, refs, items, count)
+      let final_html = if overwritten.contains(url) {
+        with_related
+      } else {
+        match index.get(slug) {
+          Some(refs) => {
+            let (items, count) = contextual_backlink_items(refs, url, documents, page_index, overwritten)
+            contextual_backlink_html(with_related, refs, items, count)
+          }
+          None => with_related
         }
-        None => with_related
       }
       let path = output.files[i].0
       output.files[i] = (path, Text(final_html))
