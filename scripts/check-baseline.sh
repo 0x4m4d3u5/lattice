@@ -64,4 +64,5 @@ echo "Running authored reader metadata workflow"
 node scripts/check-reader-metadata.mjs || status=1
 node scripts/check-contextual-backlinks.mjs || status=1
 node scripts/check-local-links.mjs || status=1
+node scripts/check-related-notes.mjs || status=1
 exit "$status"

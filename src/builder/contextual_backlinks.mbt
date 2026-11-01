@@ -129,14 +129,15 @@ fn contextual_backlink_html(html : String, refs : Array[BacklinkRef], items : St
 }
 
 ///|
-/// Final ownership is known here. Cache decisions for backlink-bearing collection
-/// pages use the completed HTML, so referring edits and ownership changes cannot
-/// leave stale excerpts while unchanged publications still avoid page writes.
+/// Final ownership is known here. Cache decisions for collection pages with
+/// backlinks or related notes use completed HTML, so referring/target edits and
+/// ownership changes cannot leave stale links while unchanged pages avoid writes.
 fn finalize_contextual_backlinks(
   output : OutputPlan,
   documents : Map[String, ProcessedDocument],
   sources : Map[String, (String, String, String)],
   index : Map[String, Array[BacklinkRef]],
+  related : Map[String, Array[String]],
   page_index : Map[String, String],
   overwritten : Map[String, Bool],
   marks : Map[String, (String, Int)],
@@ -150,9 +151,15 @@ fn finalize_contextual_backlinks(
   for i = 0; i < output.files.length(); i = i + 1 {
     if dropped.contains(i) { continue }
     if output.origins[i] is Page(source) && sources.get(source) is Some((slug, url, context)) &&
-      !overwritten.contains(url) && index.get(slug) is Some(refs) && output.files[i].1 is Text(html) {
-      let (items, count) = contextual_backlink_items(refs, url, documents, page_index, overwritten)
-      let final_html = contextual_backlink_html(html, refs, items, count)
+      !overwritten.contains(url) && (index.contains(slug) || related.contains(source)) && output.files[i].1 is Text(html) {
+      let with_related = html.replace_all(old="<!--lattice-related-notes-->", new=related_notes_html(related.get(source).unwrap_or([]), url, documents, page_index, overwritten))
+      let final_html = match index.get(slug) {
+        Some(refs) => {
+          let (items, count) = contextual_backlink_items(refs, url, documents, page_index, overwritten)
+          contextual_backlink_html(with_related, refs, items, count)
+        }
+        None => with_related
+      }
       let path = output.files[i].0
       output.files[i] = (path, Text(final_html))
       // Only collection pages participate in this cache. Root/standalone pages

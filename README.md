@@ -13,6 +13,8 @@
 
 ---
 
+For editorial reading paths, see [author-selected related notes](docs/related-notes.md).
+
 ## The Problem With Existing SSGs
 
 Every static site generator discovers content errors too late. Hugo renders pages with `page.title` as an empty string. Astro's content layer checks schemas at runtime. Wikilinks to deleted pages become silent 404s. A missing required field doesn't fail the build — it produces wrong output that someone has to catch by eye.

@@ -1919,6 +1919,7 @@ fn build_template_slots(
 ) -> Map[@template.TemplateSlot, String] {
   let slots : Map[@template.TemplateSlot, String] = Map([])
   slots.set(@template.ReaderMetadata, "")
+  slots.set(@template.RelatedNotes, "")
   slots.set(@template.Title, title)
   slots.set(@template.PageTitle, @html.escape_html_body(page_title.unwrap_or(title)))
   slots.set(@template.Content, content)
@@ -3748,6 +3749,7 @@ fn process_document(
         )
       slots.set(@template.BodyNoH1, body_no_h1)
         slots.set(@template.Backlinks, backlinks_html)
+        slots.set(@template.RelatedNotes, related_notes_slot(fm, schema))
         slots.set(@template.TableOfContents, toc_html)
         slots.set(@template.WordCount, wc.to_string())
         slots.set(@template.ReadingTime, reading_time_str(wc))
@@ -4373,6 +4375,7 @@ fn process_document_for_lint(
       )
       slots.set(@template.BodyNoH1, body_no_h1)
       slots.set(@template.Backlinks, backlinks_html)
+      slots.set(@template.RelatedNotes, related_notes_slot(fm, schema))
       slots.set(@template.TableOfContents, toc_html)
       let wc = count_words_markdown(fm.body)
       slots.set(@template.WordCount, wc.to_string())
@@ -5250,6 +5253,7 @@ fn prepare_output(
   let backlink_index = build_backlink_index(
     all_sources_for_backlinks, published_page_index,
   )
+  let related_notes = related_notes_by_source(all_sources_for_backlinks)
   let incremental = build_incremental_state(
     config, collection_sources, collections, messages,
   )
@@ -5479,7 +5483,7 @@ fn prepare_output(
             out_path,
             config.force_rebuild,
           )
-          let should_rebuild = backlink_index.contains(src.slug) || incremental.force_full_rebuild ||
+          let should_rebuild = related_notes.contains(src.path) || backlink_index.contains(src.slug) || incremental.force_full_rebuild ||
             incremental.changed_sources.contains(src.path) ||
             backlink_affected.contains(src.slug) ||
             !cache_hit
@@ -6932,7 +6936,7 @@ fn prepare_output(
       )
     }
     let context_skips = finalize_contextual_backlinks(
-      output, backlink_documents, backlink_sources, backlink_index,
+      output, backlink_documents, backlink_sources, backlink_index, related_notes,
       published_page_index, overwritten, source_output_marks, dropped_slots,
       cache_store, next_cache_store, messages, config.force_rebuild || incremental.force_full_rebuild,
     )

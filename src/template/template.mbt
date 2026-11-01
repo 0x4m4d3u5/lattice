@@ -3,6 +3,7 @@ pub(all) enum TemplateSlot {
   Title
   PageTitle
   ReaderMetadata
+  RelatedNotes
   Content
   Date
   Description
@@ -45,6 +46,7 @@ pub impl Show for TemplateSlot with fn output(self, logger) {
     Title => logger.write_string("Title")
     PageTitle => logger.write_string("PageTitle")
     ReaderMetadata => logger.write_string("ReaderMetadata")
+    RelatedNotes => logger.write_string("RelatedNotes")
     Content => logger.write_string("Content")
     Date => logger.write_string("Date")
     Description => logger.write_string("Description")
@@ -376,6 +378,7 @@ fn slot_from_name(name : String) -> Result[TemplateSlot, TemplateError] {
   if name == "tag_count" {
     return Ok(TagCount)
   }
+  if name == "related_notes" { return Ok(RelatedNotes) }
   if name == "backlinks" {
     return Ok(Backlinks)
   }

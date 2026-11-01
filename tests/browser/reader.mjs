@@ -51,7 +51,7 @@ const copySource = 'let greeting = "café <world> & friends"\n\tprintln(greeting
 writeFileSync(sharingNote, readFileSync(sharingNote, 'utf8') + '\n## Copy an example\n\n```moonbit\n' + copySource + '```\n\n```text\n  keep indentation\n\nlast line\n```\n');
 writeFileSync(join(content, 'punctuation.md'), '---\ntitle: Pipes | Fieldnotes & <notes>\n---\n# Pipes\n\nAuthored punctuation.\n');
 const datedNote = join(content, 'guides/getting-started.md');
-writeFileSync(datedNote, readFileSync(datedNote, 'utf8').replace('title: Getting started', 'title: Getting started\ndate: 2026-01-02\nupdated: 2026-02-03'));
+writeFileSync(datedNote, readFileSync(datedNote, 'utf8').replace('title: Getting started', 'title: Getting started\ndate: 2026-01-02\nupdated: 2026-02-03\nrelated: [publishing-a-note, getting-started, publishing-a-note]'));
 writeFileSync(join(content, 'context-source.md'), '---\ntitle: Context source\ndescription: A referring passage.\n---\n## Why this matters\nUse [[getting-started]] to orient new readers before they search.\n');
 mkdirSync(templates);
 mkdirSync(join(content, 'static'), { recursive: true });
@@ -67,7 +67,7 @@ for (const name of ['page.html', 'wiki-navigation.html']) {
 }
 cpSync(join(templates, 'page.html'), join(templates, 'index.html'));
 const collections = join(root, 'collections.cfg');
-writeFileSync(collections, ['Guides', 'Systems', 'Practices'].map(name => `[${name}]\ndir = ${join(content, name.toLowerCase())}\nschema = title:String,description:String,date:Optional[Date],updated:Optional[Date],tags:Optional[Array[String]]\n`).join('\n'));
+writeFileSync(collections, ['Guides', 'Systems', 'Practices'].map(name => `[${name}]\ndir = ${join(content, name.toLowerCase())}\nschema = title:String,description:String,date:Optional[Date],updated:Optional[Date],tags:Optional[Array[String]],related:Optional[Array[Ref]]\n`).join('\n'));
 const config = join(root, 'site.cfg');
 writeFileSync(config, `wikilink_aliases = true\ntitle = Fieldnotes\nbase_url = https://example.test\ntemplates_dir = ${templates}\ncollections_file = ${collections}\ncontent_index_file = content-index.json\noutput_dir = ${output}\n`);
 run('_build/js/debug/build/kurisu/lattice/cmd/main/main.js', ['build', content, '-c', config, '--collections', collections]);
@@ -134,6 +134,9 @@ try {
   await cold.locator('article h1').waitFor();
   assert.equal(await cold.locator('article h1').textContent(), 'Getting started', 'published heading must not depend on search initialization');
   assert.equal(await cold.title(), 'Getting started | Fieldnotes');
+  assert.equal(await cold.locator('.related-notes a').count(), 1);
+  assert.equal(await cold.locator('.related-notes a').getAttribute('href'), urlFor('Publishing a note'));
+  assert.match(await cold.locator('.related-notes').innerText(), /Selected by the author/);
   const metadataText = (await cold.locator('.reader-metadata').innerText()).replace(/\s+/g, ' ');
   assert.match(metadataText, /Published 2026-01-02/);
   assert.match(metadataText, /Updated 2026-02-03/);
@@ -158,11 +161,24 @@ try {
     assert.equal(await cold.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
     assert.equal(await cold.locator('.reader-metadata').evaluate(element => element.scrollWidth <= element.clientWidth), true);
     assert.equal(await contextItem.evaluate(element => element.scrollWidth <= element.clientWidth), true);
+    assert.equal(await cold.locator('.related-notes').evaluate(element => element.scrollWidth <= element.clientWidth), true);
+    await cold.locator('.related-notes').scrollIntoViewIfNeeded();
+    await save(`related-${width}-200.png`, cold);
     await contextItem.scrollIntoViewIfNeeded();
     await save(`backlinks-${width}-200.png`, cold);
   }
 
   assert.equal(await cold.locator('article h1').textContent(), 'Getting started');
+  await cold.evaluate(() => document.documentElement.style.fontSize = '');
+  await cold.locator('.related-notes').scrollIntoViewIfNeeded();
+  await save('related-desktop.png', cold);
+  const relatedLink = cold.locator('.related-notes a');
+  await relatedLink.focus(); await relatedLink.press('Enter');
+  await cold.waitForFunction(() => document.querySelector('article h1')?.textContent === 'Publishing a note');
+  assert.equal(await cold.locator('.related-notes').count(), 0);
+  await cold.goBack();
+  await cold.waitForFunction(() => document.querySelector('article h1')?.textContent === 'Getting started');
+  assert.equal(await cold.locator('.related-notes a').count(), 1);
   await coldContext.close();
   const plainContext = await browser.newContext({ javaScriptEnabled: false });
   const unloaded = await plainContext.newPage();
@@ -182,6 +198,11 @@ try {
     assert.equal(await unloaded.locator('article > header > h1').textContent(), heading);
   }
   await unloaded.goto(origin + urlFor('Getting started'));
+  assert.equal(await unloaded.locator('.related-notes a').count(), 1);
+  await unloaded.locator('.related-notes a').focus(); await unloaded.locator('.related-notes a').press('Enter');
+  await unloaded.waitForURL('**/publishing-a-note/');
+  assert.equal(await unloaded.locator('.related-notes').count(), 0);
+  await unloaded.goBack();
   const contextualLink = unloaded.locator('.backlinks').getByRole('link', { name: 'Context source', exact: true });
   await contextualLink.focus(); await contextualLink.press('Enter');
   await unloaded.waitForURL('**/context-source/#why-this-matters');
