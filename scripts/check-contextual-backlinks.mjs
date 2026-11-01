@@ -32,6 +32,13 @@ for(const wrapper of ['<!-- {{body_no_h1}} -->','<template>{{body_no_h1}}</templ
 // The source page publishes no Markdown body: retain a page link, expose no excerpt.
 writeFileSync(join(root,'templates/page.html'),'<html><body><h1>{{page_title}}</h1>{{reader_metadata}}{{?backlinks}}{{backlinks}}{{/?backlinks}}</body></html>');run();html=read();assert.match(html,/href="\/notes\/source\/"/);assert.equal(html.includes('backlink-context'),false);
 writeFileSync(join(root,'templates/page.html'),template);run();assert.match(read(),/backlink-context/);
+// Duplicate renderer blocks are ambiguous; skip them and select the next unique occurrence.
+put('source','## First\nRepeated [[target]].\n\nRepeated [[target]].\n\n## Reliable\nUnique [[target]] reason.');run();html=read();assert.match(html,/#reliable/);assert.match(html,/Unique target reason/);assert.equal(html.includes('Repeated target'),false);
+// A long Unicode excerpt is bounded and escapes source text rather than injecting markup.
+put('source','## Why\n[[target]] '+ '🌱'.repeat(200) + ' & <b>tail</b>');run();html=read();const excerpt=html.match(/<p class="backlink-context">(.*?)<\/p>/s)[1];assert.equal([...excerpt].length,181);assert.equal(excerpt.endsWith('…'),true);assert.equal(excerpt.includes('tail'),false);
+// Footnote references retain canonical navigation but cannot quote appended template content.
+put('source','Text[^note].\n\n[^note]: Footnote [[target]] reason.');run();html=read();assert.match(html,/href="\/notes\/source\/"/);assert.equal(html.includes('backlink-context'),false);
+put('source','## Restored\nA published [[target]] reference.');run();assert.match(read(),/backlink-context/);
 // A final static owner replaces the referrer; neither its private body nor link survives.
 writeFileSync(join(root,'site.cfg'),readFileSync(join(root,'site.cfg'),'utf8')+'static_dir = notes\n');mkdirSync(join(root,'content/notes/source'),{recursive:true});writeFileSync(join(root,'content/notes/source/index.html'),'<p>Replacement</p>');run();html=read();assert.equal(html.includes('backlink-context'),false);assert.equal(html.includes('Backlinks (1)'),false);
 console.log('Contextual backlinks: aliases, first retained block, nested references, escaping, draft/overwrite exclusion, omitted body and cached/forced parity passed');

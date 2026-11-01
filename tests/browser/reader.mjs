@@ -52,7 +52,7 @@ writeFileSync(sharingNote, readFileSync(sharingNote, 'utf8') + '\n## Copy an exa
 writeFileSync(join(content, 'punctuation.md'), '---\ntitle: Pipes | Fieldnotes & <notes>\n---\n# Pipes\n\nAuthored punctuation.\n');
 const datedNote = join(content, 'guides/getting-started.md');
 writeFileSync(datedNote, readFileSync(datedNote, 'utf8').replace('title: Getting started', 'title: Getting started\ndate: 2026-01-02\nupdated: 2026-02-03'));
-writeFileSync(join(content, 'guides/context-source.md'), '---\ntitle: Context source\ndescription: A referring passage.\n---\n## Why this matters\nUse [[getting-started]] to orient new readers before they search.\n');
+writeFileSync(join(content, 'context-source.md'), '---\ntitle: Context source\ndescription: A referring passage.\n---\n## Why this matters\nUse [[getting-started]] to orient new readers before they search.\n');
 mkdirSync(templates);
 mkdirSync(join(content, 'static'), { recursive: true });
 mkdirSync(join(content, 'data'));
@@ -157,6 +157,9 @@ try {
     await cold.evaluate(() => document.documentElement.style.fontSize = '200%');
     assert.equal(await cold.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
     assert.equal(await cold.locator('.reader-metadata').evaluate(element => element.scrollWidth <= element.clientWidth), true);
+    assert.equal(await contextItem.evaluate(element => element.scrollWidth <= element.clientWidth), true);
+    await contextItem.scrollIntoViewIfNeeded();
+    await save(`backlinks-${width}-200.png`, cold);
   }
 
   assert.equal(await cold.locator('article h1').textContent(), 'Getting started');
