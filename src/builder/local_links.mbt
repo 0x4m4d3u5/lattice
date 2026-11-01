@@ -5,7 +5,7 @@ fn local_link_base_path(base : String) -> String {
   match base.split_once("://") {
     Some((_, rest)) =>
       match rest.split_once("/") {
-        Some((_, path)) => "/" + path.trim_end(chars="/").to_owned()
+        Some((_, path)) => ("/" + path.to_owned()).trim_end(chars="/").to_owned()
         None => ""
       }
     None =>
@@ -25,6 +25,7 @@ fn local_link_path(path : String) -> Result[String, String] {
     return Err("repeated path separators are not supported")
   }
   let parts : Array[String] = []
+  let mut directory = false
   for raw in path.split("/") {
     let segment = @percent.decode(raw) catch {
       _ => return Err("malformed percent encoding")
@@ -36,6 +37,7 @@ fn local_link_path(path : String) -> Result[String, String] {
         "encoded separators, backslashes and control characters are not supported",
       )
     }
+    directory = segment == "" || segment == "." || segment == ".."
     match segment {
       "" | "." => ()
       ".." => {
@@ -45,13 +47,7 @@ fn local_link_path(path : String) -> Result[String, String] {
     }
   }
   let normalized = "/" + parts.join("/")
-  Ok(
-    if path.has_suffix("/") && normalized != "/" {
-      normalized + "/"
-    } else {
-      normalized
-    },
-  )
+  Ok(if directory && normalized != "/" { normalized + "/" } else { normalized })
 }
 
 ///|

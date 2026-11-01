@@ -24,7 +24,9 @@ test "local URLs resolve from published routes and mounted base paths" {
   )
   assert_eq(
     local_link_destination("../target%2Findex.html", "/notes/source/", ""),
-    Err("encoded separators, backslashes and control characters are not supported"),
+    Err(
+      "encoded separators, backslashes and control characters are not supported",
+    ),
   )
   for
     url in [
@@ -40,5 +42,20 @@ test "publication base paths include root-relative configuration" {
   assert_eq(local_link_base_path("/wiki/"), "/wiki")
   assert_eq(local_link_base_path("https://example.test/wiki/"), "/wiki")
   assert_eq(local_link_base_path("/"), "")
-  assert_eq(local_link_path("/wiki//target/"), Err("repeated path separators are not supported"))
+  assert_eq(
+    local_link_path("/wiki//target/"),
+    Err("repeated path separators are not supported"),
+  )
+}
+
+///|
+test "origin bases and terminal dot segments preserve URL semantics" {
+  assert_eq(local_link_base_path("https://example.test/"), "")
+  for
+    path in [
+      "/static/manual.pdf/.", "/static/manual.pdf/%2e", "/static/manual.pdf/sub/..",
+    ] {
+    assert_eq(local_link_path(path), Ok("/static/manual.pdf/"))
+  }
+  assert_eq(local_link_path("/notes/source/../target/.."), Ok("/notes/"))
 }

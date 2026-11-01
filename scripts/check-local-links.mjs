@@ -28,6 +28,9 @@ put('source', valid);
 const before = snapshot(); ok('check', ['--local-links', '--format', 'json']); assert.deepEqual(snapshot(), before);
 ok('build', ['--strict-local-links']); const built = snapshot(); ok('build', ['--strict-local-links']); assert.deepEqual(snapshot(), built); ok('build', ['--strict-local-links', '--force']); assert.deepEqual(snapshot(), built);
 const invalid = [
+ ['../../static/a%20b.pdf/.', 'not in the publication plan'],
+ ['../../static/a%20b.pdf/%2e', 'not in the publication plan'],
+ ['../../static/a%20b.pdf/sub/..', 'not in the publication plan'],
  ['../missing/', 'not in the publication plan'],
  ['../target/#absent', "fragment 'absent'"],
  ['../draft/#secret', 'not in the publication plan'],
@@ -69,6 +72,8 @@ writeFileSync(join(root, 'templates/page.html'), template);
 const site = readFileSync(join(root, 'site.cfg'), 'utf8');
 writeFileSync(join(root, 'site.cfg'), site.replace('https://example.test/wiki', '/wiki'));
 put('source', '[Mounted](/wiki/notes/target/#visible) [CSS](/wiki/style.css)'); ok('check', ['--local-links']);
+writeFileSync(join(root, 'site.cfg'), site.replace('https://example.test/wiki', 'https://example.test/'));
+put('source', '## Here\n[Self](#here) [Target](../target/#visible) [CSS](/style.css)'); ok('check', ['--local-links']);
 writeFileSync(join(root, 'site.cfg'), site);
 // Retaining style.css must not make arbitrary stale files valid destinations.
 writeFileSync(join(root, 'dist/stale.html'), '<h2 id="old">Old publication</h2>');
