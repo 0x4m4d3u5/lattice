@@ -115,3 +115,12 @@ It compares JS and WASM retrieval against those expectations and checks real
 published citation targets. Negative controls confirm that empty-result behavior,
 choosing only the top ambiguous hit, and accidentally including a draft would be
 detected. No external model evaluates the passages or generates an answer.
+
+## Keep publication pairing separate
+
+New publisher indexes include optional [publication pairing](publication-pairing.md)
+metadata. The example reports a separate `pairing` result from exact HTML response
+bytes. A matching artifact is not proof that the indexed passage appears in it;
+a template may omit that passage. Missing legacy metadata remains unknown.
+The executable refuses mismatched/invalid pairs, while preserving address-only
+legacy operation. Host/CDN HTML transformations may cause mismatches.

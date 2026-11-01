@@ -186,6 +186,7 @@ pub fn render_content_index_with_sections(
   fragments? : Map[String, Map[Int, String]] = Map([]),
   aliases? : Map[String, Array[String]] = Map([]),
   updated_dates? : Map[String, String] = Map([]),
+  publication_digests? : Map[String, String] = Map([]),
 ) -> String {
   render_content_entries(
     entries,
@@ -195,6 +196,7 @@ pub fn render_content_index_with_sections(
     fragments~,
     aliases~,
     updated_dates~,
+    publication_digests~,
   )
 }
 
@@ -207,6 +209,7 @@ fn render_content_entries(
   fragments? : Map[String, Map[Int, String]] = Map([]),
   aliases? : Map[String, Array[String]] = Map([]),
   updated_dates? : Map[String, String] = Map([]),
+  publication_digests? : Map[String, String] = Map([]),
 ) -> String {
   // Generated indexes overwrite authored pages at shared URLs. Do not advertise
   // authored navigation for any entry whose URL is occupied by such an index.
@@ -229,6 +232,11 @@ fn render_content_entries(
       buf.write_string("    \"aliases\": ")
       write_tags(buf, names)
       buf.write_string(",\n")
+    }
+    if !generated_urls.contains(entry.url) && publication_digests.get(entry.url) is Some(digest) {
+      buf.write_string("    \"publication\": {\"version\": 1, \"algorithm\": \"sha256\", \"digest\": ")
+      @strutil.write_json_string(buf, digest)
+      buf.write_string("},\n")
     }
     if !generated_urls.contains(entry.url) && updated_dates.get(entry.url) is Some(value) {
       buf.write_string("    \"updated\": ")

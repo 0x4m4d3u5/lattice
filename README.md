@@ -13,6 +13,8 @@
 
 ---
 
+For exact index/HTML artifact comparison, see [publication pairing](docs/publication-pairing.md).
+
 For editorial reading paths, see [author-selected related notes](docs/related-notes.md).
 
 ## The Problem With Existing SSGs

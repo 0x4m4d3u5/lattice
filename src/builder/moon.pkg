@@ -1,4 +1,5 @@
 import {
+  "moonbitlang/x/crypto" @crypto,
   "moonbitlang/core/encoding/percent" @percent,
   "moonbitlang/core/json" @json,
   "moonbitlang/core/diff" @diff,
