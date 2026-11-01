@@ -25,6 +25,8 @@ export function enhanceLocalGraph() {
   for(const [label,x,y] of [['Left',30,0],['Right',-30,0],['Up',0,30],['Down',0,-30]])button(label,()=>{panX+=x;panY+=y;transform();});
   button('Reset view',()=>{zoom=1;panX=panY=0;transform();if(graph)draw();});
   const select=node=>{status.textContent=`${node.title}${node.url===current?' — current note':''}`;for(const a of layer.querySelectorAll('a'))a.classList.toggle('selected',a.dataset.url===node.url);};
+  on(layer,'focusin',e=>{const slug=e.target.closest('a')?.dataset.slug;const node=graph?.nodes.find(n=>n.slug===slug);if(node)select(node);});
+  on(layer,'pointerover',e=>{const slug=e.target.closest('a')?.dataset.slug;const node=graph?.nodes.find(n=>n.slug===slug);if(node)select(node);});
   let points,drag,ignoreClick=false;
   function draw(){
     layer.replaceChildren();svg.classList.toggle('graph-crowded',graph.nodes.length>12);points=new Map(graph.nodes.map(n=>[n.slug,{...n}]));
@@ -39,7 +41,7 @@ export function enhanceLocalGraph() {
       const circle=document.createElementNS(ns,'circle');circle.setAttribute('r',node.url===current?'8':'6');
       const title=document.createElementNS(ns,'title');title.textContent=node.title;
       const text=document.createElementNS(ns,'text');text.setAttribute('y','-13');text.setAttribute('text-anchor','middle');text.textContent=Array.from(node.title).slice(0,22).join('')+(Array.from(node.title).length>22?'…':'');
-      a.append(title,circle,text);layer.append(a);on(a,'focus',()=>select(node));on(a,'pointerenter',()=>select(node));
+      a.append(title,circle,text);layer.append(a);
     }
     position();transform();select(graph.nodes[0]);
   }

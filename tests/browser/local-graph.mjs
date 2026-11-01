@@ -31,6 +31,7 @@ try{
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
   const before=await page.locator('.graph-canvas > g').getAttribute('transform');await page.getByRole('button',{name:'Zoom in',exact:true}).click();assert.notEqual(await page.locator('.graph-canvas > g').getAttribute('transform'),before);
   await page.getByRole('button',{name:'Right',exact:true}).click();await page.getByRole('button',{name:'Reset view'}).click();assert.equal(await page.locator('.graph-canvas > g').getAttribute('transform'),'translate(0 0) scale(1)');
+  const movable=page.locator('.graph-canvas a').nth(1);const oldPoint=await movable.getAttribute('transform');const box=await movable.locator('circle').boundingBox();await page.mouse.move(box.x+box.width/2,box.y+box.height/2);await page.mouse.down();await page.mouse.move(box.x+box.width/2+24,box.y+box.height/2+18,{steps:5});await page.mouse.up();assert.notEqual(await movable.getAttribute('transform'),oldPoint);assert.equal(new URL(page.url()).pathname,'/guides/getting-started/');
   const link=page.locator('.graph-canvas a').nth(1);await link.focus();await page.waitForFunction(()=>document.querySelector('.graph-canvas a.selected:not([aria-current])'));
   const destination=await link.getAttribute('href');await link.press('Enter');await page.waitForURL(destination);await page.locator('.local-graph summary').click();await page.locator('.graph-canvas a[aria-current="page"]').waitFor();
   assert.equal(new URL(await page.locator('.graph-canvas a[aria-current="page"]').getAttribute('href')).pathname,new URL(destination).pathname);
@@ -40,6 +41,7 @@ try{
   await page.screenshot({path:join(root,`graph-${width}.png`),fullPage:true});await page.close();
  }
  const plain=await browser.newPage({javaScriptEnabled:false,viewport:{width:375,height:800}});await plain.goto(base+'/guides/getting-started/');await plain.locator('.local-graph summary').click();assert.ok(await plain.locator('.graph-links a').count()>0);assert.equal(await plain.locator('.graph-canvas').count(),0);await plain.close();
+ const failed=await browser.newPage();await failed.route('**/graph-worker.js',route=>route.abort());await failed.goto(base+'/guides/getting-started/');await failed.locator('.local-graph summary').click();await failed.getByText('Graph unavailable; use the note links below.').waitFor();await failed.waitForFunction(()=>!document.querySelector('#lattice-controls').disabled);assert.ok(await failed.locator('.graph-links a').count()>0);await failed.close();
  // Final static ownership must remove the authored node and all incident edges.
  const conf=join(site,'content/lattice.conf');writeFileSync(conf,readFileSync(conf,'utf8')+'\nstatic_dir = guides\n');mkdirSync(join(site,'content/guides/neighbor-00'),{recursive:true});writeFileSync(join(site,'content/guides/neighbor-00/index.html'),'<p>Replacement</p>');run(cli,['build'],site);
  const graph=JSON.parse(readFileSync(join(output,'graph.json')));assert.ok(!graph.nodes.some(n=>n.slug==='neighbor-00'||n.slug==='private-node'));assert.ok(!graph.edges.some(e=>e.source==='neighbor-00'||e.target==='neighbor-00'));

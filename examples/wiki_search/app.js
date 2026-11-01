@@ -1,4 +1,5 @@
-import { enhanceLocalGraph } from './graph.js';
+// Optional graph assets must never prevent the existing reader/search startup.
+function enhanceLocalGraph() { import('./graph.js').then(module => module.enhanceLocalGraph()).catch(() => {}); }
 import { installNavigation } from './navigation.js';
 import { buildCatalogue } from './catalogue.js';
 

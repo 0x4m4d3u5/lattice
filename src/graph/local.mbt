@@ -91,12 +91,14 @@ pub fn local_layout(source : String, current : String) -> String {
 pub fn local_views(pages : Array[GraphPage]) -> Map[String, String] {
   let by_slug : Map[String, GraphPage] = Map([])
   let by_url : Map[String, String] = Map([])
+  let outgoing : Map[String, Map[String, Bool]] = Map([])
   let neighbors : Map[String, Map[String, Bool]] = Map([])
-  for page in pages { by_slug.set(page.slug, page); by_url.set(page.url, page.slug); neighbors.set(page.slug, Map([])) }
+  for page in pages { by_slug.set(page.slug, page); by_url.set(page.url, page.slug); neighbors.set(page.slug, Map([])); outgoing.set(page.slug, Map([])) }
   for page in pages {
     for link in page.outgoing {
       let url = match link.url.split_once("#") { Some((url, _)) => url.to_owned(); None => link.url }
       if by_url.get(url) is Some(target) && target != page.slug {
+        outgoing.get(page.slug).unwrap().set(target, true)
         neighbors.get(page.slug).unwrap().set(target, true)
         neighbors.get(target).unwrap().set(page.slug, true)
       }
@@ -108,7 +110,19 @@ pub fn local_views(pages : Array[GraphPage]) -> Map[String, String] {
     adjacent.sort_by((a, b) => a.lexical_compare(b))
     let selected = [page]
     for i = 0; i < adjacent.length() && i < 30; i = i + 1 { selected.push(by_slug.get(adjacent[i]).unwrap()) }
-    let view = @json.parse(local_layout(render_graph_json(selected), page.url)[:]) catch { _ => continue }
+    let nodes = selected.map(node => Json::object(Map([
+      ("slug", Json::string(node.slug)), ("url", Json::string(node.url)), ("title", Json::string(node.title)),
+    ])))
+    let edges : Array[Json] = []
+    for source in selected {
+      for target in selected {
+        if outgoing.get(source.slug).unwrap().contains(target.slug) {
+          edges.push(Json::object(Map([("source", Json::string(source.slug)), ("target", Json::string(target.slug))])))
+        }
+      }
+    }
+    let local = Json::object(Map([("nodes", Json::array(nodes)), ("edges", Json::array(edges))])).stringify()
+    let view = @json.parse(local_layout(local, page.url)[:]) catch { _ => continue }
     if view is Object(fields) {
       fields.set("total", Json::number(adjacent.length().to_double()))
       result.set(page.url, Json::object(fields).stringify())
