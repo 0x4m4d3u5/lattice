@@ -7,4 +7,5 @@ export PATH="$MOON_HOME/bin:$PATH"
 moon -C "$MOON_HOME/lib/core" bundle --target wasm-gc --deny-warn
 moon build examples/wasm_note --target wasm-gc --deny-warn
 moon build cmd/main --target js --deny-warn
+moon build examples/local_graph --target js --deny-warn
 npm test --prefix tests/browser
