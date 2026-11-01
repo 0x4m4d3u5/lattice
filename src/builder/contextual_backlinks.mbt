@@ -138,6 +138,7 @@ fn finalize_contextual_backlinks(
   sources : Map[String, (String, String, String)],
   index : Map[String, Array[BacklinkRef]],
   related : Map[String, Array[String]],
+  local_graphs : Map[String, String],
   page_index : Map[String, String],
   overwritten : Map[String, Bool],
   marks : Map[String, (String, Int)],
@@ -155,7 +156,9 @@ fn finalize_contextual_backlinks(
   for i = 0; i < output.files.length(); i = i + 1 {
     if dropped.contains(i) || last_write.get(output_path_key(output.files[i].0)) != Some(i) { continue }
     if output.origins[i] is Page(source) && sources.get(source) is Some((slug, url, context)) &&
-      (index.contains(slug) || related.contains(source)) && output.files[i].1 is Text(html) {
+      output.files[i].1 is Text(html) && (index.contains(slug) || related.contains(source) || html.contains("<!--lattice-local-graph-->")) {
+      let graph_html = match local_graphs.get(url) { Some(data) => local_graph_html(data); None => "" }
+      let html = html.replace_all(old="<!--lattice-local-graph-->", new=graph_html)
       let with_related = html.replace_all(old="<!--lattice-related-notes-->", new=related_notes_html(related.get(source).unwrap_or([]), url, documents, page_index, overwritten))
       let final_html = if overwritten.contains(url) {
         with_related
