@@ -78,7 +78,7 @@ HTML or server rewriting.
 
 An empty array means no verified targets. Missing metadata in an older snapshot,
 or explicit `null`, means **unknown**. Unsupported parsing contexts (`select`,
-`noscript`, `plaintext`), uncertain entity decoding, whitespace/control-bearing target attributes (the shared
+`noscript`, `plaintext`), uncertain entity decoding (including C1 numeric-reference remapping), whitespace/control-bearing target attributes (the shared
 decoder normalizes whitespace), and non-UTF-8 static HTML
 produce unknown metadata rather than a misleading empty set. The scanner is not
 a full browser DOM parser. Only paths present in both inventories and known on

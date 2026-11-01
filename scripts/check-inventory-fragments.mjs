@@ -17,6 +17,7 @@ source('# Removed title\n\n## Setup\nText.\n\n> ### Nested\n> Detail.\n\n## Repe
 put('content/notes/draft.md','---\ntitle: Draft\ndraft: true\n---\n## Secret\n');
 put('content/static/raw.htm','<h2 id="café:50%">Unicode</h2><a name="legacy"></a><div id="both" name="ignored"></div><a id="same" name="same"></a>');
 put('content/static/spaced.html','<a name="a  b"></a>');
+put('content/static/c1.html','<a name="&#128;"></a>');
 put('content/static/empty.html','<p>No targets</p>');
 put('content/static/invalid.html',Buffer.from([0xff,0xfe]));mkdirSync(join(root,'content/data'));
 const run=(args,status=0)=>{const r=spawnSync(native?cli:process.execPath,[...(native?[]:[cli]),...args],{cwd:root,encoding:'utf8',timeout:30000});assert.equal(r.status,status,r.stdout+r.stderr);return r.stdout;};
@@ -32,6 +33,10 @@ assert.equal(entry(first,'static/spaced.html').fragments,null);
 put('content/static/spaced.html','<a name="a b"></a>');
 assert.equal(entry(inventory(),'static/spaced.html').fragments,null);
 assert.ok(compare(first,inventory()).fragments.unknown.includes('static/spaced.html'));
+assert.equal(entry(first,'static/c1.html').fragments,null);
+put('content/static/c1.html','<a name="€"></a>');
+assert.deepEqual(entry(inventory(),'static/c1.html').fragments,['€']);
+assert.ok(compare(first,inventory()).fragments.unknown.includes('static/c1.html'));
 assert.equal(existsSync(join(root,'dist')),false);
 source('# Removed title\n\n## Install\nText.\n\n> ### Nested\n> Detail.\n\n## Repeat\nOne.\n\n## Repeat\nTwo.');
 const renamed=inventory();let diff=compare(first,renamed);

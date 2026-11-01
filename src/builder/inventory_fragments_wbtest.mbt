@@ -8,6 +8,9 @@ test "inventory captures unique emitted targets and excludes inert or duplicate 
   assert_eq(inventory_html_fragments("<a name='a b'></a>"), None)
   assert_eq(inventory_html_fragments("<div id='a&#32;&#32;b'></div>"), None)
   assert_eq(inventory_html_fragments("<div id=' leading'></div>"), None)
+  assert_eq(inventory_html_fragments("<a name='&#128;'></a>"), None)
+  assert_eq(inventory_html_fragments("<a name='&#x80;'></a>"), None)
+  assert_eq(inventory_html_fragments("<a name='€'></a>"), Some(["€"]))
   assert_eq(inventory_html_fragments("<noscript><h2 id='conditional'>C</h2></noscript>"), None)
 }
 
