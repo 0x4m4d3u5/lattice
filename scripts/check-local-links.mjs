@@ -52,10 +52,16 @@ ok('build'); // Existing permissive publication remains available.
 put('source', 'Text[^note].\n\n[^note]: [Missing](../footnote-missing/)');
 assert.equal(run('check', ['--local-links']).status, 1);
 put('source', '[Draft](../draft/#secret)'); ok('check', ['--local-links', '--drafts']);
-put('source', valid); ok('build', ['--strict-local-links']); assert.deepEqual(snapshot(), built);
+put('source', valid); ok('build', ['--strict-local-links']);
+// A successful edit/rebuild legitimately refreshes native source mtimes. The
+// failure-path snapshots above still compare every byte, including the manifest.
+const repaired = snapshot(); const manifestPath = join(root, 'dist/.lattice-manifest.json');
+assert.deepEqual({ ...repaired, [manifestPath]: built[manifestPath] }, built);
+const manifestContent = hex => { const value = JSON.parse(Buffer.from(hex, 'hex').toString()); return { ...value, entries: value.entries.map(entry => ({ ...entry, mtime: 0 })) }; };
+assert.deepEqual(manifestContent(repaired[manifestPath]), manifestContent(built[manifestPath]));
 // Published output, not Markdown heading guesses, decides whether a fragment exists.
 writeFileSync(join(root, 'templates/page.html'), template.replace('{{body_no_h1}}', '<p>Body omitted.</p>'));
-assert.equal(run('check', ['--local-links']).status, 1); assert.deepEqual(snapshot(), built);
+assert.equal(run('check', ['--local-links']).status, 1); assert.deepEqual(snapshot(), repaired);
 writeFileSync(join(root, 'templates/page.html'), template.replace('<head>', '<head><base href="/elsewhere/">'));
 const base = run('check', ['--local-links']); assert.equal(base.status, 1); assert.match(base.stdout, /base elements/);
 writeFileSync(join(root, 'templates/page.html'), template);
