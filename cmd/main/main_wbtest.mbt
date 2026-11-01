@@ -131,7 +131,7 @@ test "explain_error_code accepts enum name (case-insensitive)" {
 }
 
 ///|
-test "list_error_codes mentions all 13 codes" {
+test "list_error_codes mentions all 14 codes" {
   let listing = list_error_codes()
   assert_true(listing.contains("E001"))
   assert_true(listing.contains("E002"))
@@ -146,6 +146,7 @@ test "list_error_codes mentions all 13 codes" {
   assert_true(listing.contains("E011"))
   assert_true(listing.contains("E012"))
   assert_true(listing.contains("E013"))
+  assert_true(listing.contains("E014"))
   assert_true(listing.contains("MissingRequiredFrontmatter"))
   assert_true(listing.contains("SchemaError"))
   assert_true(listing.contains("FrontmatterError"))

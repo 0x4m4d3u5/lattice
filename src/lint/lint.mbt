@@ -3,6 +3,7 @@ pub(all) enum ViolationType {
   SchemaError
   MissingRequiredFrontmatter
   BrokenWikilink
+  BrokenLocalLink
   DanglingTagReference
   TemplateSlotError
   DataError
@@ -22,6 +23,7 @@ pub impl Show for ViolationType with fn output(self, logger) {
     MissingRequiredFrontmatter =>
       logger.write_string("MissingRequiredFrontmatter")
     BrokenWikilink => logger.write_string("BrokenWikilink")
+    BrokenLocalLink => logger.write_string("BrokenLocalLink")
     DanglingTagReference => logger.write_string("DanglingTagReference")
     TemplateSlotError => logger.write_string("TemplateSlotError")
     DataError => logger.write_string("DataError")
@@ -66,6 +68,7 @@ pub fn violation_type_name(kind : ViolationType) -> String {
     SchemaError => "schema"
     MissingRequiredFrontmatter => "missing_required_field"
     BrokenWikilink => "broken_wikilink"
+    BrokenLocalLink => "broken_local_link"
     DanglingTagReference => "dangling_tag"
     TemplateSlotError => "template_slot"
     DataError => "data"

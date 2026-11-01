@@ -4881,9 +4881,10 @@ pub fn build(
   config : BuildConfig,
   cache_store : @cache.CacheStore,
   strict_wikilinks? : Bool = false,
+  strict_local_links? : Bool = false,
 ) -> BuildResult {
   let output = OutputPlan::new(config.output_dir)
-  let result = prepare_output(config, cache_store, output, strict_wikilinks~)
+  let result = prepare_output(config, cache_store, output, strict_wikilinks~, strict_local_links~)
   if result.errors > 0 {
     return result
   }
@@ -4919,10 +4920,11 @@ fn prepare_output(
   cache_store : @cache.CacheStore,
   output : OutputPlan,
   strict_wikilinks? : Bool = false,
+  strict_local_links? : Bool = false,
 ) -> BuildResult {
   // Strict validation needs every final HTML file in this exact preparation.
   // Incremental skips deliberately omit unchanged authored writes from the plan.
-  let config = if strict_wikilinks {
+  let config = if strict_wikilinks || strict_local_links {
     { ..config, force_rebuild: true }
   } else {
     config
@@ -6944,6 +6946,11 @@ fn prepare_output(
     let image_errors : Array[@lint.LintViolation] = []
     check_image_embeds(all_sources_for_backlinks, config, page_index, output, image_errors)
     for violation in image_errors { diagnostics.push(@diagnostic.of_lint_violation(violation)) }
+    if strict_local_links {
+      let violations : Array[@lint.LintViolation] = []
+      check_output_local_links(all_sources_for_backlinks, source_urls, config, output, violations)
+      for violation in violations { diagnostics.push(@diagnostic.of_lint_violation(violation)) }
+    }
     if strict_wikilinks {
       let violations : Array[@lint.LintViolation] = []
       check_output_wikilinks(
@@ -7003,7 +7010,7 @@ fn prepare_output(
 /// Check structural integrity without writing output files.
 ///
 /// Runs the full two-pass validation pipeline and returns every violation found.
-pub fn check(config : BuildConfig) -> @lint.LintResult {
+pub fn check(config : BuildConfig, local_links? : Bool = false) -> @lint.LintResult {
   let messages : Array[String] = []
   messages.push("[lattice] checking " + config.content_dir)
   let violations : Array[@lint.LintViolation] = []
@@ -7741,6 +7748,7 @@ pub fn check(config : BuildConfig) -> @lint.LintResult {
       output,
     )
     if prepared.errors == 0 {
+      if local_links { check_output_local_links(all_sources_for_backlinks, source_urls, config, output, violations) }
       add_link_suggestions(
         all_sources_for_backlinks, collection_sources, page_index, config, output, violations,
       )

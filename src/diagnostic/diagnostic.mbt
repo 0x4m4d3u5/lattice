@@ -168,6 +168,7 @@ fn code_for_violation(kind : @lint.ViolationType) -> String {
     @lint.SchemaError => "E002"
     @lint.FrontmatterError => "E003"
     @lint.BrokenWikilink => "E004"
+    @lint.BrokenLocalLink => "E014"
     @lint.DanglingTagReference => "E005"
     @lint.TemplateSlotError => "E006"
     @lint.DataError => "E007"
@@ -194,6 +195,7 @@ fn hint_for_violation(kind : @lint.ViolationType) -> String? {
       Some(
         "check that the target file exists and its slug matches the link target",
       )
+    @lint.BrokenLocalLink => Some("use a published URL and an existing HTML fragment; Markdown source paths are not rewritten")
     @lint.DanglingTagReference =>
       Some("ensure the referenced tag has a corresponding tag page template")
     @lint.TemplateSlotError =>
@@ -251,7 +253,7 @@ pub(all) struct DiagnosticFileCount {
 ///
 /// Provides three breakdowns:
 /// - **error_count / warning_count**: totals by severity
-/// - **by_code**: how many diagnostics for each error code (E001–E013)
+/// - **by_code**: how many diagnostics for each error code (E001–E014)
 /// - **by_file**: how many diagnostics per source file
 ///
 /// Used by the build command to emit a structured summary after the
