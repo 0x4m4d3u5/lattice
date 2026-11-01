@@ -2648,6 +2648,17 @@ fn visit_body_inlines(body : String, visit : (Inline) -> Unit) -> Unit {
 }
 
 ///|
+/// Destinations parsed as ordinary Markdown links (including autolinks and footnotes).
+/// Images, code examples, raw HTML and shortcode bodies are not audited here.
+pub fn extract_link_destinations(body : String) -> Array[String] {
+  let targets : Array[String] = []
+  visit_body_inlines(body, fn(inline) {
+    if inline is Link(_, target) { targets.push(target) }
+  })
+  targets
+}
+
+///|
 /// Reserved map key for explicit asset destinations; cannot alias a page target.
 pub fn image_embed_key(target : String) -> String { "![[" + target + "]]" }
 

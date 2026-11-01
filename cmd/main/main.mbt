@@ -27,6 +27,7 @@ pub(all) struct CliOptions {
   check_mode : Bool
   check_json : Bool
   strict_wikilinks : Bool
+  local_links : Bool
   force_rebuild : Bool
   watch_mode : Bool
   watch_interval_ms : Int
@@ -226,6 +227,7 @@ fn build_parser() -> @clap.Parser {
             help="Override collections config file",
           ),
           "drafts": @clap.Arg::flag(help="Include draft posts in the build"),
+          "strict-local-links": @clap.Arg::flag(help="Validate ordinary local Markdown URLs before publishing"),
           "strict-wikilinks": @clap.Arg::flag(
             help="Reject unresolved wiki page and fragment targets before publishing",
           ),
@@ -266,6 +268,7 @@ fn build_parser() -> @clap.Parser {
             help="Override collections config file",
           ),
           "drafts": @clap.Arg::flag(help="Include draft posts in the check"),
+          "local-links": @clap.Arg::flag(help="Audit ordinary local Markdown URLs against the publication plan"),
           "format": @clap.Arg::named(
             nargs=One,
             defaults=["text"],
@@ -534,6 +537,7 @@ fn cli_options_from_clap(
         check_mode: false,
         check_json: false,
         strict_wikilinks: sv.get_flag("strict-wikilinks").unwrap_or(false),
+        local_links: sv.get_flag("strict-local-links").unwrap_or(false),
         force_rebuild,
         watch_mode,
         watch_interval_ms,
@@ -561,6 +565,7 @@ fn cli_options_from_clap(
         check_mode: true,
         check_json,
         strict_wikilinks: false,
+        local_links: sv.get_flag("local-links").unwrap_or(false),
         force_rebuild: false,
         watch_mode,
         watch_interval_ms,
@@ -588,6 +593,7 @@ fn cli_options_from_clap(
         check_mode: false,
         check_json: false,
         strict_wikilinks: false,
+        local_links: false,
         force_rebuild: false,
         watch_mode: true,
         watch_interval_ms: 500,
@@ -605,6 +611,7 @@ fn cli_options_from_clap(
         check_mode: false,
         check_json: false,
         strict_wikilinks: false,
+        local_links: false,
         force_rebuild: false,
         watch_mode: false,
         watch_interval_ms: 500,
@@ -872,10 +879,11 @@ fn run_once(
   check_mode : Bool,
   check_json : Bool,
   strict_wikilinks : Bool,
+  local_links : Bool,
 ) -> Int {
   let start_ms = @watch.current_millis()
   if check_mode {
-    let lint_result = @builder.check(build_config)
+    let lint_result = @builder.check(build_config, local_links~)
     if check_json {
       println(@lint.format_violations_json(lint_result))
       return if @lint.has_violations(lint_result) { 1 } else { 0 }
@@ -920,7 +928,7 @@ fn run_once(
         @cache.empty(build_config.output_dir)
       }
     }
-    let result = @builder.build(build_config, cache_store, strict_wikilinks~)
+    let result = @builder.build(build_config, cache_store, strict_wikilinks~, strict_local_links=local_links)
     // Print accumulated progress messages
     let mut mi = 0
     while mi < result.messages.length() {
@@ -991,6 +999,7 @@ fn run_watch(options : CliOptions, initial_state : CliState) -> Unit {
     options.check_mode,
     options.check_json,
     options.strict_wikilinks,
+    options.local_links,
   )
   if initial_result > 0 {
     println(
@@ -1051,6 +1060,7 @@ fn run_watch(options : CliOptions, initial_state : CliState) -> Unit {
           options.check_mode,
           options.check_json,
           options.strict_wikilinks,
+          options.local_links,
         )
         current_roots = state.watch_roots
         current_source_dirs = state.watch_source_dirs
@@ -1128,6 +1138,7 @@ pub fn list_error_codes() -> String {
   buf.write_string(
     "  E013  ConfigError                 — site configuration is invalid\n",
   )
+  buf.write_string("  E014  BrokenLocalLink             — opt-in local URL audit failed\n")
   buf.write_string("\n")
   buf.write_string(
     "Run `lattice explain <code>` for a full explanation of any code.",
@@ -1139,7 +1150,7 @@ pub fn list_error_codes() -> String {
 /// Return a full human-readable explanation for an error code.
 ///
 /// Accepts:
-///   - "E001" through "E013" (case-insensitive)
+///   - "E001" through "E014" (case-insensitive)
 ///   - Full enum name like "BrokenWikilink" or "broken_wikilink" (case-insensitive)
 ///
 /// Returns None if the code is not recognized.
@@ -1342,6 +1353,13 @@ pub fn explain_error_code(code : String) -> String? {
       "  {{< image src=\"/image.png\" alt=\"\" >}}.\n" +
       "  Image/figure shortcode alt values must be descriptive or exactly empty.\n" +
       "  Code examples, raw HTML, templates and other shortcode bodies are outside this policy.",
+    )
+    "e014" | "brokenlocallink" => Some(
+      "E014  BrokenLocalLink  [error]\n\n" +
+      "  An ordinary local Markdown URL failed the opt-in publication audit.\n" +
+      "  Resolve links from the published page URL, not its Markdown file.\n" +
+      "  Use `check --local-links` for a read-only audit or `build --strict-local-links`\n" +
+      "  to reject missing files/fragments before writes. External URLs are not crawled.\n",
     )
     "e013" | "configerror" =>
       Some(
@@ -1763,6 +1781,7 @@ fn run_main() -> Unit {
     options.check_mode,
     options.check_json,
     options.strict_wikilinks,
+    options.local_links,
   )
   if exit_code > 0 {
     @sys.exit(1)

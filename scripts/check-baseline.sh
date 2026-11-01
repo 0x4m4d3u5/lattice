@@ -63,4 +63,5 @@ moon -C "$MOON_HOME/lib/core" bundle --target wasm-gc --deny-warn &&
 echo "Running authored reader metadata workflow"
 node scripts/check-reader-metadata.mjs || status=1
 node scripts/check-contextual-backlinks.mjs || status=1
+node scripts/check-local-links.mjs || status=1
 exit "$status"
