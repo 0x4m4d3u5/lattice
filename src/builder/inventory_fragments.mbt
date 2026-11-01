@@ -14,7 +14,9 @@ fn inventory_html_fragments(html : String) -> Array[String]? {
     if ["select", "noscript", "plaintext"].contains(tag) { uncertain = true }
     for value in [id, name] {
       if value is Some(value) {
-        if value.contains("&") { uncertain = true }
+        // The shared text decoder collapses attribute whitespace. Do not
+        // advertise its normalized spelling as an actual browser target.
+        if value.contains("&") || value.iter().any(c => c.is_whitespace() || c.is_ascii_control()) { uncertain = true }
         if value != "" && !value.iter().any(c => c.is_ascii_control()) {
           candidates.set(candidates.length(), value)
         }

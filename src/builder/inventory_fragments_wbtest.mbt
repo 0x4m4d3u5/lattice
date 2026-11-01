@@ -4,6 +4,10 @@ test "inventory captures unique emitted targets and excludes inert or duplicate 
   assert_eq(inventory_html_fragments("<h2 id='same'>A</h2><div id='same'></div><h3 id='other'>B</h3>"), Some(["other"]))
   assert_eq(inventory_html_fragments("<p>No emitted targets</p>"), Some([]))
   assert_eq(inventory_html_fragments("<div id='a&unknown;'>A</div>"), None)
+  assert_eq(inventory_html_fragments("<a name='a  b'></a>"), None)
+  assert_eq(inventory_html_fragments("<a name='a b'></a>"), None)
+  assert_eq(inventory_html_fragments("<div id='a&#32;&#32;b'></div>"), None)
+  assert_eq(inventory_html_fragments("<div id=' leading'></div>"), None)
   assert_eq(inventory_html_fragments("<noscript><h2 id='conditional'>C</h2></noscript>"), None)
 }
 

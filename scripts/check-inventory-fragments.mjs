@@ -16,6 +16,7 @@ const source=body=>put('content/notes/guide.md','---\ntitle: Guide\n---\n'+body)
 source('# Removed title\n\n## Setup\nText.\n\n> ### Nested\n> Detail.\n\n## Repeat\nOne.\n\n## Repeat\nTwo.');
 put('content/notes/draft.md','---\ntitle: Draft\ndraft: true\n---\n## Secret\n');
 put('content/static/raw.htm','<h2 id="café:50%">Unicode</h2><a name="legacy"></a><div id="both" name="ignored"></div><a id="same" name="same"></a>');
+put('content/static/spaced.html','<a name="a  b"></a>');
 put('content/static/empty.html','<p>No targets</p>');
 put('content/static/invalid.html',Buffer.from([0xff,0xfe]));mkdirSync(join(root,'content/data'));
 const run=(args,status=0)=>{const r=spawnSync(native?cli:process.execPath,[...(native?[]:[cli]),...args],{cwd:root,encoding:'utf8',timeout:30000});assert.equal(r.status,status,r.stdout+r.stderr);return r.stdout;};
@@ -27,6 +28,10 @@ const first=inventory();const ids=entry(first,'notes/guide/index.html').fragment
 assert.ok(ids.includes('setup'));assert.ok(ids.includes('nested'));assert.ok(ids.includes('repeat-2'));assert.ok(!ids.includes('removed-title'));assert.ok(ids.includes('template-target'));assert.ok(!first.entries.some(e=>e.status==='planned'&&e.path==='notes/draft/index.html'));
 assert.deepEqual(entry(first,'static/raw.htm').fragments,['both','café:50%','legacy','same']);
 assert.deepEqual(entry(first,'static/empty.html').fragments,[]);assert.equal(entry(first,'static/invalid.html').fragments,null);
+assert.equal(entry(first,'static/spaced.html').fragments,null);
+put('content/static/spaced.html','<a name="a b"></a>');
+assert.equal(entry(inventory(),'static/spaced.html').fragments,null);
+assert.ok(compare(first,inventory()).fragments.unknown.includes('static/spaced.html'));
 assert.equal(existsSync(join(root,'dist')),false);
 source('# Removed title\n\n## Install\nText.\n\n> ### Nested\n> Detail.\n\n## Repeat\nOne.\n\n## Repeat\nTwo.');
 const renamed=inventory();let diff=compare(first,renamed);
