@@ -58,4 +58,7 @@ for(const bad of ['2025-12-31','2026-02-30','today','42','[2026-02-03]']){
 writeFileSync(target,source('2026-01-02'));run('build');assert.equal(read('notes/alpha/index.html').includes('Updated <time'),false);
 // A custom template that omits backlinks must not leave an unusable shortcut.
 writeFileSync(join(root,'templates/page.html'),template.replace('{{backlinks}}',''));run('build');assert.equal(read('notes/alpha/index.html').includes('Backlinks (1)'),false);
+for (const wrapper of ['<!-- {{backlinks}} -->', '<template>{{backlinks}}</template>']) {
+ writeFileSync(join(root,'templates/page.html'),template.replace('{{backlinks}}',wrapper));run('build');assert.equal(read('notes/alpha/index.html').includes('Backlinks (1)'),false);
+}
 console.log('Reader metadata: authored dates, validation, cache/rebuild, exports, drafts, tags, canonical backlinks and collision-safe/omitted targets passed');

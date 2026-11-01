@@ -36,3 +36,24 @@ test "backlink shortcut resolves a unique emitted target or disappears" {
     bind_backlink_shortcut(header + marker + marker, 2).contains("href=\"#"),
   )
 }
+
+///|
+test "backlink destinations must be active HTML elements" {
+  let marker = "<section class=\"backlinks\" data-lattice-backlinks>List</section>"
+  let header = reader_metadata_html(None, None, [], 2)
+  for
+    inactive in [
+      "<!-- " + marker + " -->",
+      "<template>" + marker + "</template>",
+      "<script>const html = '" + marker + "';</script>",
+    ] {
+    assert_false(
+      bind_backlink_shortcut(header + inactive, 2).contains("href=\"#"),
+    )
+    let with_active = bind_backlink_shortcut(header + inactive + marker, 2)
+    assert_true(with_active.contains("href=\"#lattice-backlinks\""))
+    assert_true(
+      with_active.contains("id=\"lattice-backlinks\" tabindex=\"-1\""),
+    )
+  }
+}

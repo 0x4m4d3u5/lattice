@@ -118,24 +118,30 @@ fn bind_backlink_shortcut(html : String, count : Int32) -> String {
   }
   let marker = "<section class=\"backlinks\" data-lattice-backlinks>"
   let link = backlink_shortcut(count)
-  if html.split(marker).count() != 2 {
+  let destinations : Array[Int32] = []
+  let ids = published_html_fragments(html, on_tag=fn(start, tag, _, _) {
+    if tag == "section" && @strutil.starts_with(html[start:].to_owned(), marker) {
+      destinations.push(start)
+    }
+  })
+  if destinations.length() != 1 {
     return html
       .replace_all(old=link, new="")
       .replace_all(old="<div class=\"reader-metadata\"></div>", new="")
   }
-  let ids = published_html_fragments(html)
   let mut id = "lattice-backlinks"
   let mut suffix = 2
   while ids.contains(id) {
     id = "lattice-backlinks-" + suffix.to_string()
     suffix = suffix + 1
   }
-  html
-  .replace_all(
-    old=marker,
-    new="<section class=\"backlinks\" id=\"" + id + "\" tabindex=\"-1\">",
-  )
-  .replace_all(
+  let start = destinations[0]
+  let with_target = html[0:start].to_owned() +
+    "<section class=\"backlinks\" id=\"" +
+    id +
+    "\" tabindex=\"-1\">" +
+    html[start + marker.length():].to_owned()
+  with_target.replace_all(
     old=link,
     new="<a href=\"#" + id + "\">Backlinks (" + count.to_string() + ")</a>",
   )
