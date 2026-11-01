@@ -74,7 +74,7 @@ article [id] { scroll-margin-top: 6rem; }
 .graph-tools { display: flex; flex-wrap: wrap; gap: .5rem; margin-block: .75rem; }
 .graph-tools button { min-height: 44px; padding: .4rem .7rem; font: inherit; }
 .graph-canvas { width: 100%; height: min(65vh, 420px); min-height: 280px; touch-action: none; border: 1px solid var(--border-subtle); }
-.graph-canvas line { stroke: currentColor; opacity: .35; stroke-width: 1; }
+.graph-canvas line { stroke: currentColor; opacity: .35; stroke-width: 1; vector-effect: non-scaling-stroke; }
 .graph-canvas circle, .graph-canvas path { fill: currentColor; }
 .graph-canvas a { color: inherit; }
 .graph-canvas text { fill: currentColor; font-size: 12px; }

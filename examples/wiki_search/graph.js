@@ -18,7 +18,7 @@ export function enhanceLocalGraph() {
   const svg=document.createElementNS(ns,'svg');svg.classList.add('graph-canvas');svg.setAttribute('role','group');svg.setAttribute('aria-label','Local authored-link graph. Use note links or the linked list below.');
   const layer=document.createElementNS(ns,'g');svg.append(layer);
   let zoom=1,panX=0,panY=0,extent=180;
-  const transform=()=>{layer.setAttribute('transform',`translate(${panX} ${panY}) scale(${zoom})`);const unit=extent*2/Math.max(1,Math.min(svg.clientWidth,svg.clientHeight))/zoom;for(const text of layer.querySelectorAll('text')){text.style.fontSize=`${14*unit}px`;text.setAttribute('y',String(-14*unit));}};
+  const transform=()=>{layer.setAttribute('transform',`translate(${panX} ${panY}) scale(${zoom})`);const unit=extent*2/Math.max(1,Math.min(svg.clientWidth,svg.clientHeight))/zoom;for(const circle of layer.querySelectorAll('circle'))circle.setAttribute('r',String((circle.parentNode.hasAttribute('aria-current')?8:6)*unit));for(const text of layer.querySelectorAll('text')){text.style.fontSize=`${14*unit}px`;text.setAttribute('y',String(-14*unit));}};
   const button=(label,fn)=>{const b=document.createElement('button');b.type='button';b.textContent=label;on(b,'click',fn);controls.append(b);};
   button('Zoom in',()=>{zoom=Math.min(3,zoom*1.25);transform();});
   button('Zoom out',()=>{zoom=Math.max(.5,zoom/1.25);transform();});
@@ -58,6 +58,7 @@ export function enhanceLocalGraph() {
       worker.postMessage({id,source,current});
     }catch{status.textContent='Graph unavailable; use the note links below.';slot.replaceChildren(status);}
   }
+  on(window,'resize',()=>{if(region.open&&graph)transform();});
   on(region,'toggle',()=>{if(!region.open){worker?.terminate();worker=undefined;started=false;}else start();});
   on(document,'visibilitychange',()=>{if(document.hidden){worker?.terminate();worker=undefined;started=false;}else start();});
   start();

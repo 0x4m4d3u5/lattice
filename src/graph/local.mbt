@@ -121,8 +121,8 @@ pub fn local_views(pages : Array[GraphPage]) -> Map[String, String] {
         }
       }
     }
-    let local = Json::object(Map([("nodes", Json::array(nodes)), ("edges", Json::array(edges))])).stringify()
-    let view = @json.parse(local_layout(local, page.url)[:]) catch { _ => continue }
+    let local_json = Json::object(Map([("nodes", Json::array(nodes)), ("edges", Json::array(edges))])).stringify()
+    let view = @json.parse(local_layout(local_json, page.url)[:]) catch { _ => continue }
     if view is Object(fields) {
       fields.set("total", Json::number(adjacent.length().to_double()))
       result.set(page.url, Json::object(fields).stringify())
