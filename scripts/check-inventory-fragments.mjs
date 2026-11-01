@@ -1,0 +1,56 @@
+import assert from 'node:assert/strict';
+import {mkdtempSync,mkdirSync,writeFileSync,readFileSync,readdirSync,existsSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {join,dirname} from 'node:path';
+import {spawnSync} from 'node:child_process';
+import {fileURLToPath} from 'node:url';
+const native=process.env.LATTICE_NATIVE_CLI;
+const cli=native??fileURLToPath(new URL('../_build/js/debug/build/kurisu/lattice/cmd/main/main.js',import.meta.url));
+const root=mkdtempSync(join(tmpdir(),'lattice-fragment-inventory-'));
+const put=(path,value)=>{mkdirSync(dirname(join(root,path)),{recursive:true});writeFileSync(join(root,path),value);};
+put('site.cfg','title = Fragments\nbase_url = https://example.test/wiki\ntemplates_dir = templates\ncollections_file = collections.cfg\noutput_dir = dist\n');
+put('collections.cfg','[notes]\ndir = content/notes\nschema = title:String\n');
+const template='<html><body><div id="template-target">Template</div>{{body_no_h1}}</body></html>';
+put('templates/page.html',template);put('templates/404.html','<p>Missing</p>');
+const source=body=>put('content/notes/guide.md','---\ntitle: Guide\n---\n'+body);
+source('# Removed title\n\n## Setup\nText.\n\n> ### Nested\n> Detail.\n\n## Repeat\nOne.\n\n## Repeat\nTwo.');
+put('content/notes/draft.md','---\ntitle: Draft\ndraft: true\n---\n## Secret\n');
+put('content/static/raw.htm','<h2 id="café:50%">Unicode</h2><a name="legacy"></a><div id="both" name="ignored"></div><a id="same" name="same"></a>');
+put('content/static/empty.html','<p>No targets</p>');
+put('content/static/invalid.html',Buffer.from([0xff,0xfe]));mkdirSync(join(root,'content/data'));
+const run=(args,status=0)=>{const r=spawnSync(native?cli:process.execPath,[...(native?[]:[cli]),...args],{cwd:root,encoding:'utf8',timeout:30000});assert.equal(r.status,status,r.stdout+r.stderr);return r.stdout;};
+const snapshot=()=>{const result={};for(const e of readdirSync(root,{recursive:true,withFileTypes:true})){const path=join(e.parentPath,e.name);result[path]=e.isFile()?readFileSync(path,'hex'):null;}return result;};
+const inventory=(flags=[])=>{const before=snapshot();const result=JSON.parse(run(['inventory','content','-c','site.cfg','--format','json',...flags]));assert.deepEqual(snapshot(),before);return result;};
+const entry=(data,path)=>data.entries.find(e=>e.path===path&&e.status==='planned');
+const compare=(before,after,format='json',status=0)=>{put('before.json',JSON.stringify(before));put('after.json',JSON.stringify(after));const start=snapshot();const result=run(['inventory-diff','--before','before.json','--after','after.json','--format',format],status);assert.deepEqual(snapshot(),start);return format==='json'?JSON.parse(result):result;};
+const first=inventory();const ids=entry(first,'notes/guide/index.html').fragments;
+assert.ok(ids.includes('setup'));assert.ok(ids.includes('nested'));assert.ok(ids.includes('repeat-2'));assert.ok(!ids.includes('removed-title'));assert.ok(ids.includes('template-target'));assert.ok(!first.entries.some(e=>e.status==='planned'&&e.path==='notes/draft/index.html'));
+assert.deepEqual(entry(first,'static/raw.htm').fragments,['both','café:50%','legacy','same']);
+assert.deepEqual(entry(first,'static/empty.html').fragments,[]);assert.equal(entry(first,'static/invalid.html').fragments,null);
+assert.equal(existsSync(join(root,'dist')),false);
+source('# Removed title\n\n## Install\nText.\n\n> ### Nested\n> Detail.\n\n## Repeat\nOne.\n\n## Repeat\nTwo.');
+const renamed=inventory();let diff=compare(first,renamed);
+assert.deepEqual(diff.added,[]);assert.deepEqual(diff.removed,[]);
+assert.deepEqual(diff.fragments.changes,[{path:'notes/guide/index.html',added:['install'],removed:['setup']}]);
+assert.ok(diff.fragments.unknown.includes('static/invalid.html'));
+assert.match(compare(first,renamed,'text'),/fragment removed "notes\/guide\/index.html" #"setup"/);
+assert.deepEqual(compare(first,renamed),diff);
+run(['build','content','-c','site.cfg']);assert.deepEqual(inventory().entries.filter(e=>e.fragments!==undefined),renamed.entries.filter(e=>e.fragments!==undefined));
+run(['build','content','-c','site.cfg','--force']);assert.deepEqual(inventory().entries.filter(e=>e.fragments!==undefined),renamed.entries.filter(e=>e.fragments!==undefined));
+// Duplicate targets lose verification; template-only and inert fake markup are distinct.
+put('templates/page.html',template.replace('{{body_no_h1}}','<div id="install">Collision</div>{{body_no_h1}}<template><h2 id="inert">Hidden</h2></template><script>"<h2 id=\"fake\">"</script>'));
+const collision=inventory();assert.ok(!entry(collision,'notes/guide/index.html').fragments.includes('install'));assert.ok(!entry(collision,'notes/guide/index.html').fragments.includes('inert'));assert.ok(!entry(collision,'notes/guide/index.html').fragments.includes('fake'));
+assert.deepEqual(compare(renamed,collision).fragments.changes[0].removed,['install']);
+put('templates/page.html',template.replace('{{body_no_h1}}','<p>Omitted body</p>'));assert.deepEqual(entry(inventory(),'notes/guide/index.html').fragments,['template-target']);
+put('templates/page.html',template.replace('{{body_no_h1}}','<noscript>{{body_no_h1}}</noscript>'));assert.equal(entry(inventory(),'notes/guide/index.html').fragments,null);
+put('templates/page.html',template);assert.ok(entry(inventory(['--drafts']),'notes/draft/index.html').fragments.includes('secret'));
+// A final static replacement supplies its own targets, never stale source headings.
+put('site.cfg',readFileSync(join(root,'site.cfg'),'utf8')+'static_dir = notes\n');put('content/notes/guide/index.html','<h2 id="replacement">Replacement</h2>');assert.deepEqual(entry(inventory(),'notes/guide/index.html').fragments,['replacement']);
+// Legacy missing metadata differs from a known empty target set.
+const legacy=structuredClone(first);for(const e of legacy.entries)delete e.fragments;
+const unknown=compare(legacy,renamed);assert.deepEqual(unknown.fragments.changes,[]);assert.equal(unknown.fragments.compared,0);assert.ok(unknown.fragments.unknown.includes('notes/guide/index.html'));
+const empty=structuredClone(first);entry(empty,'notes/guide/index.html').fragments=[];
+assert.deepEqual(compare(first,empty).fragments.changes[0].removed,ids);
+const reordered=structuredClone(first);reordered.entries.reverse();for(const e of reordered.entries)if(Array.isArray(e.fragments))e.fragments.reverse();assert.deepEqual(compare(first,reordered).fragments.changes,[]);
+for(const bad of [true,['duplicate','duplicate'],[42],[''],['bad\n']]){const value=structuredClone(first);entry(value,'notes/guide/index.html').fragments=bad;assert.equal(compare(first,value,'json',1).ready,false);}
+console.log('Inventory fragments: emitted/nested/omitted targets, collisions, static ownership, drafts, Unicode, legacy unknown, deterministic diffs and nonmutation passed');

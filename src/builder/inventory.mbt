@@ -68,6 +68,12 @@ fn OutputPlan::exclude_page(
 /// A fresh cache deliberately lists all intended files, not incremental writes.
 /// Warnings (including broken wikilinks) retain build's policy; use check strictly.
 pub fn inventory(config : BuildConfig) -> PublicationInventory {
+  inventory_with_fragments(config).0
+}
+
+///|
+/// Additive detailed preview; the original inventory API and record stay intact.
+pub fn inventory_with_fragments(config : BuildConfig) -> (PublicationInventory, Map[String, Array[String]?]) {
   let output = OutputPlan::new(config.output_dir)
   let prepared = prepare_output(
     { ..config, force_rebuild: true, },
@@ -90,6 +96,7 @@ pub fn inventory(config : BuildConfig) -> PublicationInventory {
   let ready = prepared.errors == 0 &&
     @diagnostic.count_errors(prepared.diagnostics) == 0
   let entries : Array[InventoryEntry] = []
+  let fragments : Map[String, Array[String]?] = Map([])
   if ready {
     let final_slots : Map[String, Int] = Map([])
     for index, (path, _) in output.files {
@@ -105,8 +112,7 @@ pub fn inventory(config : BuildConfig) -> PublicationInventory {
           _ => "final planned output"
         }
       }
-      entries.push(
-        inventory_entry(
+      let entry = inventory_entry(
           output.root,
           path,
           output.origins[index],
@@ -116,8 +122,18 @@ pub fn inventory(config : BuildConfig) -> PublicationInventory {
             "excluded"
           },
           reason,
-        ),
-      )
+        )
+      entries.push(entry)
+      if included && entry.kind != "build_metadata" && inventory_is_html(entry.path) {
+        let targets = match content {
+          Text(html) | OptionalText(html) => inventory_html_fragments(html)
+          Binary(bytes) => {
+            let html = @utf8.decode(bytes) catch { _ => "" }
+            if html == "" && bytes.length() > 0 { None } else { inventory_html_fragments(html) }
+          }
+        }
+        fragments.set(entry.path, targets)
+      }
     }
     for entry in output.excluded {
       entries.push(entry)
@@ -149,12 +165,12 @@ pub fn inventory(config : BuildConfig) -> PublicationInventory {
     }
     @diagnostic.format_diagnostic(a).compare(@diagnostic.format_diagnostic(b))
   })
-  {
+  ({
     output_dir: Some(output.root),
     ready,
     entries,
     diagnostics: prepared.diagnostics,
-  }
+  }, fragments)
 }
 
 ///|
@@ -177,17 +193,19 @@ fn inventory_integer(value : Int?) -> Json {
 let inventory_notice : String = "Forced-build preview only: no output, cache or manifest writes. Not a filesystem-success or privacy guarantee. Vault types do not filter publication; configured static assets are copied wholesale. Existing stale files are not removed or inventoried."
 
 ///|
-pub fn format_inventory_json(result : PublicationInventory) -> String {
+pub fn format_inventory_json(result : PublicationInventory, fragments? : Map[String, Array[String]?] = Map([])) -> String {
   let entries = result.entries.map(fn(entry) {
-    Json::object(
-      Map([
+    let fields = Map([
         ("path", Json::string(entry.path)),
         ("source", inventory_string(entry.source)),
         ("kind", Json::string(entry.kind)),
         ("status", Json::string(entry.status)),
         ("reason", Json::string(entry.reason)),
-      ]),
-    )
+      ])
+    if entry.status == "planned" && fragments.get(entry.path) is Some(targets) {
+      fields.set("fragments", match targets { Some(ids) => Json::array(ids.map(Json::string)); None => Json::null() })
+    }
+    Json::object(fields)
   })
   let diagnostics = result.diagnostics.map(fn(d) {
     Json::object(
@@ -224,7 +242,7 @@ pub fn format_inventory_json(result : PublicationInventory) -> String {
 }
 
 ///|
-pub fn format_inventory(result : PublicationInventory) -> String {
+pub fn format_inventory(result : PublicationInventory, fragments? : Map[String, Array[String]?] = Map([])) -> String {
   let lines = [
     "Publication inventory: " +
     (if result.ready { "prepared" } else { "blocked" }),
@@ -247,6 +265,11 @@ pub fn format_inventory(result : PublicationInventory) -> String {
       " — " +
       entry.reason,
     )
+  }
+  let ordered_fragments = fragments.to_array()
+  ordered_fragments.sort_by_key(pair => pair.0)
+  for (path, targets) in ordered_fragments {
+    lines.push("fragments " + Json::string(path).stringify() + " " + (match targets { Some(ids) => Json::array(ids.map(Json::string)).stringify(); None => "unknown" }))
   }
   for d in result.diagnostics {
     lines.push(@diagnostic.format_diagnostic(d))

@@ -304,7 +304,7 @@ fn build_parser() -> @clap.Parser {
             help="Output format: text or json",
           ),
         },
-        help="Compare planned HTML paths in two saved inventories (no writes)",
+        help="Compare planned HTML paths and verified fragments in saved inventories (no writes)",
       ),
       "inventory": @clap.SubCommand::new(
         args={
@@ -1600,16 +1600,16 @@ fn run_main() -> Unit {
       try {
         let old = @fs.read_file_to_string(before)
         let current = @fs.read_file_to_string(after)
-        @builder.compare_inventories(old, current)
+        @builder.compare_inventory_targets(old, current)
       } catch {
         @fs.IOError(message) => Err("cannot read inventory: " + message)
       }
     }
     println(
       if format == "json" {
-        @builder.format_inventory_comparison_json(result)
+        @builder.format_inventory_target_comparison_json(result)
       } else {
-        @builder.format_inventory_comparison(result)
+        @builder.format_inventory_target_comparison(result)
       },
     )
     if result is Err(_) {
@@ -1635,12 +1635,12 @@ fn run_main() -> Unit {
         return
       }
     }
-    let result = @builder.inventory(state.build_config)
+    let (result, fragments) = @builder.inventory_with_fragments(state.build_config)
     println(
       if format == "json" {
-        @builder.format_inventory_json(result)
+        @builder.format_inventory_json(result, fragments~)
       } else {
-        @builder.format_inventory(result)
+        @builder.format_inventory(result, fragments~)
       },
     )
     if !result.ready {

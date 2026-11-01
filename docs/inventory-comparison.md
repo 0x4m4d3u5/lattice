@@ -1,7 +1,7 @@
-# Review planned HTML path changes
+# Review planned HTML path and fragment changes
 
 Save two explicit publication inventories to compare the planned HTML file paths
-before and after an authoring or configuration change:
+and verified fragment targets before and after an authoring or configuration change:
 
 ```sh
 node "$LATTICE_CLI" inventory --format json > before.json
@@ -37,14 +37,14 @@ are compared; build metadata is excluded. This includes authored pages, generate
 indexes and redirect HTML, and static HTML. Draft/excluded candidates do not enter
 the sets. Other assets, feeds, search indexes and retained optional CSS are outside
 this report. It reads the [inventory's final file view](publication-inventory.md),
-not the incomplete build manifest, old output on disk or guessed heading history.
+not the incomplete build manifest, old output on disk or guessed heading slugs.
 
 Path strings are compared exactly and sorted lexically. Output roots, source
 paths, ownership and entry ordering do not affect path identity. `unchanged`
-means only that the same path occurs in both sets; contents, headings, redirect
-destinations and ownership may have changed. Neither snapshot contains enough
-information to establish domain/base-URL changes, server URL rewriting, external
-backlinks or heading-anchor impact. `index.html` is not converted into a guessed
+means only that the same path occurs in both sets; contents, redirect destinations
+and ownership may have changed. Fragment changes on those common paths are reported
+separately. The snapshots do not establish domain/base-URL changes, server URL
+rewriting or external backlinks. `index.html` is not converted into a guessed
 public URL. Non-HTML public URLs are not covered.
 
 Use comparable configurations and draft flags, and retain a snapshot from the
@@ -54,22 +54,59 @@ important: the report includes warning counts for each snapshot; consult the
 original JSON diagnostics for details. No output is deleted if a path disappears
 from the plan, and stale files may still exist on disk or a host.
 
+## Published fragment changes
+
+Current CLI inventories attach `fragments` to final planned HTML entries. An
+array lists raw, decoded, scanner-verified unique IDs and legacy anchor names,
+including emitted nested headings and template/static targets. It is not a list
+of source heading slugs. Omitted headings and inert template/comment/script
+markup do not contribute targets. Duplicate IDs/names lose verification; their
+removal from the verified set means a target became ambiguous, not necessarily
+that its spelling disappeared. The browser's implicit `top` target is not added.
+
+A heading rename at an unchanged path can therefore report:
+
+```text
+fragment removed "notes/guide/index.html" #"setup"
+fragment added "notes/guide/index.html" #"installation"
+```
+
+These are separate set changes, not an inferred rename. Values are raw identifiers,
+not assembled or percent-encoded public URLs. Base paths do not alter output-relative
+file identity. This does not promise browser navigation equivalence for malformed
+HTML or server rewriting.
+
+An empty array means no verified targets. Missing metadata in an older snapshot,
+or explicit `null`, means **unknown**. Unsupported parsing contexts (`select`,
+`noscript`, `plaintext`), uncertain entity decoding, and non-UTF-8 static HTML
+produce unknown metadata rather than a misleading empty set. The scanner is not
+a full browser DOM parser. Only paths present in both inventories and known on
+both sides are compared; other common paths are listed as unknown. Added/removed
+files remain in the existing path report rather than duplicating every target.
+
 ## Machine-readable output and errors
 
 Success returns exit status 0, even when paths differ. JSON has `version: 1`,
 `scope: "planned_html_paths"`, `ready: true`, `notice`, sorted `added` and `removed`
-arrays, `unchanged`, `before_warnings` and `after_warnings` counts.
+arrays, `unchanged`, `before_warnings` and `after_warnings` counts. The additive
+`fragments` object has `scope: "verified_html_targets_v1"`, `compared` (common
+paths with known sets), sorted `unknown` paths, and sorted `changes` objects
+containing `path`, `added` and `removed` identifier arrays. Legacy snapshots still
+produce the original path comparison, with their common fragment sets unknown.
 
 Both inputs must be ready version-1 inventory JSON with valid entry fields and
 known kinds/statuses. Blocked inventories, error diagnostics, malformed JSON,
 unsupported versions, empty paths and duplicate planned destinations are rejected.
-Unknown extra fields are ignored for additive compatibility. No path from a
+Fragment arrays must contain distinct nonempty strings without ASCII controls; malformed
+fragment metadata is rejected. Other unknown extra fields are ignored for additive compatibility. No path from a
 snapshot is opened; paths are treated as data and quoted in text output.
 
 Read/input failures return exit status 1. With `--format json`, they return
 `ready: false`, `error` and the version/scope/notice fields, with no partial diff.
 Unknown options and unsupported output formats remain ordinary CLI usage errors.
 
-The pure additive API is `@builder.compare_inventories(before_json, after_json)`,
-with `format_inventory_comparison` and `format_inventory_comparison_json` helpers.
-Existing inventory output, publishing policies and runtime support are unchanged.
+The existing path-only `@builder.compare_inventories` API and its formatters keep
+their contracts. Use `compare_inventory_targets` with
+`format_inventory_target_comparison` / `format_inventory_target_comparison_json`
+for the detailed report used by the CLI. Publishing policies and runtime support
+are unchanged.

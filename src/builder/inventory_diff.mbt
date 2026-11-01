@@ -111,9 +111,14 @@ pub fn compare_inventories(
 let inventory_diff_notice : String = "Planned HTML file paths only (.html/.htm), relative to each output root. No inferred moves, URL/host mapping, content or heading history, external-backlink coverage. No redirects or deletions are performed. Excluded entries, build metadata and non-HTML files are omitted. Preview snapshots do not prove deployment or future filesystem success."
 
 ///|
-pub fn format_inventory_comparison_json(
+pub fn format_inventory_comparison_json(result : Result[InventoryComparison, String]) -> String {
+  inventory_comparison_json(result).stringify()
+}
+
+///|
+fn inventory_comparison_json(
   result : Result[InventoryComparison, String],
-) -> String {
+) -> Json {
   let fields : Map[String, Json] = Map([
     ("version", Json::number(1)),
     ("scope", Json::string("planned_html_paths")),
@@ -139,7 +144,7 @@ pub fn format_inventory_comparison_json(
       )
     }
   }
-  Json::object(fields).stringify()
+  Json::object(fields)
 }
 
 ///|
