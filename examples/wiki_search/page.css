@@ -63,3 +63,5 @@ article [id] { scroll-margin-top: 6rem; }
 .reader-metadata > * { min-width: 0; overflow-wrap: anywhere; }
 .reader-tags { display: inline-flex; flex-wrap: wrap; gap: .25em .6em; }
 .backlinks:target { scroll-margin-top: 6rem; }
+
+.backlinks .backlink-context { margin: .25rem 0 .8rem; color: var(--text-metadata); font-size: .95em; overflow-wrap: anywhere; }

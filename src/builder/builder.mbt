@@ -558,6 +558,8 @@ priv struct ProcessedDocument {
   headings : Array[@markdown.TocEntry]
   sections : Array[@markdown.TextSection]
   section_fragments : Map[Int, String]
+  section_offsets : Array[Int?]
+  wikilink_blocks : Array[(String, Int, Int)]
   resolved_links : Array[@wikilink.ResolvedWikilink]
   tags : Array[@tags.TagRef]
 }
@@ -3639,6 +3641,8 @@ fn process_document(
         headings: cache_markdown.toc,
         sections: cache_sections,
         section_fragments: Map([]),
+        section_offsets: [],
+        wikilink_blocks: [],
         resolved_links: resolved,
         tags: page_tags,
       }),
@@ -3648,10 +3652,12 @@ fn process_document(
   let wl_map = build_wikilink_map(resolved, body=fm.body, page_index~)
   // Step 5: render markdown body to HTML fragment
   let section_offsets : Array[Int?] = []
+  let wikilink_blocks : Array[(String, Int, Int)] = []
   let (markdown_result, leading_h1_end, sections) = @markdown.render_with_text_sections(
     fm.body,
     wl_map,
     section_offsets~,
+    wikilink_blocks~,
   )
   let slot_offsets = section_slot_offsets(
     section_offsets,
@@ -3914,6 +3920,8 @@ fn process_document(
       headings: markdown_result.toc,
       sections,
       section_fragments,
+      section_offsets,
+      wikilink_blocks,
       resolved_links: resolved,
       tags: page_tags,
     }),
@@ -4271,10 +4279,12 @@ fn process_document_for_lint(
 
   let wl_map = build_wikilink_map(resolved, body=fm.body, page_index~)
   let section_offsets : Array[Int?] = []
+  let wikilink_blocks : Array[(String, Int, Int)] = []
   let (markdown_result, leading_h1_end, sections) = @markdown.render_with_text_sections(
     fm.body,
     wl_map,
     section_offsets~,
+    wikilink_blocks~,
   )
   let slot_offsets = section_slot_offsets(
     section_offsets,
@@ -4479,6 +4489,8 @@ fn process_document_for_lint(
       headings: markdown_result.toc,
       sections,
       section_fragments,
+      section_offsets,
+      wikilink_blocks,
       resolved_links: resolved,
       tags: page_tags,
     }),
@@ -5294,6 +5306,8 @@ fn prepare_output(
   let mut redirect_count = 0
   let redirect_sources : Array[RedirectSource] = []
   let graph_pages : Array[@graph.GraphPage] = []
+  let backlink_documents : Map[String, ProcessedDocument] = Map([])
+  let backlink_sources : Map[String, (String, String, String)] = Map([])
   let updated_dates : Map[String, String] = Map([])
   let search_entries : Array[@search.SearchEntry] = []
   let content_entries : Array[@search.ContentEntry] = []
@@ -5449,7 +5463,7 @@ fn prepare_output(
             out_path,
             config.force_rebuild,
           )
-          let should_rebuild = incremental.force_full_rebuild ||
+          let should_rebuild = backlink_index.contains(src.slug) || incremental.force_full_rebuild ||
             incremental.changed_sources.contains(src.path) ||
             backlink_affected.contains(src.slug) ||
             !cache_hit
@@ -5591,6 +5605,8 @@ fn prepare_output(
                   None => "page"
                 }
                 source_output_marks.set(doc.url, (output_path_key(out_path), source_mark))
+                backlink_documents.set(doc.url, doc)
+                backlink_sources.set(src.path, (src.slug, doc.url, page_context))
                 if collect_content_navigation {
                   content_sections_by_url.set(doc.url, doc.sections)
                   content_aliases_by_url.set(doc.url, if config.site.wikilink_aliases == Some(true) && !doc.sections.is_empty() {
@@ -5762,6 +5778,8 @@ fn prepare_output(
               ),
             )
             source_output_marks.set(doc.url, (output_path_key(out_path), source_mark))
+            backlink_documents.set(doc.url, doc)
+            backlink_sources.set(src.path, (src.slug, doc.url, ""))
             if collect_content_navigation {
               content_sections_by_url.set(doc.url, doc.sections)
               content_aliases_by_url.set(doc.url, if config.site.wikilink_aliases == Some(true) && !doc.sections.is_empty() {
@@ -5942,6 +5960,8 @@ fn prepare_output(
               ),
             )
             source_output_marks.set(doc.url, (output_path_key(out_path), source_mark))
+            backlink_documents.set(doc.url, doc)
+            backlink_sources.set(src.path, (src.slug, doc.url, ""))
             if collect_content_navigation {
               content_sections_by_url.set(doc.url, doc.sections)
               content_aliases_by_url.set(doc.url, if config.site.wikilink_aliases == Some(true) && !doc.sections.is_empty() {
@@ -6894,6 +6914,17 @@ fn prepare_output(
           ),
         ),
       )
+    }
+    let context_skips = finalize_contextual_backlinks(
+      output, backlink_documents, backlink_sources, backlink_index,
+      published_page_index, overwritten, source_output_marks, dropped_slots,
+      cache_store, next_cache_store, messages, config.force_rebuild || incremental.force_full_rebuild,
+    )
+    rebuilt = rebuilt - context_skips
+    unchanged = unchanged + context_skips
+    if cache_slot is Some(slot) {
+      let (path, _) = output.files[slot]
+      output.files[slot] = (path, Text(@cache.render_store(next_cache_store)))
     }
     output.prune_files(dropped_slots)
     let image_errors : Array[@lint.LintViolation] = []
