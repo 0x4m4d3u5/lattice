@@ -19,9 +19,7 @@ test "backlinks list each referring note once across repeated heading targets" {
   let beta = @fs.read_file_to_string(
     config.output_dir + "/posts/beta/index.html",
   )
-  assert_true(
-    beta.contains(
-      "<section class=\"backlinks\" id=\"lattice-backlinks\" tabindex=\"-1\">\n<h2>Backlinks</h2>\n<ul>\n<li><a href=\"/posts/alpha/\">Garden</a></li>\n<li><a href=\"/posts/gamma/\">Garden</a></li>\n</ul>\n</section>\n",
-    ),
-  )
+  assert_true(beta.contains("<a href=\"/posts/alpha/\">Garden</a><p class=\"backlink-context\">care harvest overview</p>"))
+  assert_true(beta.contains("<a href=\"/posts/gamma/\">Garden</a><p class=\"backlink-context\">beta Beta.md#Harvest</p>"))
+  assert_eq(beta.split("class=\"backlink-context\"").count(), 3)
 }

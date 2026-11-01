@@ -52,6 +52,7 @@ writeFileSync(sharingNote, readFileSync(sharingNote, 'utf8') + '\n## Copy an exa
 writeFileSync(join(content, 'punctuation.md'), '---\ntitle: Pipes | Fieldnotes & <notes>\n---\n# Pipes\n\nAuthored punctuation.\n');
 const datedNote = join(content, 'guides/getting-started.md');
 writeFileSync(datedNote, readFileSync(datedNote, 'utf8').replace('title: Getting started', 'title: Getting started\ndate: 2026-01-02\nupdated: 2026-02-03'));
+writeFileSync(join(content, 'context-source.md'), '---\ntitle: Context source\ndescription: A referring passage.\n---\n## Why this matters\nUse [[getting-started]] to orient new readers before they search.\n');
 mkdirSync(templates);
 mkdirSync(join(content, 'static'), { recursive: true });
 mkdirSync(join(content, 'data'));
@@ -141,6 +142,9 @@ try {
 
   assert.equal(await cold.locator('#lattice-current-collection').innerText(), 'Guides');
   assert.equal(await cold.locator('#lattice-navigation').isVisible(), false, 'mobile sidebar must not flash before modules load');
+  const contextItem = cold.locator('.backlinks li').filter({ hasText: 'Context source' });
+  assert.match(await contextItem.innerText(), /orient new readers/);
+  assert.match(await contextItem.locator('a').getAttribute('href'), /#why-this-matters$/);
   await save('reader-cold-module-delay.png', cold);
   releaseModule();
   await cold.waitForFunction(() => !document.querySelector('#lattice-controls').disabled);
@@ -153,6 +157,9 @@ try {
     await cold.evaluate(() => document.documentElement.style.fontSize = '200%');
     assert.equal(await cold.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
     assert.equal(await cold.locator('.reader-metadata').evaluate(element => element.scrollWidth <= element.clientWidth), true);
+    assert.equal(await contextItem.evaluate(element => element.scrollWidth <= element.clientWidth), true);
+    await contextItem.scrollIntoViewIfNeeded();
+    await save(`backlinks-${width}-200.png`, cold);
   }
 
   assert.equal(await cold.locator('article h1').textContent(), 'Getting started');
@@ -174,6 +181,11 @@ try {
     await unloaded.reload();
     assert.equal(await unloaded.locator('article > header > h1').textContent(), heading);
   }
+  await unloaded.goto(origin + urlFor('Getting started'));
+  const contextualLink = unloaded.locator('.backlinks').getByRole('link', { name: 'Context source', exact: true });
+  await contextualLink.focus(); await contextualLink.press('Enter');
+  await unloaded.waitForURL('**/context-source/#why-this-matters');
+  assert.equal(await unloaded.locator('#why-this-matters').count(), 1);
   await plainContext.close();
 
   const continuity = await browser.newContext({ viewport: { width: 1440, height: 900 } });
@@ -504,6 +516,7 @@ try {
     await page.emulateMedia({ media: 'screen' });
     if (width === 1440) {
       const [opened] = await Promise.all([context.waitForEvent('page'), section.click({ button: 'middle' })]);
+      await opened.waitForURL(url => url.hash === expectedHash);
       await opened.waitForLoadState();
       assert.equal(new URL(opened.url()).hash, expectedHash);
       await opened.close();
@@ -513,8 +526,8 @@ try {
   await page.goto(`${origin}/wiki/static/search/`); await ready();
   assert.equal(await page.getByRole('searchbox').inputValue(), '');
   assert.equal(await page.locator('#lattice-collections .collection').count(), 4);
-  assert.equal(await page.locator('#lattice-page-navigation a').count(), 7);
-  assert.equal(await page.locator('#lattice-collections a').count(), 7);
+  assert.equal(await page.locator('#lattice-page-navigation a').count(), 8);
+  assert.equal(await page.locator('#lattice-collections a').count(), 8);
   await save('landing-desktop.png');
   await page.locator('.overview-link').focus();
   await page.keyboard.press('Tab'); await page.keyboard.press('Shift+Tab');
@@ -663,7 +676,7 @@ try {
   failWasm = true;
   await page.reload();
   await page.waitForFunction(() => document.querySelector('#lattice-status').textContent.startsWith('Search is unavailable'));
-  assert.equal(await page.locator('#lattice-collections a').count(), 7);
+  assert.equal(await page.locator('#lattice-collections a').count(), 8);
   await page.locator('#lattice-collections').getByRole('link', { name: 'Getting started', exact: true }).click();
   await page.locator('article').waitFor();
   await page.waitForFunction(() => document.querySelector('#lattice-status').textContent.startsWith('Search is unavailable'));

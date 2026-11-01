@@ -2740,10 +2740,14 @@ pub(all) struct TextSection {
 /// Optional section_offsets receives one UTF-16 heading start per section;
 /// preambles and generated footnotes have None. Offsets describe renderer origin,
 /// not a guarantee that a template publishes that heading.
+/// Optional wikilink_blocks collects (authored target, start, end) for referring
+/// top-level rendered blocks. Nested references share their enclosing block;
+/// appended footnotes are not included. Offsets alone do not prove publication.
 pub fn render_with_text_sections(
   body : String,
   wikilinks : Map[String, String],
   section_offsets? : Array[Int?] = [],
+  wikilink_blocks? : Array[(String, Int, Int)] = [],
 ) -> (RenderResult, Int?, Array[TextSection]) {
   let sections : Array[TextSection] = []
   let (rendered, boundary) = render_document(
@@ -2751,6 +2755,7 @@ pub fn render_with_text_sections(
     wikilinks,
     Some(sections),
     section_offsets~,
+    wikilink_blocks~,
   )
   (rendered, boundary, sections)
 }
@@ -2761,6 +2766,7 @@ fn render_document(
   wikilinks : Map[String, String],
   sections : Array[TextSection]?,
   section_offsets? : Array[Int?] = [],
+  wikilink_blocks? : Array[(String, Int, Int)] = [],
 ) -> (RenderResult, Int?) {
   let preprocessed = preprocess_callout_next_line(body)
   let ls = lines_of(preprocessed)
@@ -2782,6 +2788,9 @@ fn render_document(
     None => None
     Some(_) => Some(fn(block : Block, html : String) {
       let end = html_offset + html.length()
+      visit_blocks([block], fn(inline) {
+        if inline is WikiRef(target, _) { wikilink_blocks.push((target, html_offset, end)) }
+      })
       if block is Heading(_, _) { heading_ranges.push((html_offset, end)) }
       html_offset = end
     })

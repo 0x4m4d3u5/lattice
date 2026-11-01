@@ -23,3 +23,4 @@ LATTICE_NATIVE_CLI="$PWD/_build/native/debug/build/kurisu/lattice/cmd/main/main.
 LATTICE_NATIVE_CLI="$PWD/_build/native/debug/build/kurisu/lattice/cmd/main/main.exe" node scripts/check-vault-acceptance.mjs
 
 LATTICE_NATIVE_CLI="$PWD/_build/native/debug/build/kurisu/lattice/cmd/main/main.exe" node scripts/check-reader-metadata.mjs
+LATTICE_NATIVE_CLI="$PWD/_build/native/debug/build/kurisu/lattice/cmd/main/main.exe" node scripts/check-contextual-backlinks.mjs

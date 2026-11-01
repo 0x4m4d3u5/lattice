@@ -354,3 +354,19 @@ timezone offsets). This does not add time precision to the authored update date.
 Without an explicit update, existing feed/sitemap publication-date fallbacks remain; these
 are not editing-history evidence. Builds never derive dates from the clock, file
 mtime or Git. Rebuilding an unchanged note does not advance its dates.
+
+### Contextual backlinks
+
+Backlinks remain one entry per referring note, sorted by canonical page URL. Each
+entry can include a short plain-text excerpt from the first referring Markdown
+block that survives verbatim in the published source page. Repeated links do not
+increase the count. Lists and blockquotes use their enclosing top-level block;
+excerpts are limited to 180 Unicode characters plus an ellipsis when truncated. Code examples are not references.
+
+A backlink targets the enclosing top-level section only when the existing
+renderer-origin tracking verifies its unique published heading. Otherwise it
+links to the canonical page. Removed headings, transformed/omitted content,
+ambiguous repeated blocks, inert template content and raw-text contexts do not
+acquire guessed targets or unpublished excerpts. Footnote-only references retain
+page links without excerpts. Draft and overwritten referring pages are excluded.
+These are static links and text, not popovers or transclusion.

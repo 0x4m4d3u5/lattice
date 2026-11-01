@@ -40,7 +40,7 @@ assert.ok(readFileSync(join(output, 'posts/alpha/index.html'), 'utf8').includes(
 assert.ok(readFileSync(join(output, 'posts/alpha/index.html'), 'utf8').includes(
   '<p>Example <code>[[missing]] ` literal</code>.</p>\n'));
 assert.ok(readFileSync(join(output, 'posts/alpha/index.html'), 'utf8').includes('<p>Jump <a href="#overview">here</a>.</p>'));
-assert.ok(!readFileSync(join(output, 'posts/alpha/index.html'), 'utf8').includes('href="/posts/alpha/">Garden</a>'));
+assert.ok(!readFileSync(join(output, 'posts/alpha/index.html'), 'utf8').includes('href="/posts/alpha/#overview">Garden</a>'));
 const beta = readFileSync(join(output, 'posts/beta/index.html'), 'utf8');
 const expectedBody = 'Planting & Care Planting & Care photosynthesis uses H2O. Read notes, then x. photosynthesis. HTML-based. Ctrl+C. Temperature 10°C. Plant 🌱. A B. Visible prose. <!-- visible After textarea.';
 const contentBody = () => JSON.parse(readFileSync(join(output, 'content-index.json'), 'utf8'))
@@ -88,8 +88,8 @@ assert.equal(contentBody(), expectedBody);
 
 assert.ok(beta.includes('<h2 id="planting-care">Planting &amp; Care</h2>'));
 assert.ok(beta.includes('<h2 id="planting-care-2">Planting &amp; Care</h2>'));
-assert.ok(beta.includes('href="/posts/alpha/">Garden</a>'));
-assert.equal(beta.split('href="/posts/alpha/">Garden</a>').length - 1, 1);
+assert.ok(beta.includes('href="/posts/alpha/#overview">Garden</a>'));
+assert.equal(beta.split('href="/posts/alpha/#overview">Garden</a>').length - 1, 1);
 assert.deepEqual(JSON.parse(readFileSync(join(output, 'graph.json'), 'utf8')).edges,
   [{ source: 'alpha', target: 'beta' }]);
 const index = readFileSync(join(output, 'posts/index.html'), 'utf8');
@@ -104,7 +104,7 @@ const incremental = run('build');
 assert.equal(incremental.status, 0, incremental.stdout + incremental.stderr);
 assert.deepEqual(contentLinks('/posts/alpha/'), []);
 const updatedBeta = readFileSync(join(output, 'posts/beta/index.html'), 'utf8');
-assert.ok(!updatedBeta.includes('href="/posts/alpha/">Garden</a>'));
+assert.ok(!updatedBeta.includes('href="/posts/alpha/#overview">Garden</a>'));
 assert.deepEqual(JSON.parse(readFileSync(join(output, 'graph.json'), 'utf8')).edges, []);
 const full = run('build', ['--force']);
 assert.equal(full.status, 0, full.stdout + full.stderr);
