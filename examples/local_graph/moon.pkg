@@ -1,0 +1,5 @@
+import { "kurisu/lattice/src/graph" }
+options(link: {
+  "js": { "exports": ["layout_graph"], "format": "esm" },
+  "wasm-gc": { "exports": ["layout_graph"], "use-js-builtin-string": true, "imported-string-constants": "_" },
+})

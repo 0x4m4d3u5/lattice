@@ -1,3 +1,5 @@
+// Optional graph assets must never prevent the existing reader/search startup.
+function enhanceLocalGraph() { import('./graph.js').then(module => module.enhanceLocalGraph()).catch(() => {}); }
 import { installNavigation } from './navigation.js';
 import { buildCatalogue } from './catalogue.js';
 
@@ -422,6 +424,7 @@ window.addEventListener('pagehide', () => { persist(); stop(); });
 window.addEventListener('pageshow', event => { if (event.persisted) start(); });
 start();
 
+enhanceLocalGraph();
 installNavigation({
   readPosition: () => readingPosition || { left: scrollX, top: scrollY },
   urls: () => new Set([new URL(overview.href).href, ...buildCatalogue(catalogueEntries, document.baseURI, overview.href).map(page => page.url)]),
@@ -430,6 +433,6 @@ installNavigation({
     overview.toggleAttribute('aria-current', new URL(overview.href).pathname === location.pathname);
     if (overview.hasAttribute('aria-current')) overview.setAttribute('aria-current', 'page');
     renderCatalogue(catalogueEntries);
-    addSectionLinks(); addCodeCopyControls();
+    addSectionLinks(); addCodeCopyControls(); enhanceLocalGraph();
   },
 });

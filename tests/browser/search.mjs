@@ -40,7 +40,7 @@ const config = join(root, 'site.cfg');
 writeFileSync(config, `wikilink_aliases = true\ntitle = Wiki\nbase_url = https://example.test\ntemplates_dir = ${templates}\ncollections_file = ${collections}\ncontent_index_file = content-index.json\noutput_dir = ${output}\n`);
 const built = run('_build/js/debug/build/kurisu/lattice/cmd/main/main.js', ['build', content, '-c', config, '--collections', collections]);
 assert.equal(built.status, 0, built.stdout + built.stderr);
-for (const name of ['index.html', 'app.js', 'boot.js', 'navigation.js', 'worker.js', 'host.js', 'renderer.wasm', 'page.css', 'shell.css', 'catalogue.js']) {
+for (const name of ['index.html', 'app.js', 'boot.js', 'navigation.js', 'graph.js', 'graph-worker.js', 'graph-core.js', 'worker.js', 'host.js', 'renderer.wasm', 'page.css', 'shell.css', 'catalogue.js']) {
   assert.deepEqual(readFileSync(join(output, 'static/search', name)), readFileSync(join(search, name)));
 }
 // Extend only this disposable synthetic index to exercise caller-supplied URLs
@@ -68,7 +68,7 @@ const validIndex = JSON.stringify(entries);
 const changedTagIndex = JSON.stringify(entries.map(entry => ({ ...entry, tags: entry.tags.map(tag => tag.replace(/[A-Z]/g, letter => letter.toLowerCase())) })));
 const assets = new Map([
   ['/wiki/static/search/', ['static/search/index.html', 'text/html']],
-  ...['app.js', 'boot.js', 'navigation.js', 'worker.js', 'host.js', 'catalogue.js'].map(name => [`/wiki/static/search/${name}`, [`static/search/${name}`, 'text/javascript']]),
+  ...['app.js', 'boot.js', 'navigation.js', 'graph.js', 'graph-worker.js', 'graph-core.js', 'worker.js', 'host.js', 'catalogue.js'].map(name => [`/wiki/static/search/${name}`, [`static/search/${name}`, 'text/javascript']]),
   ['/wiki/static/search/renderer.wasm', ['static/search/renderer.wasm', 'application/wasm']],
   ['/wiki/static/search/shell.css', ['static/search/shell.css', 'text/css']],
   ['/wiki/static/search/page.css', ['static/search/page.css', 'text/css']],

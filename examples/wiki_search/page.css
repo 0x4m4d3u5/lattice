@@ -68,3 +68,20 @@ article [id] { scroll-margin-top: 6rem; }
 
 .related-notes { font-family: var(--font-interface); overflow-wrap: anywhere; }
 .related-notes > p { color: var(--text-metadata); margin-block: .35rem .75rem; font-size: .95em; }
+
+.local-graph { margin-block: 2rem; border-block: 1px solid var(--border-subtle); padding-block: 1rem; }
+.local-graph summary { cursor: pointer; font-weight: 600; }
+.graph-tools { display: flex; flex-wrap: wrap; gap: .5rem; margin-block: .75rem; }
+.graph-tools button { min-height: 44px; padding: .4rem .7rem; font: inherit; }
+.graph-canvas { width: 100%; height: min(65vh, 420px); min-height: 280px; touch-action: none; border: 1px solid var(--border-subtle); }
+.graph-canvas line { stroke: currentColor; opacity: .35; stroke-width: 1; vector-effect: non-scaling-stroke; }
+.graph-canvas circle, .graph-canvas path { fill: currentColor; }
+.graph-canvas a { color: inherit; }
+.graph-canvas text { fill: currentColor; font-size: 12px; }
+.graph-canvas a:focus, .graph-canvas a.selected { outline: none; color: #17643b; }
+.graph-canvas a:focus circle, .graph-canvas a.selected circle { stroke: currentColor; stroke-width: 5; fill: white; }
+.graph-status { min-height: 2em; overflow-wrap: anywhere; }
+.graph-links { columns: 2 12rem; }
+@media (forced-colors: active) { .graph-canvas a:focus, .graph-canvas a.selected { color: Highlight; } }
+
+.graph-crowded a:not(.selected):not([aria-current]) text { display: none; }

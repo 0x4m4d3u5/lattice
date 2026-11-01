@@ -5345,6 +5345,7 @@ fn prepare_output(
   // is complete, including assets and configurable index destinations.
   let tag_output_groups : Array[(String, String, Array[Int])] = []
   let tags_index_slots : Array[Int] = []
+  let mut graph_slot : Int? = None
   let mut content_index_slot : Int? = None
   let mut cache_slot : Int? = None
   let tag_pages_by_slug : Map[String, Array[@tags.TaggedPage]] = Map([])
@@ -5483,7 +5484,7 @@ fn prepare_output(
             out_path,
             config.force_rebuild,
           )
-          let should_rebuild = related_notes.contains(src.path) || backlink_index.contains(src.slug) || incremental.force_full_rebuild ||
+          let should_rebuild = doc.html.contains("<!--lattice-local-graph-->") || related_notes.contains(src.path) || backlink_index.contains(src.slug) || incremental.force_full_rebuild ||
             incremental.changed_sources.contains(src.path) ||
             backlink_affected.contains(src.slug) ||
             !cache_hit
@@ -6611,6 +6612,7 @@ fn prepare_output(
       let graph_write_ok = try {
         let graph_json = @graph.render_graph_json(graph_pages)
         let out_path = config.output_dir + "/graph.json"
+        graph_slot = Some(output.files.length())
         output.write_text(out_path, graph_json)
         messages.push("[lattice] wrote " + out_path)
         true
@@ -6935,8 +6937,14 @@ fn prepare_output(
         ),
       )
     }
+    let public_graph = graph_pages.filter(page => !overwritten.contains(page.url))
+    if graph_slot is Some(slot) {
+      let (path, _) = output.files[slot]
+      output.files[slot] = (path, Text(@graph.render_graph_json(public_graph)))
+    }
+    let local_graphs = if backlink_documents.values().any(doc => doc.html.contains("<!--lattice-local-graph-->")) { @graph.local_views(public_graph) } else { Map([]) }
     let context_skips = finalize_contextual_backlinks(
-      output, backlink_documents, backlink_sources, backlink_index, related_notes,
+      output, backlink_documents, backlink_sources, backlink_index, related_notes, local_graphs,
       published_page_index, overwritten, source_output_marks, dropped_slots,
       cache_store, next_cache_store, messages, config.force_rebuild || incremental.force_full_rebuild,
     )

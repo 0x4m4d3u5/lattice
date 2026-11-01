@@ -173,6 +173,8 @@ It uses the build's preparation plan. It is not a privacy guarantee: vault metad
 such as `type: private` does not exclude a note, and configured static assets are
 copied wholesale. Use `check` for strict wikilink validation before publishing. Compare two saved previews with [`inventory-diff`](docs/inventory-comparison.md) to review added and removed HTML paths without inferring renames.
 
+The bundled reader includes a [bounded local authored-link graph](docs/local-graph.md), with a static linked-list fallback.
+
 ## Architecture
 
 ```

@@ -11,3 +11,9 @@ done
 node scripts/run-wasm-note.mjs \
   _build/wasm-gc/debug/build/kurisu/lattice/examples/wasm_note/wasm_note.wasm \
   _build/js/debug/build/kurisu/lattice/examples/wasm_note/wasm_note.js
+
+# Independent graph module: do not alter the strict note/search export ABI.
+for target in js wasm-gc; do
+  moon build examples/local_graph --target "$target" --deny-warn
+done
+node scripts/check-local-graph.mjs

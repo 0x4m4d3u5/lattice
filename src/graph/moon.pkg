@@ -1,4 +1,5 @@
 import {
+  "moonbitlang/core/json" @json,
   "kurisu/lattice/src/strutil" @strutil,
   "kurisu/lattice/src/wikilink" @wikilink,
 }
