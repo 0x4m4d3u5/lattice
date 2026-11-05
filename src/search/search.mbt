@@ -1,4 +1,14 @@
 ///|
+/// Half-open final HTML UTF-8 byte range and SHA-256 bindings for its indexed text.
+pub(all) struct PassageRetention {
+  start : Int
+  end : Int
+  digest : String
+  heading_digest : String
+  body_digest : String
+}
+
+///|
 /// JSON search index rendering for lattice.
 ///
 /// The renderer is pure: it accepts typed search entries and returns JSON.
@@ -187,6 +197,7 @@ pub fn render_content_index_with_sections(
   aliases? : Map[String, Array[String]] = Map([]),
   updated_dates? : Map[String, String] = Map([]),
   publication_digests? : Map[String, String] = Map([]),
+  retentions? : Map[String, Map[Int, PassageRetention]] = Map([]),
 ) -> String {
   render_content_entries(
     entries,
@@ -197,6 +208,7 @@ pub fn render_content_index_with_sections(
     aliases~,
     updated_dates~,
     publication_digests~,
+    retentions~,
   )
 }
 
@@ -210,6 +222,7 @@ fn render_content_entries(
   aliases? : Map[String, Array[String]] = Map([]),
   updated_dates? : Map[String, String] = Map([]),
   publication_digests? : Map[String, String] = Map([]),
+  retentions? : Map[String, Map[Int, PassageRetention]] = Map([]),
 ) -> String {
   // Generated indexes overwrite authored pages at shared URLs. Do not advertise
   // authored navigation for any entry whose URL is occupied by such an index.
@@ -321,6 +334,19 @@ fn render_content_entries(
           items.get(i) is Some(fragment) {
           buf.write_string(", \"fragment\": ")
           @strutil.write_json_string(buf, fragment)
+        }
+        if retentions.get(entry.url) is Some(items) && items.get(i) is Some(binding) {
+          buf.write_string(", \"retention\": {\"version\": 1, \"algorithm\": \"sha256\", \"start\": ")
+          buf.write_string(binding.start.to_string())
+          buf.write_string(", \"end\": ")
+          buf.write_string(binding.end.to_string())
+          buf.write_string(", \"digest\": ")
+          @strutil.write_json_string(buf, binding.digest)
+          buf.write_string(", \"heading_digest\": ")
+          @strutil.write_json_string(buf, binding.heading_digest)
+          buf.write_string(", \"body_digest\": ")
+          @strutil.write_json_string(buf, binding.body_digest)
+          buf.write_char('}')
         }
         buf.write_char('}')
       }

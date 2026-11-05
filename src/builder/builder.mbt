@@ -559,6 +559,7 @@ priv struct ProcessedDocument {
   sections : Array[@markdown.TextSection]
   section_fragments : Map[Int, String]
   section_offsets : Array[Int?]
+  passage_ranges : Array[(Int, Int, Int)]
   wikilink_blocks : Array[(String, Int, Int)]
   published_wikilink_blocks : Map[Int, Bool]
   resolved_links : Array[@wikilink.ResolvedWikilink]
@@ -3644,6 +3645,7 @@ fn process_document(
         sections: cache_sections,
         section_fragments: Map([]),
         section_offsets: [],
+        passage_ranges: [],
         wikilink_blocks: [],
         published_wikilink_blocks: Map([]),
         resolved_links: resolved,
@@ -3655,11 +3657,14 @@ fn process_document(
   let wl_map = build_wikilink_map(resolved, body=fm.body, page_index~)
   // Step 5: render markdown body to HTML fragment
   let section_offsets : Array[Int?] = []
+  let section_ranges : Array[(Int, Int)] = []
+  let passage_ranges : Array[(Int, Int, Int)] = []
   let wikilink_blocks : Array[(String, Int, Int)] = []
   let (markdown_result, leading_h1_end, sections) = @markdown.render_with_text_sections(
     fm.body,
     wl_map,
     section_offsets~,
+    section_ranges~,
     wikilink_blocks~,
   )
   let slot_offsets = section_slot_offsets(
@@ -3671,6 +3676,7 @@ fn process_document(
   )
   add_backlink_slot_offsets(slot_offsets, wikilink_blocks, sections.length(),
     markdown_result.html.length() - rendered_body_no_h1(markdown_result.html, leading_h1_end).length())
+  let slot_ranges = passage_slot_ranges(section_ranges, markdown_result.html.length() - rendered_body_no_h1(markdown_result.html, leading_h1_end).length())
   let mut published_wikilink_blocks : Map[Int, Bool] = Map([])
   let mut section_fragments : Map[Int, String] = Map([])
   if markdown_result.shortcode_errors.length() > 0 {
@@ -3724,6 +3730,8 @@ fn process_document(
     render_url : String,
     canonical : String,
     structured_data : Array[@html.StructuredData],
+    // A root alias can share the canonical URL; only the primary render owns origins.
+    record_origins : Bool,
   ) -> Result[String, String] {
     match custom_template {
       Some(tpl) => {
@@ -3809,17 +3817,21 @@ fn process_document(
             page_field_arrays,
             slot_offsets~,
             rendered_offsets=emitted,
+            slot_ranges~,
+            rendered_ranges=if record_origins { passage_ranges } else { [] },
           ) {
           Ok(html) => {
             let candidates = section_fragment_candidates(html, emitted.filter(origin => origin.0 < sections.length()))
             let published = bind_backlink_shortcut(
-              @html.inject_head_markup(
+              inject_passage_head(
                 html,
                 @html.render_structured_data_script(structured_data, date_modified=updated_value),
+                if record_origins { passage_ranges } else { [] },
               ),
               backlink_count,
+              ranges=if record_origins { passage_ranges } else { [] },
             )
-            if render_url == url {
+            if record_origins {
               published_wikilink_blocks = backlink_origin_blocks(html, emitted, sections.length())
               section_fragments = unique_section_fragments(
                 published, candidates,
@@ -3844,16 +3856,21 @@ fn process_document(
         }
         let emitted : Array[(Int, Int)] = []
         let html = @html.render_page(meta, page_body, date_modified=updated_value, body_offset=fn(offset) {
+          if record_origins {
+            for (key, start, end) in slot_ranges.get(@template.Content).unwrap_or([]) {
+              passage_ranges.push((key, offset + toc_html.length() + start, offset + toc_html.length() + end))
+            }
+          }
           for
             (index, start) in slot_offsets.get(@template.Content).unwrap_or([]) {
             emitted.push((index, offset + toc_html.length() + start))
           }
         })
-        if render_url == url {
+        if record_origins {
           published_wikilink_blocks = backlink_origin_blocks(html, emitted, sections.length())
           section_fragments = section_fragment_candidates(html, emitted.filter(origin => origin.0 < sections.length()))
         }
-        Ok(bind_backlink_shortcut(html, backlink_count))
+        Ok(bind_backlink_shortcut(html, backlink_count, ranges=if record_origins { passage_ranges } else { [] }))
       }
     }
   }
@@ -3877,6 +3894,7 @@ fn process_document(
         )
         structured_data
       },
+      true,
     ) {
     Ok(html) => html
     Err(msg) => {
@@ -3890,6 +3908,7 @@ fn process_document(
         "/",
         @strutil.absolute_url(site.base_url, "/"),
         website_structured_data_builder(site),
+        false,
       ) {
       Ok(html) => {
         // Inject site-wide feed autodiscovery link into root page
@@ -3930,6 +3949,7 @@ fn process_document(
       sections,
       section_fragments,
       section_offsets,
+      passage_ranges,
       wikilink_blocks,
       published_wikilink_blocks,
       resolved_links: resolved,
@@ -4289,11 +4309,14 @@ fn process_document_for_lint(
 
   let wl_map = build_wikilink_map(resolved, body=fm.body, page_index~)
   let section_offsets : Array[Int?] = []
+  let section_ranges : Array[(Int, Int)] = []
+  let passage_ranges : Array[(Int, Int, Int)] = []
   let wikilink_blocks : Array[(String, Int, Int)] = []
   let (markdown_result, leading_h1_end, sections) = @markdown.render_with_text_sections(
     fm.body,
     wl_map,
     section_offsets~,
+    section_ranges~,
     wikilink_blocks~,
   )
   let slot_offsets = section_slot_offsets(
@@ -4305,6 +4328,7 @@ fn process_document_for_lint(
   )
   add_backlink_slot_offsets(slot_offsets, wikilink_blocks, sections.length(),
     markdown_result.html.length() - rendered_body_no_h1(markdown_result.html, leading_h1_end).length())
+  let slot_ranges = passage_slot_ranges(section_ranges, markdown_result.html.length() - rendered_body_no_h1(markdown_result.html, leading_h1_end).length())
   let mut published_wikilink_blocks : Map[Int, Bool] = Map([])
   let mut section_fragments : Map[Int, String] = Map([])
   i = 0
@@ -4436,6 +4460,8 @@ fn process_document_for_lint(
           page_field_arrays,
           slot_offsets~,
           rendered_offsets=emitted,
+          slot_ranges~,
+          rendered_ranges=passage_ranges,
         ) {
         Ok(html) => {
           section_fragments = section_fragment_candidates(html, emitted.filter(origin => origin.0 < sections.length()))
@@ -4480,6 +4506,9 @@ fn process_document_for_lint(
       }
       let emitted : Array[(Int, Int)] = []
       let html = @html.render_page(meta, page_body, date_modified=updated_value, body_offset=fn(offset) {
+        for (key, start, end) in slot_ranges.get(@template.Content).unwrap_or([]) {
+          passage_ranges.push((key, offset + toc_html.length() + start, offset + toc_html.length() + end))
+        }
         for (index, start) in slot_offsets.get(@template.Content).unwrap_or([]) {
           emitted.push((index, offset + toc_html.length() + start))
         }
@@ -4491,7 +4520,7 @@ fn process_document_for_lint(
   }
   {
     document: Some({
-      html: bind_backlink_shortcut(page_html, backlink_count),
+      html: bind_backlink_shortcut(page_html, backlink_count, ranges=passage_ranges),
       root_html: None,
       title,
       url,
@@ -4506,6 +4535,7 @@ fn process_document_for_lint(
       sections,
       section_fragments,
       section_offsets,
+      passage_ranges,
       wikilink_blocks,
       published_wikilink_blocks,
       resolved_links: resolved,
@@ -6929,10 +6959,12 @@ fn prepare_output(
     // Retain prepared canonical HTML even when publication skips its disk write.
     let publication_html : Map[String, String] = Map([])
     for (url, doc) in backlink_documents { if !overwritten.contains(url) { publication_html.set(url, doc.html) } }
+    let final_passages = backlink_documents.map(fn(_, doc) { doc.passage_ranges.copy() })
     let context_skips = finalize_contextual_backlinks(
       output, backlink_documents, backlink_sources, backlink_index, related_notes, local_graphs,
       published_page_index, overwritten, source_output_marks, dropped_slots,
       publication_html,
+      final_passages,
       cache_store, next_cache_store, messages, config.force_rebuild || incremental.force_full_rebuild,
     )
     if content_index_slot is Some(slot) {
@@ -6949,6 +6981,7 @@ fn prepare_output(
             aliases=content_aliases_by_url,
             updated_dates~,
             publication_digests=publication_html.map(fn(_, html) { publication_digest(html) }),
+            retentions=publication_html.map(fn(url, html) { passage_bindings(backlink_documents.get(url).unwrap(), html, final_passages.get(url).unwrap_or([])) }),
           ),
         ),
       )

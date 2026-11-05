@@ -14,7 +14,8 @@ inside those states stay within their enclosing passage rather than becoming
 section labels. This preserves existing whole-body extraction semantics and
 is not a browser visibility policy or sanitizer. Visible appended footnote
 definitions form a generated passage labeled `Footnotes`, cited at the page URL.
-Duplicate headings retain separate positions. A section may also have a
+Duplicate headings retain separate positions. Sections may also carry optional
+[passage-retention bindings](passage-retention.md), independently of fragments. A section may also have a
 `fragment` string when its originating Markdown heading survives publication
 with a unique HTML ID. Preambles and generated footnotes have no fragment.
 Generated navigation pages and sources superseded by generated output have an

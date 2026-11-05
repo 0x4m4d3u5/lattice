@@ -3697,3 +3697,50 @@ message assertions for both categories fail before this one-line fix; they also
 verify error severity, E006 in check, publication preservation and recovery.
 The local pinned JS baseline passes 1,386 workspace tests, 16 dedicated clap
 tests, check and build with warnings denied. Only synthetic content was used.
+
+
+## Complete passage origins survive only known edits
+
+The existing heading-origin metadata and whole-artifact SHA-256 pairing answered
+separate questions: where a citation points and whether a response is the
+prepared page. Neither showed that the entire indexed section survived a custom
+template. This AI-assisted slice records complete ranges in the renderer's
+section extraction pass and carries them through verbatim template emissions.
+Ranges are separate from heading offsets so a surviving heading cannot stand in
+for a removed or edited body.
+
+Each substitution shifts later ranges and invalidates overlapping ranges. Invalid
+origins remain in the emission list, preventing a later deletion from rescuing a
+duplicate. All filtered emissions are conservatively unverified, including a
+filter whose output happens to equal its input. Final UTF-8 ranges and SHA-256
+bindings for HTML slices and both indexed strings are emitted only for the final
+authored owner. Sorted boundary conversion avoids repeatedly encoding page
+prefixes. Existing stdlib split, sorting and UTF-8 encoding and the existing
+crypto dependency suffice; the custom utility tracks edit provenance, which is
+not a string-replacement API guarantee.
+
+The evidence host reports retention independently from address validation and
+artifact pairing. Matching bytes in a comment or hidden element remain byte
+retention, never a claim of browser visibility, factual truth or authenticity.
+Regression fixtures exercise both that boundary and conservative failures.
+
+
+Cloud verification passed the full JS baseline (1,653 project tests), the
+WASM/WASM-GC/native target gates (1,652 tests per target), vendored CLI tests,
+portable core/note/search checks, and the new end-to-end fixture on JS and native.
+The browser suite could not launch sandboxed Chromium in this cloud environment;
+the installed system Chromium also failed with sandboxing enabled. Browser/DOM
+acceptance remains pending on a compatible runner. No sandbox protection was
+disabled. The offline interrupted work was unavailable; this implementation was
+built from the clean PR 162 checkpoint rather than assumed recovered.
+
+
+Pre-merge independent review identified a false-negative case with `root_page =
+index`: rendering the root alias used the same URL as the canonical page and
+recorded its origins twice. An end-to-end regression failed before the fix.
+Origin collection now belongs explicitly to the canonical render invocation,
+not to URL equality; the alias render cannot mutate canonical origin metadata.
+The regression covers default and custom templates and rebuild parity. Review
+also clarified that the trusted index asserts the text-to-slice relationship:
+changing text and its digest together can match unchanged HTML. Verification
+checks those bindings, not independent text extraction or authentication.
