@@ -112,7 +112,7 @@ fn reader_metadata_html(
 ///|
 /// Bind only our rendered backlink section, avoiding authored/template IDs.
 /// If a custom template omits or repeats it, omit the shortcut instead.
-fn bind_backlink_shortcut(html : String, count : Int32) -> String {
+fn bind_backlink_shortcut(html : String, count : Int32, ranges? : Array[(Int, Int, Int)] = []) -> String {
   if count <= 0 {
     return html
   }
@@ -125,9 +125,7 @@ fn bind_backlink_shortcut(html : String, count : Int32) -> String {
     }
   })
   if destinations.length() != 1 {
-    return html
-      .replace_all(old=link, new="")
-      .replace_all(old="<div class=\"reader-metadata\"></div>", new="")
+    return replace_passages(replace_passages(html, link, "", ranges), "<div class=\"reader-metadata\"></div>", "", ranges)
   }
   let mut id = "lattice-backlinks"
   let mut suffix = 2
@@ -136,14 +134,16 @@ fn bind_backlink_shortcut(html : String, count : Int32) -> String {
     suffix = suffix + 1
   }
   let start = destinations[0]
+  shift_passages(ranges, start, start + marker.length(), ("<section class=\"backlinks\" id=\"" + id + "\" tabindex=\"-1\">").length())
   let with_target = html[0:start].to_owned() +
     "<section class=\"backlinks\" id=\"" +
     id +
     "\" tabindex=\"-1\">" +
     html[start + marker.length():].to_owned()
-  with_target.replace_all(
-    old=link,
-    new="<a href=\"#" + id + "\">Backlinks (" + count.to_string() + ")</a>",
+  replace_passages(
+    with_target, link,
+    "<a href=\"#" + id + "\">Backlinks (" + count.to_string() + ")</a>",
+    ranges,
   )
 }
 

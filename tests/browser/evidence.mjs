@@ -42,10 +42,11 @@ try {
   const context = await browser.newContext({ javaScriptEnabled: false });
   let validations = 0;
   const collect = (query, data = indexJson) => collectEvidence({ indexJson: data, query, search, origin,
-    validateTarget: async (url, fragment, publication) => { validations++; return validatePublishedTarget(context, url, fragment, publication); } });
+    validateTarget: async (url, fragment, publication, passage) => { validations++; return validatePublishedTarget(context, url, fragment, publication, passage); } });
   const ready = await collect('isolated checksum');
   assert.equal(ready.status, 'ready');
   assert.equal(ready.pairing.status, 'matched');
+  assert.equal(ready.retention.status, 'matched');
   assert.equal(ready.candidates[0].passage, entry.sections[0].body);
   assert.ok(ready.candidates[0].passage.length > ready.candidates[0].snippet.length);
   assert.equal(ready.citation.url, origin + entry.url + '#verification');
@@ -73,6 +74,7 @@ try {
   const mixed = await collect('isolated checksum');
   assert.equal(mixed.status, 'ready', 'address validation remains separate');
   assert.equal(mixed.pairing.status, 'mismatched');
+  assert.equal(mixed.retention.status, 'mismatched');
   const newer = { version: 1, algorithm: 'sha256', digest: createHash('sha256').update(html).digest('hex') };
   html = originalHtml;
   assert.equal((await collect('isolated checksum', altered(e => ({ ...e, publication: newer })))).pairing.status, 'mismatched');
@@ -81,6 +83,15 @@ try {
   for (const binding of [null, {}, [entry.publication, newer], { ...entry.publication, digest: 'bad' }, { ...entry.publication, other: newer }]) {
     assert.equal((await collect('isolated checksum', altered(e => ({ ...e, publication: binding })))).pairing.status, 'invalid');
   }
+  for (const patch of [
+    s => { s.body += ' altered'; }, s => { s.heading += ' altered'; },
+  ]) {
+    const changedText = await collect('isolated checksum', altered(e => { patch(e.sections[0]); return e; }));
+    assert.equal(changedText.pairing.status, 'matched');
+    assert.equal(changedText.retention.status, 'mismatched');
+  }
+  assert.equal((await collect('isolated checksum', altered(e => { delete e.sections[0].retention; return e; }))).retention.status, 'unknown');
+  assert.equal((await collect('isolated checksum', altered(e => { e.sections[0].retention = null; return e; }))).retention.status, 'invalid');
   const raw = Buffer.from([0, 13, 10, 255, 0xc3, 0xa9]);
   assert.equal(comparePublication(raw, { version: 1, algorithm: 'sha256', digest: createHash('sha256').update(raw).digest('hex') }).status, 'matched');
   assert.equal(comparePublication(Buffer.from(raw.toString('utf8')), { version: 1, algorithm: 'sha256', digest: createHash('sha256').update(raw).digest('hex') }).status, 'mismatched');
@@ -103,6 +114,13 @@ try {
   assert.equal(changedArtifact.code, 2, changedArtifact.stderr);
   assert.equal(JSON.parse(changedArtifact.stdout).status, 'ready');
   assert.equal(JSON.parse(changedArtifact.stdout).pairing.status, 'mismatched');
+  assert.equal(JSON.parse(changedArtifact.stdout).retention.status, 'matched');
+  html = originalHtml;
+  writeFileSync(indexPath, altered(e => { e.sections[0].body += ' altered'; return e; }));
+  const changedText = await execute('isolated checksum');
+  assert.equal(changedText.code, 2, changedText.stderr);
+  assert.equal(JSON.parse(changedText.stdout).pairing.status, 'matched');
+  assert.equal(JSON.parse(changedText.stdout).retention.status, 'mismatched');
   html = originalHtml;
   console.log('Agent evidence: real published index, WASM retrieval, complete passage, ambiguous/no-result abstention, canonical DOM validation, stale/fake/duplicate targets, legacy fallback and executable passed');
 } finally { await browser.close(); await new Promise(resolve => server.close(resolve)); }

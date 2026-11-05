@@ -2751,6 +2751,8 @@ pub(all) struct TextSection {
 /// Optional section_offsets receives one UTF-16 heading start per section;
 /// preambles and generated footnotes have None. Offsets describe renderer origin,
 /// not a guarantee that a template publishes that heading.
+/// Optional section_ranges receives aligned complete half-open UTF-16 HTML
+/// ranges, including preambles and generated footnotes, before template edits.
 /// Optional wikilink_blocks collects (authored target, start, end) for referring
 /// top-level rendered blocks. Nested references share their enclosing block;
 /// appended footnotes are not included. Offsets alone do not prove publication.
@@ -2758,6 +2760,7 @@ pub fn render_with_text_sections(
   body : String,
   wikilinks : Map[String, String],
   section_offsets? : Array[Int?] = [],
+  section_ranges? : Array[(Int, Int)] = [],
   wikilink_blocks? : Array[(String, Int, Int)] = [],
 ) -> (RenderResult, Int?, Array[TextSection]) {
   let sections : Array[TextSection] = []
@@ -2766,6 +2769,7 @@ pub fn render_with_text_sections(
     wikilinks,
     Some(sections),
     section_offsets~,
+    section_ranges~,
     wikilink_blocks~,
   )
   (rendered, boundary, sections)
@@ -2777,6 +2781,7 @@ fn render_document(
   wikilinks : Map[String, String],
   sections : Array[TextSection]?,
   section_offsets? : Array[Int?] = [],
+  section_ranges? : Array[(Int, Int)] = [],
   wikilink_blocks? : Array[(String, Int, Int)] = [],
 ) -> (RenderResult, Int?) {
   let preprocessed = preprocess_callout_next_line(body)
@@ -2827,7 +2832,7 @@ fn render_document(
   }
   if sections is Some(items) {
     collect_text_sections(
-      html_with_footnotes, heading_ranges, items, section_offsets,
+      html_with_footnotes, heading_ranges, items, section_offsets, section_ranges,
     )
   }
   (
@@ -2850,6 +2855,7 @@ fn collect_text_sections(
   ranges : Array[(Int, Int)],
   sections : Array[TextSection],
   section_offsets : Array[Int?],
+  section_ranges : Array[(Int, Int)],
 ) -> Unit {
   let offsets : Array[Int] = []
   for (start, end) in ranges {
@@ -2869,6 +2875,7 @@ fn collect_text_sections(
     if whole_text != "" {
       sections.push({ heading: "", body: whole_text, })
       section_offsets.push(None)
+      section_ranges.push((0, html.length()))
     }
     return
   }
@@ -2876,6 +2883,7 @@ fn collect_text_sections(
   if preamble != "" {
     sections.push({ heading: "", body: preamble, })
     section_offsets.push(None)
+    section_ranges.push((0, visible[0].0))
   }
   for i = 0; i < visible.length(); i = i + 1 {
     let (start, heading_end) = visible[i]
@@ -2899,6 +2907,7 @@ fn collect_text_sections(
     if heading != "" || body != "" {
       sections.push({ heading, body, })
       section_offsets.push(if generated { None } else { Some(start) })
+      section_ranges.push((start, end))
     }
   }
 }

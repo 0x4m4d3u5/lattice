@@ -105,7 +105,7 @@ fn contextual_backlink_items(
 
 ///|
 /// Replace only the exact generated list in an active backlink section.
-fn contextual_backlink_html(html : String, refs : Array[BacklinkRef], items : String, count : Int) -> String {
+fn contextual_backlink_html(html : String, refs : Array[BacklinkRef], items : String, count : Int, ranges : Array[(Int, Int, Int)]) -> String {
   let original = render_backlinks_html(refs)
   let old_body = match original.split_once(">") { Some((_, body)) => body.to_owned(); None => return html }
   let replacements : Array[(String, String)] = []
@@ -124,8 +124,8 @@ fn contextual_backlink_html(html : String, refs : Array[BacklinkRef], items : St
     }
   })
   let mut result = html
-  for (old, new) in replacements { result = result.replace_all(old~, new~) }
-  result.replace_all(old="<div class=\"reader-metadata\"></div>", new="")
+  for (old, new) in replacements { result = replace_passages(result, old, new, ranges) }
+  replace_passages(result, "<div class=\"reader-metadata\"></div>", "", ranges)
 }
 
 ///|
@@ -144,6 +144,7 @@ fn finalize_contextual_backlinks(
   marks : Map[String, (String, Int)],
   dropped : Map[Int, Bool],
   publication_html : Map[String, String],
+  final_passages : Map[String, Array[(Int, Int, Int)]],
   cache : @cache.CacheStore,
   next_cache : @cache.CacheStore,
   messages : Array[String],
@@ -158,16 +159,17 @@ fn finalize_contextual_backlinks(
     if dropped.contains(i) || last_write.get(output_path_key(output.files[i].0)) != Some(i) { continue }
     if output.origins[i] is Page(source) && sources.get(source) is Some((slug, url, context)) &&
       output.files[i].1 is Text(html) && (index.contains(slug) || related.contains(source) || html.contains("<!--lattice-local-graph-->")) {
+      let ranges = if marks.get(url) is Some((path, _)) && output.files[i].0 == path { final_passages.get(url).unwrap_or([]) } else { [] }
       let graph_html = match local_graphs.get(url) { Some(data) => local_graph_html(data); None => "" }
-      let html = html.replace_all(old="<!--lattice-local-graph-->", new=graph_html)
-      let with_related = html.replace_all(old="<!--lattice-related-notes-->", new=related_notes_html(related.get(source).unwrap_or([]), url, documents, page_index, overwritten))
+      let html = replace_passages(html, "<!--lattice-local-graph-->", graph_html, ranges)
+      let with_related = replace_passages(html, "<!--lattice-related-notes-->", related_notes_html(related.get(source).unwrap_or([]), url, documents, page_index, overwritten), ranges)
       let final_html = if overwritten.contains(url) {
         with_related
       } else {
         match index.get(slug) {
           Some(refs) => {
             let (items, count) = contextual_backlink_items(refs, url, documents, page_index, overwritten)
-            contextual_backlink_html(with_related, refs, items, count)
+            contextual_backlink_html(with_related, refs, items, count, ranges)
           }
           None => with_related
         }

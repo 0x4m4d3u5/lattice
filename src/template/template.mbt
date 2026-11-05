@@ -952,6 +952,8 @@ priv struct TemplateOutput {
   mut length : Int
   origins : Map[TemplateSlot, Array[(Int, Int)]]
   emitted : Array[(Int, Int)]
+  ranges : Map[TemplateSlot, Array[(Int, Int, Int)]]
+  emitted_ranges : Array[(Int, Int, Int)]
 }
 
 ///|
@@ -992,6 +994,14 @@ fn render_body_parts(
                 if offset >= 0 && offset < value.length() {
                   out.emitted.push((key, out.length + offset))
                 }
+              }
+            }
+            for (key, start, end) in out.ranges.get(slot).unwrap_or([]) {
+              if filters.is_empty() && start >= 0 && end > start && end <= value.length() {
+                out.emitted_ranges.push((key, out.length + start, out.length + end))
+              } else {
+                // Preserve uncertainty across layouts and duplicate emissions.
+                out.emitted_ranges.push((key, -1, -1))
               }
             }
             out.write_string(rendered)
@@ -1183,6 +1193,8 @@ fn render_parts(
   page_field_arrays : Map[String, Array[String]],
   slot_offsets? : Map[TemplateSlot, Array[(Int, Int)]] = Map([]),
   rendered_offsets? : Array[(Int, Int)] = [],
+  slot_ranges? : Map[TemplateSlot, Array[(Int, Int, Int)]] = Map([]),
+  rendered_ranges? : Array[(Int, Int, Int)] = [],
 ) -> Result[String, TemplateError] {
   // Validate required slots upfront
   let mut i = 0
@@ -1200,6 +1212,8 @@ fn render_parts(
     length: 0,
     origins: slot_offsets,
     emitted: rendered_offsets,
+    ranges: slot_ranges,
+    emitted_ranges: rendered_ranges,
   }
   match
     render_body_parts(
@@ -1242,7 +1256,10 @@ pub fn render_template(
 /// Render a parsed template with both standard slots and data slots.
 /// Optional slot offsets carry caller keys and UTF-16 positions through verbatim
 /// insertions, conditionals, loops and layouts. Changed filter output drops its
-/// offsets. Read rendered_offsets only on success; no marker text enters HTML.
+/// offsets. Optional slot_ranges/rendered_ranges carry (key, start, end) for
+/// complete half-open UTF-16 ranges through unfiltered emissions only. Invalid
+/// ranges are retained as (key, -1, -1), so callers can reject uncertainty and
+/// duplicate origins. Read outputs only on success; no marker text enters HTML.
 pub fn render_template_with_data(
   template : Template,
   slots : Map[TemplateSlot, String],
@@ -1251,11 +1268,14 @@ pub fn render_template_with_data(
   page_field_arrays : Map[String, Array[String]],
   slot_offsets? : Map[TemplateSlot, Array[(Int, Int)]] = Map([]),
   rendered_offsets? : Array[(Int, Int)] = [],
+  slot_ranges? : Map[TemplateSlot, Array[(Int, Int, Int)]] = Map([]),
+  rendered_ranges? : Array[(Int, Int, Int)] = [],
 ) -> Result[String, TemplateError] {
   // If template has a layout, render child first, then render layout with body
   match template.layout {
     Some(layout) => {
       let child_offsets : Array[(Int, Int)] = []
+      let child_ranges : Array[(Int, Int, Int)] = []
       // Render the child template
       let child_output = match
         render_parts(
@@ -1266,6 +1286,8 @@ pub fn render_template_with_data(
           page_field_arrays,
           slot_offsets~,
           rendered_offsets=child_offsets,
+          slot_ranges~,
+          rendered_ranges=child_ranges,
         ) {
         Ok(output) => output
         Err(e) => return Err(e)
@@ -1283,6 +1305,8 @@ pub fn render_template_with_data(
         layout_offsets.set(key, offsets)
       }
       layout_offsets.set(Body, child_offsets)
+      let layout_ranges = slot_ranges.copy()
+      layout_ranges.set(Body, child_ranges)
       // Render layout with all slots including body
       render_parts(
         layout,
@@ -1292,6 +1316,8 @@ pub fn render_template_with_data(
         page_field_arrays,
         slot_offsets=layout_offsets,
         rendered_offsets~,
+        slot_ranges=layout_ranges,
+        rendered_ranges~,
       )
     }
     None =>
@@ -1303,6 +1329,8 @@ pub fn render_template_with_data(
         page_field_arrays,
         slot_offsets~,
         rendered_offsets~,
+        slot_ranges~,
+        rendered_ranges~,
       )
   }
 }

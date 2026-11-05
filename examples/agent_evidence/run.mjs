@@ -12,7 +12,7 @@ const browser = await chromium.launch({ chromiumSandbox: true, ...(process.env.L
 try {
   const context = await browser.newContext({ javaScriptEnabled: false });
   const result = await collectEvidence({ indexJson, query: process.argv[4], origin: process.argv[3], search,
-    validateTarget: (url, fragment, publication) => validatePublishedTarget(context, url, fragment, publication) });
+    validateTarget: (url, fragment, publication, passage) => validatePublishedTarget(context, url, fragment, publication, passage) });
   console.log(JSON.stringify(result, null, 2));
-  if (result.status !== 'ready' || ['mismatched', 'invalid'].includes(result.pairing?.status)) process.exitCode = 2;
+  if (result.status !== 'ready' || [result.pairing?.status, result.retention?.status].some(status => ['mismatched', 'invalid'].includes(status))) process.exitCode = 2;
 } finally { await browser.close(); }

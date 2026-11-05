@@ -46,7 +46,8 @@ address result alone must not be interpreted as a matched publication.
 body text can still artifact-match while the index contains a passage. Matching
 also does not authenticate the publisher, establish freshness, prove factual
 truth, or show that a passage answers a question. Both index and HTML can be stale
-or altered together. Full passage provenance/DOM extraction is a separate contract.
+or altered together. [Passage retention](passage-retention.md) is a separate byte-origin contract;
+it does not establish DOM visibility.
 
 Bindings describe prepared output, not a filesystem transaction. Failed
 validation publishes nothing; interruption/disk failure can still leave mixed
