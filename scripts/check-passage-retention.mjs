@@ -52,12 +52,15 @@ try {
   assert.ok(html().subarray(initial[2].retention.start, initial[2].retention.end).toString('utf8').includes('Footnote 🌸.'));
   const rootPreamble = index().find(e => e.url === '/').sections[0];
   assert.equal(rootPreamble.heading, ''); assert.ok(rootPreamble.retention);
+  write('site.cfg', readFileSync(join(root, 'site.cfg'), 'utf8') + 'root_page = index\n');
+  const verifyRoot = () => assert.ok(index().find(e => e.url === '/').sections.every(s => s.retention), 'canonical root origins must be recorded once');
+  run(); verify([true, true, true]); verifyRoot();
   for (const template of [
     '<html><head></head><body>前 🌱{{content}}</body></html>',
     '{{reader_metadata}}{{backlinks}}{{related_notes}}<!--lattice-local-graph-->{{content}}',
     '{{content}}{{backlinks}}<!--lattice-local-graph-->{{related_notes}}{{reader_metadata}}',
   ]) {
-    write('templates/page.html', template); run(); verify([true, true, true]);
+    write('templates/page.html', template); run(); verify([true, true, true]); verifyRoot();
     const before = readFileSync(join(root, 'dist/content-index.json'));
     run(); verify([true, true, true]); assert.deepEqual(readFileSync(join(root, 'dist/content-index.json')), before);
     run(['--force']); verify([true, true, true]); assert.deepEqual(readFileSync(join(root, 'dist/content-index.json')), before);
@@ -84,6 +87,8 @@ try {
   const passage = { binding: section.retention, heading: section.heading, body: section.body };
   assert.equal(compareRetention(bytes, { ...passage, body: 'Changed index body' }).status, 'mismatched');
   assert.equal(compareRetention(bytes, { ...passage, heading: 'Changed heading' }).status, 'mismatched');
+  // The trusted index asserts the text-to-slice association; hashes do not authenticate it.
+  assert.equal(compareRetention(bytes, { ...passage, body: 'Changed index body', binding: { ...passage.binding, body_digest: hash('Changed index body') } }).status, 'matched');
   const changed = Buffer.from(bytes); changed[section.retention.start] ^= 1;
   assert.equal(compareRetention(changed, passage).status, 'mismatched');
   assert.equal(compareRetention(bytes, {}).status, 'unknown');

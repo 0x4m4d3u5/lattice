@@ -3733,3 +3733,14 @@ the installed system Chromium also failed with sandboxing enabled. Browser/DOM
 acceptance remains pending on a compatible runner. No sandbox protection was
 disabled. The offline interrupted work was unavailable; this implementation was
 built from the clean PR 162 checkpoint rather than assumed recovered.
+
+
+Pre-merge independent review identified a false-negative case with `root_page =
+index`: rendering the root alias used the same URL as the canonical page and
+recorded its origins twice. An end-to-end regression failed before the fix.
+Origin collection now belongs explicitly to the canonical render invocation,
+not to URL equality; the alias render cannot mutate canonical origin metadata.
+The regression covers default and custom templates and rebuild parity. Review
+also clarified that the trusted index asserts the text-to-slice relationship:
+changing text and its digest together can match unchanged HTML. Verification
+checks those bindings, not independent text extraction or authentication.

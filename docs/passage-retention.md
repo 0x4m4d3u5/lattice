@@ -50,7 +50,10 @@ the body may artifact-match while its sections have unknown retention.
 Verbatim text inside a comment, script, hidden element or inert template can
 retain its bytes. Retention does not assert DOM placement, visible text,
 accessibility, freshness, authenticity, factual correctness or relevance to a
-question. Both the index and HTML can be altered together. Address validation
+question. The index is trusted to bind its text to the renderer-owned slice;
+the host does not re-extract text from HTML. Changing indexed text and its matching
+text digest together can still report `matched` even if HTML is unchanged. Both
+the index and HTML can also be altered together. Address validation
 and artifact pairing retain their separate meanings.
 
 Run `node scripts/check-passage-retention.mjs` after building the JS CLI, or set
