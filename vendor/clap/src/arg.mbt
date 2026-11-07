@@ -135,6 +135,7 @@ pub fn Arg::is_global(self : Arg) -> Bool {
 }
 
 ///|
+#derive(Eq)
 pub(all) enum Nargs {
   Any
   /// n == 1
@@ -147,7 +148,7 @@ pub(all) enum Nargs {
   AtMost(UInt)
   /// X <= n < Y
   Range(UInt, UInt)
-} derive(Eq)
+}
 
 ///|
 pub impl Show for Nargs with fn output(self, logger) {

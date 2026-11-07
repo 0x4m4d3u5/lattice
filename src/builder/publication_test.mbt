@@ -1,10 +1,11 @@
 ///|
 /// Record directories as well as bytes, including hidden cache/manifest files.
 /// A failed build must not even leave newly prepared, empty directories behind.
+#derive(Eq, Debug)
 priv struct PublicationSnapshotEntry {
   path : String
   bytes : Bytes?
-} derive(Eq, Debug)
+}
 
 ///|
 fn publication_snapshot_walk(

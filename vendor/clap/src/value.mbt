@@ -1,11 +1,12 @@
 ///|
+#derive(Eq)
 pub(all) struct SimpleValue {
   name : String
   args : Map[String, Array[String]]
   flags : Map[String, Bool]
   positional_args : Array[String]
   mut subcmd : SimpleValue?
-} derive(Eq)
+}
 
 ///|
 /// Create a simple value to hold the parsed result

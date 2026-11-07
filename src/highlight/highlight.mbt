@@ -1,5 +1,6 @@
 ///|
 /// Syntax highlighting tokenization and HTML rendering for fenced code blocks.
+#derive(Eq, Debug, ToJson)
 pub(all) enum TokenKind {
   Keyword
   Type
@@ -13,7 +14,7 @@ pub(all) enum TokenKind {
   Builtin
   Whitespace
   Unknown
-} derive(Eq, Debug, ToJson)
+}
 
 ///|
 pub impl Show for TokenKind with fn output(self, logger) {
@@ -34,10 +35,11 @@ pub impl Show for TokenKind with fn output(self, logger) {
 }
 
 ///|
+#derive(Eq, Debug, ToJson)
 pub(all) struct Token {
   kind : TokenKind
   text : String
-} derive(Eq, Debug, ToJson)
+}
 
 ///|
 fn is_pascal_case_ident(s : String) -> Bool {

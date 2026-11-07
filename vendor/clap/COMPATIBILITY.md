@@ -39,3 +39,14 @@ variant and a nested `SimpleValue` with the pre-migration implementation.
 
 `src/choice_display_test.mbt` adds one compatibility test with two pre-migration
 choice diagnostic strings, bringing the vendored suite to 16 tests.
+
+## 2026-11-04 toolchain compatibility
+
+The compatibility upgrade moves trailing `derive(...)` declarations to
+`#derive(...)` attributes and uses a full string slice for default argument views.
+The derived traits, parser choices, numeric conversions and diagnostics are unchanged.
+All 16 vendored tests pass on JavaScript, WASM, WASM-GC and native with Moon
+`0.1.20261104`, compiler `0.10.20+65efd5b93`, and Node `26.12.1`.
+The repository pins the matching official native SDK and core archives. The complete upstream delta was regenerated from the
+SHA-256-verified registry archive, includes the local compatibility tests, and was
+checked by applying it and comparing every source and manifest with this copy.
