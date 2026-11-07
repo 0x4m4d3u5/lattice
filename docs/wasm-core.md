@@ -28,7 +28,7 @@ of the filesystem builder or the complete WASM test suite. The full JavaScript
 baseline remains a separate required CI step.
 
 Verified locally on Linux x86_64 with Node `26.12.1`, compiler
-`v0.10.18+6c83a7f62`, and Moon CLI/Moonrun `e1e1f15`. Both generated targets pass
+`v0.10.20+65efd5b93`, and Moon CLI/Moonrun `940aa18`. Both generated targets pass
 all five fixtures; the full warning-free JS baseline also passes. A Node worker
 was tested. These fixed fixture exports remain Node-only. The separate
 [supplied-note browser gate](wasm-note.md#real-browser-worker-gate) now verifies
