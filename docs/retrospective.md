@@ -3744,3 +3744,28 @@ The regression covers default and custom templates and rebuild parity. Review
 also clarified that the trusted index asserts the text-to-slice relationship:
 changing text and its digest together can match unchanged HTML. Verification
 checks those bindings, not independent text extraction or authentication.
+
+
+## Enforce strict citation policy before constructing a citation
+
+The evidence host intentionally preserves legacy indexes, so its existing
+`ready` status describes address validation even when byte bindings are unknown.
+An opt-in `strictCitations` policy now requires publication pairing and passage
+retention to match before constructing the structured citation. Rejection is a
+host result with a distinct status, null citation, and separate reasons for all
+failing checks; implementing this only as a CLI exit code would still expose a
+usable citation to imported callers or JSON consumers.
+
+This AI-assisted change keeps the default API and CLI behavior intact and adds
+`--strict-citations` to the executable. Tests cover the full pairing/retention
+state matrix, actual digest comparisons, abstention and address failures,
+configuration mistakes, and unchanged defaults. Browser tests exercise the same
+policy through real responses and the executable. The stricter gate does not
+turn publisher-provided bindings into proof of visibility, authenticity or truth.
+
+
+Local verification passed 21 browser-free policy tests, the existing publication
+pairing and passage-retention acceptance fixtures, and JavaScript syntax checks.
+The expanded browser/executable fixture could not launch Chromium because this
+cloud environment has no usable browser sandbox. It remains pending on a
+compatible runner; sandbox protections were not disabled.

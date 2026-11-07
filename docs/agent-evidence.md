@@ -64,6 +64,47 @@ The executable exits zero only for `ready` without mismatched or invalid
 `pairing`/`retention`, and exits 2 for those failures or an abstention. Missing
 legacy bindings report `unknown` and do not prevent address validation. Setup failures are ordinary process errors.
 
+## Opt-in strict citations
+
+Use the host option `collectEvidence({ ...options, strictCitations: true })`, or
+put `--strict-citations` before the executable's positional arguments:
+
+```sh
+node examples/agent_evidence/run.mjs --strict-citations \
+  dist/content-index.json http://127.0.0.1:8000 "isolated checksum"
+```
+
+Strict mode requires successful address validation **and** `pairing.status` and
+`retention.status` both equal to `matched`. Either check reporting `unknown`,
+`mismatched` or `invalid` rejects the citation. Missing host comparisons are
+unknown; unsupported or missing index bindings therefore cannot pass strict mode.
+The API option defaults to `false` and must be a boolean.
+
+A provenance rejection returns `status: "rejected_citation"`, `citation: null`,
+and `rejections`, an array of `{ check, status, reason, detail? }` records for
+all failing checks. `check` is `pairing` or `retention`; `detail` preserves the
+comparison's explanation when supplied. A combined `reason` is also included.
+`candidates` remain diagnostic retrieved evidence, never issued citations. Hosts
+must use the top-level `citation` only when `status` is `ready`. The CLI prints
+this same rejected result and exits 2; the policy is enforced in the shared host,
+not merely in the process exit code. Address failures remain `invalid_target`;
+retrieval abstention and ambiguity still take precedence.
+
+Without the option, existing behavior is unchanged: a valid address can return
+`ready` even when pairing or retention is unknown, mismatched or invalid. The
+default CLI continues to exit 2 for mismatched/invalid checks and permits unknown
+legacy bindings. Strict mode additionally withholds the structured citation and
+rejects unknown checks. Both matched still permits a citation only after the
+existing single-candidate and canonical-address checks succeed.
+
+Strict byte matching does not establish browser visibility, factual truth,
+freshness, authenticity or relevance. It still trusts the index's association
+between the indexed text and the HTML slice; see [passage retention](passage-retention.md).
+
+Run `node --test examples/agent_evidence/evidence.test.mjs` for the browser-free
+policy matrix and real digest-comparison checks. The browser evidence fixture
+also exercises strict imported-host results and executable JSON/exit behavior.
+
 ## Validation and boundaries
 
 The host joins each hit back to exactly one indexed page and its section position.
