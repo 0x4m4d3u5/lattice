@@ -41,7 +41,7 @@ const browser = await chromium.launch({ chromiumSandbox: true, ...(process.env.L
 try {
   const context = await browser.newContext({ javaScriptEnabled: false });
   let validations = 0;
-  const collect = (query, data = indexJson) => collectEvidence({ indexJson: data, query, search, origin,
+  const collect = (query, data = indexJson, strictCitations = false) => collectEvidence({ indexJson: data, query, search, origin, strictCitations,
     validateTarget: async (url, fragment, publication, passage) => { validations++; return validatePublishedTarget(context, url, fragment, publication, passage); } });
   const ready = await collect('isolated checksum');
   assert.equal(ready.status, 'ready');
@@ -98,14 +98,30 @@ try {
   html = originalHtml;
   const legacy = await collect('isolated checksum', altered(e => { delete e.sections; return e; }));
   assert.equal(legacy.status, 'ready'); assert.equal(legacy.citation.url, origin + entry.url);
+  assert.equal((await collect('isolated checksum', indexJson, true)).status, 'ready');
+  for (const change of [
+    e => { delete e.publication; return e; },
+    e => { delete e.sections[0].retention; return e; },
+    e => { e.publication = null; return e; },
+    e => { e.sections[0].retention = null; return e; },
+    e => { e.publication.digest = '0'.repeat(64); return e; },
+    e => { e.sections[0].body += ' altered'; return e; },
+  ]) {
+    const rejected = await collect('isolated checksum', altered(change), true);
+    assert.equal(rejected.status, 'rejected_citation'); assert.equal(rejected.citation, null);
+    assert.equal(rejected.rejections.length, 1);
+  }
   await context.close();
   // Exercise the documented executable, not only its imported helper.
-  const execute = query => new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, [join(repository, 'examples/agent_evidence/run.mjs'), indexPath, origin, query]);
+  const execute = (query, strict = false) => new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [join(repository, 'examples/agent_evidence/run.mjs'), ...(strict ? ['--strict-citations'] : []), indexPath, origin, query]);
     let stdout = '', stderr = ''; child.stdout.on('data', b => stdout += b); child.stderr.on('data', b => stderr += b);
     child.on('error', reject); child.on('exit', code => resolve({ code, stdout, stderr }));
   });
   const result = await execute('isolated checksum');
+  const strictReady = await execute('isolated checksum', true);
+  assert.equal(strictReady.code, 0, strictReady.stderr);
+  assert.equal(JSON.parse(strictReady.stdout).status, 'ready');
   const absent = await execute('platinum');
   assert.equal(absent.code, 2, absent.stderr); assert.equal(JSON.parse(absent.stdout).status, 'no_results');
   assert.equal(result.code, 0, result.stderr); assert.equal(JSON.parse(result.stdout).citation.url, ready.citation.url);
@@ -122,5 +138,23 @@ try {
   assert.equal(JSON.parse(changedText.stdout).pairing.status, 'matched');
   assert.equal(JSON.parse(changedText.stdout).retention.status, 'mismatched');
   html = originalHtml;
-  console.log('Agent evidence: real published index, WASM retrieval, complete passage, ambiguous/no-result abstention, canonical DOM validation, stale/fake/duplicate targets, legacy fallback and executable passed');
+  for (const change of [
+    e => { delete e.publication; return e; },
+    e => { delete e.sections[0].retention; return e; },
+    e => { e.publication = null; return e; },
+    e => { e.sections[0].retention = null; return e; },
+    e => { e.publication.digest = '0'.repeat(64); return e; },
+    e => { e.sections[0].body += ' altered'; return e; },
+  ]) {
+    writeFileSync(indexPath, altered(change));
+    const rejected = await execute('isolated checksum', true);
+    assert.equal(rejected.code, 2, rejected.stderr);
+    const result = JSON.parse(rejected.stdout);
+    assert.equal(result.status, 'rejected_citation'); assert.equal(result.citation, null);
+  }
+  writeFileSync(indexPath, altered(e => { delete e.publication; delete e.sections[0].retention; return e; }));
+  const compatible = await execute('isolated checksum');
+  assert.equal(compatible.code, 0, compatible.stderr);
+  assert.equal(JSON.parse(compatible.stdout).status, 'ready');
+  console.log('Agent evidence: real published index, WASM retrieval, complete passage, ambiguous/no-result abstention, canonical DOM validation, stale/fake/duplicate targets, legacy fallback, strict citation rejection and executable passed');
 } finally { await browser.close(); await new Promise(resolve => server.close(resolve)); }

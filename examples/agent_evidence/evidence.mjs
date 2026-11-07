@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 // A conservative host policy around Lattice retrieval, not an answer generator.
-export async function collectEvidence({ indexJson, query, search, validateTarget, origin }) {
+export async function collectEvidence({ indexJson, query, search, validateTarget, origin, strictCitations = false }) {
+  if (typeof strictCitations !== 'boolean') throw new TypeError('strictCitations must be a boolean');
   const response = await search(indexJson, query, '[]', 50);
   if (response.error) return { status: 'invalid_index', query, error: response.error, candidates: [] };
   const index = JSON.parse(indexJson);
@@ -30,6 +31,17 @@ export async function collectEvidence({ indexJson, query, search, validateTarget
   const pairing = validation.pairing ?? { status: 'unknown', reason: 'Host did not compare publication bytes' };
   const retention = validation.retention ?? { status: 'unknown', reason: 'Host did not compare passage retention' };
   if (!validation.ok) return { status: 'invalid_target', query, candidates, citation: null, reason: validation.reason, pairing, retention };
+  if (strictCitations) {
+    const rejections = [];
+    for (const [check, result] of [['pairing', pairing], ['retention', retention]]) {
+      if (result.status === 'matched') continue;
+      const status = ['unknown', 'mismatched', 'invalid'].includes(result.status) ? result.status : 'invalid';
+      rejections.push({ check, status, reason: `${check} must be matched; received ${status}`,
+        ...(typeof result.reason === 'string' ? { detail: result.reason } : {}) });
+    }
+    if (rejections.length) return { status: 'rejected_citation', query, candidates, pairing, retention,
+      citation: null, reason: rejections.map(item => item.reason).join('; '), rejections };
+  }
   return { status: 'ready', query, candidates, pairing, retention, citation: { title: evidence.title, url: target.href },
     limitation: 'Retrieved text is evidence to inspect, not proof of factual truth. Target validation does not establish freshness or truth of the indexed passage. Retention compares publisher-origin bytes, not browser visibility.' };
 }
