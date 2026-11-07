@@ -485,7 +485,7 @@ pub fn validate(
   // Reserved keys are consumed by the lattice builder itself and are never
   // user-schema fields — flagging them as unrecognized would be a false positive.
   let reserved = [
-    "toc", "toc_depth", "draft", "template", "redirect_from", "og_image", "weight",
+    "toc", "toc_depth", "draft", "visibility", "template", "redirect_from", "og_image", "weight",
   ]
   let valid_fields = Map([])
   let mut j = 0

@@ -179,6 +179,7 @@ fn code_for_violation(kind : @lint.ViolationType) -> String {
     @lint.IOError => "E011"
     @lint.MissingImageAlt => "E012"
     @lint.ConfigError => "E013"
+    @lint.PublicationVisibilityError => "E015"
   }
 }
 
@@ -213,6 +214,8 @@ fn hint_for_violation(kind : @lint.ViolationType) -> String? {
     @lint.IOError => Some("check file permissions and that the path exists")
     @lint.ConfigError =>
       Some("check site configuration syntax, required fields and values")
+    @lint.PublicationVisibilityError =>
+      Some("private publication is not supported; keep private notes and attachments outside the public build inputs")
     @lint.MissingImageAlt =>
       Some(
         "add descriptive alt text; for decorative images use an image/figure shortcode with explicit alt=\"\"",
@@ -254,7 +257,7 @@ pub(all) struct DiagnosticFileCount {
 ///
 /// Provides three breakdowns:
 /// - **error_count / warning_count**: totals by severity
-/// - **by_code**: how many diagnostics for each error code (E001–E014)
+/// - **by_code**: how many diagnostics for each error code (E001–E015)
 /// - **by_file**: how many diagnostics per source file
 ///
 /// Used by the build command to emit a structured summary after the

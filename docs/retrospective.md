@@ -3769,3 +3769,38 @@ pairing and passage-retention acceptance fixtures, and JavaScript syntax checks.
 The expanded browser/executable fixture could not launch Chromium because this
 cloud environment has no usable browser sandbox. It remains pending on a
 compatible runner; sandbox protections were not disabled.
+
+
+## Reject private intent before offering private publication
+
+This AI-assisted slice reserves `visibility` as an exact public/private string
+contract while leaving missing visibility and existing organizational metadata
+alone. The compatibility tradeoff was explicitly reviewed before implementation.
+Private publication is not ready: filtering a note would still leave attachments,
+metadata and stale output at risk. The first step therefore rejects the entire
+public preparation when a configured Markdown source declares private or invalid
+visibility. Draft readiness remains independent.
+
+The guard is shared by ordinary build, check and inventory and runs before cache
+reuse and derived output generation. Review of the actual source paths found that
+root `404.md` bypasses normal collection; it now receives the same check, including
+when the dedicated renderer rereads it. Repeated visibility assignments are
+rejected in both frontmatter syntaxes so last-assignment-wins cannot erase private
+intent. Other duplicate metadata retains its established behavior. Existing
+Map/string operations and parser/location helpers were sufficient; no new string
+utility or dependency was needed.
+
+The regression fixtures cover filesystem APIs and CLI behavior, typed values,
+duplicate declarations, drafts, all source kinds, cached/forced/strict builds,
+legacy metadata, source/output preservation, and recovery. A blocked build keeps
+old artifacts untouched, which is explicitly documented as preservation rather
+than privacy or takedown. Asset classification, isolated audiences and stale-file
+handling remain future work; no private vault was used for these tests.
+
+
+Independent review found that quoted keys were preserved literally by the parser,
+letting a quoted private declaration bypass the guard on custom 404 pages. The
+reserved key now normalizes its single- and double-quoted spellings before
+validation and duplicate detection. Focused regressions cover both syntaxes,
+public/private values and mixed duplicate spellings through all three commands.
+Other quoted metadata semantics remain unchanged.

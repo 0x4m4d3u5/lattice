@@ -7,6 +7,12 @@ build's final files and draft/overwrite exclusions without publishing. It includ
 static assets and does not interpret vault types as a publication filter. This is
 not an automatic vault importer, migration tool or privacy audit.
 
+The reserved [`visibility` field](publication-visibility.md) rejects private,
+invalid or duplicate declarations in ordinary build/check/inventory, including
+hidden drafts. This is a public-only guard, not mixed-vault support. Keep private
+notes and attachments outside the public source tree; a rejection leaves old
+published files untouched. Existing `type: private` behavior is unchanged.
+
 ## Bring a curated vault copy into the wiki starter
 
 Use a separate working copy so the original notes stay untouched. There is no
