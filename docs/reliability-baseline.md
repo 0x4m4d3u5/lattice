@@ -10,20 +10,21 @@ Repository bootstrap and CI use the official **native-hosted compiler** on Linux
 x86_64. Compiler host and generated target are separate: this compiler produces
 JavaScript, WASM, WASM-GC and native executables. Node remains pinned to 26.12.1.
 
-- Moon CLI and Moonrun: `0.1.20261028` (`e1e1f15`).
-- Compiler: `0.10.18+6c83a7f62`.
-- Core: `0.1.20261028+6c83a7f62`, extracted from the matching tagged compiler archive.
+- Moon CLI and Moonrun: `0.1.20261104` (`940aa18`).
+- Compiler: `0.10.20+65efd5b93`.
+- Core: `0.10.20+65efd5b93`, from the exact-version official core archive.
 - Dependencies remain `moonbitlang/x 0.5.5` and the vendored `clap 0.2.6` compatibility copy.
 
 | Official input | Verified SHA-256 |
 | --- | --- |
-| Linux SDK, including native compiler and C runtime | `0e4cde1ace98e8ef00552a937738b59c6901c4b8a004ebad71ea0e63688f63f1` |
-| Tagged compiler archive, used for matching core | `c666b3b45db79e2a1a477cc9e99812223700d645d33d9834c95216208926fed1` |
+| Linux SDK, including native compiler and C runtime | `80d987523308fa490eba9f1baf98df996a5a7891e118357553b7c2608c0597c5` |
+| Matching official core source archive | `8ec2a2c01335501d703867bb4eef5f92d3cd7e1ae1ee5f7f14d54d16d2c7c2b5` |
 
-[Official SDK distribution path](https://cli.moonbitlang.com/binaries/0.10.18%2B6c83a7f62/moonbit-linux-x86_64.tar.gz)
-and [tagged core source archive](https://github.com/moonbitlang/moonbit-compiler/releases/tag/v0.10.18%2B6c83a7f62).
-The latter archive also contains a WASM-hosted compiler; bootstrap does not install
-that compiler. Its SDK revision metadata is checked independently of the CLI version.
+[Official SDK distribution path](https://cli.moonbitlang.com/binaries/0.10.20%2B65efd5b93/moonbit-linux-x86_64.tar.gz)
+and [matching core source archive](https://cli.moonbitlang.com/cores/core-0.10.20%2B65efd5b93.tar.gz).
+The installer checks the core's declared version as well as its archive checksum;
+it never substitutes a different compiler host or a floating core. The native compiler
+reports a November 5 build date while the CLI reports November 4.
 
 The installer verifies archives before extraction, stages the installation, bundles
 JS core, and verifies installed tools before promotion. Cache reuse checks the
@@ -34,7 +35,7 @@ when changing compiler profiles. A local `moon upgrade` does not alter these pin
 ### Reproducibility and download retention
 
 The SDK download's HTTP `x-amz-expiration` header advertises deletion on
-**December 29, 2026**, under `delete binaries every 60days`. This is remote object
+**January 5, 2027**, under `delete binaries every 60days`. This is remote object
 retention, not evidence that the downloaded executable expires at runtime. Fresh
 installation after removal is not guaranteed; retained installations/caches do not
 provide permanent artifact availability either. Missing downloads or changed hashes
@@ -61,6 +62,13 @@ Native file stamps use modification times; the JS watcher hashes contents, so
 restoring identical bytes can cause one additional dependency rebuild on native.
 
 ## Source compatibility
+
+The November 4 toolchain deprecates trailing `derive(...)` syntax and legacy
+`String.view()`. Sixteen declarations now use `#derive(...)` attributes, preserving
+the same traits, and the vendored CLI parser uses a full string slice for defaults.
+No warning category is disabled, dependency version changed, or parser policy altered.
+These source changes and the compiler pin are one upgrade; the previous pinned
+compiler is not claimed to support the new attribute syntax.
 
 The October 28 compiler uses `Json(value)` instead of deprecated `to_json()`
 and `Iter::count` instead of `Iter::length`. Cache I/O now follows typed
@@ -99,6 +107,28 @@ configuration. The 2026-10-11 cleanup fixes the underlying APIs and declarations
 including vendored code. Display compatibility tests preserve 89 pre-migration
 public strings and asset-validation formatting; two parser-choice diagnostic strings, and CLI stdout, stderr and exit codes
 were compared against the previous implementation using seven synthetic commands.
+
+## Verified upgrade results — 2026-11-07
+
+An isolated Linux x86_64 checkout based on `dae79b388006e230762e3dcdacd9452a2aee464b`
+passed the complete gate sequence with the compiler/core profile above and Node
+`26.12.1`: `check-baseline.sh`, `check-targets.sh`, `check-wasm-core.sh`,
+`check-wasm-note.sh`, and `check-browser-note.sh`. The browser suite used headless
+Chromium `153.0.8010.12` with its sandbox enabled; only synthetic sites were processed.
+
+The JavaScript workspace suite passed all 1,653 tests. WASM, WASM-GC and native each
+passed all 1,652 tests; each total includes the 16 vendored clap tests, which also
+passed their explicit package gate. JavaScript and both WASM targets retain
+warnings-as-errors. Native retains only its documented unused environment import.
+The CLI/publication fixtures, 21 evidence tests, portable exports, supplied-note
+workers, prepared search, browser reader, graph, and preview workflows also passed.
+
+The actual installer passed both a fresh installation and cached reuse. An
+intentionally corrupted disposable core manifest was rejected without overwriting
+that installation. The vendored patch was reapplied to its checksum-verified
+registry archive and compared with every source and manifest. Shell syntax and
+`git diff --check` passed. These results establish the new pinned profile; they do
+not claim that the new attribute syntax works with the previous compiler.
 
 ## Historical baseline results and backend limitation
 

@@ -8,6 +8,7 @@
 
 ///|
 /// Vault-specific frontmatter fields used in PARA workflows.
+#derive(Eq, Debug)
 pub(all) struct VaultMetadata {
   note_type : String?
   status : String?
@@ -15,7 +16,7 @@ pub(all) struct VaultMetadata {
   goal : String?
   source : String?
   created : String?
-} derive(Eq, Debug)
+}
 
 ///|
 /// Extract vault-specific metadata from parsed frontmatter.

@@ -1,16 +1,3 @@
---- a/moon.mod.json
-+++ /dev/null
-@@ -1,10 +0,0 @@
--{
--  "name": "TheWaWaR/clap",
--  "version": "0.2.6",
--  "readme": "README.md",
--  "repository": "https://github.com/TheWaWaR/clap.mbt",
--  "license": "MIT",
--  "keywords": ["utils", "command line", "parser"],
--  "description": "Command Line Argument Parser",
--  "source": "src"
--}
 --- /dev/null
 +++ b/moon.mod
 @@ -0,0 +1,15 @@
@@ -29,29 +16,53 @@
 +description = "Command Line Argument Parser"
 +
 +source = "src"
---- a/src/moon.pkg.json
+--- a/moon.mod.json
 +++ /dev/null
-@@ -1 +0,0 @@
--{ }
---- /dev/null
-+++ b/src/moon.pkg
-@@ -0,0 +1,5 @@
-+import {
-+  "moonbitlang/core/hashmap",
-+  "moonbitlang/core/string",
-+  "moonbitlang/core/hashset",
-+}
+@@ -1,10 +0,0 @@
+-{
+-  "name": "TheWaWaR/clap",
+-  "version": "0.2.6",
+-  "readme": "README.md",
+-  "repository": "https://github.com/TheWaWaR/clap.mbt",
+-  "license": "MIT",
+-  "keywords": ["utils", "command line", "parser"],
+-  "description": "Command Line Argument Parser",
+-  "source": "src"
+-}
 --- a/src/arg.mbt
 +++ b/src/arg.mbt
-@@ -49 +49 @@
+@@ -46,7 +46,7 @@
+ pub fn Arg::named(
+   short? : Char = null_short,
+   nargs? : Nargs = Any,
 -  choices? : @hashset.HashSet[String] = @hashset.new(),
 +  choices? : @hashset.HashSet[String] = @hashset.HashSet([]),
-@@ -64 +64 @@
+   defaults? : ArrayView[String] = [],
+   global? : Bool = false,
+   value_delimiter? : String = ",",
+@@ -61,7 +61,7 @@
+ /// Create a positional argument
+ pub fn Arg::positional(
+   nargs? : Nargs = Any,
 -  choices? : @hashset.HashSet[String] = @hashset.new(),
 +  choices? : @hashset.HashSet[String] = @hashset.HashSet([]),
-@@ -150 +150,31 @@
+   defaults? : ArrayView[String] = [],
+   value_delimiter? : String = ",",
+   env_var? : String = "",
+@@ -135,6 +135,7 @@
+ }
+
+ ///|
++#derive(Eq)
+ pub(all) enum Nargs {
+   Any
+   /// n == 1
+@@ -147,7 +148,37 @@
+   AtMost(UInt)
+   /// X <= n < Y
+   Range(UInt, UInt)
 -} derive(Show, Eq)
-+} derive(Eq)
++}
 +
 +///|
 +pub impl Show for Nargs with fn output(self, logger) {
@@ -82,35 +93,117 @@
 +    }
 +  }
 +}
-@@ -176,0 +207,6 @@
+
+ ///|
+ /// Check if the length is constrained by Nargs
+@@ -174,3 +205,9 @@
+     Range(_, high) => length >= high
+   }
+ }
 +
 +///|
 +pub extend Nargs with Eq::{not_equal, equal}
 +
 +///|
 +pub extend Nargs with Show::{to_string, output}
+--- /dev/null
++++ b/src/choice_display_test.mbt
+@@ -0,0 +1,28 @@
++// Historical diagnostic text; HashSet iteration order is platform-dependent.
++///|
++test "choice diagnostics preserve pre-migration text" {
++  let parser = @clap.Parser::new(args={
++    "color": @clap.Arg::named(choices=@hashset.HashSet(["red", "blue"])),
++  })
++  let value = @clap.SimpleValue::new("PROG")
++  try parser.parse(value, ["--color", "green"]) catch {
++    err => assert_true(
++      err.to_string() == "InvalidArgumentValue(Invalid argument value for PROG => color, value=green, choices=@hashset.from_array([red, blue]))" ||
++      err.to_string() == "InvalidArgumentValue(Invalid argument value for PROG => color, value=green, choices=@hashset.from_array([blue, red]))",
++    )
++  } noraise {
++    _ => fail("expected invalid choice")
++  }
++  let parser = @clap.Parser::new(args={
++    "color": @clap.Arg::named(choices=@hashset.HashSet(["red", "blue"]), defaults=["green"]),
++  })
++  let value = @clap.SimpleValue::new("PROG")
++  try parser.parse(value, []) catch {
++    err => assert_true(
++      err.to_string() == "InvalidSpec(Invalid argument, name=color, default value=green not in choices=@hashset.from_array([red, blue]))" ||
++      err.to_string() == "InvalidSpec(Invalid argument, name=color, default value=green not in choices=@hashset.from_array([blue, red]))",
++    )
++  } noraise {
++    _ => fail("expected invalid default")
++  }
++}
 --- a/src/gen_help.mbt
 +++ b/src/gen_help.mbt
-@@ -8 +8 @@
+@@ -5,7 +5,7 @@
+   subcmd_chains : Array[String],
+   global_args : Map[String, Arg],
+ ) -> String {
 -  let builder = StringBuilder::new(size_hint=32)
 +  let builder = StringBuilder(size_hint=32)
-@@ -22 +22 @@
+   builder.write_string("Usage: ")
+   let mut args = self.args
+   let mut subcmds = self.subcmds
+@@ -19,7 +19,7 @@
+     subcmds = subcmd.subcmds
+   }
+   builder.write_string("[OPTIONS]")
 -  if not(subcmds.is_empty()) {
 +  if !subcmds.is_empty() {
-@@ -47 +47 @@
+     builder.write_char(' ')
+     builder.write_string("<COMMAND>")
+   }
+@@ -44,7 +44,7 @@
+   }
+   builder.write_char('\n')
+   builder.write_char('\n')
 -  if not(subcmds.is_empty()) {
 +  if !subcmds.is_empty() {
-@@ -69 +69 @@
+     builder.write_string("Commands:\n")
+     let max_length = subcmds
+       .iter()
+@@ -66,7 +66,7 @@
+     builder.write_string("  \{label}  \{help}\n\n")
+   }
+   write_args(builder, "Options", args, {}, true)
 -  if not(global_args.is_empty()) {
 +  if !global_args.is_empty() {
-@@ -87,2 +87,2 @@
+     builder.write_char('\n')
+     write_args(builder, "Common Options", global_args, args, false)
+   }
+@@ -84,8 +84,8 @@
+   builder.write_string("\{title}:\n")
+   let options = []
+   for name, arg in the_args.iter2() {
 -    guard not(cull_args.contains(name)) else { continue }
 -    guard not(arg is Positional(..)) else { continue }
 +    guard !cull_args.contains(name) else { continue }
 +    guard !(arg is Positional(..)) else { continue }
+     let short_string = match arg.short() {
+       Some(short) => "-\{short},"
+       None => "   "
+--- /dev/null
++++ b/src/moon.pkg
+@@ -0,0 +1,5 @@
++import {
++  "moonbitlang/core/hashmap",
++  "moonbitlang/core/string",
++  "moonbitlang/core/hashset",
++}
+--- a/src/moon.pkg.json
++++ /dev/null
+@@ -1 +0,0 @@
+-{ }
 --- a/src/parser.mbt
 +++ b/src/parser.mbt
-@@ -37 +37,42 @@
+@@ -34,7 +34,48 @@
+   InvalidArgumentValueLength(String)
+   TooManyArgs(String)
+   InvalidSpec(String)
 -} derive(Show)
 +}
 +
@@ -154,78 +247,177 @@
 +    }
 +  }
 +}
-@@ -49 +90 @@
+
+ ///|
+ /// Parse the command line arguments
+@@ -46,11 +87,11 @@
+ ) -> String? raise ParserError {
+   let mut cmd_name = self.prog
+   let subcmd_chains = [cmd_name]
 -  let global_args : Map[String, Arg] = {}
 +  let global_args : Map[String, Arg] = Map([])
-@@ -53 +94 @@
+   let mut args = self.args
+   let mut positional_arg : (String, Arg)? = None
+   let mut subcmds = self.subcmds
 -  let args_length : @hashmap.HashMap[String, UInt] = @hashmap.new()
 +  let args_length : @hashmap.HashMap[String, UInt] = @hashmap.HashMap([])
-@@ -67 +108 @@
+   let mut current_value = value
+   let mut current_arg : (String, Arg)? = None
+   let mut nargs_error : ParserError? = None
+@@ -64,12 +105,12 @@
+         if name == "help" {
+           return Some(self.gen_help_message(subcmd_chains, global_args))
+         }
 -        let name = name.to_string()
 +        let name = name.to_owned()
-@@ -72 +113 @@
+         let new_arg = args
+           .get(name)
+           .map_or_else(fn() { global_args.get(name) }, fn(x) { Some(x) })
+           .map(fn(arg) { (name, arg) })
 -        if new_arg.is_empty() && positional_arg is Some(arg) {
 +        if new_arg is None && positional_arg is Some(arg) {
-@@ -107 +148 @@
+           current_value.add_value(arg.0, cli_arg, true)
+           update_args_length(args_length, arg.0)
+         } else {
+@@ -104,7 +145,7 @@
+               },
+               fn(x) { Some(x) },
+             )
 -          if new_arg.is_empty() && positional_arg is Some(arg) {
 +          if new_arg is None && positional_arg is Some(arg) {
-@@ -119 +160 @@
+             current_value.add_value(arg.0, cli_arg, true)
+             update_args_length(args_length, arg.0)
+           } else {
+@@ -116,9 +157,9 @@
+       // == Normal argument ==
+       value_string if current_arg is Some((name, arg)) => {
+         if arg.choices() is Some(choices) {
 -          if choices.length() > 0 && not(choices.contains(value_string)) {
 +          if choices.length() > 0 && !choices.contains(value_string) {
-@@ -121 +162 @@
+             raise InvalidArgumentValue(
 -              "Invalid argument value for \{cmd_name} => \{name}, value=\{value_string}, choices=\{choices}",
 +              "Invalid argument value for \{cmd_name} => \{name}, value=\{value_string}, choices=@hashset.from_array([\{choices.iter().join(", ")}])",
-@@ -134 +175 @@
+             )
+           }
+         }
+@@ -131,7 +172,7 @@
+             "Argument length limit: \{nargs}, current length: \{new_length}",
+           )
+         }
 -        if (not(positional_arg.is_empty()) || not(subcmds.is_empty())) &&
 +        if (!(positional_arg is None) || !subcmds.is_empty()) &&
-@@ -190 +231 @@
+           nargs.is_exceeded(new_length + 1) {
+           // Stop accepting more named arguments if nargs is full filled
+           current_arg = None
+@@ -187,12 +228,12 @@
+ ///|
+ fn get_defaults(arg : Arg, env_vars : Map[String, String]) -> Iter[StringView] {
+   let common = arg.common()
 -  if not(common.env_var.is_empty()) &&
 +  if !common.env_var.is_empty() &&
-@@ -248 +289 @@
+     env_vars.get(common.env_var) is Some(env_value) {
+     let value_delimiter = arg.value_delimiter().unwrap()
+     env_value.split(value_delimiter)
+   } else {
+-    arg.defaults().iter().map(fn(s) { s.view() })
++    arg.defaults().iter().map(fn(s) { s[:] })
+   }
+ }
+
+@@ -245,7 +286,7 @@
+   for name, arg in args.iter2() {
+     let positional = arg is Positional(_)
+     if positional {
 -      if not(subcmds.is_empty()) {
 +      if !subcmds.is_empty() {
-@@ -267,2 +308,2 @@
+         raise InvalidSpec(
+           "Invalid argument spec: sub-commands(parent=\{cmd_name}) and positional argument(\{name}) are not allowed at the same time",
+         )
+@@ -264,18 +305,18 @@
+     }
+     if arg.short() is Some(short_char) {
+       if short_char != null_short &&
 -        not(short_char.is_ascii_alphabetic()) &&
 -        not(short_char.is_ascii_digit()) {
 +        !short_char.is_ascii_alphabetic() &&
 +        !short_char.is_ascii_digit() {
-@@ -274 +315 @@
+         raise InvalidSpec(
+           "Invalid argument spec: parent-cmd=\{cmd_name}, name=\{name}, short=\{short_char}, only 0-9,a-z,A-Z is allowed",
+         )
+       }
+     }
 -    if arg.choices() is Some(choices) && not(choices.is_empty()) {
 +    if arg.choices() is Some(choices) && !choices.is_empty() {
-@@ -276 +317 @@
+       for value in get_defaults(arg, env_vars) {
 -        if not(choices.contains(value.to_string())) {
 +        if !choices.contains(value.to_owned()) {
-@@ -278 +319 @@
+           raise InvalidSpec(
 -            "Invalid argument, name=\{name}, default value=\{value} not in choices=\{choices}",
 +            "Invalid argument, name=\{name}, default value=\{value} not in choices=@hashset.from_array([\{choices.iter().join(", ")}])",
-@@ -314 +355 @@
+           )
+         }
+       }
+@@ -311,7 +352,7 @@
+       let positional = arg is Positional(..)
+       let mut length = args_length.get_or_default(name, 0)
+       // flag and named argument can only presented in final subcommand
 -      if (arg is Flag(_) || arg is Named(_)) && length > 0 && not(final_subcmd) {
 +      if (arg is Flag(_) || arg is Named(_)) && length > 0 && !final_subcmd {
-@@ -322 +363 @@
+         raise InvalidArgumentValueLength(
+           "Invalid argument: \{name}, flag/named argument can only presented in final level",
+         )
+@@ -319,7 +360,7 @@
+       if arg is Flag(store~, ..) {
+         if length == 0 {
+           let common = arg.common()
 -          let value = if not(common.env_var.is_empty()) &&
 +          let value = if !common.env_var.is_empty() &&
-@@ -333 +374 @@
+             env_vars.get(common.env_var) is Some(env_value) {
+             match env_value {
+               "true" => true
+@@ -330,7 +371,7 @@
+                 )
+             }
+           } else {
 -            not(store)
 +            !store
-@@ -347 +388 @@
+           }
+           current_value.set_flag(name, value)
+           update_args_length(args_length, name)
+@@ -344,17 +385,17 @@
+         // Set defaults for:
+         //   * final level positional argument
+         //   * non-final level named argument
 -        if length == 0 && not(positional && not(final_subcmd)) {
 +        if length == 0 && !(positional && !final_subcmd) {
-@@ -349 +390 @@
+           for default_value in get_defaults(arg, env_vars) {
 -            current_value.add_value(name, default_value.to_string(), positional)
 +            current_value.add_value(name, default_value.to_owned(), positional)
-@@ -355 +396 @@
+             update_args_length(args_length, name)
+             length += 1
+           }
+         }
+         let nargs = arg.nargs().unwrap()
 -        if not(nargs.is_valid_length(length)) {
 +        if !nargs.is_valid_length(length) {
-@@ -357 +398 @@
+           if positional {
 -            if not(final_subcmd) {
 +            if !final_subcmd {
-@@ -382,0 +424,3 @@
+               if length != 0 {
+                 raise InvalidArgumentValueLength(
+                   "Invalid positional argument length=\{length}, expected: 0 (has subcommand)",
+@@ -380,3 +421,6 @@
+   }
+   nargs_error
+ }
 +
 +///|
 +pub extend ParserError with Show::{to_string, output}
 --- a/src/parser_test.mbt
 +++ b/src/parser_test.mbt
-@@ -3,4 +3,4 @@
+@@ -1,9 +1,9 @@
+ ///|
+ test "parse simple named argument" {
 -  let parser = Parser::new(args={
 -    "arg1": Arg::named(short='a', nargs=Fixed(1), help="Argument 1"),
 -  })
@@ -234,12 +426,24 @@
 +    "arg1": @clap.Arg::named(short='a', nargs=Fixed(1), help="Argument 1"),
 +  })
 +  let value = @clap.SimpleValue::new(parser.prog)
-@@ -14,2 +14,2 @@
+   let help_message = parser.parse(value, ["--arg1", "abc"])
+   assert_eq(help_message, None)
+   assert_eq(value.name, "PROG")
+@@ -11,8 +11,8 @@
+   assert_eq(value.args.get("arg1").unwrap(), ["abc"])
+   assert_eq(value.flags.is_empty(), true)
+   assert_eq(value.positional_args.is_empty(), true)
 -  assert_eq(value.subcmd.is_empty(), true)
 -  let value = SimpleValue::new(parser.prog)
 +  assert_eq(value.subcmd is None, true)
 +  let value = @clap.SimpleValue::new(parser.prog)
-@@ -29,4 +29,4 @@
+   let help_message = parser.parse(value, ["--help"]).unwrap()
+   let expected_help_message =
+     #|Usage: PROG [OPTIONS]
+@@ -26,18 +26,18 @@
+
+ ///|
+ test "parse simple positional argument" {
 -  let parser = Parser::new(args={
 -    "arg1": Arg::positional(nargs=Fixed(1), help="Argument 1"),
 -  })
@@ -248,12 +452,23 @@
 +    "arg1": @clap.Arg::positional(nargs=Fixed(1), help="Argument 1"),
 +  })
 +  let value = @clap.SimpleValue::new(parser.prog)
-@@ -39,2 +39,2 @@
+   let help_message = parser.parse(value, ["abc"])
+   assert_eq(help_message, None)
+   assert_eq(value.name, "PROG")
+   assert_eq(value.args.length(), 0)
+   assert_eq(value.flags.is_empty(), true)
+   assert_eq(value.positional_args, ["abc"])
 -  assert_eq(value.subcmd.is_empty(), true)
 -  let value = SimpleValue::new(parser.prog)
 +  assert_eq(value.subcmd is None, true)
 +  let value = @clap.SimpleValue::new(parser.prog)
-@@ -56,4 +56,4 @@
+   let help_message = parser.parse(value, ["--help"]).unwrap()
+   let expected_help_message =
+     #|Usage: PROG [OPTIONS] <ARG1>
+@@ -53,18 +53,18 @@
+
+ ///|
+ test "parse simple flag argument" {
 -  let parser = Parser::new(args={
 -    "arg1": Arg::flag(short='a', help="Argument 1"),
 -  })
@@ -262,28 +477,59 @@
 +    "arg1": @clap.Arg::flag(short='a', help="Argument 1"),
 +  })
 +  let value = @clap.SimpleValue::new(parser.prog)
-@@ -66,2 +66,2 @@
+   let help_message = parser.parse(value, ["--arg1"])
+   assert_eq(help_message, None)
+   assert_eq(value.name, "PROG")
+   assert_eq(value.args.length(), 0)
+   assert_eq(value.flags.get("arg1").unwrap(), true)
+   assert_eq(value.positional_args.is_empty(), true)
 -  assert_eq(value.subcmd.is_empty(), true)
 -  let value = SimpleValue::new(parser.prog)
 +  assert_eq(value.subcmd is None, true)
 +  let value = @clap.SimpleValue::new(parser.prog)
-@@ -81,3 +81,3 @@
+   let help_message = parser.parse(value, ["--help"]).unwrap()
+   let expected_help_message =
+     #|Usage: PROG [OPTIONS]
+@@ -78,13 +78,13 @@
+
+ ///|
+ test "parse simple subcmd" {
 -  let parser = Parser::new(subcmds={
 -    "subcmd1": SubCommand::new(
 -      args={ "arg1": Arg::flag(short='a', help="Argument 1") },
 +  let parser = @clap.Parser::new(subcmds={
 +    "subcmd1": @clap.SubCommand::new(
 +      args={ "arg1": @clap.Arg::flag(short='a', help="Argument 1") },
-@@ -87 +87 @@
+       help="Test subcommand",
+     ),
+   })
 -  let value = SimpleValue::new(parser.prog)
 +  let value = @clap.SimpleValue::new(parser.prog)
-@@ -95 +95 @@
+   let help_message = parser.parse(value, ["subcmd1", "--arg1"])
+   assert_eq(help_message, None)
+   assert_eq(value.name, "PROG")
+@@ -92,7 +92,7 @@
+   assert_eq(value.flags.is_empty(), true)
+   assert_eq(value.positional_args.is_empty(), true)
+   assert_eq(value.subcmd.unwrap().flags.get("arg1").unwrap(), true)
 -  let value = SimpleValue::new(parser.prog)
 +  let value = @clap.SimpleValue::new(parser.prog)
-@@ -107 +107 @@
+   let help_message = parser.parse(value, ["--help"]).unwrap()
+   let expected_help_message =
+     #|Usage: PROG [OPTIONS] <COMMAND>
+@@ -104,7 +104,7 @@
+     #|  -h, --help  Print help
+     #|
+   assert_eq(help_message, expected_help_message)
 -  let value = SimpleValue::new(parser.prog)
 +  let value = @clap.SimpleValue::new(parser.prog)
-@@ -121,4 +121,4 @@
+   let help_message = parser.parse(value, ["subcmd1", "--help"]).unwrap()
+   let expected_help_message =
+     #|Usage: PROG subcmd1 [OPTIONS]
+@@ -118,10 +118,10 @@
+
+ ///|
+ test "parser short named argument" {
 -  let parser = Parser::new(args={
 -    "arg1": Arg::named(short='a', nargs=Fixed(1), help="Argument 1"),
 -  })
@@ -292,10 +538,19 @@
 +    "arg1": @clap.Arg::named(short='a', nargs=Fixed(1), help="Argument 1"),
 +  })
 +  let value = @clap.SimpleValue::new(parser.prog)
-@@ -132 +132 @@
+   let help_message = parser.parse(value, ["-a", "abc"])
+   assert_eq(help_message, None)
+   assert_eq(value.name, "PROG")
+@@ -129,23 +129,23 @@
+   assert_eq(value.args.get("arg1").unwrap(), ["abc"])
+   assert_eq(value.flags.is_empty(), true)
+   assert_eq(value.positional_args.is_empty(), true)
 -  assert_eq(value.subcmd.is_empty(), true)
 +  assert_eq(value.subcmd is None, true)
-@@ -137,4 +137,4 @@
+ }
+
+ ///|
+ test "parse short flag argument" {
 -  let parser = Parser::new(args={
 -    "arg1": Arg::flag(short='a', help="Argument 1"),
 -  })
@@ -304,38 +559,76 @@
 +    "arg1": @clap.Arg::flag(short='a', help="Argument 1"),
 +  })
 +  let value = @clap.SimpleValue::new(parser.prog)
-@@ -147,2 +147,2 @@
+   let help_message = parser.parse(value, ["-a"])
+   assert_eq(help_message, None)
+   assert_eq(value.name, "PROG")
+   assert_eq(value.args.length(), 0)
+   assert_eq(value.flags.get("arg1").unwrap(), true)
+   assert_eq(value.positional_args.is_empty(), true)
 -  assert_eq(value.subcmd.is_empty(), true)
 -  let value = SimpleValue::new(parser.prog)
 +  assert_eq(value.subcmd is None, true)
 +  let value = @clap.SimpleValue::new(parser.prog)
-@@ -170,4 +170,4 @@
+   let help_message = parser.parse(value, ["-h"]).unwrap()
+   let expected_help_message =
+     #|Usage: PROG [OPTIONS]
+@@ -165,22 +165,25 @@
+ }
+
+ ///|
++#derive(Eq, Debug)
+ enum CustomCommands {
+   SubCommand1(verbose~ : Bool, positional_args~ : Array[UInt])
 -} derive(Show, Eq)
 -
 -///|
 -impl Value for CustomValue with set_flag(self, name : String, value : Bool) -> Unit raise ParserError {
-+} derive(Eq, Debug)
++}
 +
 +///|
 +impl Value for CustomValue with fn set_flag(self, name : String, value : Bool) -> Unit raise @clap.ParserError {
-@@ -177 +177,3 @@
+   match self.subcmd {
+     None => {
+       guard name == "debug" else {
 -        raise ParserError::InvalidArgumentName("Invalid flag \{name}=\{value}")
 +        raise @clap.ParserError::InvalidArgumentName(
 +          "Invalid flag \{name}=\{value}",
 +        )
-@@ -183 +185 @@
+       }
+       self.debug = value
+     }
+     Some(SubCommand1(positional_args~, ..)) => {
+       guard name == "verbose" else {
 -        raise ParserError::InvalidArgumentName(
 +        raise @clap.ParserError::InvalidArgumentName(
-@@ -193 +195 @@
+           "Invalid subcmd1 flag \{name}=\{value}",
+         )
+       }
+@@ -190,34 +193,34 @@
+ }
+
+ ///|
 -impl Value for CustomValue with add_value(
 +impl Value for CustomValue with fn add_value(
-@@ -198 +200 @@
+   self,
+   name : String,
+   value : String,
+   _positional : Bool,
 -) -> Unit raise ParserError {
 +) -> Unit raise @clap.ParserError {
-@@ -204 +206 @@
+   match self.subcmd {
+     None =>
+       match name {
+         "arg1" => self.arg1 = value
+         _ =>
 -          raise ParserError::InvalidArgumentName(
 +          raise @clap.ParserError::InvalidArgumentName(
-@@ -211,5 +213,5 @@
+             "Invalid argument name \{name}",
+           )
+       }
+     Some(SubCommand1(positional_args~, ..)) =>
+       match name {
+         "arg2" => {
 -          let parsed_value = try? @strconv.parse_uint(value)
 -          guard parsed_value is Ok(uint_value) else {
 -            raise ParserError::InvalidArgumentValue(
@@ -346,72 +639,142 @@
 +              raise @clap.ParserError::InvalidArgumentValue(
 +                "Invalid value \{value} for argument \{name}",
 +              )
-@@ -220 +222 @@
+           }
+           positional_args.push(uint_value)
+         }
+         _ =>
 -          raise ParserError::InvalidArgumentName(
 +          raise @clap.ParserError::InvalidArgumentName(
-@@ -228 +230 @@
+             "Invalid argument name \{name}",
+           )
+       }
+@@ -225,12 +228,12 @@
+ }
+
+ ///|
 -impl Value for CustomValue with select_subcmd(self, name : String) -> CustomValue raise ParserError {
 +impl Value for CustomValue with fn select_subcmd(self, name : String) -> CustomValue raise @clap.ParserError {
-@@ -233 +235 @@
+   match name {
+     "subcmd1" =>
+       self.subcmd = Some(SubCommand1(verbose=false, positional_args=[]))
+     _ =>
 -      raise ParserError::InvalidSubCommandName(
 +      raise @clap.ParserError::InvalidSubCommandName(
-@@ -242 +244 @@
+         "Invalid subcommand name \{name}",
+       )
+   }
+@@ -239,16 +242,16 @@
+
+ ///|
+ test "parse custom value" {
 -  let parser = Parser::new(
 +  let parser = @clap.Parser::new(
-@@ -244,2 +246,2 @@
+     args={
 -      "debug": Arg::flag(short='d', help="Debug"),
 -      "arg1": Arg::named(short='a', nargs=Fixed(1), help="Argument 1"),
 +      "debug": @clap.Arg::flag(short='d', help="Debug"),
 +      "arg1": @clap.Arg::named(short='a', nargs=Fixed(1), help="Argument 1"),
-@@ -248 +250 @@
+     },
+     subcmds={
 -      "subcmd1": SubCommand::new(
 +      "subcmd1": @clap.SubCommand::new(
-@@ -250,2 +252,2 @@
+         args={
 -          "verbose": Arg::flag(short='v', help="Verbose"),
 -          "arg2": Arg::positional(nargs=Fixed(3), help="Argument 2"),
 +          "verbose": @clap.Arg::flag(short='v', help="Verbose"),
 +          "arg2": @clap.Arg::positional(nargs=Fixed(3), help="Argument 2"),
-@@ -262,2 +264,2 @@
+         },
+         help="Test subcommand",
+       ),
+@@ -259,8 +262,8 @@
+   assert_eq(help_message, None)
+   assert_eq(value.debug, true)
+   assert_eq(value.arg1, "value1")
 -  assert_eq(value.subcmd.is_empty(), true)
 -  let value = CustomValue::{ debug: false, arg1: "", subcmd: None }
 +  assert_eq(value.subcmd is None, true)
 +  let value = CustomValue::{ debug: false, arg1: "", subcmd: None, }
-@@ -305 +307 @@
+   let help_message = parser.parse(value, ["--help"]).unwrap()
+   let expected_help_message =
+     #|Usage: PROG [OPTIONS] <COMMAND>
+@@ -302,10 +305,10 @@
+
+ ///|
+ test "simple global argument" {
 -  let parser = Parser::new(
 +  let parser = @clap.Parser::new(
-@@ -307,2 +309,2 @@
+     args={
 -      "debug": Arg::flag(short='d', global=true, help="Debug"),
 -      "arg1": Arg::named(
 +      "debug": @clap.Arg::flag(short='d', global=true, help="Debug"),
 +      "arg1": @clap.Arg::named(
-@@ -316 +318 @@
+         short='a',
+         nargs=Fixed(1),
+         global=true,
+@@ -313,16 +316,16 @@
+       ),
+     },
+     subcmds={
 -      "subcmd1": SubCommand::new(
 +      "subcmd1": @clap.SubCommand::new(
-@@ -318,2 +320,2 @@
+         args={
 -          "verbose": Arg::flag(short='v', help="Verbose"),
 -          "arg2": Arg::positional(nargs=Fixed(3), help="Argument 2"),
 +          "verbose": @clap.Arg::flag(short='v', help="Verbose"),
 +          "arg2": @clap.Arg::positional(nargs=Fixed(3), help="Argument 2"),
-@@ -325 +327 @@
+         },
+         help="Test subcommand",
+       ),
+     },
+   )
 -  let value = SimpleValue::new(parser.prog)
 +  let value = @clap.SimpleValue::new(parser.prog)
-@@ -339 +341 @@
+   let help_message = parser.parse(value, [
+     "subcmd1", "--debug", "--arg1", "value1", "33", "44", "55",
+   ])
+@@ -336,7 +339,7 @@
+   assert_eq(subcmd1.get_option("arg1").unwrap(), "value1")
+   assert_eq(subcmd1.get_array("arg1"), ["value1"])
+   assert_eq(subcmd1.get_positional(), [(33 : UInt), 44, 55])
 -  let value = SimpleValue::new(parser.prog)
 +  let value = @clap.SimpleValue::new(parser.prog)
-@@ -360,2 +362,2 @@
+   let help_message = parser.parse(value, ["subcmd1", "--help"]).unwrap()
+   let expected_help_message =
+     #|Usage: PROG subcmd1 [OPTIONS] [ARG2]...
+@@ -357,15 +360,15 @@
+
+ ///|
+ test "simple env vars" {
 -  let parser = Parser::new(args={
 -    "arg1": Arg::named(
 +  let parser = @clap.Parser::new(args={
 +    "arg1": @clap.Arg::named(
-@@ -368 +370 @@
+       short='a',
+       nargs=AtMost(2),
+       env_var="ENV_ARG1",
+       help="Argument 1",
+     ),
+   })
 -  let value = SimpleValue::new(parser.prog)
 +  let value = @clap.SimpleValue::new(parser.prog)
-@@ -376,2 +378,2 @@
+   let help_message = parser.parse(value, [], env_vars={ "ENV_ARG1": "ijk,xyz" })
+   assert_eq(help_message, None)
+   assert_eq(value.name, "PROG")
+@@ -373,8 +376,8 @@
+   assert_eq(value.args.get("arg1").unwrap(), ["ijk", "xyz"])
+   assert_eq(value.flags.is_empty(), true)
+   assert_eq(value.positional_args.is_empty(), true)
 -  assert_eq(value.subcmd.is_empty(), true)
 -  let value = SimpleValue::new(parser.prog)
 +  assert_eq(value.subcmd is None, true)
 +  let value = @clap.SimpleValue::new(parser.prog)
-@@ -391,5 +393,5 @@
+   let help_message = parser.parse(value, ["--help"]).unwrap()
+   let expected_help_message =
+     #|Usage: PROG [OPTIONS]
+@@ -388,11 +391,11 @@
+
+ ///|
+ test "parse special positional argument with -" {
 -  let parser = Parser::new(args={
 -    "arg1": Arg::positional(nargs=AtMost(3), help="Argument 1"),
 -    "arg2": Arg::named(short='A', nargs=AtMost(1), help="Argument 2"),
@@ -422,19 +785,34 @@
 +    "arg2": @clap.Arg::named(short='A', nargs=AtMost(1), help="Argument 2"),
 +  })
 +  let value = @clap.SimpleValue::new(parser.prog)
-@@ -403 +405 @@
+   let help_message = parser.parse(value, ["-", "-2", "xx", "-A", "333"])
+   assert_eq(help_message, None)
+   assert_eq(value.name, "PROG")
+@@ -400,14 +403,14 @@
+   assert_eq(value.args.get("arg2").unwrap(), ["333"])
+   assert_eq(value.flags.is_empty(), true)
+   assert_eq(value.positional_args, ["-", "-2", "xx"])
 -  assert_eq(value.subcmd.is_empty(), true)
 +  assert_eq(value.subcmd is None, true)
-@@ -408,3 +410,3 @@
+ }
+
+ ///|
+ test "gen help for arguments without short argument" {
 -  let parser = Parser::new(args={
 -    "arg1": Arg::named(help="Argument 1"),
 -    "arg2": Arg::flag(help="Argument 2"),
 +  let parser = @clap.Parser::new(args={
 +    "arg1": @clap.Arg::named(help="Argument 1"),
 +    "arg2": @clap.Arg::flag(help="Argument 2"),
+   })
+   let help_message = parser.gen_help_message(["self"], {})
+   inspect(
 --- a/src/parser_test_error.mbt
 +++ b/src/parser_test_error.mbt
-@@ -7,2 +7,5 @@
+@@ -4,8 +4,11 @@
+     "arg1": Arg::named(short='a', nargs=Fixed(2), help="Argument 1"),
+   })
+   let value = SimpleValue::new(parser.prog)
 -  let result = try? parser.parse(value, ["--arg1", "v1", "v2", "v3"])
 -  assert_eq(result.unwrap_err().to_string().contains("TooManyArgs"), true)
 +  try parser.parse(value, ["--arg1", "v1", "v2", "v3"]) catch {
@@ -442,7 +820,13 @@
 +  } noraise {
 +    _ => fail("expected too many arguments to raise")
 +  }
-@@ -17,8 +20,8 @@
+ }
+
+ ///|
+@@ -14,12 +17,12 @@
+     "arg1": Arg::flag(short='a', help="Argument 1"),
+   })
+   let value = SimpleValue::new(parser.prog)
 -  let result = try? parser.parse(value, ["--arg1", "--arg1"])
 -  assert_eq(
 -    result
@@ -459,22 +843,39 @@
 +  } noraise {
 +    _ => fail("expected duplicate flag to raise")
 +  }
+ }
 --- a/src/value.mbt
 +++ b/src/value.mbt
-@@ -4,2 +4,2 @@
+@@ -1,19 +1,20 @@
+ ///|
++#derive(Eq)
+ pub(all) struct SimpleValue {
+   name : String
 -  args : @hashmap.HashMap[String, Array[String]]
 -  flags : @hashmap.HashMap[String, Bool]
 +  args : Map[String, Array[String]]
 +  flags : Map[String, Bool]
-@@ -8 +8 @@
+   positional_args : Array[String]
+   mut subcmd : SimpleValue?
 -} derive(Show, Eq)
-+} derive(Eq)
-@@ -15,2 +15,2 @@
++}
+
+ ///|
+ /// Create a simple value to hold the parsed result
+ pub fn SimpleValue::new(name : String) -> SimpleValue {
+   SimpleValue::{
+     name,
 -    args: @hashmap.new(),
 -    flags: @hashmap.new(),
 +    args: Map([]),
 +    flags: Map([]),
-@@ -97,5 +97,5 @@
+     positional_args: [],
+     subcmd: None,
+   }
+@@ -94,55 +95,55 @@
+
+ ///|
+ pub(open) trait BasicValue {
 -  parse(input : String) -> Self raise @strconv.StrConvError
 -}
 -
@@ -485,7 +886,10 @@
 +
 +///|
 +pub impl BasicValue for String with fn parse(input : String) -> String raise {
-@@ -106,22 +106,22 @@
+   input
+ }
+
+ ///|
 -pub impl BasicValue for Double with parse(input : String) -> Double raise @strconv.StrConvError {
 -  @strconv.parse_double(input)
 -}
@@ -530,7 +934,10 @@
 +///|
 +pub impl BasicValue for UInt64 with fn parse(input : String) -> UInt64 raise {
 +  @string.parse_uint64(input[:])
-@@ -132,7 +132,7 @@
+ }
+
+ ///|
+ pub(open) trait Value {
 -  set_flag(Self, name : String, value : Bool) -> Unit raise ParserError = _
 -  add_value(Self, name : String, value : String, positional : Bool) -> Unit raise ParserError = _
 -  select_subcmd(Self, subcmd : String) -> Self raise ParserError = _
@@ -545,26 +952,57 @@
 +
 +///|
 +impl Value with fn set_flag(_self, name : String, _value : Bool) -> Unit raise ParserError {
-@@ -145 +145 @@
+   raise ParserError::InvalidArgumentName(
+     "Invalid argument name \{name}, unimplemented",
+   )
+ }
+
+ ///|
 -impl Value with add_value(
 +impl Value with fn add_value(
-@@ -157 +157 @@
+   _self,
+   name : String,
+   value : String,
+@@ -154,19 +155,23 @@
+ }
+
+ ///|
 -impl Value with select_subcmd(_self, subcmd : String) -> Self raise ParserError {
 +impl Value with fn select_subcmd(_self, subcmd : String) -> Self raise ParserError {
-@@ -164 +164,5 @@
+   raise ParserError::InvalidSubCommandName(
+     "Invalid sub-command \{subcmd}, unimplemented",
+   )
+ }
+
+ ///|
 -pub impl Value for SimpleValue with set_flag(self, name : String, value : Bool) -> Unit raise ParserError {
 +pub impl Value for SimpleValue with fn set_flag(
 +  self,
 +  name : String,
 +  value : Bool,
 +) -> Unit raise ParserError {
-@@ -169 +173 @@
+   self.flags.set(name, value)
+ }
+
+ ///|
 -pub impl Value for SimpleValue with add_value(
 +pub impl Value for SimpleValue with fn add_value(
-@@ -185 +189 @@
+   self,
+   name : String,
+   value : String,
+@@ -182,7 +187,7 @@
+ }
+
+ ///|
 -pub impl Value for SimpleValue with select_subcmd(self, subcmd : String) -> SimpleValue raise ParserError {
 +pub impl Value for SimpleValue with fn select_subcmd(self, subcmd : String) -> SimpleValue raise ParserError {
-@@ -194,0 +199,51 @@
+   match self.subcmd {
+     Some(subcmd_value) => subcmd_value
+     None => {
+@@ -192,3 +197,54 @@
+     }
+   }
+ }
 +
 +///|
 +pub impl Show for SimpleValue with fn output(self, logger) {
@@ -616,3 +1054,46 @@
 +
 +///|
 +pub extend SimpleValue with Value::{select_subcmd, set_flag, add_value}
+--- /dev/null
++++ b/src/value_compat_test.mbt
+@@ -0,0 +1,40 @@
++///|
++test "numeric argument parsing preserves signed and unsigned boundaries" {
++  let value = @clap.SimpleValue::new("synthetic")
++  value.args["int"] = ["-2147483648"]
++  value.args["uint"] = ["4294967295"]
++  value.args["int64"] = ["-9223372036854775808"]
++  value.args["uint64"] = ["18446744073709551615"]
++  value.args["double"] = ["3.5"]
++  let signed : Int = value.get_one("int")
++  let unsigned : UInt = value.get_one("uint")
++  let signed64 : Int64 = value.get_one("int64")
++  let unsigned64 : UInt64 = value.get_one("uint64")
++  let decimal : Double = value.get_one("double")
++  assert_eq(signed, -2147483648)
++  assert_eq(unsigned, 4294967295U)
++  assert_eq(signed64, -9223372036854775808L)
++  assert_eq(unsigned64, 18446744073709551615UL)
++  assert_eq(decimal, 3.5)
++}
++
++///|
++test "invalid numeric arguments remain InvalidArgumentValue errors" {
++  let value = @clap.SimpleValue::new("synthetic")
++  value.args["overflow"] = ["2147483648"]
++  value.args["negative"] = ["-1"]
++  try {
++    let _ : Int = value.get_one("overflow")
++  } catch {
++    err => assert_true(err.to_string().contains("InvalidArgumentValue"))
++  } noraise {
++    _ => fail("expected signed overflow to raise")
++  }
++  try {
++    let _ : UInt = value.get_one("negative")
++  } catch {
++    err => assert_true(err.to_string().contains("InvalidArgumentValue"))
++  } noraise {
++    _ => fail("expected negative unsigned argument to raise")
++  }
++}

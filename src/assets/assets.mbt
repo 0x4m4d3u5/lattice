@@ -5,13 +5,14 @@
 /// - Missing source directory is not an error.
 /// - Copy preserves binary bytes and relative paths.
 /// - All failures are typed (no panics).
+#derive(Eq, Debug)
 pub(all) enum AssetCopyError {
   SourceReadError(String, String)
   SourceNotDirectory(String)
   DestCreateError(String, String)
   FileReadError(String, String)
   FileWriteError(String, String)
-} derive(Eq, Debug)
+}
 
 ///|
 pub impl Show for AssetCopyError with fn output(self, logger) {
@@ -53,16 +54,18 @@ pub impl Show for AssetCopyError with fn output(self, logger) {
 }
 
 ///|
+#derive(Eq)
 pub struct AssetValidation {
   errors : Array[AssetCopyError]
-} derive(Eq)
+}
 
 ///|
 /// A static file captured in memory, with its path relative to the static root.
+#derive(Eq)
 pub(all) struct StaticAsset {
   relative_path : String
   bytes : Bytes
-} derive(Eq)
+}
 
 ///|
 fn read_tree(

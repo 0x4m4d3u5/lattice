@@ -19,12 +19,13 @@ pub(all) struct ShortcodeCall {
 }
 
 ///|
+#derive(Eq)
 pub(all) enum ShortcodeError {
   UnknownShortcode(String)
   MissingParam(String, String)
   InvalidParamType(String, String, String)
   InvalidSyntax(String)
-} derive(Eq)
+}
 
 ///|
 pub impl Show for ShortcodeError with fn output(self, logger) {

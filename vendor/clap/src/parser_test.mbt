@@ -165,9 +165,10 @@ struct CustomValue {
 }
 
 ///|
+#derive(Eq, Debug)
 enum CustomCommands {
   SubCommand1(verbose~ : Bool, positional_args~ : Array[UInt])
-} derive(Eq, Debug)
+}
 
 ///|
 impl Value for CustomValue with fn set_flag(self, name : String, value : Bool) -> Unit raise @clap.ParserError {

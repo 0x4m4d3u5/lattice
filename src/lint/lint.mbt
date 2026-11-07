@@ -1,4 +1,5 @@
 ///|
+#derive(Eq, Hash, Debug)
 pub(all) enum ViolationType {
   SchemaError
   MissingRequiredFrontmatter
@@ -14,7 +15,7 @@ pub(all) enum ViolationType {
   IOError
   MissingImageAlt
   ConfigError
-} derive(Eq, Hash, Debug)
+}
 
 ///|
 pub impl Show for ViolationType with fn output(self, logger) {

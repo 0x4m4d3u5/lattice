@@ -1,4 +1,5 @@
 ///|
+#derive(Eq, Hash)
 pub(all) enum TemplateSlot {
   Title
   PageTitle
@@ -38,7 +39,7 @@ pub(all) enum TemplateSlot {
   TableOfContents
   Author
   Excerpt
-} derive(Eq, Hash)
+}
 
 ///|
 pub impl Show for TemplateSlot with fn output(self, logger) {
@@ -119,13 +120,14 @@ pub(all) enum TemplateError {
 ///|
 /// Pipe/filter for slot value transformations.
 /// Chained after slot names with `|` e.g. `{{page.title | upper | truncate 50}}`
+#derive(Eq)
 enum Filter {
   Upper // uppercase the string
   Lower // lowercase the string
   Truncate(Int) // truncate to N chars, append "..." if truncated
   DatePart(String) // extract "year"|"month"|"day" from date string
   Default(String) // fallback if slot renders empty
-} derive(Eq)
+}
 
 ///|
 fn split_dot_template(s : String) -> Array[String] {
