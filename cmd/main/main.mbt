@@ -868,6 +868,23 @@ fn load_cli_state(
     options.content_dir,
     site.standalone_dir.unwrap_or(options.content_dir + "/standalone"),
   ]
+  // Output may be nested under inputs, but must not hide an input root.
+  if options.watch_mode && !options.check_mode {
+    for root in watch_roots + watch_source_dirs {
+      let hides_input = @watch.path_contains(output_dir, root) catch {
+        @watch.IOError(msg) => {
+          print_diagnostic_main(cli_error(msg))
+          return Err(1)
+        }
+      }
+      if hides_input {
+        print_diagnostic_main(
+          cli_error("watch output directory contains an input root: " + root),
+        )
+        return Err(1)
+      }
+    }
+  }
   Ok({ build_config, watch_roots, watch_source_dirs, })
 }
 
@@ -1021,6 +1038,21 @@ fn run_watch(options : CliOptions, initial_state : CliState) -> Unit {
   @watch.clear_interrupt()
   @watch.install_sigint_handler()
 
+  let mut current_roots = initial_state.watch_roots
+  let mut current_source_dirs = initial_state.watch_source_dirs
+  let mut current_output = initial_state.build_config.output_dir
+  let mut snapshot = @watch.take_snapshot(
+    current_roots,
+    source_dirs=current_source_dirs,
+    excluded_dirs=if options.check_mode { [] } else { [current_output] },
+  ) catch {
+    @watch.IOError(msg) => {
+      print_diagnostic_main(cli_error("watch snapshot failed: " + msg))
+      @sys.exit(1)
+      return
+    }
+  }
+
   let initial_result = run_once(
     initial_state.build_config,
     options.check_mode,
@@ -1037,19 +1069,6 @@ fn run_watch(options : CliOptions, initial_state : CliState) -> Unit {
     @serve.broadcast_reload()
   }
 
-  let mut current_roots = initial_state.watch_roots
-  let mut current_source_dirs = initial_state.watch_source_dirs
-  let mut snapshot = @watch.take_snapshot(
-    current_roots,
-    source_dirs=current_source_dirs,
-  ) catch {
-    @watch.IOError(msg) => {
-      print_diagnostic_main(cli_error("watch snapshot failed: " + msg))
-      @sys.exit(1)
-      return
-    }
-  }
-
   while true {
     @watch.sleep_ms(options.watch_interval_ms)
     if @watch.interrupted() {
@@ -1062,6 +1081,7 @@ fn run_watch(options : CliOptions, initial_state : CliState) -> Unit {
     let next_snapshot = @watch.take_snapshot(
       current_roots,
       source_dirs=current_source_dirs,
+      excluded_dirs=if options.check_mode { [] } else { [current_output] },
     ) catch {
       @watch.IOError(msg) => {
         print_diagnostic_main(cli_warning("watch snapshot failed: " + msg))
@@ -1091,23 +1111,17 @@ fn run_watch(options : CliOptions, initial_state : CliState) -> Unit {
         )
         current_roots = state.watch_roots
         current_source_dirs = state.watch_source_dirs
+        current_output = state.build_config.output_dir
         if options.serve_mode && result == 0 {
           @serve.broadcast_reload()
         }
       }
       Err(_) => ()
     }
-    snapshot = @watch.take_snapshot(
-      current_roots,
-      source_dirs=current_source_dirs,
-    ) catch {
-      @watch.IOError(msg) => {
-        print_diagnostic_main(
-          cli_warning("watch snapshot failed after rebuild: " + msg),
-        )
-        next_snapshot
-      }
-    }
+    // Only acknowledge inputs observed BEFORE this run. Edits during the run
+    // (or immediately after its completion log) belong to the next poll. New
+    // config-dependent roots are discovered on that poll, not swallowed here.
+    snapshot = next_snapshot
     if @watch.interrupted() {
       println("[lattice] watch stopped")
       if options.serve_mode {

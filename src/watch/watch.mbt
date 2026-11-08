@@ -23,14 +23,28 @@ pub fn file_stamp(path : String) -> Int64 {
 fn collect_snapshot_entries(
   path : String,
   entries : Array[SnapshotEntry],
+  excluded_dirs : Array[String],
 ) -> Unit raise WatchError {
-  entries.push({ path, stamp: file_mtime_millis(path) })
+  if excluded_dirs.any(root => path_contains(root, path)) {
+    return
+  }
   if !@fs.path_exists(path) {
+    entries.push({ path, stamp: -1L, })
     return
   }
   let is_dir = @fs.is_dir(path) catch {
     @fs.IOError(msg) => raise IOError("cannot stat " + path + ": " + msg)
   }
+  // Directory membership is represented by child entries, not directory mtimes.
+  // In particular, creating excluded output must not dirty its parent.
+  entries.push({
+    path,
+    stamp: if is_dir {
+      0L
+    } else {
+      file_mtime_millis(path)
+    },
+  })
   if !is_dir {
     return
   }
@@ -42,7 +56,7 @@ fn collect_snapshot_entries(
   children.sort()
   let mut i = 0
   while i < children.length() {
-    collect_snapshot_entries(path + "/" + children[i], entries)
+    collect_snapshot_entries(path + "/" + children[i], entries, excluded_dirs)
     i = i + 1
   }
 }
@@ -85,6 +99,7 @@ fn collect_markdown_snapshot_entries(
 pub fn take_snapshot(
   paths : Array[String],
   source_dirs? : Array[String] = [],
+  excluded_dirs? : Array[String] = [],
 ) -> Array[SnapshotEntry] raise WatchError {
   let roots : Array[String] = []
   let mut i = 0
@@ -104,11 +119,13 @@ pub fn take_snapshot(
   let entries : Array[SnapshotEntry] = []
   i = 0
   while i < deduped.length() {
-    collect_snapshot_entries(deduped[i], entries)
+    collect_snapshot_entries(deduped[i], entries, excluded_dirs)
     i = i + 1
   }
   for path in source_dirs {
-    collect_markdown_snapshot_entries(path, entries)
+    if !excluded_dirs.any(root => path_contains(root, path)) {
+      collect_markdown_snapshot_entries(path, entries)
+    }
   }
   // diff_paths expects global path order, including overlapping roots. Use the
   // standard array sort rather than relying on recursive traversal order.
@@ -199,4 +216,27 @@ pub fn diff_paths(
     j = j + 1
   }
   changed
+}
+
+///|
+/// Lexical containment, with relative paths resolved against the same cwd.
+/// Like the portable filesystem API, this does not resolve symlinks.
+pub fn path_contains(
+  root : String,
+  candidate : String,
+) -> Bool raise WatchError {
+  try {
+    let base = @path.Path(root).resolve().normalize()
+    let relative = @path.Path(candidate)
+      .resolve()
+      .normalize()
+      .relative(base~)
+      .to_string()
+    relative != ".." &&
+    !relative.has_prefix("../") &&
+    !relative.has_prefix("..\\") &&
+    !@path.Path(relative).is_absolute()
+  } catch {
+    _ => raise IOError("cannot resolve watch paths: " + root + ", " + candidate)
+  }
 }

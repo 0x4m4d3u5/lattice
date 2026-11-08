@@ -412,3 +412,15 @@ robots_txt = false
 Accepted boolean values: `true/false`, `yes/no`, `1/0`, or `on/off`. When disabled, lattice logs "robots.txt skipped (disabled)" instead of writing the file.
 
 Build preparation is a site-wide output gate: validation or generation errors leave existing output, cache, and manifest unchanged. The builder prepares generated files and static asset bytes before creating output directories or writing files. Publication I/O is not atomic, and stale files can remain; see [build safety](build-safety.md). Broken wikilinks remain warnings in `build`, which still renders the page; `lattice check` reports them as violations without writing output. Run `lattice check` when you need that stricter link policy without output changes.
+
+### Edits while watching
+
+`build --watch`, `check --watch`, and live preview retain edits made during a run,
+including edits immediately after its completion message, for the next poll.
+Changes to configured input roots can cause one additional settling rebuild.
+Publishing watchers exclude the configured output directory so generated files
+nested inside watched trees do not cause rebuild loops. They reject output that
+contains or equals an input root rather than silently stop watching that input.
+Read-only `check --watch` neither excludes output paths nor applies this refusal.
+Path exclusions are lexical (normalized relative/absolute paths), not symlink
+resolution; use distinct, stable source and output trees without symlink aliases.

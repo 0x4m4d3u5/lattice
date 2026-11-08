@@ -3804,3 +3804,30 @@ reserved key now normalizes its single- and double-quoted spellings before
 validation and duplicate detection. Focused regressions cover both syntaxes,
 public/private values and mixed duplicate spellings through all three commands.
 Other quoted metadata semantics remain unchanged.
+
+## Retain edits across watcher runs (2026-11-08)
+
+AI-assisted investigation of an intermittent postmerge JavaScript watch fixture
+failure found a reproducible loss window: the watcher replaced its input baseline
+with a snapshot taken after building. A change after an input was consumed could
+therefore be acknowledged without ever appearing in output. JavaScript snapshots
+hash bytes, so timestamp precision was not an explanation for this case. The
+original CI interleaving is not proven; the controlled regression is.
+
+The watcher now acknowledges only the snapshot from before each run, including
+the initial run and failed/read-only checks. It discovers changed config roots on
+the next poll. Publishing output is explicitly excluded instead of using a
+post-build snapshot to swallow self-generated changes. Directories track presence
+and child membership, not mtimes changed by excluded output creation. Output that
+would hide an input root is rejected in publishing modes; check remains read-only
+and watches those inputs. Normalization uses core/path rather than a new path
+parser; this is lexical isolation, not a symlink or concurrent-writer guarantee.
+
+The Node preload fixture makes edits synchronously at completion boundaries,
+covering initial/repeated builds, validation failure recovery, template/config/
+static updates, new roots and output paths, and read-only checks. It fails on the
+old CLI without relying on scheduler luck and passes the corrected CLI. Basic
+watch workflow tests no longer wait 250ms for a post-build snapshot to settle;
+idle CPU and SIGINT checks remain. Unit tests cover excluded output creation and
+removal, sibling-prefix and lexical-alias paths, and directory/file/missing
+transitions. No sleep duration or timeout was increased to mask the failure.

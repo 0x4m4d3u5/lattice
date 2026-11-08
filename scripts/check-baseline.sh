@@ -19,6 +19,8 @@ echo "Running machine-readable CLI check fixture"
 node scripts/check-cli-json.mjs || status=1
 echo "Running JavaScript watch author workflow"
 node scripts/check-js-watch.mjs || status=1
+echo "Running deterministic watch change retention"
+node scripts/check-watch-retention.mjs || status=1
 echo "Running JavaScript live preview workflow"
 node scripts/check-js-serve.mjs || status=1
 echo "Running root and standalone watch workflow"
