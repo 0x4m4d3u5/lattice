@@ -10,6 +10,7 @@ priv enum OutputContents {
 ///|
 priv struct OutputPlan {
   root : String
+  fresh_output : Bool
   directories : Array[String]
   requested_directories : Array[String]
   directory_index : Map[String, Bool]
@@ -25,9 +26,10 @@ fn output_path_key(path : String) -> String {
 }
 
 ///|
-fn OutputPlan::new(root : String) -> OutputPlan {
+fn OutputPlan::new(root : String, fresh_output? : Bool = false) -> OutputPlan {
   {
     root: output_path_key(root),
+    fresh_output,
     directories: [],
     requested_directories: [],
     directory_index: Map([]),
@@ -53,6 +55,15 @@ fn OutputPlan::contained_path(
     relative.has_prefix("..\\") ||
     @path.Path(relative).is_absolute() {
     raise @fs.IOError("output path escapes output directory: " + path)
+  }
+  if self.fresh_output &&
+    (
+      relative == ".lattice-cache" ||
+      relative.has_prefix(".lattice-cache/") ||
+      relative == ".lattice-manifest.json" ||
+      relative.has_prefix(".lattice-manifest.json/")
+    ) {
+    raise @fs.IOError("fresh output reserves internal metadata path: " + path)
   }
   key
 }
@@ -118,7 +129,16 @@ fn OutputPlan::write_optional_text(
   content : String,
   origin? : OutputOrigin = Generated,
 ) -> Unit raise @fs.IOError {
-  self.files.push((self.file_path(path), OptionalText(content)))
+  self.files.push(
+    (
+      self.file_path(path),
+      if self.fresh_output {
+        Text(content)
+      } else {
+        OptionalText(content)
+      },
+    ),
+  )
   self.origins.push(origin)
 }
 
@@ -185,6 +205,9 @@ fn OutputPlan::prune_files(self : OutputPlan, dropped : Map[Int, Bool]) -> Unit 
 
 ///|
 fn OutputPlan::preflight(self : OutputPlan) -> Unit raise @fs.IOError {
+  if self.fresh_output {
+    require_fresh_destination(self.root)
+  }
   // Check the entire plan before mkdir or the first write. In particular, a
   // late cache/manifest or nested index conflict must not replace earlier HTML.
   for dir in self.directories {
@@ -219,9 +242,18 @@ fn OutputPlan::publish(
       @fs.create_dir(dir)
     }
   }
-  // Preserve ordered same-file writes (for example warning-only redirects).
-  // Cache and manifest are appended last by the builder.
-  for file in self.files {
+  // Default builds preserve ordered writes and append cache/manifest last.
+  // Fresh publication writes only the final winner for each output path.
+  let final_slots : Map[String, Int] = Map([])
+  if self.fresh_output {
+    for index, (path, _) in self.files {
+      final_slots.set(path, index)
+    }
+  }
+  for index, file in self.files {
+    if self.fresh_output && final_slots.get(file.0) != Some(index) {
+      continue
+    }
     match file.1 {
       Text(content) => @fs.write_string_to_file(file.0, content)
       OptionalText(content) =>

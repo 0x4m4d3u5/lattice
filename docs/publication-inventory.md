@@ -19,6 +19,11 @@ content directory, `-o`, `--config` and `--collections` options. It adds no back
 restrictions or new filesystem primitives. Native execution still requires the
 native toolchain; the pinned verified profile is JavaScript/Node.
 
+Use `inventory --fresh-output -o releases/new-release` to preview an isolated
+release. It refuses an existing or overlapping destination and omits generated
+cache/manifest entries. Build it with the same `--fresh-output` option. See
+[fresh output](fresh-output.md) for filesystem and deployment limits.
+
 ## Read the report
 
 Text output starts with `prepared` or `blocked`. JSON has `version: 1`,
@@ -41,7 +46,8 @@ For example, an authored page at a collection index route may be listed as
 excluded because generated navigation owns that destination. A static overwrite
 is shown as the final static owner. Earlier writers may still be transiently
 written during publication: `excluded` here describes the **final file view**,
-not a guarantee that an intermediate write never occurs. A custom draft 404 is
+not a guarantee that an intermediate write never occurs in ordinary mode.
+Fresh-output mode publishes only the final writer for each destination. A custom draft 404 is
 excluded while its generated default remains planned. Existing optional CSS is
 listed as retained rather than planned for replacement.
 

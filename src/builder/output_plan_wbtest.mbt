@@ -128,3 +128,61 @@ test "pruning preserves inventory origins and records removed candidates" {
   assert_eq(output.excluded[0].status, "excluded")
   assert_false(@fs.path_exists(output.root))
 }
+
+///|
+test "fresh output makes CSS mandatory reserves metadata and rechecks destination" {
+  let prefix = "./_tmp_output_plan_fresh_"
+  let mut suffix = 0
+  while @fs.path_exists(prefix + suffix.to_string()) {
+    suffix += 1
+  }
+  let root = prefix + suffix.to_string()
+  let output = OutputPlan::new(root, fresh_output=true)
+  output.write_optional_text(root + "/style.css", "css")
+  assert_true(output.files[0].1 is Text(_))
+  for
+    name in [".lattice-cache", ".lattice-manifest.json", ".lattice-cache/child"] {
+    let rejected = try {
+      output.write_text(root + "/" + name, "authored")
+      false
+    } catch {
+      @fs.IOError(_) => true
+    }
+    assert_true(rejected)
+  }
+  output.preflight()
+  // A destination created after preparation must still be refused.
+  @fs.create_dir(root)
+  @fs.write_string_to_file(root + "/sentinel", "unchanged")
+  let rejected = try {
+    output.publish([], [])
+    false
+  } catch {
+    @fs.IOError(msg) => msg.contains("already exists")
+  }
+  assert_true(rejected)
+  assert_eq(@fs.read_file_to_string(root + "/sentinel"), "unchanged")
+  assert_false(@fs.path_exists(root + "/style.css"))
+}
+
+///|
+test "fresh publication writes final winners only" {
+  let prefix = "./_tmp_output_plan_fresh_winners_"
+  let mut suffix = 0
+  while @fs.path_exists(prefix + suffix.to_string()) {
+    suffix += 1
+  }
+  let root = prefix + suffix.to_string()
+  let output = OutputPlan::new(root, fresh_output=true)
+  // Optional writers emit a message if executed. Install one directly to prove
+  // that even an intermediate writer with an observable side effect is skipped.
+  output.files.push(
+    (output.file_path(root + "/index.html"), OptionalText("old")),
+  )
+  output.origins.push(Generated)
+  output.write_text(root + "/index.html", "final")
+  let messages : Array[String] = []
+  output.publish([], messages)
+  assert_eq(messages.length(), 0)
+  assert_eq(@fs.read_file_to_string(root + "/index.html"), "final")
+}
