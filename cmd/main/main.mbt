@@ -1438,7 +1438,7 @@ fn run_main() -> Unit {
       println(err.to_string())
       println("")
       println(parser.gen_help_message(["lattice"], {}))
-      @sys.exit(1)
+      finish_once(1)
       return
     }
   }
@@ -1471,7 +1471,7 @@ fn run_main() -> Unit {
     print_diagnostic_main(
       cli_error("--fresh-output is a flag without a value, supported only by build and inventory"),
     )
-    @sys.exit(1)
+    finish_once(1)
     return
   }
 
@@ -1481,13 +1481,13 @@ fn run_main() -> Unit {
   if audience_arguments.length() > 0 &&
     (subcmd_name != "build" && subcmd_name != "check" && subcmd_name != "inventory") {
     print_diagnostic_main(cli_error("--audience is supported only by build, check and inventory"))
-    @sys.exit(1)
+    finish_once(1)
     return
   }
   if audience_arguments.length() > 1 ||
     audience_arguments.any(arg => arg.has_prefix("--audience=")) {
     print_diagnostic_main(cli_error("specify --audience public once, as a separate option and value"))
-    @sys.exit(1)
+    finish_once(1)
     return
   }
   let subcmd_sv = sv.subcmd.unwrap()
@@ -1498,7 +1498,7 @@ fn run_main() -> Unit {
       Some("public") => Some(@builder.Audience::Public)
       _ => {
         print_diagnostic_main(cli_error("--audience must be public; private audience builds are not implemented"))
-        @sys.exit(1)
+        finish_once(1)
         return
       }
     }
@@ -1507,7 +1507,7 @@ fn run_main() -> Unit {
   if audience != None &&
     args.any(arg => arg == "--watch" || arg.has_prefix("--watch=")) {
     print_diagnostic_main(cli_error("--audience cannot be combined with --watch; choose a new output directory for each export"))
-    @sys.exit(1)
+    finish_once(1)
     return
   }
 
@@ -1525,7 +1525,7 @@ fn run_main() -> Unit {
       }
       Err(msg) => {
         print_diagnostic_main(cli_error(msg))
-        @sys.exit(1)
+        finish_once(1)
         return
       }
     }
@@ -1548,7 +1548,7 @@ fn run_main() -> Unit {
           print_diagnostic_main(cli_error("unknown error code: " + code))
           println("")
           println(list_error_codes())
-          @sys.exit(1)
+          finish_once(1)
           return
         }
       }
@@ -1562,7 +1562,7 @@ fn run_main() -> Unit {
       print_diagnostic_main(
         cli_error("usage: lattice new <collection> --name <slug>"),
       )
-      @sys.exit(1)
+      finish_once(1)
       return
     }
     let collection_name = subcmd_sv.positional_args[0]
@@ -1573,7 +1573,7 @@ fn run_main() -> Unit {
           "--name <slug> is required (e.g. lattice new posts --name my-first-post)",
         ),
       )
-      @sys.exit(1)
+      finish_once(1)
       return
     }
     let config_raw = safe_get_one(subcmd_sv, "config").unwrap_or("")
@@ -1594,7 +1594,7 @@ fn run_main() -> Unit {
             None,
           ),
         )
-        @sys.exit(1)
+        finish_once(1)
         return
       }
     }
@@ -1602,7 +1602,7 @@ fn run_main() -> Unit {
       Ok(c) => c
       Err(err) => {
         print_diagnostic_main(config_error_diagnostic(config_path, err))
-        @sys.exit(1)
+        finish_once(1)
         return
       }
     }
@@ -1619,7 +1619,7 @@ fn run_main() -> Unit {
         Ok(defs) => defs
         Err(diagnostic) => {
           print_diagnostic_main(diagnostic)
-          @sys.exit(1)
+          finish_once(1)
           return
         }
       }
@@ -1628,7 +1628,7 @@ fn run_main() -> Unit {
         Ok(defs) => defs
         Err((_, diagnostic)) => {
           print_diagnostic_main(diagnostic)
-          @sys.exit(1)
+          finish_once(1)
           return
         }
       }
@@ -1662,7 +1662,7 @@ fn run_main() -> Unit {
             "]",
           ),
         )
-        @sys.exit(1)
+        finish_once(1)
         return
       }
     }
@@ -1676,7 +1676,7 @@ fn run_main() -> Unit {
       Ok(path) => println("[lattice] created " + path)
       Err(msg) => {
         print_diagnostic_main(cli_error(msg))
-        @sys.exit(1)
+        finish_once(1)
         return
       }
     }
@@ -1689,7 +1689,7 @@ fn run_main() -> Unit {
       print_diagnostic_main(
         cli_error("inventory-diff --format must be text or json"),
       )
-      @sys.exit(1)
+      finish_once(1)
       return
     }
     let before = safe_get_one(subcmd_sv, "before").unwrap_or("")
@@ -1713,7 +1713,7 @@ fn run_main() -> Unit {
       },
     )
     if result is Err(_) {
-      @sys.exit(1)
+      finish_once(1)
     }
     return
   }
@@ -1724,14 +1724,14 @@ fn run_main() -> Unit {
       print_diagnostic_main(
         cli_error("inventory --format must be text or json"),
       )
-      @sys.exit(1)
+      finish_once(1)
       return
     }
     let options = cli_options_from_clap(subcmd_sv, "build")
     let state = match load_cli_state(options, inventory_json=format == "json") {
       Ok(state) => state
       Err(code) => {
-        @sys.exit(code)
+        finish_once(code)
         return
       }
     }
@@ -1748,7 +1748,7 @@ fn run_main() -> Unit {
       },
     )
     if !result.ready {
-      @sys.exit(1)
+      finish_once(1)
     }
     return
   }
@@ -1759,7 +1759,7 @@ fn run_main() -> Unit {
     let state = match load_cli_state(options) {
       Ok(state) => state
       Err(code) => {
-        @sys.exit(code)
+        finish_once(code)
         return
       }
     }
@@ -1776,7 +1776,7 @@ fn run_main() -> Unit {
         print_diagnostic_main(result.errors[ei])
         ei += 1
       }
-      @sys.exit(1)
+      finish_once(1)
       return
     }
     // Print formatted summary
@@ -1838,7 +1838,7 @@ fn run_main() -> Unit {
     print_diagnostic_main(
       cli_error("--fresh-output and --audience cannot be combined with --watch; choose a new output directory for each export"),
     )
-    @sys.exit(1)
+    finish_once(1)
     return
   }
 
@@ -1847,14 +1847,14 @@ fn run_main() -> Unit {
     print_diagnostic_main(
       cli_error("invalid port: " + options.serve_port.to_string()),
     )
-    @sys.exit(1)
+    finish_once(1)
     return
   }
 
   let state = match load_cli_state(options) {
     Ok(state) => state
     Err(code) => {
-      @sys.exit(code)
+      finish_once(code)
       return
     }
   }
@@ -1869,7 +1869,7 @@ fn run_main() -> Unit {
           " — port unavailable or server unsupported by this runtime",
         ),
       )
-      @sys.exit(1)
+      finish_once(1)
       return
     }
     println(
@@ -1899,7 +1899,7 @@ fn run_main() -> Unit {
     audience~,
   )
   if exit_code > 0 {
-    @sys.exit(1)
+    finish_once(1)
   }
 }
 

@@ -3857,3 +3857,33 @@ The audit also preserved the custom 404 renderer's existing schema-free
 fallback rather than silently imposing the root-page title schema, and added an
 effective-policy manifest dependency for programmatic configuration changes.
 No portable render-note API or new JavaScript/WASM export was added.
+
+## Drain one-shot CLI output before Node exit (2026-11-08)
+
+An AI-assisted synthetic compatibility check isolated an output-lifecycle bug:
+`check --format json` wrote a complete diagnostic object to a regular file but
+only a prefix to a pipe while retaining exit status 1. The MoonBit `x/sys.exit`
+JavaScript implementation calls Node `process.exit`, which does not wait for
+pending asynchronous stdout/stderr writes. Increasing a consumer buffer or
+reducing diagnostics would hide the bug rather than repair the producer.
+
+One-shot completion now sets Node's supported `process.exitCode` and returns,
+letting the event loop drain writes naturally. Native/WASM retain their existing
+synchronous exit behavior. Every early error in `run_main` already returns;
+replacing only its exit sites preserves dispatch and failure status for checks,
+inventories, inventory comparisons, configuration and argument failures, and text
+commands. The fatal initial watch-snapshot exit remains immediate because a live
+server worker may already exist. Server worker failures and watcher signal
+behavior are unchanged. There is no drain sleep, forced timeout, output cap,
+dependency, or new global stream error handler. A closed downstream pipe retains
+Node Console's existing ignored-write-error behavior: it terminates promptly,
+but exit status reports validation, not acknowledgement of downstream receipt.
+
+AI authored the scoped fix and a wholly synthetic regression, with independent
+lifecycle review. The regression compares the exact bytes of actual pipes and
+regular files, parses the entire output, and verifies 4,000 diagnostics with a
+multibyte source path. An IPC-controlled first stdout write deterministically
+exposes immediate exit without depending on scheduling. A separate slow reader
+exercises real backpressure without the preload. Success, inventory failure,
+comparison failure, configuration failure and fatal arguments are covered with
+bounded child-process timeouts and unchanged empty stderr expectations.
