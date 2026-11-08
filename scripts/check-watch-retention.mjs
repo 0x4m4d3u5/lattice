@@ -25,6 +25,7 @@ writeFileSync(join(root, 'next-templates/page.html'), '<main>{{content}}<aside>N
 const nextSource = join(root, 'next-notes'); mkdirSync(nextSource);
 writeFileSync(join(nextSource, 'remote.md'), '---\ntitle: Remote\n---\nInitial remote body\n');
 const nextOutput = join(root, 'content/posts/generated-next/remote/index.html');
+const completionRelease = join(root, 'release-final-completion');
 const preload = join(root, 'edit-at-completion.cjs');
 // Execute author edits inside the child, after its output is complete but
 // before run_once returns. There is no scheduling race or timing assumption.
@@ -39,6 +40,16 @@ process.stdout.write = function(chunk, ...args) {
     const line = pending.slice(0, end); pending = pending.slice(end + 1);
     if (line.startsWith('[lattice] built ')) {
       builds++;
+      // Force final output to be visible to the parent before the sixth
+      // completion log. The parent releases this test-only barrier once it
+      // observes those bytes, rather than relying on a scheduler delay.
+      if (builds === 6) {
+        const deadline = Date.now() + 10_000;
+        while (!fs.existsSync(${JSON.stringify(completionRelease)})) {
+          if (Date.now() >= deadline) throw Error('parent did not release completion barrier');
+          Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 10);
+        }
+      }
       if (builds === 1) fs.writeFileSync(${JSON.stringify(source)}, '---\\ntitle: Note\\n---\\nRetained initial edit\\n');
       if (builds === 2) {
         fs.appendFileSync(${JSON.stringify(template)}, '<aside>Retained template</aside>');
@@ -47,7 +58,7 @@ process.stdout.write = function(chunk, ...args) {
       }
       if (builds === 3) {
         const html = fs.readFileSync(${JSON.stringify(output)}, 'utf8');
-        if (!html.includes('Retained template') || !html.includes('Retained site') || fs.readFileSync(${JSON.stringify(asset)}, 'utf8') !== 'Retained asset') throw Error('dependency edits were lost');
+        if (!html.includes('Retained template') || !html.includes('Retained site') || fs.readFileSync(${JSON.stringify(join(root, 'content/posts/generated/static/example.txt'))}, 'utf8') !== 'Retained asset') throw Error('dependency edits were lost');
         fs.writeFileSync(${JSON.stringify(source)}, '---\\ndescription: Missing title\\n---\\nInvalid edit\\n');
       }
       if (builds === 4) fs.writeFileSync(${JSON.stringify(config)}, fs.readFileSync(${JSON.stringify(config)}, 'utf8').replace('templates_dir = templates', 'templates_dir = next-templates').replace('posts/generated', 'posts/generated-next') + 'standalone_dir = next-notes\\n');
@@ -65,20 +76,34 @@ let log = '', exited = false;
 child.stdout.on('data', data => { log += data; });
 child.stderr.on('data', data => { log += data; });
 const exit = new Promise(resolve => child.on('exit', () => { exited = true; resolve(); }));
+const completedBuilds = () => (log.match(/^\[lattice\] built [^\n]*\n/gm) || []).length;
+let observedOutputBeforeCompletion = false;
+function finalOutputReady() {
+  // Earlier completions may also still be buffered in the parent's pipe.
+  if (completedBuilds() < 5) return false;
+  if (!existsSync(nextOutput) || !readFileSync(nextOutput, 'utf8').includes('Retained new root edit')) return false;
+  if (!existsSync(completionRelease)) {
+    observedOutputBeforeCompletion = completedBuilds() === 5;
+    writeFileSync(completionRelease, 'release');
+  }
+  return true;
+}
 try {
   const deadline = Date.now() + 10_000;
-  while (!log.includes('[lattice] built ') || !existsSync(nextOutput) || !readFileSync(nextOutput, 'utf8').includes('Retained new root edit')) {
+  // Output writes precede completion logs. Require both before measuring idle.
+  while (!finalOutputReady() || completedBuilds() < 6) {
     assert.ok(!exited && Date.now() < deadline, `edits made at build completion must not be discarded\n${log}`);
     await delay(25);
   }
+  assert.ok(observedOutputBeforeCompletion, 'exercise output-visible-before-completion ordering');
   assert.ok(log.includes('[lattice] build failed:'), 'exercise failed rebuild recovery');
   assert.ok(readFileSync(nextOutput, 'utf8').includes('New root template'));
   assert.ok(readFileSync(join(root, 'content/posts/generated-next/posts/note/index.html'), 'utf8').includes('Retained recovery'));
   assert.equal(readFileSync(join(root, 'content/posts/generated-next/static/example.txt'), 'utf8'), 'Retained asset');
-  const settled = (log.match(/\[lattice\] built /g) || []).length;
-  await delay(500);
-  assert.equal((log.match(/\[lattice\] built /g) || []).length, settled, `generated output must not cause rebuild loops\n${log}`);
+  const settled = completedBuilds();
   assert.ok(settled >= 6 && settled <= 7, `only input/root transitions may rebuild\n${log}`);
+  await delay(500);
+  assert.equal(completedBuilds(), settled, `generated output must not cause rebuild loops\n${log}`);
   console.log(`Watch retains initial/rebuild/failure edits and changed roots/output without loops (${root})`);
 } finally {
   if (!exited) child.kill('SIGINT');
