@@ -36,3 +36,5 @@ LATTICE_NATIVE_CLI="$PWD/_build/native/debug/build/kurisu/lattice/cmd/main/main.
 LATTICE_NATIVE_CLI="$PWD/_build/native/debug/build/kurisu/lattice/cmd/main/main.exe" node scripts/check-passage-retention.mjs
 
 LATTICE_NATIVE_CLI="$PWD/_build/native/debug/build/kurisu/lattice/cmd/main/main.exe" node scripts/check-publication-visibility.mjs
+
+LATTICE_NATIVE_CLI="$PWD/_build/native/debug/build/kurisu/lattice/cmd/main/main.exe" node scripts/check-static-allowlist.mjs

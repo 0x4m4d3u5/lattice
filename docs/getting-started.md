@@ -375,7 +375,11 @@ dist/
 ```
 
 If `static_dir` exists, lattice also copies those files into `dist/static/`.
-That directory is copied wholesale, not filtered by note draft flags or vault
+To publish only explicitly selected files, set a top-level
+`static_allowlist = ["logo.png", "downloads/guide.pdf"]`; `[]` selects none.
+See [static allowlists](static-allowlist.md), including the requirement to use a
+fresh output when verifying exclusions. Omission preserves copying all files.
+By default, that directory is copied wholesale, not filtered by note draft flags or vault
 metadata. Keep private attachments outside it. Removing a source does not remove
 its old published file; use a new output directory when you need a fresh output
 set, then review it before publishing. Publication writes are not atomic.

@@ -30,7 +30,7 @@ Text output starts with `prepared` or `blocked`. JSON has `version: 1`,
 | `source` | Source path for an authored page or static asset; otherwise `null` |
 | `kind` | `page`, `generated`, `static_asset` or `build_metadata` |
 | `status` | `planned` for the final owner, or `excluded` |
-| `reason` | Final output, optional output, draft, retained stylesheet, superseded writer or final-plan pruning explanation |
+| `reason` | Final output, optional output, draft, retained stylesheet, static allowlist, superseded writer or final-plan pruning explanation |
 
 Entries sort by path, status, kind, source and reason. Diagnostics retain severity,
 code, path, available line/column, message and note; their presentation is sorted.
@@ -71,9 +71,10 @@ can invalidate the preview. It is not a promise that a future build will succeed
 a directory transaction, or a deployment operation.
 
 Vault helpers are not publication filters: `type: private`, inbox or WIP metadata
-alone does not prevent publication. Every file under the configured static
-source directory is copied according to existing rules, even if its related note
-is excluded. Review attachment inclusion explicitly. Existing stale output is
+alone does not prevent publication. By default, every file under the configured static
+source directory is copied, even if its related note is excluded. An explicit
+[`static_allowlist`](static-allowlist.md) selects exact files and reports withheld
+paths as excluded. Review attachment inclusion explicitly. Existing stale output is
 neither inventoried nor removed; inspect a fresh output directory when evaluating
 what a build emits. The inventory adds no migration, filtering, deletion or
 privacy guarantee. See [build safety](build-safety.md) and

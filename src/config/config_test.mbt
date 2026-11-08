@@ -618,3 +618,57 @@ test "wikilink aliases are explicitly enabled with a validated boolean" {
   assert_eq(@config.parse("title = Wiki\nbase_url = https://example.test\nwikilink_aliases = true\n").unwrap().wikilink_aliases, Some(true))
   assert_true(@config.parse("title = Wiki\nbase_url = https://example.test\nwikilink_aliases = maybe\n") is Err(_))
 }
+
+///|
+test "static allowlist omission and empty selection are distinct" {
+  assert_eq(@config.parse("title=Site\nbase_url=/\n").unwrap().static_allowlist, None)
+  assert_eq(@config.parse("title=Site\nbase_url=/\nstatic_allowlist=[]\n").unwrap().static_allowlist, Some([]))
+  assert_eq(@config.parse("title=Site\nbase_url=/\nstatic_allowlist=[\"logo.png\", \"downloads/guide.pdf\"]\n").unwrap().static_allowlist, Some(["logo.png", "downloads/guide.pdf"]))
+}
+
+///|
+test "static allowlist requires a strict JSON string array" {
+  for value in ["", "null", "true", "42", "{}", "\"logo.png\"", "[1]", "[null]", "[\"a\",]", "['a']", "[\"a\"] trailing", "[\"a\", \"a\"]", "[\"a\", \"\\u0061\"]"] {
+    assert_true(@config.parse("title=Site\nbase_url=/\nstatic_allowlist=" + value + "\n") is Err(@config.InvalidValue("static_allowlist", _)))
+  }
+}
+
+///|
+test "static allowlist rejects noncanonical paths and glob syntax" {
+  for path in ["", "/absolute", "C:/file", "a\\b", ".", "..", "a/../b", "a/./b", "a//b", "a/", "*.png", "a?b", "[ab].png", "a\nb", "a\tb", "a\u0000b", "a\u007fb", "a\u0085b"] {
+    assert_true(@config.validate_static_allowlist([path]) is Err(_))
+  }
+  assert_true(@config.validate_static_allowlist(["café/file name.png", ".hidden"]) is Ok(_))
+}
+
+///|
+test "static allowlist rejects duplicate and misplaced declarations" {
+  for suffix in ["static_allowlist=[]\nstatic_allowlist=[]\n", "[[collections]]\nname=posts\ndir=posts\nstatic_allowlist=[]\n", "[[data]]\nname=nav\nstatic_allowlist=[]\n"] {
+    assert_true(@config.parse("title=Site\nbase_url=/\n" + suffix) is Err(@config.InvalidValue("static_allowlist", _)))
+  }
+}
+
+///|
+test "quoted static allowlist keys cannot bypass selection or duplicate checks" {
+  let base = "title = Fixture\nbase_url = https://example.test\n"
+  for key in ["static_allowlist", "\"static_allowlist\"", "'static_allowlist'", "\"static_allow\\u006cist\""] {
+    match @config.parse(base + key + " = []\n") {
+      Ok(site) => assert_eq(site.static_allowlist, Some([]))
+      Err(_) => fail("quoted allowlist was rejected")
+    }
+    for second in ["static_allowlist", "\"static_allowlist\"", "'static_allowlist'"] {
+      assert_true(@config.parse(base + key + " = []\n" + second + " = []\n") is Err(_))
+    }
+    assert_true(@config.parse(base + key + " = false\n") is Err(_))
+    assert_true(@config.parse(base + "[[data]]\nname = metadata\n" + key + " = []\n") is Err(_))
+  }
+}
+
+///|
+test "undecodable double quoted config keys fail visibly" {
+  let base = "title = Fixture\nbase_url = https://example.test\n"
+  for key in ["\"static_allow\\U0000006cist\"", "\"static_allowlist", "\"unknown\\U0000006bey\""] {
+    assert_true(@config.parse(base + key + " = []\n") is Err(_))
+    assert_true(@config.parse(base + "static_allowlist = []\n" + key + " = []\n") is Err(_))
+  }
+}

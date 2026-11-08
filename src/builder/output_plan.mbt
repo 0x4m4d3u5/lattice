@@ -251,12 +251,28 @@ fn plan_static_assets(
 ) -> Result[Int, @assets.AssetCopyError] {
   let static_dir = static_dir_name(config.site)
   let directories : Array[String] = []
-  let assets = match
-    @assets.read_static(config.content_dir, static_dir, directories~) {
-    Ok(assets) => assets
+  let selection = match
+    @assets.read_static_selected(
+      config.content_dir, static_dir, config.site.static_allowlist, directories~,
+    ) {
+    Ok(selection) => selection
     Err(err) => return Err(err)
   }
+  let assets = selection.assets
   let destination = @strutil.join_path(config.output_dir, static_dir)
+  for relative_path in selection.withheld_paths {
+    output.excluded.push(
+      inventory_entry(
+        output.root,
+        @strutil.join_path(destination, relative_path),
+        StaticAsset(@strutil.join_path(
+          @strutil.join_path(config.content_dir, static_dir), relative_path,
+        )),
+        "excluded",
+        "not selected by static_allowlist; existing output is not removed",
+      ),
+    )
+  }
   for directory in directories {
     let path = @strutil.join_path(destination, directory)
     output.ensure_dir(path) catch {

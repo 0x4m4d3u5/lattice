@@ -44,9 +44,12 @@ fn register_image_assets(
     return
   }
   let static_dir = static_dir_name(config.site)
-  guard @assets.read_static(config.content_dir, static_dir) is Ok(assets) else {
+  guard @assets.read_static_selected(
+    config.content_dir, static_dir, config.site.static_allowlist,
+  ) is Ok(selection) else {
     return
   }
+  let assets = selection.assets
   let qualified_prefix = output_path_key(static_dir) + "/"
   for asset in assets {
     let path = output_path_key(static_dir + "/" + asset.relative_path)

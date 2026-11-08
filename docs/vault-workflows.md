@@ -12,6 +12,8 @@ invalid or duplicate declarations in ordinary build/check/inventory, including
 hidden drafts. This is a public-only guard, not mixed-vault support. Keep private
 notes and attachments outside the public source tree; a rejection leaves old
 published files untouched. Existing `type: private` behavior is unchanged.
+An optional [`static_allowlist`](static-allowlist.md) selects exact attachments
+for new writes; it does not remove stale files or make a mixed vault safe.
 
 ## Bring a curated vault copy into the wiki starter
 

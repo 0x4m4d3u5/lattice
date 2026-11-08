@@ -7806,13 +7806,22 @@ pub fn check(config : BuildConfig, local_links? : Bool = false) -> @lint.LintRes
     }
   }
   let _sitemap_xml = @sitemap.render_sitemap(config.site.base_url, graph_pages, updated_dates~)
-  let static_validation = @assets.check_static(
-    config.content_dir,
-    static_dir_name(config.site),
-  )
+  let static_errors : Array[@assets.AssetCopyError] = match config.site.static_allowlist {
+    None => @assets.check_static(config.content_dir, static_dir_name(config.site)).errors
+    Some(_) => {
+      let errors : Array[@assets.AssetCopyError] = []
+      match @assets.read_static_selected(
+        config.content_dir, static_dir_name(config.site), config.site.static_allowlist,
+      ) {
+        Ok(_) => ()
+        Err(err) => errors.push(err)
+      }
+      errors
+    }
+  }
   i = 0
-  while i < static_validation.errors.length() {
-    let asset_err = static_validation.errors[i]
+  while i < static_errors.length() {
+    let asset_err = static_errors[i]
     violations.push({
       path: @assets.error_path(asset_err),
       line: None,

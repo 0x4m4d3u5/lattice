@@ -190,7 +190,7 @@ fn inventory_integer(value : Int?) -> Json {
 }
 
 ///|
-let inventory_notice : String = "Forced-build preview only: no output, cache or manifest writes. Not a filesystem-success or privacy guarantee. Vault types do not filter publication; configured static assets are copied wholesale. Existing stale files are not removed or inventoried."
+let inventory_notice : String = "Forced-build preview only: no output, cache or manifest writes. Not a filesystem-success or privacy guarantee. Vault types do not filter publication; static assets are copied wholesale unless static_allowlist selects exact files. Existing stale files are not removed or inventoried."
 
 ///|
 pub fn format_inventory_json(result : PublicationInventory, fragments? : Map[String, Array[String]?] = Map([])) -> String {

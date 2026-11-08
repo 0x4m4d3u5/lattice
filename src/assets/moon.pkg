@@ -1,4 +1,5 @@
 import {
+  "kurisu/lattice/src/config" @config,
   "moonbitlang/core/debug" @debug,
   "moonbitlang/x/fs" @fs,
   "kurisu/lattice/src/strutil" @strutil,

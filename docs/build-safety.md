@@ -141,7 +141,8 @@ entries. A draft `content/404.md` uses the usual default error content.
 Source validation and slug ownership still cover all discovered sources. Tags
 unique to hidden drafts remain valid during validation, and authored wikilinks
 still resolve against the complete source catalog. Cache and manifest metadata
-can contain draft sources; static files are copied wholesale. Existing output
+can contain draft sources; static files are copied wholesale unless an explicit
+[`static_allowlist`](static-allowlist.md) selects exact files. Existing output
 files are retained, so switching off `--drafts` in an existing output directory
 does not remove previously emitted draft pages, aliases, redirects, or tag pages.
 Use a fresh output directory when you need to verify what a build emits.

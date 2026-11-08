@@ -172,8 +172,9 @@ node "$LATTICE_CLI" inventory --format json
 The [publication inventory](docs/publication-inventory.md) lists authored pages,
 generated files, static assets and build metadata, with draft/overwrite exclusions.
 It uses the build's preparation plan. It is not a privacy guarantee: vault metadata
-such as `type: private` does not exclude a note, and configured static assets are
-copied wholesale. Use `check` for strict wikilink validation before publishing. Compare two saved previews with [`inventory-diff`](docs/inventory-comparison.md) to review added and removed HTML paths without inferring renames.
+such as `type: private` does not exclude a note, and static assets are
+copied wholesale unless an explicit [`static_allowlist`](docs/static-allowlist.md)
+selects exact files. Exclusions do not remove old output. Use `check` for strict wikilink validation before publishing. Compare two saved previews with [`inventory-diff`](docs/inventory-comparison.md) to review added and removed HTML paths without inferring renames.
 
 The reserved [`visibility` field](docs/publication-visibility.md) is a public-only
 safety guard: absent/public keeps existing behavior, while private, invalid or
