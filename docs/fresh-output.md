@@ -42,10 +42,12 @@ combined with `build --watch`, and is not a `serve` or `dev` option: those modes
 need to reuse a destination.
 
 Drafts, visibility, static selection and link-validation policy remain separate.
-`--drafts` still includes drafts when explicitly requested. Private, invalid or
-duplicate visibility declarations still reject preparation. The
+`--drafts` still includes drafts when explicitly requested. Without an explicit
+audience, private, invalid or duplicate visibility declarations reject preparation.
+The separate [`--audience public`](public-audience.md) policy selects only explicit
+public sources and requires fresh output plus a static allowlist. The
 [`static_allowlist`](static-allowlist.md) still controls exact static-file
-selection, and omission still means copy all static files. A reference does not
+selection; without an explicit audience, omission still means copy all static files. A reference does not
 expand the allowlist. Use `--strict-wikilinks` and `--strict-local-links` when you
 want their existing validation policies on a fresh build.
 
@@ -69,7 +71,8 @@ private information. Final-writer selection is per output file: it does not chan
 search/index policy, so excerpts from a superseded authored page can still appear
 in another generated file. It does not make a mixed private/public vault safe. Continue
 using a curated public source tree and the
-[public-only visibility guard](publication-visibility.md).
+[public-only visibility guard](publication-visibility.md), or review the narrower
+opt-in [public source projection](public-audience.md) and its trusted-input limits.
 
 The additive builder APIs accept `fresh_output=true` on `build`, `inventory` and
 `inventory_with_fragments`. `BuildConfig` and the default API behavior are

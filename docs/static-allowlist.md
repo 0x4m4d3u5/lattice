@@ -52,9 +52,10 @@ source role from reading those files.
 ## Safety limits
 
 This is a static-file selection policy, **not a complete privacy boundary**.
-Private visibility declarations still reject the whole build. Do not publish a
-mixed public/private vault with this option. Keep using a deliberately curated
-public source tree.
+Without an explicit audience, private visibility declarations still reject the
+whole build. The allowlist alone does not select public Markdown. The separate
+[`--audience public`](public-audience.md) policy requires this allowlist alongside
+fresh output and early source selection; its trusted-input limits still apply.
 
 The allowlist controls new static writes only. It does not delete stale output,
 withdraw a deployed file, or sanitize old build metadata. Narrowing the list or

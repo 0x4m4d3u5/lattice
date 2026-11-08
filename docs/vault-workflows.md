@@ -15,6 +15,12 @@ published files untouched. Existing `type: private` behavior is unchanged.
 An optional [`static_allowlist`](static-allowlist.md) selects exact attachments
 for new writes; it does not remove stale files or make a mixed vault safe.
 
+For an opt-in early source filter, see [`--audience public`](public-audience.md).
+It excludes private and unlabelled Markdown before derivation and requires an
+explicit attachment allowlist plus fresh output. Templates, data, selected assets
+and authored public text remain trusted inputs; this is not a complete mixed-vault
+privacy or deployment policy. The curated-copy workflow below remains supported.
+
 ## Bring a curated vault copy into the wiki starter
 
 Use a separate working copy so the original notes stay untouched. There is no

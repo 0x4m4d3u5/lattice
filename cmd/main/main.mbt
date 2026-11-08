@@ -226,6 +226,11 @@ fn build_parser() -> @clap.Parser {
             defaults=[""],
             help="Override collections config file",
           ),
+          "audience": @clap.Arg::named(
+            nargs=One,
+            defaults=[""],
+            help="Opt in to explicit public source selection (public only)",
+          ),
           "drafts": @clap.Arg::flag(help="Include draft posts in the build"),
           "strict-local-links": @clap.Arg::flag(help="Validate ordinary local Markdown URLs before publishing"),
           "strict-wikilinks": @clap.Arg::flag(
@@ -269,6 +274,11 @@ fn build_parser() -> @clap.Parser {
             nargs=One,
             defaults=[""],
             help="Override collections config file",
+          ),
+          "audience": @clap.Arg::named(
+            nargs=One,
+            defaults=[""],
+            help="Opt in to explicit public source selection (public only)",
           ),
           "drafts": @clap.Arg::flag(help="Include draft posts in the check"),
           "local-links": @clap.Arg::flag(help="Audit ordinary local Markdown URLs against the publication plan"),
@@ -331,6 +341,11 @@ fn build_parser() -> @clap.Parser {
             nargs=One,
             defaults=[""],
             help="Override collections config file",
+          ),
+          "audience": @clap.Arg::named(
+            nargs=One,
+            defaults=[""],
+            help="Opt in to explicit public source selection (public only)",
           ),
           "drafts": @clap.Arg::flag(help="Include draft sources in the preview"),
           "fresh-output": @clap.Arg::flag(
@@ -887,10 +902,11 @@ fn run_once(
   strict_wikilinks : Bool,
   local_links : Bool,
   fresh_output? : Bool = false,
+  audience? : @builder.Audience? = None,
 ) -> Int {
   let start_ms = @watch.current_millis()
   if check_mode {
-    let lint_result = @builder.check(build_config, local_links~)
+    let lint_result = @builder.check(build_config, local_links~, audience~)
     if check_json {
       println(@lint.format_violations_json(lint_result))
       return if @lint.has_violations(lint_result) { 1 } else { 0 }
@@ -921,7 +937,7 @@ fn run_once(
     )
     0
   } else {
-    let cache_store = if fresh_output {
+    let cache_store = if fresh_output || audience != None {
       @cache.empty(build_config.output_dir)
     } else {
       match (try Ok(@cache.load(build_config.output_dir)) catch { err => Err(err) }) {
@@ -939,7 +955,7 @@ fn run_once(
         }
       }
     }
-    let result = @builder.build(build_config, cache_store, strict_wikilinks~, strict_local_links=local_links, fresh_output~)
+    let result = @builder.build(build_config, cache_store, strict_wikilinks~, strict_local_links=local_links, fresh_output~, audience~)
     // Print accumulated progress messages
     let mut mi = 0
     while mi < result.messages.length() {
@@ -1376,11 +1392,13 @@ pub fn explain_error_code(code : String) -> String? {
     "e015" | "publicationvisibilityerror" | "publicationvisibility" => Some(
       "E015  PublicationVisibilityError  [error]\n\n" +
       "  The reserved visibility field accepts exactly public or private strings.\n" +
-      "  Private-audience publication is not implemented. A private declaration\n" +
+      "  Private-audience publication is not implemented. Without --audience public, a private declaration\n" +
       "  blocks ordinary build, check and inventory, including drafts and cache hits.\n" +
       "  Keep private notes and attachments outside a curated public source tree.\n" +
       "  Do not relabel private material as public merely to pass this check.\n" +
-      "  Missing visibility preserves existing behavior; type: private is organizational.\n" +
+      "  With --audience public, only explicit visibility: public sources are selected.\n" +
+      "  Fresh output and an explicit static_allowlist are required for that projection.\n" +
+      "  Missing visibility preserves default behavior; type: private is organizational.\n" +
       "  A failed build does not remove previously published or stale files.\n",
     )
     "e013" | "configerror" =>
@@ -1443,7 +1461,41 @@ fn run_main() -> Unit {
     return
   }
 
+  let audience_arguments : Array[String] = args.iter().filter(arg =>
+    arg == "--audience" || arg.has_prefix("--audience=")
+  ).collect()
+  if audience_arguments.length() > 0 &&
+    (subcmd_name != "build" && subcmd_name != "check" && subcmd_name != "inventory") {
+    print_diagnostic_main(cli_error("--audience is supported only by build, check and inventory"))
+    @sys.exit(1)
+    return
+  }
+  if audience_arguments.length() > 1 ||
+    audience_arguments.any(arg => arg.has_prefix("--audience=")) {
+    print_diagnostic_main(cli_error("specify --audience public once, as a separate option and value"))
+    @sys.exit(1)
+    return
+  }
   let subcmd_sv = sv.subcmd.unwrap()
+  let audience : @builder.Audience? = if audience_arguments.is_empty() {
+    None
+  } else {
+    match safe_get_one(subcmd_sv, "audience") {
+      Some("public") => Some(@builder.Audience::Public)
+      _ => {
+        print_diagnostic_main(cli_error("--audience must be public; private audience builds are not implemented"))
+        @sys.exit(1)
+        return
+      }
+    }
+  }
+
+  if audience != None &&
+    args.any(arg => arg == "--watch" || arg.has_prefix("--watch=")) {
+    print_diagnostic_main(cli_error("--audience cannot be combined with --watch; choose a new output directory for each export"))
+    @sys.exit(1)
+    return
+  }
 
   // Handle 'init' subcommand early — no config loading needed
   if subcmd_name == "init" {
@@ -1672,6 +1724,7 @@ fn run_main() -> Unit {
     let (result, fragments) = @builder.inventory_with_fragments(
       state.build_config,
       fresh_output=subcmd_sv.get_flag("fresh-output").unwrap_or(false),
+      audience~,
     )
     println(
       if format == "json" {
@@ -1767,9 +1820,9 @@ fn run_main() -> Unit {
   let options = cli_options_from_clap(subcmd_sv, subcmd_name)
   let fresh_output = subcmd_name == "build" &&
     subcmd_sv.get_flag("fresh-output").unwrap_or(false)
-  if fresh_output && options.watch_mode {
+  if (fresh_output || audience != None) && options.watch_mode {
     print_diagnostic_main(
-      cli_error("--fresh-output cannot be combined with --watch; choose a new output directory for each export"),
+      cli_error("--fresh-output and --audience cannot be combined with --watch; choose a new output directory for each export"),
     )
     @sys.exit(1)
     return
@@ -1829,6 +1882,7 @@ fn run_main() -> Unit {
     options.strict_wikilinks,
     options.local_links,
     fresh_output~,
+    audience~,
   )
   if exit_code > 0 {
     @sys.exit(1)

@@ -181,7 +181,12 @@ For a release that cannot inherit stale files, use
 It refuses existing or overlapping destinations and omits generated cache and
 manifest files. Existing releases and deployed files remain untouched.
 
-The reserved [`visibility` field](docs/publication-visibility.md) is a public-only
+Opt in to [`--audience public`](docs/public-audience.md) to select only Markdown
+sources explicitly marked `visibility: public`, before deriving pages or indexes.
+It requires fresh output and an explicit static allowlist. Read the trusted-input
+and reference-audit limits before using it with a mixed source tree.
+
+By default, the reserved [`visibility` field](docs/publication-visibility.md) is a public-only
 safety guard: absent/public keeps existing behavior, while private, invalid or
 duplicate declarations block ordinary build, check and inventory. Private-audience
 builds are not implemented. Draft flags do not override this guard, and rejection

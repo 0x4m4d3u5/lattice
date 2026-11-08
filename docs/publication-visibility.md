@@ -1,7 +1,10 @@
 # Public-only visibility guard
 
-Lattice currently publishes a curated public source tree. It does **not** support
-building a mixed private/public vault, even with this guard enabled.
+Without an explicit audience, Lattice publishes a curated public source tree and
+rejects private declarations. This page describes that compatibility default.
+The separate [`--audience public`](public-audience.md) policy selects only explicit
+public Markdown before derivation, with fresh-output and attachment requirements.
+Neither mode is a general private-information sanitizer.
 
 `visibility` is now a reserved frontmatter key. Ordinary `build`, `check` and
 `inventory` enforce it without an opt-in flag:
@@ -65,8 +68,9 @@ out of the public build inputs and public repository.
 
 A complete audience boundary still needs explicit asset classification, isolated
 public/private outputs and caches, stale-artifact handling, and public-only
-metadata/link derivation. This prerequisite deliberately rejects private input
-instead of offering an incomplete private-page filter. Continue using the
+metadata/link derivation. The default guard deliberately rejects private input. The explicit
+[public source projection](public-audience.md) adds early selection but still has
+trusted-input and reference-audit limits. For the compatibility path, use the
 [curated-copy workflow](vault-workflows.md) and review the
 [publication inventory](publication-inventory.md) and [build safety](build-safety.md).
 

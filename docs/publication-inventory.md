@@ -24,6 +24,11 @@ release. It refuses an existing or overlapping destination and omits generated
 cache/manifest entries. Build it with the same `--fresh-output` option. See
 [fresh output](fresh-output.md) for filesystem and deployment limits.
 
+Use `inventory --audience public --fresh-output` for the explicit
+[public source projection](public-audience.md). It reports private/unlabelled
+source exclusions, so treat the report as local audit information, not a file to
+deploy. Its selection and mandatory supported-link checks match public builds.
+
 ## Read the report
 
 Text output starts with `prepared` or `blocked`. JSON has `version: 1`,
@@ -112,7 +117,7 @@ existing formatters retain their original output.
 ## Reserved visibility declarations
 
 The [public-only visibility guard](publication-visibility.md) runs during the same
-preparation used by inventory and ordinary builds. Private, invalid or duplicate
+preparation used by inventory and ordinary builds without an audience. Private, invalid or duplicate
 `visibility` declarations produce `E015`, `ready: false` and an empty entry list,
 even with `--drafts`. Missing visibility and `type: private` retain their previous
 behavior. This does not classify assets or remove/inventory stale output.

@@ -2649,11 +2649,18 @@ fn visit_body_inlines(body : String, visit : (Inline) -> Unit) -> Unit {
 
 ///|
 /// Destinations parsed as ordinary Markdown links (including autolinks and footnotes).
-/// Images, code examples, raw HTML and shortcode bodies are not audited here.
-pub fn extract_link_destinations(body : String) -> Array[String] {
+/// Image destinations are opt-in; code, raw HTML and shortcode bodies stay opaque.
+pub fn extract_link_destinations(
+  body : String,
+  include_images? : Bool = false,
+) -> Array[String] {
   let targets : Array[String] = []
   visit_body_inlines(body, fn(inline) {
-    if inline is Link(_, target) { targets.push(target) }
+    match inline {
+      Link(_, target) => targets.push(target)
+      Image(_, target) => if include_images { targets.push(target) }
+      _ => ()
+    }
   })
   targets
 }
