@@ -167,7 +167,7 @@ fn check_output_local_links(
   let base = local_link_base_path(config.site.base_url)
   for collection in collections {
     for source in collection.sources {
-      if !source_is_visible(source, config.include_drafts) {
+      if !source_is_visible(source, config.include_drafts, allow_missing_frontmatter=config.site.allow_missing_frontmatter == Some(true)) {
         continue
       }
       let source_url = match source_urls.get(source.path) {
@@ -185,7 +185,7 @@ fn check_output_local_links(
       if !owned && output.public_projection is None {
         continue
       }
-      let body = match @frontmatter.parse(source.content) {
+      let body = match @frontmatter.parse_with_policy(source.content, allow_missing_frontmatter=config.site.allow_missing_frontmatter == Some(true)) {
         Ok(fm) => fm.body
         Err(_) => continue
       }

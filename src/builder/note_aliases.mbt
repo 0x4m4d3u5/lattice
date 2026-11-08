@@ -13,6 +13,7 @@ fn authored_source_url(collection_name : String, slug : String) -> String {
 fn register_note_aliases(
   collections : Array[CollectionSources],
   page_index : Map[String, String],
+  allow_missing_frontmatter? : Bool = false,
 ) -> Array[@lint.LintViolation] {
   let violations : Array[@lint.LintViolation] = []
   let canonical = page_index.copy()
@@ -26,7 +27,7 @@ fn register_note_aliases(
   }
   sources.sort_by_key(fn(pair) { pair.0.path })
   for (source, url) in sources {
-    let fm = match @frontmatter.parse(source.content) {
+    let fm = match @frontmatter.parse_with_policy(source.content, allow_missing_frontmatter~) {
       Ok(fm) => fm
       Err(_) => continue
     }
@@ -125,8 +126,8 @@ fn note_alias_schema(schema : @schema.Schema, enabled : Bool) -> @schema.Schema 
 ///|
 /// Read names only from the source selected for publication, never a draft
 /// sharing another source's URL. Final output ownership filters this metadata.
-fn searchable_note_aliases(content : String) -> Array[String] {
-  guard @frontmatter.parse(content) is Ok(fm) else { return [] }
+fn searchable_note_aliases(content : String, allow_missing_frontmatter? : Bool = false) -> Array[String] {
+  guard @frontmatter.parse_with_policy(content, allow_missing_frontmatter~) is Ok(fm) else { return [] }
   guard fm.fields.get("aliases") is Some(@frontmatter.FArray(values)) else { return [] }
   let names : Array[String] = []
   for value in values {

@@ -3831,3 +3831,29 @@ watch workflow tests no longer wait 250ms for a post-build snapshot to settle;
 idle CPU and SIGINT checks remain. Unit tests cover excluded output creation and
 removal, sibling-prefix and lexical-alias paths, and directory/file/missing
 transitions. No sleep duration or timeout was increased to mask the failure.
+
+
+## Explicit body-only ingestion (2026-11-08)
+
+An AI-assisted local compatibility probe found that a body-only note was rejected
+at the delimiter check before its all-optional schema could run. Synthetic
+same-body comparisons with empty frontmatter isolated parsing policy from content
+validation. The private note and probe artifacts are not fixtures or repository
+inputs; this narrow finding does not complete a real-vault quality evaluation.
+
+The chosen fix is an explicit, typed site ingestion setting, defaulting off,
+rather than synthetic headers, inferred metadata or weaker schemas. A shared
+policy-aware parser retains the strict public parsing APIs and is threaded through
+filesystem rendering, linting, indexes and scanners. Recognized headers never
+fall back after a parse error. The public-audience projection sees empty metadata
+as missing visibility and excludes those bytes before derivation, while retaining
+denied identities for reference checks. Ordinary publication intentionally retains
+its existing missing-visibility behavior, documented prominently as a risk.
+
+AI authored the implementation and synthetic regressions with a separate boundary
+review. That review caught double BOM normalization changing the strict default;
+passing original bytes to the strict parser and a parity regression fixed it.
+The audit also preserved the custom 404 renderer's existing schema-free
+fallback rather than silently imposing the root-page title schema, and added an
+effective-policy manifest dependency for programmatic configuration changes.
+No portable render-note API or new JavaScript/WASM export was added.

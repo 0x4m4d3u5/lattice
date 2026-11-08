@@ -20,7 +20,7 @@ fn add_link_suggestions(
   let source_paths : Map[String, String] = Map([])
   for collection in collections {
     for source in collection.sources {
-      if source_is_visible(source, config.include_drafts) {
+      if source_is_visible(source, config.include_drafts, allow_missing_frontmatter=config.site.allow_missing_frontmatter == Some(true)) {
         source_paths.set(source.slug, source.path)
       }
     }
@@ -49,10 +49,10 @@ fn add_link_suggestions(
   }
   for collection in collections {
     for source in collection.sources {
-      if !source_is_visible(source, config.include_drafts) {
+      if !source_is_visible(source, config.include_drafts, allow_missing_frontmatter=config.site.allow_missing_frontmatter == Some(true)) {
         continue
       }
-      let body = match @frontmatter.parse(source.content) {
+      let body = match @frontmatter.parse_with_policy(source.content, allow_missing_frontmatter=config.site.allow_missing_frontmatter == Some(true)) {
         Ok(fm) => fm.body
         Err(_) => continue
       }

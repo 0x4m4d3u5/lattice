@@ -42,3 +42,5 @@ LATTICE_NATIVE_CLI="$PWD/_build/native/debug/build/kurisu/lattice/cmd/main/main.
 LATTICE_NATIVE_CLI="$PWD/_build/native/debug/build/kurisu/lattice/cmd/main/main.exe" node scripts/check-fresh-output.mjs
 
 LATTICE_NATIVE_CLI="$PWD/_build/native/debug/build/kurisu/lattice/cmd/main/main.exe" node scripts/check-public-audience.mjs
+
+LATTICE_NATIVE_CLI="$PWD/_build/native/debug/build/kurisu/lattice/cmd/main/main.exe" node scripts/check-optional-frontmatter.mjs

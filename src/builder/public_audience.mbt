@@ -44,7 +44,7 @@ fn project_public_sources(
   guard output.public_projection is Some(projection) else { return sources }
   let selected : Array[SourceFile] = []
   for source in sources {
-    let fm = match @frontmatter.parse(source.content) {
+    let fm = match @frontmatter.parse_with_policy(source.content, allow_missing_frontmatter=config.site.allow_missing_frontmatter == Some(true)) {
       Ok(fm) => fm
       Err(message) => {
         let (line, message) = frontmatter_document_error(message)
@@ -87,7 +87,7 @@ fn project_public_sources(
         }
       }
     }
-    for route in extract_redirect_paths(source.content) {
+    for route in extract_redirect_paths(source.content, allow_missing_frontmatter=config.site.allow_missing_frontmatter == Some(true)) {
       let route = "/" + redirect_url_to_output_path(route)
       if local_link_path(route) is Ok(route) {
         projection.denied_paths.set(public_route_key(route), true)
@@ -147,8 +147,8 @@ fn check_public_boundary(
   let base = local_link_base_path(config.site.base_url)
   for collection in collections {
     for source in collection.sources {
-      if !source_is_visible(source, config.include_drafts) { continue }
-      guard @frontmatter.parse(source.content) is Ok(fm) else { continue }
+      if !source_is_visible(source, config.include_drafts, allow_missing_frontmatter=config.site.allow_missing_frontmatter == Some(true)) { continue }
+      guard @frontmatter.parse_with_policy(source.content, allow_missing_frontmatter=config.site.allow_missing_frontmatter == Some(true)) is Ok(fm) else { continue }
       let url = if collection.definition.name == "_404" { "/404.html" } else { authored_source_url(collection.definition.name, source.slug) }
       for field in collection.definition.schema.fields {
         if fm.fields.get(field.name) is Some(value) {
