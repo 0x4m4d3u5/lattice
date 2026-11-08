@@ -175,14 +175,14 @@ fn check_output_local_links(
         None => continue
       }
       let source_path = output_path_key(
-        config.output_dir + source_url + "index.html",
+        config.output_dir + public_url_output_path(source_url),
       )
       // Audit only authored pages that retain final ownership of their canonical route.
       let owned = match owners.get(source_path) {
         Some(Page(path)) => path == source.path
         _ => false
       }
-      if !owned {
+      if !owned && output.public_projection is None {
         continue
       }
       let body = match @frontmatter.parse(source.content) {
@@ -198,7 +198,7 @@ fn check_output_local_links(
         })
       }
       let seen : Map[String, Bool] = Map([])
-      for target in @markdown.extract_link_destinations(body) {
+      for target in @markdown.extract_link_destinations(body, include_images=output.public_projection is Some(_)) {
         if seen.contains(target) {
           continue
         }

@@ -11,6 +11,7 @@ priv enum OutputContents {
 priv struct OutputPlan {
   root : String
   fresh_output : Bool
+  public_projection : PublicProjection?
   directories : Array[String]
   requested_directories : Array[String]
   directory_index : Map[String, Bool]
@@ -26,10 +27,11 @@ fn output_path_key(path : String) -> String {
 }
 
 ///|
-fn OutputPlan::new(root : String, fresh_output? : Bool = false) -> OutputPlan {
+fn OutputPlan::new(root : String, fresh_output? : Bool = false, audience? : Audience? = None) -> OutputPlan {
   {
     root: output_path_key(root),
     fresh_output,
+    public_projection: audience.map(_ => PublicProjection::new()),
     directories: [],
     requested_directories: [],
     directory_index: Map([]),

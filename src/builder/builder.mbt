@@ -2241,6 +2241,7 @@ pub fn is_non_content_file(filename : String) -> Bool {
 fn collect_root_sources(
   content_dir : String,
   slug_owner : Map[String, String],
+  collected_paths? : Map[String, Bool]? = None,
 ) -> Array[SourceFile] raise @fs.IOError {
   let entries = @fs.read_dir(content_dir)
   let sources : Array[SourceFile] = []
@@ -2248,6 +2249,13 @@ fn collect_root_sources(
   while i < entries.length() {
     let filename = entries[i]
     if filename.to_lower().has_suffix(".md") && !is_non_content_file(filename) {
+      // Public discovery must not confuse an already collected file with a
+      // distinct root source that happens to share its slug.
+      if collected_paths is Some(paths) &&
+        paths.contains(public_source_path_key(content_dir + "/" + filename)) {
+        i = i + 1
+        continue
+      }
       let file_slug = @slug.filename_to_slug(filename)
       // Only include if no collection or standalone page has claimed this slug
       match slug_owner.get(file_slug) {
@@ -2903,14 +2911,18 @@ fn render_404_page(
   data_store : @data.DataStore,
   authored? : Array[Bool] = [],
   image_index? : Map[String, String] = Map([]),
+  selected_404? : Array[SourceFile]? = None,
 ) -> Result[String, String] {
   let page_path = config.content_dir + "/404.md"
-  let has_custom_404 = @fs.path_exists(page_path)
+  let has_custom_404 = match selected_404 { Some(sources) => !sources.is_empty(); None => @fs.path_exists(page_path) }
   let url = "/404.html"
 
   let (title, body_html, description, leading_h1_end) = if has_custom_404 {
-    let source = @fs.read_file_to_string(page_path) catch {
-      @fs.IOError(msg) => return Err("cannot read 404.md: " + msg)
+    let source = match selected_404 {
+      Some(sources) => sources[0].content
+      None => @fs.read_file_to_string(page_path) catch {
+        @fs.IOError(msg) => return Err("cannot read 404.md: " + msg)
+      }
     }
     // The dedicated renderer rereads 404.md; guard these exact bytes too.
     if publication_visibility_violation(page_path, source) is Some(violation) {
@@ -2919,7 +2931,10 @@ fn render_404_page(
     match @frontmatter.parse(source) {
       Err(e) => return Err("404.md frontmatter: " + e)
       Ok(fm) => {
-        let wl_map = build_wikilink_map([], body=fm.body, page_index=image_index)
+        let resolved = if selected_404 is Some(_) {
+          @wikilink.resolve(@wikilink.extract(fm.body, page_path), image_index).0
+        } else { [] }
+        let wl_map = build_wikilink_map(resolved, body=fm.body, page_index=image_index)
         let (markdown_result, leading_h1_end) =
           @markdown.render_with_leading_h1_boundary(fm.body, wl_map)
         if markdown_result.shortcode_errors.length() > 0 {
@@ -4924,8 +4939,9 @@ pub fn build(
   strict_wikilinks? : Bool = false,
   strict_local_links? : Bool = false,
   fresh_output? : Bool = false,
+  audience? : Audience? = None,
 ) -> BuildResult {
-  let output = OutputPlan::new(config.output_dir, fresh_output~)
+  let output = OutputPlan::new(config.output_dir, fresh_output~, audience~)
   let result = prepare_output(config, cache_store, output, strict_wikilinks~, strict_local_links~)
   if result.errors > 0 {
     return result
@@ -4964,6 +4980,12 @@ fn prepare_output(
   strict_wikilinks? : Bool = false,
   strict_local_links? : Bool = false,
 ) -> BuildResult {
+  let public_mode = output.public_projection is Some(_)
+  if public_mode && (!output.fresh_output || config.site.static_allowlist is None) {
+    return fresh_output_failure(config, "public audience requires fresh_output=true and an explicit site.static_allowlist (an empty list is allowed)")
+  }
+  let strict_wikilinks = strict_wikilinks || public_mode
+  let strict_local_links = strict_local_links || public_mode
   // Strict validation needs every final HTML file in this exact preparation.
   // Incremental skips deliberately omit unchanged authored writes from the plan.
   let config = if output.fresh_output || strict_wikilinks || strict_local_links {
@@ -5057,6 +5079,7 @@ fn prepare_output(
 
   // Pass 1: collect sources for each collection
   let collection_sources : Array[CollectionSources] = []
+  let collected_source_paths : Map[String, Bool] = Map([])
   let mut source_count = 0
   let mut i = 0
   while i < collections.length() {
@@ -5080,6 +5103,10 @@ fn prepare_output(
         []
       }
     }
+    if public_mode {
+      for source in sources { collected_source_paths.set(public_source_path_key(source.path), true) }
+    }
+    let sources = project_public_sources(sources, collection_def.name, config, output, diagnostics)
     source_count = source_count + sources.length()
     collection_sources.push({ definition: collection_def, sources, })
     i = i + 1
@@ -5150,6 +5177,10 @@ fn prepare_output(
   } else {
     []
   }
+  if public_mode {
+    for source in standalone_sources { collected_source_paths.set(public_source_path_key(source.path), true) }
+  }
+  let standalone_sources = project_public_sources(standalone_sources, "_standalone", config, output, diagnostics)
   i = 0
   while i < standalone_sources.length() {
     let src = standalone_sources[i]
@@ -5188,7 +5219,8 @@ fn prepare_output(
   // e.g. content/index.md → /, content/about.md → /about/
   let root_sources : Array[SourceFile] = collect_root_sources(
     config.content_dir,
-    slug_owner,
+    if public_mode { Map([]) } else { slug_owner },
+    collected_paths=if public_mode { Some(collected_source_paths) } else { None },
   ) catch {
     @fs.IOError(msg) => {
       diagnostics.push(
@@ -5203,6 +5235,8 @@ fn prepare_output(
       []
     }
   }
+  let root_sources = project_public_sources(root_sources, "_root", config, output, diagnostics)
+  snapshot_public_404(config, output, diagnostics)
   i = 0
   while i < root_sources.length() {
     let src = root_sources[i]
@@ -5271,8 +5305,8 @@ fn prepare_output(
   }
   // No private audience exists yet. Fail before derived indexes, cache reuse,
   // rendering or asset preparation can treat a private declaration as public.
-  let visibility_violations = publication_visibility_violations(config, all_sources_for_backlinks)
-  if visibility_violations.length() > 0 {
+  let visibility_violations = if public_mode { [] } else { publication_visibility_violations(config, all_sources_for_backlinks) }
+  if visibility_violations.length() > 0 || (public_mode && @diagnostic.count_errors(diagnostics) > 0) {
     for violation in visibility_violations {
       diagnostics.push(@diagnostic.of_lint_violation(violation))
     }
@@ -5286,7 +5320,7 @@ fn prepare_output(
       messages,
     }
   }
-  register_image_assets(config, page_index, all_sources_for_backlinks)
+  register_image_assets(config, page_index, all_sources_for_backlinks, selected_404=output.public_projection.map(p => p.selected_404))
   let alias_violations = if config.site.wikilink_aliases == Some(true) {
     register_note_aliases(all_sources_for_backlinks, page_index)
   } else { [] }
@@ -6717,7 +6751,7 @@ fn prepare_output(
     }
     if error_count == 0 {
       let page_path = config.content_dir + "/404.md"
-      let has_custom_404 = @fs.path_exists(page_path)
+      let has_custom_404 = match output.public_projection { Some(projection) => !projection.selected_404.is_empty(); None => @fs.path_exists(page_path) }
       let authored : Array[Bool] = []
       let fortyfour_html = match
         render_404_page(
@@ -6728,6 +6762,7 @@ fn prepare_output(
           data_store,
           authored~,
           image_index=page_index,
+          selected_404=output.public_projection.map(p => p.selected_404),
         ) {
         Ok(html) => Some(html)
         Err(msg) => {
@@ -7031,18 +7066,23 @@ fn prepare_output(
       output.files[slot] = (path, Text(@cache.render_store(next_cache_store)))
     }
     output.prune_files(dropped_slots)
+    let audit_sources = public_audit_sources(all_sources_for_backlinks, output)
+    if public_mode {
+      source_urls.set(config.content_dir + "/404.md", "/404.html")
+      check_public_boundary(audit_sources, page_index, config, output, diagnostics)
+    }
     let image_errors : Array[@lint.LintViolation] = []
     check_image_embeds(all_sources_for_backlinks, config, page_index, output, image_errors)
     for violation in image_errors { diagnostics.push(@diagnostic.of_lint_violation(violation)) }
     if strict_local_links {
       let violations : Array[@lint.LintViolation] = []
-      check_output_local_links(all_sources_for_backlinks, source_urls, config, output, violations)
+      check_output_local_links(audit_sources, source_urls, config, output, violations)
       for violation in violations { diagnostics.push(@diagnostic.of_lint_violation(violation)) }
     }
     if strict_wikilinks {
       let violations : Array[@lint.LintViolation] = []
       check_output_wikilinks(
-        all_sources_for_backlinks, page_index, source_urls, config, output, violations,
+        audit_sources, page_index, source_urls, config, output, violations,
       )
       // Replace build's permissive unresolved-link warnings with the precise
       // strict diagnostics. Hidden drafts are not publication candidates.
@@ -7098,7 +7138,21 @@ fn prepare_output(
 /// Check structural integrity without writing output files.
 ///
 /// Runs the full two-pass validation pipeline and returns every violation found.
-pub fn check(config : BuildConfig, local_links? : Bool = false) -> @lint.LintResult {
+pub fn check(config : BuildConfig, local_links? : Bool = false, audience? : Audience? = None) -> @lint.LintResult {
+  if audience is Some(_) {
+    let output = OutputPlan::new(config.output_dir, fresh_output=true, audience~)
+    let prepared = prepare_output(config, @cache.empty(config.output_dir), output)
+    if prepared.errors == 0 {
+      output.preflight() catch {
+        @fs.IOError(message) => prepared.diagnostics.push(build_error(Some(config.output_dir), None, None, "output preflight failed: " + message))
+      }
+    }
+    let violations : Array[@lint.LintViolation] = prepared.diagnostics.filter(d => d.severity == @diagnostic.Error).map(fn(d) {
+      { path: d.path.unwrap_or(config.content_dir), line: d.line, column: d.column,
+        kind: public_diagnostic_kind(d), message: d.message, }
+    })
+    return { violations, messages: prepared.messages }
+  }
   let messages : Array[String] = []
   messages.push("[lattice] checking " + config.content_dir)
   let violations : Array[@lint.LintViolation] = []

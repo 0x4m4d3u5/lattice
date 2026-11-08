@@ -193,7 +193,7 @@ fn check_output_wikilinks(
         if link.url.contains("#") {
           continue
         }
-        let path = output_path_key(config.output_dir + link.url + "index.html")
+        let path = output_path_key(config.output_dir + public_url_output_path(link.url))
         if !final_paths.contains(path) {
           let (line, column) = fragment_link_location(source.content, link.raw)
           violations.push({
@@ -251,7 +251,7 @@ fn check_output_fragments(
         } else {
           page.to_owned()
         }
-        let path = output_path_key(config.output_dir + url + "index.html")
+        let path = output_path_key(config.output_dir + public_url_output_path(url))
         let ids = match ids_by_path.get(path) {
           Some(ids) => ids
           None => {

@@ -29,6 +29,8 @@ echo "Running fresh-output isolation workflow"
 node scripts/check-fresh-output.mjs || status=1
 echo "Running explicit static publication allowlist"
 node scripts/check-static-allowlist.mjs || status=1
+echo "Running opt-in public audience export"
+node scripts/check-public-audience.mjs || status=1
 echo "Running public-only visibility guard"
 node scripts/check-publication-visibility.mjs || status=1
 echo "Running strict build publication gate"

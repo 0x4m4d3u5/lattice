@@ -34,8 +34,9 @@ fn register_image_assets(
   config : BuildConfig,
   index : Map[String, String],
   collections : Array[CollectionSources],
+  selected_404? : Array[SourceFile]? = None,
 ) -> Unit {
-  if !image_embed_sources(collections, config).any(fn(source) {
+  if !image_embed_sources(collections, config, selected_404~).any(fn(source) {
       match @frontmatter.parse(source.content) {
         Ok(fm) => !@markdown.extract_image_embeds(fm.body).is_empty()
         Err(_) => false
@@ -132,7 +133,7 @@ fn check_image_embeds(
     }
     final_assets.set(image_asset_url(relative), is_asset)
   }
-  for source in image_embed_sources(collections, config) {
+  for source in image_embed_sources(collections, config, selected_404=output.public_projection.map(p => p.selected_404)) {
     if !source_is_visible(source, config.include_drafts) {
       continue
     }
@@ -177,12 +178,17 @@ fn check_image_embeds(
 fn image_embed_sources(
   collections : Array[CollectionSources],
   config : BuildConfig,
+  selected_404? : Array[SourceFile]? = None,
 ) -> Array[SourceFile] {
   let sources : Array[SourceFile] = []
   for collection in collections {
     for source in collection.sources {
       sources.push(source)
     }
+  }
+  if selected_404 is Some(selected) {
+    for source in selected { sources.push(source) }
+    return sources
   }
   let path = config.content_dir + "/404.md"
   if @fs.path_exists(path) {
