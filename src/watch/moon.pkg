@@ -1,6 +1,7 @@
 import {
   "moonbitlang/x/fs",
   "moonbitlang/core/env",
+  "moonbitlang/core/path",
 }
 
 options(

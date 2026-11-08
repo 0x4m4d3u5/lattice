@@ -87,27 +87,22 @@ try {
   await until(build, () => builds(build) === 2, 'source rebuild');
   assert.ok(readFileSync(output, 'utf8').includes('Edited passage'));
   const lastGood = readFileSync(output, 'utf8');
-  await delay(250); // Let the completed build's post-run snapshot settle.
   writeFileSync(source, '---\ndescription: Missing required title\n---\nInvalid edit\n');
   await until(build, () => build.log.includes('[lattice] build failed:'), 'validation failure');
   assert.equal(readFileSync(output, 'utf8'), lastGood, 'invalid edits preserve the last good page');
-  await delay(250);
   writeFileSync(source, note('Repaired passage'));
   await until(build, () => builds(build) === 3, 'repair rebuild');
   assert.ok(readFileSync(output, 'utf8').includes('Repaired passage'));
-  await delay(250);
   writeFileSync(template, readFileSync(template, 'utf8') + '<aside>Template update</aside>');
   writeFileSync(config, readFileSync(config, 'utf8').replace('Watch fixture', 'Updated site'));
   writeFileSync(asset, 'Updated asset');
   await until(build, () => readFileSync(output, 'utf8').includes('Template update') && readFileSync(output, 'utf8').includes('Updated site') && readFileSync(join(root, 'dist/static/example.txt'), 'utf8') === 'Updated asset', 'template/config/static rebuild');
   await until(build, () => builds(build) >= 4, 'completed rebuild');
-  await delay(250);
   await stop(build);
 
   const checkOutput = join(root, 'check-output');
   check = watch('check', ['-o', checkOutput]);
   await until(check, () => check.log.includes('check passed: no violations'), 'initial read-only check');
-  await delay(250);
   writeFileSync(source, '---\ndescription: Missing title\n---\nCheck edit\n');
   await until(check, () => check.log.includes('check finished in'), 'watch validation diagnostic');
   assert.equal(existsSync(checkOutput), false, 'check --watch must not publish output');
@@ -116,7 +111,6 @@ try {
   writeFileSync(source, note('Long-interval stop probe'));
   longWait = watch('build', [], '60000');
   await until(longWait, () => builds(longWait) === 1, 'long-interval initial build');
-  await delay(250);
   await stop(longWait); // SIGINT must not wait for the 60-second delay to expire.
 
   const { elapsedMs, cpuMs } = JSON.parse(readFileSync(metrics, 'utf8'));
