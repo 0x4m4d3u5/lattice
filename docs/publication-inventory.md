@@ -101,3 +101,11 @@ remain intact. `inventory_with_fragments(config)` returns the inventory plus a
 map of output-relative paths to optional target arrays. Pass that map as the
 optional `fragments` argument to either inventory formatter. Without it, the
 existing formatters retain their original output.
+
+## Reserved visibility declarations
+
+The [public-only visibility guard](publication-visibility.md) runs during the same
+preparation used by inventory and ordinary builds. Private, invalid or duplicate
+`visibility` declarations produce `E015`, `ready: false` and an empty entry list,
+even with `--drafts`. Missing visibility and `type: private` retain their previous
+behavior. This does not classify assets or remove/inventory stale output.

@@ -1139,6 +1139,7 @@ pub fn list_error_codes() -> String {
     "  E013  ConfigError                 — site configuration is invalid\n",
   )
   buf.write_string("  E014  BrokenLocalLink             — opt-in local URL audit failed\n")
+  buf.write_string("  E015  PublicationVisibilityError  — private or invalid publication visibility\n")
   buf.write_string("\n")
   buf.write_string(
     "Run `lattice explain <code>` for a full explanation of any code.",
@@ -1150,7 +1151,7 @@ pub fn list_error_codes() -> String {
 /// Return a full human-readable explanation for an error code.
 ///
 /// Accepts:
-///   - "E001" through "E014" (case-insensitive)
+///   - "E001" through "E015" (case-insensitive)
 ///   - Full enum name like "BrokenWikilink" or "broken_wikilink" (case-insensitive)
 ///
 /// Returns None if the code is not recognized.
@@ -1360,6 +1361,16 @@ pub fn explain_error_code(code : String) -> String? {
       "  Resolve links from the published page URL, not its Markdown file.\n" +
       "  Use `check --local-links` for a read-only audit or `build --strict-local-links`\n" +
       "  to reject missing files/fragments before writes. External URLs are not crawled.\n",
+    )
+    "e015" | "publicationvisibilityerror" | "publicationvisibility" => Some(
+      "E015  PublicationVisibilityError  [error]\n\n" +
+      "  The reserved visibility field accepts exactly public or private strings.\n" +
+      "  Private-audience publication is not implemented. A private declaration\n" +
+      "  blocks ordinary build, check and inventory, including drafts and cache hits.\n" +
+      "  Keep private notes and attachments outside a curated public source tree.\n" +
+      "  Do not relabel private material as public merely to pass this check.\n" +
+      "  Missing visibility preserves existing behavior; type: private is organizational.\n" +
+      "  A failed build does not remove previously published or stale files.\n",
     )
     "e013" | "configerror" =>
       Some(

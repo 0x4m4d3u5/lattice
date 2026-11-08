@@ -175,6 +175,12 @@ It uses the build's preparation plan. It is not a privacy guarantee: vault metad
 such as `type: private` does not exclude a note, and configured static assets are
 copied wholesale. Use `check` for strict wikilink validation before publishing. Compare two saved previews with [`inventory-diff`](docs/inventory-comparison.md) to review added and removed HTML paths without inferring renames.
 
+The reserved [`visibility` field](docs/publication-visibility.md) is a public-only
+safety guard: absent/public keeps existing behavior, while private, invalid or
+duplicate declarations block ordinary build, check and inventory. Private-audience
+builds are not implemented. Draft flags do not override this guard, and rejection
+does not remove old published files or classify static attachments.
+
 The bundled reader includes a [bounded local authored-link graph](docs/local-graph.md), with a static linked-list fallback.
 
 ## Architecture

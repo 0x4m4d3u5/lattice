@@ -15,6 +15,7 @@ pub(all) enum ViolationType {
   IOError
   MissingImageAlt
   ConfigError
+  PublicationVisibilityError
 }
 
 ///|
@@ -35,6 +36,7 @@ pub impl Show for ViolationType with fn output(self, logger) {
     IOError => logger.write_string("IOError")
     MissingImageAlt => logger.write_string("MissingImageAlt")
     ConfigError => logger.write_string("ConfigError")
+    PublicationVisibilityError => logger.write_string("PublicationVisibilityError")
   }
 }
 
@@ -80,6 +82,7 @@ pub fn violation_type_name(kind : ViolationType) -> String {
     IOError => "io"
     MissingImageAlt => "missing_image_alt"
     ConfigError => "config"
+    PublicationVisibilityError => "publication_visibility"
   }
 }
 

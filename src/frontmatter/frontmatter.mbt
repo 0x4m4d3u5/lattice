@@ -381,7 +381,13 @@ fn parse_assignment(
   if eq < 0 {
     return Err("no '=' found in line")
   }
-  let key = trim_ws(@strutil.substr(line, 0, eq))
+  let raw_key = trim_ws(@strutil.substr(line, 0, eq))
+  // Normalize only the new reserved key; other quoted metadata keeps its
+  // established behavior. Both spellings participate in duplicate rejection.
+  let key = match raw_key {
+    "\"visibility\"" | "'visibility'" => "visibility"
+    _ => raw_key
+  }
   if key.length() == 0 {
     return Err("empty key")
   }
@@ -492,7 +498,13 @@ fn parse_yaml_assignment(
     }
     return Err("missing ':' separator in frontmatter line")
   }
-  let key = trim_ws(@strutil.substr(line, 0, colon))
+  let raw_key = trim_ws(@strutil.substr(line, 0, colon))
+  // Normalize only the new reserved key; other quoted metadata keeps its
+  // established behavior. Both spellings participate in duplicate rejection.
+  let key = match raw_key {
+    "\"visibility\"" | "'visibility'" => "visibility"
+    _ => raw_key
+  }
   if key.length() == 0 {
     return Err("empty key")
   }
@@ -569,6 +581,11 @@ pub fn parse_yaml(content : String) -> Result[Frontmatter, String] {
         if l.length() > 0 && @strutil.char_at(l, 0) != '#' {
           match parse_yaml_assignment(lines, j) {
             Ok((key, val, next_j)) => {
+              // Never let a later public value erase a private declaration.
+              // Other metadata retains the established last-assignment behavior.
+              if key == "visibility" && fields.contains(key) {
+                return Err("line " + (j + 1).to_string() + ": duplicate visibility field")
+              }
               fields.set(key, val)
               j = next_j
             }
@@ -615,7 +632,12 @@ pub fn parse_toml(content : String) -> Result[Frontmatter, String] {
         let l = trim_ws(lines[j])
         if l.length() > 0 && @strutil.char_at(l, 0) != '#' {
           match parse_assignment(l) {
-            Ok((key, val)) => fields.set(key, val)
+            Ok((key, val)) => {
+              if key == "visibility" && fields.contains(key) {
+                return Err("line " + (j + 1).to_string() + ": duplicate visibility field")
+              }
+              fields.set(key, val)
+            }
             Err(msg) => return Err("line " + (j + 1).to_string() + ": " + msg)
           }
         }

@@ -1730,10 +1730,14 @@ fn frontmatter_field_line(source : String, field : String) -> Int? {
     if line.has_prefix("#") {
       continue
     }
-    if line.split_once(separator) is Some((key, _)) &&
-      key.trim(chars=" \t\r\n").to_owned() == field {
-      // The parser overwrites duplicate keys; locate the active assignment.
-      found = Some(line_number)
+    if line.split_once(separator) is Some((raw_key, _)) {
+      let key = raw_key.trim(chars=" \t\r\n").to_owned()
+      if key == field ||
+        (field == "visibility" && (key == "\"visibility\"" || key == "'visibility'")) {
+        // Other fields retain last-assignment-wins; visibility also accepts
+        // quoted key spellings and rejects duplicates in the parser.
+        found = Some(line_number)
+      }
     }
   }
   found
@@ -2907,6 +2911,10 @@ fn render_404_page(
   let (title, body_html, description, leading_h1_end) = if has_custom_404 {
     let source = @fs.read_file_to_string(page_path) catch {
       @fs.IOError(msg) => return Err("cannot read 404.md: " + msg)
+    }
+    // The dedicated renderer rereads 404.md; guard these exact bytes too.
+    if publication_visibility_violation(page_path, source) is Some(violation) {
+      return Err(violation.message)
     }
     match @frontmatter.parse(source) {
       Err(e) => return Err("404.md frontmatter: " + e)
@@ -5248,6 +5256,23 @@ fn prepare_output(
       sources: root_sources,
     })
   }
+  // No private audience exists yet. Fail before derived indexes, cache reuse,
+  // rendering or asset preparation can treat a private declaration as public.
+  let visibility_violations = publication_visibility_violations(config, all_sources_for_backlinks)
+  if visibility_violations.length() > 0 {
+    for violation in visibility_violations {
+      diagnostics.push(@diagnostic.of_lint_violation(violation))
+    }
+    return {
+      errors: @diagnostic.count_errors(diagnostics),
+      diagnostics,
+      rebuilt_pages: 0,
+      unchanged_pages: 0,
+      skipped_drafts: 0,
+      redirect_count: 0,
+      messages,
+    }
+  }
   register_image_assets(config, page_index, all_sources_for_backlinks)
   let alias_violations = if config.site.wikilink_aliases == Some(true) {
     register_note_aliases(all_sources_for_backlinks, page_index)
@@ -7293,6 +7318,15 @@ pub fn check(config : BuildConfig, local_links? : Bool = false) -> @lint.LintRes
       },
       sources: root_sources,
     })
+  }
+  // Share build's unconditional policy; --drafts and optional strict checks
+  // cannot override an explicit private or invalid visibility declaration.
+  let visibility_violations = publication_visibility_violations(config, all_sources_for_backlinks)
+  if visibility_violations.length() > 0 {
+    for violation in visibility_violations {
+      violations.push(violation)
+    }
+    return { violations, messages }
   }
   register_image_assets(config, page_index, all_sources_for_backlinks)
   if config.site.wikilink_aliases == Some(true) {
