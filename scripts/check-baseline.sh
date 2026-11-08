@@ -25,6 +25,8 @@ echo "Running root and standalone watch workflow"
 node scripts/check-watch-pages.mjs || status=1
 echo "Running schema-driven new-content fixture"
 node scripts/check-new-content.mjs || status=1
+echo "Running fresh-output isolation workflow"
+node scripts/check-fresh-output.mjs || status=1
 echo "Running explicit static publication allowlist"
 node scripts/check-static-allowlist.mjs || status=1
 echo "Running public-only visibility guard"

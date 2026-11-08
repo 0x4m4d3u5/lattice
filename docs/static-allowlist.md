@@ -60,7 +60,8 @@ The allowlist controls new static writes only. It does not delete stale output,
 withdraw a deployed file, or sanitize old build metadata. Narrowing the list or
 removing a source leaves any previously copied output intact. Verify a **fresh,
 dedicated output directory**, and separately ensure deployment removes withdrawn
-files. A failed build also preserves the previous output.
+files. [`build --fresh-output`](fresh-output.md) enforces an unused destination
+and omits generated build metadata; it leaves old releases unchanged. A failed build also preserves the previous output.
 
 The setting does not filter Markdown sources, generated pages, search/content
 indexes, templates, data files, or cache/manifest metadata. Those can still

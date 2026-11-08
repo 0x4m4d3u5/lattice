@@ -234,6 +234,9 @@ fn build_parser() -> @clap.Parser {
           "force": @clap.Arg::flag(
             help="Ignore incremental cache and rebuild everything",
           ),
+          "fresh-output": @clap.Arg::flag(
+            help="Require a new isolated output directory and omit build metadata",
+          ),
           "watch": @clap.Arg::flag(help="Rebuild on file changes with polling"),
           "watch-interval": @clap.Arg::named(
             short='i',
@@ -330,6 +333,9 @@ fn build_parser() -> @clap.Parser {
             help="Override collections config file",
           ),
           "drafts": @clap.Arg::flag(help="Include draft sources in the preview"),
+          "fresh-output": @clap.Arg::flag(
+            help="Preview a new isolated output directory without build metadata",
+          ),
           "format": @clap.Arg::named(
             nargs=One,
             defaults=["text"],
@@ -880,6 +886,7 @@ fn run_once(
   check_json : Bool,
   strict_wikilinks : Bool,
   local_links : Bool,
+  fresh_output? : Bool = false,
 ) -> Int {
   let start_ms = @watch.current_millis()
   if check_mode {
@@ -914,21 +921,25 @@ fn run_once(
     )
     0
   } else {
-    let cache_store = match (try Ok(@cache.load(build_config.output_dir)) catch { err => Err(err) }) {
-      Ok(store) => store
-      Err(err) => {
-        print_diagnostic_main(
-          with_path(
-            cli_warning("cache: " + @cache.error_text(err)),
-            Some(build_config.output_dir),
-            None,
-            None,
-          ),
-        )
-        @cache.empty(build_config.output_dir)
+    let cache_store = if fresh_output {
+      @cache.empty(build_config.output_dir)
+    } else {
+      match (try Ok(@cache.load(build_config.output_dir)) catch { err => Err(err) }) {
+        Ok(store) => store
+        Err(err) => {
+          print_diagnostic_main(
+            with_path(
+              cli_warning("cache: " + @cache.error_text(err)),
+              Some(build_config.output_dir),
+              None,
+              None,
+            ),
+          )
+          @cache.empty(build_config.output_dir)
+        }
       }
     }
-    let result = @builder.build(build_config, cache_store, strict_wikilinks~, strict_local_links=local_links)
+    let result = @builder.build(build_config, cache_store, strict_wikilinks~, strict_local_links=local_links, fresh_output~)
     // Print accumulated progress messages
     let mut mi = 0
     while mi < result.messages.length() {
@@ -1420,6 +1431,18 @@ fn run_main() -> Unit {
     }
   }
 
+  // Clap tolerates some unknown options. Never silently fall back to ordinary
+  // publication when a caller asked for fresh-output guarantees.
+  if args.any(arg => arg.has_prefix("--fresh-output=")) ||
+    (args.contains("--fresh-output") &&
+      subcmd_name != "build" && subcmd_name != "inventory") {
+    print_diagnostic_main(
+      cli_error("--fresh-output is a flag without a value, supported only by build and inventory"),
+    )
+    @sys.exit(1)
+    return
+  }
+
   let subcmd_sv = sv.subcmd.unwrap()
 
   // Handle 'init' subcommand early — no config loading needed
@@ -1646,7 +1669,10 @@ fn run_main() -> Unit {
         return
       }
     }
-    let (result, fragments) = @builder.inventory_with_fragments(state.build_config)
+    let (result, fragments) = @builder.inventory_with_fragments(
+      state.build_config,
+      fresh_output=subcmd_sv.get_flag("fresh-output").unwrap_or(false),
+    )
     println(
       if format == "json" {
         @builder.format_inventory_json(result, fragments~)
@@ -1739,6 +1765,15 @@ fn run_main() -> Unit {
   }
 
   let options = cli_options_from_clap(subcmd_sv, subcmd_name)
+  let fresh_output = subcmd_name == "build" &&
+    subcmd_sv.get_flag("fresh-output").unwrap_or(false)
+  if fresh_output && options.watch_mode {
+    print_diagnostic_main(
+      cli_error("--fresh-output cannot be combined with --watch; choose a new output directory for each export"),
+    )
+    @sys.exit(1)
+    return
+  }
 
   // Validate port for serve
   if options.serve_mode && !@serve.is_valid_port(options.serve_port) {
@@ -1793,6 +1828,7 @@ fn run_main() -> Unit {
     options.check_json,
     options.strict_wikilinks,
     options.local_links,
+    fresh_output~,
   )
   if exit_code > 0 {
     @sys.exit(1)

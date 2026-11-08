@@ -52,6 +52,8 @@ A rejected build leaves the existing output, cache and manifest unchanged. It
 neither removes previously published content nor withdraws a deployed site. If a
 published note becomes private, the previous public file still exists. Handle
 that takedown explicitly and do not deploy an old output directory after failure.
+[`build --fresh-output`](fresh-output.md) prevents carrying stale artifacts into
+a new release, but does not withdraw an earlier release.
 
 Configured static assets are copied wholesale by default, including unreferenced
 files. An optional [`static_allowlist`](static-allowlist.md) selects exact files;

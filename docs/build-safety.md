@@ -4,6 +4,11 @@
 leaves the previous output directory, including cache and manifest, unchanged.
 A failed first build does not create the output directory.
 
+For an isolated release, [`build --fresh-output`](fresh-output.md) requires an
+unused destination outside the configured input trees, ignores caches and omits
+generated cache/manifest files. It publishes only final file writers and never
+deletes old output. The default build behavior below remains unchanged.
+
 ## Preparation and publication
 
 1. Read sources and dependencies, build the page index, and run the existing

@@ -67,14 +67,14 @@ fn OutputPlan::exclude_page(
 /// Uses build's full preparation and destination preflight, never publish.
 /// A fresh cache deliberately lists all intended files, not incremental writes.
 /// Warnings (including broken wikilinks) retain build's policy; use check strictly.
-pub fn inventory(config : BuildConfig) -> PublicationInventory {
-  inventory_with_fragments(config).0
+pub fn inventory(config : BuildConfig, fresh_output? : Bool = false) -> PublicationInventory {
+  inventory_with_fragments(config, fresh_output~).0
 }
 
 ///|
 /// Additive detailed preview; the original inventory API and record stay intact.
-pub fn inventory_with_fragments(config : BuildConfig) -> (PublicationInventory, Map[String, Array[String]?]) {
-  let output = OutputPlan::new(config.output_dir)
+pub fn inventory_with_fragments(config : BuildConfig, fresh_output? : Bool = false) -> (PublicationInventory, Map[String, Array[String]?]) {
+  let output = OutputPlan::new(config.output_dir, fresh_output~)
   let prepared = prepare_output(
     { ..config, force_rebuild: true, },
     @cache.empty(config.output_dir),

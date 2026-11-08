@@ -382,7 +382,9 @@ fresh output when verifying exclusions. Omission preserves copying all files.
 By default, that directory is copied wholesale, not filtered by note draft flags or vault
 metadata. Keep private attachments outside it. Removing a source does not remove
 its old published file; use a new output directory when you need a fresh output
-set, then review it before publishing. Publication writes are not atomic.
+set, then review it before publishing. [`build --fresh-output`](fresh-output.md)
+enforces an unused destination and leaves generated cache/manifest files out of
+that release. Publication writes are not atomic.
 
 For full-text knowledge retrieval, enable the optional
 [content index](content-index.md) with `content_index_file = content-index.json`.

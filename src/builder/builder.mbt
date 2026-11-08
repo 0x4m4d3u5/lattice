@@ -4923,8 +4923,9 @@ pub fn build(
   cache_store : @cache.CacheStore,
   strict_wikilinks? : Bool = false,
   strict_local_links? : Bool = false,
+  fresh_output? : Bool = false,
 ) -> BuildResult {
-  let output = OutputPlan::new(config.output_dir)
+  let output = OutputPlan::new(config.output_dir, fresh_output~)
   let result = prepare_output(config, cache_store, output, strict_wikilinks~, strict_local_links~)
   if result.errors > 0 {
     return result
@@ -4965,17 +4966,23 @@ fn prepare_output(
 ) -> BuildResult {
   // Strict validation needs every final HTML file in this exact preparation.
   // Incremental skips deliberately omit unchanged authored writes from the plan.
-  let config = if strict_wikilinks || strict_local_links {
+  let config = if output.fresh_output || strict_wikilinks || strict_local_links {
     { ..config, force_rebuild: true }
   } else {
     config
   }
+  let cache_store = if output.fresh_output { @cache.empty(config.output_dir) } else { cache_store }
   let messages : Array[String] = []
   messages.push(
     "[lattice] building " + config.content_dir + " → " + config.output_dir,
   )
   let diagnostics : Array[@diagnostic.Diagnostic] = []
 
+  if output.fresh_output {
+    require_fresh_destination(config.output_dir) catch {
+      @fs.IOError(msg) => return fresh_output_failure(config, msg)
+    }
+  }
   let layout = match load_project_layout(config) {
     Ok(parsed) => parsed
     Err(msg) => {
@@ -4994,6 +5001,12 @@ fn prepare_output(
     }
   }
   let collections = layout.collections
+  if output.fresh_output {
+    validate_fresh_roots(config, collections) catch {
+      @fs.IOError(msg) => return fresh_output_failure(config, msg)
+    }
+  }
+
   messages.push(
     "[lattice] using " + collections.length().to_string() + " collections",
   )
@@ -5349,7 +5362,7 @@ fn prepare_output(
   // Default CSS is optional and write-once; its historical I/O warning policy
   // also applies during publication, where an actual disk write can fail.
   let css_path = config.output_dir + "/style.css"
-  if !@fs.path_exists(css_path) {
+  if output.fresh_output || !@fs.path_exists(css_path) {
     output.write_optional_text(css_path, custom_css) catch {
       @fs.IOError(msg) =>
         diagnostics.push(
@@ -6758,7 +6771,7 @@ fn prepare_output(
         None => error_count = error_count + 1
       }
     }
-    if error_count == 0 {
+    if error_count == 0 && !output.fresh_output {
       match write_manifest(config, collection_sources, collections, output) {
         Ok(_) => ()
         Err(msg) => {
@@ -6774,7 +6787,7 @@ fn prepare_output(
         }
       }
     }
-    if error_count == 0 {
+    if error_count == 0 && !output.fresh_output {
       let slot = output.files.length()
       output.write_text(
         @cache.cache_path(config.output_dir),

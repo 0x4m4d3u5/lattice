@@ -176,6 +176,11 @@ such as `type: private` does not exclude a note, and static assets are
 copied wholesale unless an explicit [`static_allowlist`](docs/static-allowlist.md)
 selects exact files. Exclusions do not remove old output. Use `check` for strict wikilink validation before publishing. Compare two saved previews with [`inventory-diff`](docs/inventory-comparison.md) to review added and removed HTML paths without inferring renames.
 
+For a release that cannot inherit stale files, use
+[`build --fresh-output`](docs/fresh-output.md) with a new output directory.
+It refuses existing or overlapping destinations and omits generated cache and
+manifest files. Existing releases and deployed files remain untouched.
+
 The reserved [`visibility` field](docs/publication-visibility.md) is a public-only
 safety guard: absent/public keeps existing behavior, while private, invalid or
 duplicate declarations block ordinary build, check and inventory. Private-audience
