@@ -109,7 +109,8 @@ try {
   await until(check, () => check.log.includes('check passed: no violations'), 'initial check');
   await delay(250);
   writeFileSync(home, note('Home', '[[missing-target]]'));
-  await until(check, () => check.log.includes('check finished in'), 'root wikilink diagnostic');
+  // Wait for the expected violation as well as completion of a failed check.
+  await until(check, () => check.log.includes('check finished in') && check.log.includes('missing-target'), 'root wikilink diagnostic');
   assert.ok(check.log.includes('missing-target'));
   await delay(250);
   writeFileSync(home, note('Home', 'Repaired root'));
