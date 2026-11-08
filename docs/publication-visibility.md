@@ -53,8 +53,9 @@ neither removes previously published content nor withdraws a deployed site. If a
 published note becomes private, the previous public file still exists. Handle
 that takedown explicitly and do not deploy an old output directory after failure.
 
-Configured static assets are still copied wholesale on successful builds,
-including unreferenced files. This guard does not classify attachments, data,
+Configured static assets are copied wholesale by default, including unreferenced
+files. An optional [`static_allowlist`](static-allowlist.md) selects exact files;
+it does not remove previously emitted assets or enable mixed-vault publication. This guard does not classify attachments, data,
 templates, copied Markdown assets or prose, and it cannot detect private text
 copied into a public note. It does not inspect arbitrary notes outside the
 configured Markdown source set. Keep private notes **and** private attachments

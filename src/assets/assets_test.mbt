@@ -261,3 +261,58 @@ test "read_static records the static root and empty nested directories" {
   }
   assert_eq(directories, ["", "empty", "empty/nested"])
 }
+
+///|
+test "selected static assets read exact files and inventory withheld paths" {
+  let site = "_tmp_assets_selected"
+  setup_dir(site)
+  setup_dir(site + "/public")
+  setup_dir(site + "/public/downloads")
+  setup_dir(site + "/public/empty")
+  write_file(site + "/public/logo.png", "logo")
+  write_file(site + "/public/logo.png.backup", "private")
+  write_file(site + "/public/downloads/guide.pdf", "guide")
+  write_file(site + "/public/downloads/private.pdf", "private")
+  let directories : Array[String] = []
+  match @assets.read_static_selected(site, "public", Some(["logo.png", "downloads/guide.pdf"]), directories~) {
+    Ok(selection) => {
+      assert_eq(selection.assets.map(fn(asset) { asset.relative_path }), ["logo.png", "downloads/guide.pdf"])
+      assert_eq(selection.assets[0].bytes, b"logo")
+      assert_eq(selection.withheld_paths, ["logo.png.backup", "downloads/private.pdf"])
+      assert_eq(directories, ["", "downloads"])
+    }
+    Err(_) => abort("valid allowlist failed")
+  }
+  match @assets.read_static_selected(site, "public", Some([])) {
+    Ok(selection) => {
+      assert_eq(selection.assets.length(), 0)
+      assert_eq(selection.withheld_paths.length(), 4)
+    }
+    Err(_) => abort("empty allowlist failed")
+  }
+  let legacy_dirs : Array[String] = []
+  match @assets.read_static_selected(site, "public", None, directories=legacy_dirs) {
+    Ok(selection) => {
+      assert_eq(selection.assets.length(), 4)
+      assert_eq(selection.withheld_paths, [])
+      assert_true(legacy_dirs.contains("empty"))
+    }
+    Err(_) => abort("legacy selection failed")
+  }
+}
+
+///|
+test "selected static assets reject missing directory duplicate and unsafe entries" {
+  let site = "_tmp_assets_selected_errors"
+  setup_dir(site)
+  setup_dir(site + "/static")
+  setup_dir(site + "/static/nested")
+  write_file(site + "/static/a", "a")
+  for paths in [["missing"], ["nested"], ["../outside"], ["a", "a"], ["nested/"]] {
+    let directories : Array[String] = []
+    assert_true(@assets.read_static_selected(site, "static", Some(paths), directories~) is Err(_))
+    assert_eq(directories, [])
+  }
+  assert_true(@assets.read_static_selected("_tmp_selected_missing_9x7z", "static", Some(["missing"])) is Err(_))
+  assert_true(@assets.read_static_selected("_tmp_selected_missing_9x7z", "static", Some([])) is Ok(_))
+}

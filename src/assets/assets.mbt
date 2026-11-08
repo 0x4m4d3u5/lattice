@@ -355,3 +355,122 @@ pub extend StaticAsset with Eq::{not_equal, equal}
 
 ///|
 pub extend StaticAsset with Show::{to_string, output}
+
+///|
+/// Selected bytes and withheld file names, relative to the configured static root.
+/// Withheld files are inventoried without opening their contents.
+pub struct StaticSelection {
+  assets : Array[StaticAsset]
+  withheld_paths : Array[String]
+}
+
+///|
+fn inventory_static_tree(
+  source_root : String,
+  relative_dir : String,
+  files : Array[String],
+) -> Result[Unit, AssetCopyError] {
+  let path = @strutil.join_path(source_root, relative_dir)
+  let entries = @fs.read_dir(path) catch {
+    @fs.IOError(msg) => return Err(SourceReadError(path, msg))
+  }
+  for name in entries {
+    let relative_path = @strutil.join_path(relative_dir, name)
+    let source = @strutil.join_path(source_root, relative_path)
+    let is_dir = @fs.is_dir(source) catch {
+      @fs.IOError(msg) => return Err(SourceReadError(source, msg))
+    }
+    if is_dir {
+      match inventory_static_tree(source_root, relative_path, files) {
+        Err(e) => return Err(e)
+        Ok(_) => ()
+      }
+    } else {
+      files.push(relative_path)
+    }
+  }
+  Ok(())
+}
+
+///|
+/// None retains legacy copy-all semantics (including empty directories).
+/// Some([]) withholds every file. Some(paths) reads only exact named files and
+/// records only their parent directories, never unrelated empty directories.
+/// Named missing paths and directories fail before any file bytes are read.
+///
+/// Like read_static, this assumes a stable, trusted source tree. The portable
+/// x/fs API follows symlinks and has no lstat/realpath; this is an authoring
+/// policy, not a sandbox against symlinks or concurrent filesystem mutation.
+pub fn read_static_selected(
+  site_root : String,
+  static_dir : String,
+  allowlist : Array[String]?,
+  directories? : Array[String] = [],
+) -> Result[StaticSelection, AssetCopyError] {
+  let paths = match allowlist {
+    None => return match read_static(site_root, static_dir, directories~) {
+      Ok(assets) => Ok({ assets, withheld_paths: [] })
+      Err(e) => Err(e)
+    }
+    Some(paths) => paths
+  }
+  let source_root = @strutil.join_path(site_root, static_dir)
+  match @config.validate_static_allowlist(paths) {
+    Err(@config.InvalidValue(_, msg)) => return Err(SourceReadError(source_root, msg))
+    Err(_) => return Err(SourceReadError(source_root, "invalid static_allowlist"))
+    Ok(_) => ()
+  }
+  if !@fs.path_exists(source_root) {
+    if paths.is_empty() {
+      return Ok({ assets: [], withheld_paths: [] })
+    }
+    return Err(FileReadError(@strutil.join_path(source_root, paths[0]), "allowlisted static file does not exist"))
+  }
+  let is_dir = @fs.is_dir(source_root) catch {
+    @fs.IOError(msg) => return Err(SourceReadError(source_root, msg))
+  }
+  if !is_dir {
+    return Err(SourceNotDirectory(source_root))
+  }
+  // Validate the entire selection before opening any selected file.
+  let selected : Map[String, Bool] = Map([])
+  for relative_path in paths {
+    let source = @strutil.join_path(source_root, relative_path)
+    if !@fs.path_exists(source) {
+      return Err(FileReadError(source, "allowlisted static file does not exist"))
+    }
+    let is_file = @fs.is_file(source) catch {
+      @fs.IOError(msg) => return Err(FileReadError(source, msg))
+    }
+    if !is_file {
+      return Err(FileReadError(source, "allowlisted static path is not a regular file"))
+    }
+    selected[relative_path] = true
+  }
+  let files : Array[String] = []
+  match inventory_static_tree(source_root, "", files) {
+    Err(e) => return Err(e)
+    Ok(_) => ()
+  }
+  files.sort()
+  let withheld_paths = files.filter(fn(path) { !selected.contains(path) })
+  let assets : Array[StaticAsset] = []
+  let selected_directories : Array[String] = []
+  for relative_path in paths {
+    let source = @strutil.join_path(source_root, relative_path)
+    let bytes = @fs.read_file_to_bytes(source) catch {
+      @fs.IOError(msg) => return Err(FileReadError(source, msg))
+    }
+    assets.push({ relative_path, bytes })
+    let parts = relative_path.split("/").collect()
+    let mut parent = ""
+    for i = 0; i < parts.length(); i = i + 1 {
+      if !selected_directories.contains(parent) {
+        selected_directories.push(parent)
+      }
+      parent = @strutil.join_path(parent, parts[i].to_owned())
+    }
+  }
+  directories.append(selected_directories)
+  Ok({ assets, withheld_paths })
+}

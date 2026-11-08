@@ -38,6 +38,7 @@ pub struct SiteConfig {
   search_index_file : String?
   content_index_file : String?
   static_dir : String?
+  static_allowlist : Array[String]?
   data_dir : String?
   standalone_dir : String?
   root_page : String?
@@ -157,6 +158,7 @@ fn parse_bool_config(value : String) -> Bool? {
 /// - `search_index_file`
 /// - `content_index_file`
 /// - `static_dir`
+/// - `static_allowlist` (strict JSON array of exact static-relative file paths)
 /// - `data_dir`
 /// - `standalone_dir`
 /// - `root_page`
@@ -186,6 +188,7 @@ pub fn parse(input : String) -> Result[SiteConfig, ConfigError] {
   let mut search_index_file : String? = None
   let mut content_index_file : String? = None
   let mut static_dir : String? = None
+  let mut static_allowlist : Array[String]? = None
   let mut data_dir : String? = None
   let mut standalone_dir : String? = None
   let mut root_page : String? = None
@@ -315,8 +318,24 @@ pub fn parse(input : String) -> Result[SiteConfig, ConfigError] {
     match parse_assignment(raw, line_no) {
       Err(e) => return Err(e)
       Ok((key, value)) => {
+        // A quoted reserved policy key must not silently become an ignored
+        // unknown field and restore copy-all behavior. Other config keys keep
+        // their existing syntax and unknown-key compatibility.
+        let key = if key == "'static_allowlist'" || key == "\"static_allowlist\"" {
+          "static_allowlist"
+        } else if key.has_prefix("\"") {
+          let decoded = @json.parse(key) catch {
+            _ => return Err(InvalidLine(line_no, "invalid double-quoted key; use JSON string syntax"))
+          }
+          if decoded is String("static_allowlist") { "static_allowlist" } else { key }
+        } else {
+          key
+        }
         let string_value = parse_string_value_config(value)
 
+        if key == "static_allowlist" && (in_data_block || in_collections_block) {
+          return Err(InvalidValue(key, "must be declared at top level before table blocks"))
+        }
         if in_data_block {
           // Inside [[data]] block
           if key == "name" {
@@ -427,6 +446,27 @@ pub fn parse(input : String) -> Result[SiteConfig, ConfigError] {
             content_index_file = None
           } else {
             content_index_file = Some(string_value)
+          }
+        } else if key == "static_allowlist" {
+          if static_allowlist is Some(_) {
+            return Err(InvalidValue(key, "must not be declared more than once"))
+          }
+          let parsed = @json.parse(value) catch {
+            _ => return Err(InvalidValue(key, "must be a JSON array of strings"))
+          }
+          let paths : Array[String] = []
+          match parsed {
+            Array(items) => for item in items {
+              match item {
+                String(path) => paths.push(path)
+                _ => return Err(InvalidValue(key, "must be a JSON array of strings"))
+              }
+            }
+            _ => return Err(InvalidValue(key, "must be a JSON array of strings"))
+          }
+          match validate_static_allowlist(paths) {
+            Err(e) => return Err(e)
+            Ok(_) => static_allowlist = Some(paths)
           }
         } else if key == "static_dir" {
           if string_value.length() == 0 {
@@ -564,6 +604,7 @@ pub fn parse(input : String) -> Result[SiteConfig, ConfigError] {
     search_index_file,
     content_index_file,
     static_dir,
+    static_allowlist,
     data_dir,
     standalone_dir,
     root_page,
@@ -576,4 +617,27 @@ pub fn parse(input : String) -> Result[SiteConfig, ConfigError] {
     wikilink_aliases,
     require_image_alt,
   })
+}
+
+///|
+/// Validate exact, canonical static-relative paths. No normalization or patterns:
+/// reject empty/dot segments, backslashes, drive/URI colons, glob metacharacters,
+/// and C0/C1 control characters. Whitespace and Unicode filenames are supported.
+pub fn validate_static_allowlist(paths : Array[String]) -> Result[Unit, ConfigError] {
+  let seen : Map[String, Bool] = Map([])
+  for path in paths {
+    if seen.contains(path) {
+      return Err(InvalidValue("static_allowlist", "duplicate path: " + path))
+    }
+    if path.is_empty() || path.split("/").any(fn(part) {
+      part.is_empty() || part == "." || part == ".."
+    }) || path.iter().any(fn(c) {
+      c < '\u0020' || (c >= '\u007f' && c <= '\u009f') ||
+      c == '\\' || c == ':' || c == '*' || c == '?' || c == '[' || c == ']'
+    }) {
+      return Err(InvalidValue("static_allowlist", "expected a canonical relative file path without glob characters: " + path))
+    }
+    seen[path] = true
+  }
+  Ok(())
 }
