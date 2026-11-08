@@ -208,3 +208,17 @@ It protects validation/generation failures and preflights destination types,
 but does not claim atomic directory promotion or recovery from publication I/O
 failures. The pinned filesystem API lacks rename; [build safety](build-safety.md)
 documents that narrower, tested contract.
+
+### Pipe-safe CLI output
+
+`scripts/check-piped-json.mjs` exercises the built JavaScript CLI using only
+synthetic content. It compares complete output bytes through regular files and
+pipes, including a controlled pending write and a slow reader, checks failure
+status and JSON diagnostic counts, and ensures child processes terminate. It also
+covers clean results, inventory and inventory-diff errors, fatal configuration
+and argument errors, and prompt closed-pipe termination. Run it after
+`moon build cmd/main --target js --deny-warn`; the baseline gate runs it alongside
+`check-cli-json.mjs`. `LATTICE_PIPE_CLI` optionally selects another compiled CLI
+for a pre-fix negative control. One-shot JSON consumers can parse stdout directly
+and should separately check the command's exit status. Invalid argument syntax
+retains the existing text-error contract; watch mode is not a one-object stream.

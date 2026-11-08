@@ -17,6 +17,8 @@ echo "Running copied README author workflow"
 node scripts/check-readme.mjs || status=1
 echo "Running machine-readable CLI check fixture"
 node scripts/check-cli-json.mjs || status=1
+echo "Running pipe-safe machine-readable CLI fixture"
+node scripts/check-piped-json.mjs || status=1
 echo "Running JavaScript watch author workflow"
 node scripts/check-js-watch.mjs || status=1
 echo "Running deterministic watch change retention"
