@@ -223,3 +223,9 @@ fn public_route_denied(projection : PublicProjection, route : String) -> Bool {
   projection.denied_paths.contains(exact + "/index.html") ||
   projection.denied_paths.contains(public_route_key(route))
 }
+
+///|
+/// Lexical identity only; symlinks and concurrent writers are outside this mode.
+fn public_source_path_key(path : String) -> String {
+  @path.Path(path).resolve().normalize().to_string()
+}

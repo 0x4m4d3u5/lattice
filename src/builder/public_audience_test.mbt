@@ -101,6 +101,8 @@ test "private collection slug cannot suppress public root discovery" {
   let config = public_audience_fixture("root_discovery")
   @fs.write_string_to_file(config.content_dir + "/posts/alpha.md", public_audience_source("private", "PRIVATE_COLLISION_SENTINEL"))
   @fs.write_string_to_file(config.content_dir + "/alpha.md", public_audience_source("public", "PUBLIC_ROOT_COLLISION_SENTINEL"))
+  assert_true(@builder.inventory(config, fresh_output=true, audience=Some(@builder.Audience::Public)).ready)
+  assert_eq(@builder.check(config, audience=Some(@builder.Audience::Public)).violations.length(), 0)
   assert_eq(@builder.build(config, @cache.empty(config.output_dir), fresh_output=true, audience=Some(@builder.Audience::Public)).errors, 0)
   assert_true(@fs.read_file_to_string(config.output_dir + "/alpha/index.html").contains("PUBLIC_ROOT_COLLISION_SENTINEL"))
   assert_false(@fs.path_exists(config.output_dir + "/posts/alpha/index.html"))
@@ -277,4 +279,45 @@ test "public audience denies typed references masked by public canonical collisi
     assert_true(@builder.build(config, @cache.empty(config.output_dir), fresh_output=true, audience=Some(@builder.Audience::Public)).errors > 0)
     assert_false(@fs.path_exists(config.output_dir))
   }
+}
+
+///|
+test "public root discovery deduplicates default and explicit root collection files" {
+  for mode in ["default", "explicit"] {
+    let base = public_audience_fixture("root_collection_" + mode)
+    let config = if mode == "default" { { ..base, collections_path: None } } else {
+      @fs.write_string_to_file(base.collections_path.unwrap(),
+        "[posts]\nschema = title:String,date:Date\ndir = " + @path.Path(base.content_dir + "/posts/../.").resolve().to_string() + "\n")
+      base
+    }
+    let public_path = config.content_dir + "/root-post.md"
+    let private_path = config.content_dir + "/excluded-post.md"
+    @fs.write_string_to_file(public_path, public_audience_source("public", "ROOT_COLLECTION_PUBLIC_SENTINEL"))
+    @fs.write_string_to_file(private_path, public_audience_source("private", "ROOT_COLLECTION_PRIVATE_SENTINEL"))
+    let inventory = @builder.inventory(config, fresh_output=true, audience=Some(@builder.Audience::Public))
+    assert_true(inventory.ready)
+    assert_eq(inventory.entries.filter(entry => entry.status == "excluded" && entry.source is Some(source) && source.has_suffix("/excluded-post.md")).length(), 1)
+    assert_eq(@builder.check(config, audience=Some(@builder.Audience::Public)).violations.length(), 0)
+    assert_false(@fs.path_exists(config.output_dir))
+    assert_eq(@builder.build(config, @cache.empty(config.output_dir), fresh_output=true, audience=Some(@builder.Audience::Public)).errors, 0)
+    assert_true(@fs.read_file_to_string(config.output_dir + "/posts/root-post/index.html").contains("ROOT_COLLECTION_PUBLIC_SENTINEL"))
+    assert_false(@fs.path_exists(config.output_dir + "/root-post/index.html"))
+    assert_false(@fs.path_exists(config.output_dir + "/posts/excluded-post/index.html"))
+  }
+}
+
+///|
+test "public root discovery deduplicates raw standalone files without suppressing distinct slugs" {
+  let base = public_audience_fixture("root_standalone")
+  let config = { ..base, site: @config.parse(@fs.read_file_to_string(base.config_path) + "static_allowlist = []\nstandalone_dir = " + @path.Path(base.content_dir + "/posts/../.").resolve().to_string() + "\n").unwrap() }
+  @fs.write_string_to_file(config.content_dir + "/posts/alpha.md", public_audience_source("private", "PRIVATE_COLLECTION_SENTINEL"))
+  @fs.write_string_to_file(config.content_dir + "/alpha.md", public_audience_source("public", "PUBLIC_STANDALONE_SENTINEL"))
+  @fs.write_string_to_file(config.content_dir + "/excluded-root.md", public_audience_source("private", "PRIVATE_STANDALONE_SENTINEL"))
+  let inventory = @builder.inventory(config, fresh_output=true, audience=Some(@builder.Audience::Public))
+  assert_true(inventory.ready)
+  assert_eq(inventory.entries.filter(entry => entry.status == "excluded" && entry.source is Some(source) && source.has_suffix("/excluded-root.md")).length(), 1)
+  assert_eq(@builder.check(config, audience=Some(@builder.Audience::Public)).violations.length(), 0)
+  assert_eq(@builder.build(config, @cache.empty(config.output_dir), fresh_output=true, audience=Some(@builder.Audience::Public)).errors, 0)
+  assert_true(@fs.read_file_to_string(config.output_dir + "/alpha/index.html").contains("PUBLIC_STANDALONE_SENTINEL"))
+  assert_false(@fs.path_exists(config.output_dir + "/posts/alpha/index.html"))
 }

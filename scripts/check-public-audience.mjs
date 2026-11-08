@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, statSync, writeFileSync, unlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 
@@ -326,4 +326,39 @@ put(config, configText(['public.png'], 'root_page = target\n'));
 publish(); assert.match(readFileSync(join(output, 'index.html'), 'utf8'), /PUBLIC_TARGET_BODY/);
 assert.match(readFileSync(join(output, 'collision/index.html'), 'utf8'), /PUBLIC_ROOT_COLLISION_BODY/);
 assert.equal(existsSync(join(output, 'notes/collision/index.html')), false);
+// A collection at content root must not rediscover its own files as root
+// pages. Identity is normalized source path, never a global slug suppression.
+for (const explicit of [false, true]) {
+  const fixture = join(root, explicit ? 'root-collection-alias' : 'root-default-collection');
+  const sources = join(fixture, 'content'), destination = join(fixture, 'release');
+  const site = join(fixture, 'site.cfg'), collections = join(fixture, 'collections.cfg');
+  const selected = join(sources, 'selected.md'), hidden = join(sources, 'EXCLUDED_PATH_same_file.md');
+  put(selected, note('Selected once', 'public', 'PUBLIC_SINGLE_SOURCE_BODY', 'date: 2026-01-02\n'));
+  put(hidden, note('EXCLUDED_TITLE_same_file', 'private', 'EXCLUDED_BODY_same_file', 'date: 2026-01-02\n'));
+  put(join(fixture, 'templates/page.html'), '{{content}}');
+  mkdirSync(join(fixture, 'data'), { recursive: true });
+  put(site, `title = Source identity fixture\nbase_url = https://example.test\nstatic_allowlist = []\ntemplates_dir = ${fixture}/templates\ndata_dir = ${fixture}/data\n${explicit ? `collections_file = ${collections}\n` : ''}`);
+  if (explicit) put(collections, `[posts]\ndir = ${sources}/../content/.\nschema = title:String,date:Date\n`);
+  else assert.equal(existsSync(collections), false, 'default collection control must have no collection config');
+  const invoke = command => {
+    const r = spawnSync(executable, [...prefix, command, sources, '-o', destination, '-c', site, ...flagsFor(command)], { cwd: fixture, encoding: 'utf8', timeout: 30_000 });
+    assert.ifError(r.error); assert.equal(r.status, 0, `${explicit ? 'aliased root collection' : 'default collection'} ${command}: ${r.stdout}${r.stderr}`); return r;
+  };
+  const before = snapshot(fixture), sourceBefore = snapshot(sources);
+  assert.deepEqual(JSON.parse(invoke('check').stdout).violations, []);
+  const inventory = JSON.parse(invoke('inventory').stdout);
+  assert.equal(inventory.ready, true);
+  const entriesFor = source => inventory.entries.filter(e => e.source && resolve(fixture, e.source) === source);
+  const selectedEntries = entriesFor(selected).filter(e => e.status === 'planned');
+  assert.equal(selectedEntries.length, 1, 'selected source must have one planned page owner');
+  assert.equal(selectedEntries[0].path, 'posts/selected/index.html');
+  assert.equal(entriesFor(hidden).filter(e => e.status === 'excluded').length, 1, 'same excluded source must be audited exactly once');
+  assert.deepEqual(snapshot(fixture), before, 'dedup check/inventory mutated input or output');
+  invoke('build');
+  assert.deepEqual(snapshot(sources), sourceBefore, 'dedup build mutated sources');
+  assert.match(readFileSync(join(destination, 'posts/selected/index.html'), 'utf8'), /PUBLIC_SINGLE_SOURCE_BODY/);
+  assert.equal(existsSync(join(destination, 'selected/index.html')), false, 'collection source was rediscovered as root page');
+  assert.deepEqual(Object.keys(snapshot(destination)).filter(p => !p.endsWith('/')).sort(), inventory.entries.filter(e => e.status === 'planned').map(e => e.path).sort());
+  scan(destination);
+}
 console.log('Public audience: mixed-source sentinel isolation, derivations, fresh/static requirements, CLI misuse, typed metadata, draft policy, reference collisions, 404 and read-only preview parity passed');

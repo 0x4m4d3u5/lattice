@@ -2241,6 +2241,7 @@ pub fn is_non_content_file(filename : String) -> Bool {
 fn collect_root_sources(
   content_dir : String,
   slug_owner : Map[String, String],
+  collected_paths? : Map[String, Bool]? = None,
 ) -> Array[SourceFile] raise @fs.IOError {
   let entries = @fs.read_dir(content_dir)
   let sources : Array[SourceFile] = []
@@ -2248,6 +2249,13 @@ fn collect_root_sources(
   while i < entries.length() {
     let filename = entries[i]
     if filename.to_lower().has_suffix(".md") && !is_non_content_file(filename) {
+      // Public discovery must not confuse an already collected file with a
+      // distinct root source that happens to share its slug.
+      if collected_paths is Some(paths) &&
+        paths.contains(public_source_path_key(content_dir + "/" + filename)) {
+        i = i + 1
+        continue
+      }
       let file_slug = @slug.filename_to_slug(filename)
       // Only include if no collection or standalone page has claimed this slug
       match slug_owner.get(file_slug) {
@@ -5071,6 +5079,7 @@ fn prepare_output(
 
   // Pass 1: collect sources for each collection
   let collection_sources : Array[CollectionSources] = []
+  let collected_source_paths : Map[String, Bool] = Map([])
   let mut source_count = 0
   let mut i = 0
   while i < collections.length() {
@@ -5093,6 +5102,9 @@ fn prepare_output(
         // produces zero pages.
         []
       }
+    }
+    if public_mode {
+      for source in sources { collected_source_paths.set(public_source_path_key(source.path), true) }
     }
     let sources = project_public_sources(sources, collection_def.name, config, output, diagnostics)
     source_count = source_count + sources.length()
@@ -5165,6 +5177,9 @@ fn prepare_output(
   } else {
     []
   }
+  if public_mode {
+    for source in standalone_sources { collected_source_paths.set(public_source_path_key(source.path), true) }
+  }
   let standalone_sources = project_public_sources(standalone_sources, "_standalone", config, output, diagnostics)
   i = 0
   while i < standalone_sources.length() {
@@ -5205,6 +5220,7 @@ fn prepare_output(
   let root_sources : Array[SourceFile] = collect_root_sources(
     config.content_dir,
     if public_mode { Map([]) } else { slug_owner },
+    collected_paths=if public_mode { Some(collected_source_paths) } else { None },
   ) catch {
     @fs.IOError(msg) => {
       diagnostics.push(
