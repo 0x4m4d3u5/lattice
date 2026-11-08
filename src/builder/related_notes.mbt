@@ -27,11 +27,11 @@ fn related_notes_slot(fm : @frontmatter.Frontmatter, schema : @schema.Schema) ->
 }
 
 ///|
-fn related_notes_by_source(collections : Array[CollectionSources]) -> Map[String, Array[String]] {
+fn related_notes_by_source(collections : Array[CollectionSources], allow_missing_frontmatter? : Bool = false) -> Map[String, Array[String]] {
   let result : Map[String, Array[String]] = Map([])
   for collection in collections {
     for source in collection.sources {
-      if @frontmatter.parse(source.content) is Ok(fm) {
+      if @frontmatter.parse_with_policy(source.content, allow_missing_frontmatter~) is Ok(fm) {
         let refs = authored_related_notes(fm, collection.definition.schema)
         if !refs.is_empty() { result.set(source.path, refs) }
       }

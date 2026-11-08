@@ -21,8 +21,9 @@ fn publication_visibility(
 fn publication_visibility_violation(
   path : String,
   source : String,
+  allow_missing_frontmatter? : Bool = false,
 ) -> @lint.LintViolation? {
-  let (line, message) = match @frontmatter.parse(source) {
+  let (line, message) = match @frontmatter.parse_with_policy(source, allow_missing_frontmatter~) {
     Err(msg) => {
       // Preserve the existing diagnostics for unrelated parse failures. They
       // still block publication in the ordinary document validation pipeline.
@@ -61,7 +62,7 @@ fn publication_visibility_violations(
   for collection in collections {
     for source in collection.sources {
       seen.set(source.path, true)
-      if publication_visibility_violation(source.path, source.content) is Some(violation) {
+      if publication_visibility_violation(source.path, source.content, allow_missing_frontmatter=config.site.allow_missing_frontmatter == Some(true)) is Some(violation) {
         violations.push(violation)
       }
     }
@@ -71,7 +72,7 @@ fn publication_visibility_violations(
   if !seen.contains(path) && @fs.path_exists(path) {
     try {
       let source = @fs.read_file_to_string(path)
-      if publication_visibility_violation(path, source) is Some(violation) {
+      if publication_visibility_violation(path, source, allow_missing_frontmatter=config.site.allow_missing_frontmatter == Some(true)) is Some(violation) {
         violations.push(violation)
       }
     } catch {

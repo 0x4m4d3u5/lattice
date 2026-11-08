@@ -168,10 +168,10 @@ fn check_output_wikilinks(
   }
   for collection in collections {
     for source in collection.sources {
-      if !source_is_visible(source, config.include_drafts) {
+      if !source_is_visible(source, config.include_drafts, allow_missing_frontmatter=config.site.allow_missing_frontmatter == Some(true)) {
         continue
       }
-      let body = match @frontmatter.parse(source.content) {
+      let body = match @frontmatter.parse_with_policy(source.content, allow_missing_frontmatter=config.site.allow_missing_frontmatter == Some(true)) {
         Ok(fm) => fm.body
         Err(_) => continue
       }
@@ -229,10 +229,10 @@ fn check_output_fragments(
   let ids_by_path : Map[String, Map[String, Bool]] = Map([])
   for collection in collections {
     for source in collection.sources {
-      if !source_is_visible(source, config.include_drafts) {
+      if !source_is_visible(source, config.include_drafts, allow_missing_frontmatter=config.site.allow_missing_frontmatter == Some(true)) {
         continue
       }
-      let body = match @frontmatter.parse(source.content) {
+      let body = match @frontmatter.parse_with_policy(source.content, allow_missing_frontmatter=config.site.allow_missing_frontmatter == Some(true)) {
         Ok(fm) => fm.body
         Err(_) => continue
       }

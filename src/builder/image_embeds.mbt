@@ -37,7 +37,7 @@ fn register_image_assets(
   selected_404? : Array[SourceFile]? = None,
 ) -> Unit {
   if !image_embed_sources(collections, config, selected_404~).any(fn(source) {
-      match @frontmatter.parse(source.content) {
+      match @frontmatter.parse_with_policy(source.content, allow_missing_frontmatter=config.site.allow_missing_frontmatter == Some(true)) {
         Ok(fm) => !@markdown.extract_image_embeds(fm.body).is_empty()
         Err(_) => false
       }
@@ -80,7 +80,7 @@ fn register_image_assets(
 }
 
 ///|
-fn image_embed_location(source : String, target : String) -> (Int32?, Int32?) {
+fn image_embed_location(source : String, target : String, allow_missing_frontmatter? : Bool = false) -> (Int32?, Int32?) {
   let mut cursor = 0
   while cursor < source.length() {
     let start = @strutil.find_str(source, cursor, "![[", source.length())
@@ -93,7 +93,7 @@ fn image_embed_location(source : String, target : String) -> (Int32?, Int32?) {
     }
     let masked = source[:start].to_owned() + " " + source[start + 1:].to_owned()
     fn count(text : String) -> Int32 {
-      let body = match @frontmatter.parse(text) {
+      let body = match @frontmatter.parse_with_policy(text, allow_missing_frontmatter~) {
         Ok(fm) => fm.body
         Err(_) => text
       }
@@ -134,10 +134,10 @@ fn check_image_embeds(
     final_assets.set(image_asset_url(relative), is_asset)
   }
   for source in image_embed_sources(collections, config, selected_404=output.public_projection.map(p => p.selected_404)) {
-    if !source_is_visible(source, config.include_drafts) {
+    if !source_is_visible(source, config.include_drafts, allow_missing_frontmatter=config.site.allow_missing_frontmatter == Some(true)) {
       continue
     }
-    guard @frontmatter.parse(source.content) is Ok(fm) else { continue }
+    guard @frontmatter.parse_with_policy(source.content, allow_missing_frontmatter=config.site.allow_missing_frontmatter == Some(true)) is Ok(fm) else { continue }
     for target in @markdown.extract_image_embeds(fm.body) {
       let key = @markdown.image_embed_key(target)
       let message = if !image_embed_target_supported(target) {
@@ -161,7 +161,7 @@ fn check_image_embeds(
         }
       }
       if message is Some(message) {
-        let (line, column) = image_embed_location(source.content, target)
+        let (line, column) = image_embed_location(source.content, target, allow_missing_frontmatter=config.site.allow_missing_frontmatter == Some(true))
         violations.push({
           path: source.path,
           line,

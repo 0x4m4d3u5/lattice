@@ -31,6 +31,8 @@ echo "Running fresh-output isolation workflow"
 node scripts/check-fresh-output.mjs || status=1
 echo "Running explicit static publication allowlist"
 node scripts/check-static-allowlist.mjs || status=1
+echo "Running opt-in missing frontmatter workflow"
+node scripts/check-optional-frontmatter.mjs || status=1
 echo "Running opt-in public audience export"
 node scripts/check-public-audience.mjs || status=1
 echo "Running public-only visibility guard"

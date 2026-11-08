@@ -287,6 +287,8 @@ moon run cmd/main --target js -- build ./example/content --config ./example/site
 
 ### Frontmatter
 
+Frontmatter is required by default. Explicit `allow_missing_frontmatter = true` accepts body-only Markdown without weakening schemas. **Ordinary builds may then publish unlabelled notes with optional schemas.** Read [optional frontmatter ingestion](docs/optional-frontmatter.md) and use the separate public-audience export for mixed private/public trees.
+
 YAML frontmatter uses `---` fences and `key: value` assignments. The example below is ready to copy into the scaffolded post. To use TOML instead, switch to `+++` fences and `key = value` assignments.
 
 ```markdown

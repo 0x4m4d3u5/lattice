@@ -408,10 +408,10 @@ fn build_wikilink_map(
 }
 
 ///|
-fn extract_link_targets(source : String, slug : String) -> Array[String] {
+fn extract_link_targets(source : String, slug : String, allow_missing_frontmatter? : Bool = false) -> Array[String] {
   let unique : Map[String, Bool] = Map([])
   let targets : Array[String] = []
-  let body = match @frontmatter.parse(source) {
+  let body = match @frontmatter.parse_with_policy(source, allow_missing_frontmatter~) {
     Ok(fm) => fm.body
     Err(_) => source
   }
@@ -429,9 +429,9 @@ fn extract_link_targets(source : String, slug : String) -> Array[String] {
 }
 
 ///|
-fn source_is_visible(source : SourceFile, include_drafts : Bool) -> Bool {
+fn source_is_visible(source : SourceFile, include_drafts : Bool, allow_missing_frontmatter? : Bool = false) -> Bool {
   include_drafts ||
-  (match @frontmatter.parse(source.content) {
+  (match @frontmatter.parse_with_policy(source.content, allow_missing_frontmatter~) {
     Ok(fm) => !is_draft(fm)
     // Keep malformed sources in validation; parsing errors must still fail builds.
     Err(_) => true
@@ -447,6 +447,7 @@ fn source_is_visible(source : SourceFile, include_drafts : Bool) -> Bool {
 fn build_backlink_index(
   collection_sources : Array[CollectionSources],
   page_index : Map[String, String],
+  allow_missing_frontmatter? : Bool = false,
 ) -> Map[String, Array[BacklinkRef]] {
   let index : Map[String, Array[BacklinkRef]] = Map([])
   let canonical_by_url : Map[String, String] = Map([])
@@ -464,7 +465,7 @@ fn build_backlink_index(
       let source_url = if page_index.contains(src.slug) {
         authored_source_url(coll.definition.name, src.slug)
       } else { "" }
-      let (source_title, body) = match @frontmatter.parse(src.content) {
+      let (source_title, body) = match @frontmatter.parse_with_policy(src.content, allow_missing_frontmatter~) {
         Ok(fm) => (extract_title(fm), fm.body)
         Err(_) => (src.slug, src.content)
       }
@@ -1308,8 +1309,8 @@ pub fn render_redirect_page(canonical_url : String) -> String {
 ///|
 /// Extract redirect_from paths from raw content string.
 /// Returns array of redirect path strings if present, empty otherwise.
-fn extract_redirect_paths(raw_content : String) -> Array[String] {
-  match @frontmatter.parse(raw_content) {
+fn extract_redirect_paths(raw_content : String, allow_missing_frontmatter? : Bool = false) -> Array[String] {
+  match @frontmatter.parse_with_policy(raw_content, allow_missing_frontmatter~) {
     Ok(fm) =>
       match fm.fields.get("redirect_from") {
         Some(@frontmatter.FArray(urls)) => {
@@ -1342,8 +1343,9 @@ fn emit_redirects_for_page(
   redirect_sources : Array[RedirectSource],
   diagnostics : Array[@diagnostic.Diagnostic],
   output : OutputPlan,
+  allow_missing_frontmatter? : Bool = false,
 ) -> Int {
-  let paths = extract_redirect_paths(raw_content)
+  let paths = extract_redirect_paths(raw_content, allow_missing_frontmatter~)
   if paths.length() == 0 {
     return 0
   }
@@ -2242,6 +2244,7 @@ fn collect_root_sources(
   content_dir : String,
   slug_owner : Map[String, String],
   collected_paths? : Map[String, Bool]? = None,
+  allow_missing_frontmatter? : Bool = false,
 ) -> Array[SourceFile] raise @fs.IOError {
   let entries = @fs.read_dir(content_dir)
   let sources : Array[SourceFile] = []
@@ -2269,7 +2272,7 @@ fn collect_root_sources(
             content,
             fingerprint: @cache.fingerprint_for_source(path, content),
             stamp: @watch.file_stamp(path),
-            link_targets: extract_link_targets(content, file_slug),
+            link_targets: extract_link_targets(content, file_slug, allow_missing_frontmatter~),
           })
         }
         Some(_) => () // slug already claimed, skip
@@ -2654,6 +2657,7 @@ fn collect_tag_catalog(
   tags_field : String,
   include_drafts? : Bool = true,
   aliases_enabled? : Bool = false,
+  allow_missing_frontmatter? : Bool = false,
 ) -> TagCatalog {
   let ordered_slugs : Array[String] = []
   let name_by_slug : Map[String, String] = Map([])
@@ -2663,7 +2667,7 @@ fn collect_tag_catalog(
     let mut j = 0
     while j < coll.sources.length() {
       let src = coll.sources[j]
-      match @frontmatter.parse(src.content) {
+      match @frontmatter.parse_with_policy(src.content, allow_missing_frontmatter~) {
         Ok(fm) => {
           let schema_errors = @schema.validate(fm, note_alias_schema(coll.definition.schema, aliases_enabled))
           if schema_errors.length() == 0 && (include_drafts || !is_draft(fm)) {
@@ -2925,10 +2929,10 @@ fn render_404_page(
       }
     }
     // The dedicated renderer rereads 404.md; guard these exact bytes too.
-    if publication_visibility_violation(page_path, source) is Some(violation) {
+    if publication_visibility_violation(page_path, source, allow_missing_frontmatter=config.site.allow_missing_frontmatter == Some(true)) is Some(violation) {
       return Err(violation.message)
     }
-    match @frontmatter.parse(source) {
+    match @frontmatter.parse_with_policy(source, allow_missing_frontmatter=config.site.allow_missing_frontmatter == Some(true)) {
       Err(e) => return Err("404.md frontmatter: " + e)
       Ok(fm) => {
         let resolved = if selected_404 is Some(_) {
@@ -3449,7 +3453,7 @@ fn process_document(
 ) -> BuildDocOutcome {
   let diagnostics : Array[@diagnostic.Diagnostic] = []
   // Step 1: parse frontmatter
-  let fm = match @frontmatter.parse(source) {
+  let fm = match @frontmatter.parse_with_policy(source, allow_missing_frontmatter=site.allow_missing_frontmatter == Some(true)) {
     Err(e) => {
       let (line, message) = frontmatter_document_error(e)
       diagnostics.push(
@@ -3999,6 +4003,7 @@ fn build_sorted_collection_pages(
   sources : Array[SourceFile],
   collection_name : String,
   sort_order : @collections.SortOrder,
+  allow_missing_frontmatter? : Bool = false,
 ) -> SortedCollectionPages {
   // Parse each source to get title, date, and weight for sorting
   let pages : Array[(String, String, String?, Int?)] = [] // (slug, title, date, weight)
@@ -4007,7 +4012,7 @@ fn build_sorted_collection_pages(
   let mut i = 0
   while i < sources.length() {
     let src = sources[i]
-    let (title, date_opt, weight_opt) = match @frontmatter.parse(src.content) {
+    let (title, date_opt, weight_opt) = match @frontmatter.parse_with_policy(src.content, allow_missing_frontmatter~) {
       Ok(fm) => (extract_title(fm), extract_date(fm), extract_weight(fm))
       Err(_) => (src.slug, None, None)
     }
@@ -4170,7 +4175,7 @@ fn process_document_for_lint(
   backlink_count? : Int = 0,
 ) -> LintDocOutcome {
   let violations : Array[@lint.LintViolation] = []
-  let fm = match @frontmatter.parse(source) {
+  let fm = match @frontmatter.parse_with_policy(source, allow_missing_frontmatter=site.allow_missing_frontmatter == Some(true)) {
     Err(msg) => {
       let (line, message) = frontmatter_document_error(msg)
       violations.push({
@@ -4578,6 +4583,7 @@ fn process_document_for_lint(
 /// the render loop.
 pub fn collect_sources(
   content_dir : String,
+  allow_missing_frontmatter? : Bool = false,
 ) -> Array[SourceFile] raise @fs.IOError {
   let entries = @fs.read_dir(content_dir)
   let sources : Array[SourceFile] = []
@@ -4595,7 +4601,7 @@ pub fn collect_sources(
         content,
         fingerprint: @cache.fingerprint_for_source(path, content),
         stamp: @watch.file_stamp(path),
-        link_targets: extract_link_targets(content, file_slug),
+        link_targets: extract_link_targets(content, file_slug, allow_missing_frontmatter~),
       })
     }
     i = i + 1
@@ -4703,7 +4709,14 @@ fn dependency_manifest_entries(
   ) catch {
     @watch.IOError(msg) => return Err(msg)
   }
-  let entries : Array[@manifest.ManifestEntry] = []
+  // Track the effective policy even when callers replace SiteConfig in memory
+  // without editing config_path. Older manifests safely trigger a full rebuild.
+  let entries : Array[@manifest.ManifestEntry] = [{
+    src: "@lattice/allow_missing_frontmatter",
+    mtime: if config.site.allow_missing_frontmatter == Some(true) { 1L } else { 0L },
+    out: "",
+    targets: [],
+  }]
   let mut i = 0
   while i < snapshot.length() {
     entries.push({
@@ -5084,7 +5097,7 @@ fn prepare_output(
   let mut i = 0
   while i < collections.length() {
     let collection_def = collections[i]
-    let sources = collect_sources(collection_def.content_dir) catch {
+    let sources = collect_sources(collection_def.content_dir, allow_missing_frontmatter=config.site.allow_missing_frontmatter == Some(true)) catch {
       @fs.IOError(msg) => {
         diagnostics.push(
           build_error(
@@ -5160,7 +5173,7 @@ fn prepare_output(
   let standalone_sources : Array[SourceFile] = if @fs.path_exists(
       standalone_dir,
     ) {
-    collect_sources(standalone_dir) catch {
+    collect_sources(standalone_dir, allow_missing_frontmatter=config.site.allow_missing_frontmatter == Some(true)) catch {
       @fs.IOError(msg) => {
         diagnostics.push(
           build_error(
@@ -5221,6 +5234,7 @@ fn prepare_output(
     config.content_dir,
     if public_mode { Map([]) } else { slug_owner },
     collected_paths=if public_mode { Some(collected_source_paths) } else { None },
+    allow_missing_frontmatter=config.site.allow_missing_frontmatter == Some(true),
   ) catch {
     @fs.IOError(msg) => {
       diagnostics.push(
@@ -5322,25 +5336,26 @@ fn prepare_output(
   }
   register_image_assets(config, page_index, all_sources_for_backlinks, selected_404=output.public_projection.map(p => p.selected_404))
   let alias_violations = if config.site.wikilink_aliases == Some(true) {
-    register_note_aliases(all_sources_for_backlinks, page_index)
+    register_note_aliases(all_sources_for_backlinks, page_index, allow_missing_frontmatter=config.site.allow_missing_frontmatter == Some(true))
   } else { [] }
   for violation in alias_violations {
     diagnostics.push(@diagnostic.of_lint_violation(violation))
   }
   // Validation knows every authored tag, including tags unique to hidden drafts.
-  let known_tags = collect_tag_catalog(all_sources_for_backlinks, tags_field, aliases_enabled=config.site.wikilink_aliases == Some(true)).name_by_slug
+  let known_tags = collect_tag_catalog(all_sources_for_backlinks, tags_field, aliases_enabled=config.site.wikilink_aliases == Some(true), allow_missing_frontmatter=config.site.allow_missing_frontmatter == Some(true)).name_by_slug
   let tag_catalog = collect_tag_catalog(
     all_sources_for_backlinks,
     tags_field,
     include_drafts=config.include_drafts,
     aliases_enabled=config.site.wikilink_aliases == Some(true),
+    allow_missing_frontmatter=config.site.allow_missing_frontmatter == Some(true),
   )
   // Keep URL validation and ownership complete; derivations use published URLs.
   let published_page_index : Map[String, String] = Map([])
   let visible_urls : Map[String, Bool] = Map([])
   for coll in all_sources_for_backlinks {
     for src in coll.sources {
-      if source_is_visible(src, config.include_drafts) {
+      if source_is_visible(src, config.include_drafts, allow_missing_frontmatter=config.site.allow_missing_frontmatter == Some(true)) {
         visible_urls.set(authored_source_url(coll.definition.name, src.slug), true)
         match page_index.get(src.slug) {
           Some(url) => published_page_index.set(src.slug, url)
@@ -5354,8 +5369,9 @@ fn prepare_output(
   }
   let backlink_index = build_backlink_index(
     all_sources_for_backlinks, published_page_index,
+    allow_missing_frontmatter=config.site.allow_missing_frontmatter == Some(true),
   )
-  let related_notes = related_notes_by_source(all_sources_for_backlinks)
+  let related_notes = related_notes_by_source(all_sources_for_backlinks, allow_missing_frontmatter=config.site.allow_missing_frontmatter == Some(true))
   let incremental = build_incremental_state(
     config, collection_sources, collections, messages,
   )
@@ -5519,10 +5535,11 @@ fn prepare_output(
     // Build sorted pages for prev/next navigation
     let sorted_coll_pages = build_sorted_collection_pages(
       coll.sources.filter(fn(src) {
-        source_is_visible(src, config.include_drafts)
+        source_is_visible(src, config.include_drafts, allow_missing_frontmatter=config.site.allow_missing_frontmatter == Some(true))
       }),
       coll.definition.name,
       coll.definition.sort_order,
+      allow_missing_frontmatter=config.site.allow_missing_frontmatter == Some(true),
     )
 
     let mut j = 0
@@ -5594,7 +5611,7 @@ fn prepare_output(
           // We already parsed frontmatter in process_document, so we can check the result there
           // Instead of re-parsing, we'll check if document was validated and extract draft status
           // from the original source's frontmatter parse result during validation
-          let is_draft_post = match @frontmatter.parse(src.content) {
+          let is_draft_post = match @frontmatter.parse_with_policy(src.content, allow_missing_frontmatter=config.site.allow_missing_frontmatter == Some(true)) {
             Ok(fm) => is_draft(fm)
             Err(_) => false
           }
@@ -5685,6 +5702,7 @@ fn prepare_output(
                   redirect_sources,
                   diagnostics,
                   output,
+                  allow_missing_frontmatter=config.site.allow_missing_frontmatter == Some(true),
                 )
               }
               redirect_count = redirect_count + redirects_generated
@@ -5733,7 +5751,7 @@ fn prepare_output(
                 if collect_content_navigation {
                   content_sections_by_url.set(doc.url, doc.sections)
                   content_aliases_by_url.set(doc.url, if config.site.wikilink_aliases == Some(true) && !doc.sections.is_empty() {
-                    searchable_note_aliases(src.content)
+                    searchable_note_aliases(src.content, allow_missing_frontmatter=config.site.allow_missing_frontmatter == Some(true))
                   } else { [] })
                   content_fragments_by_url.set(doc.url, doc.section_fragments)
                   content_headings_by_url.set(doc.url, doc.headings)
@@ -5828,7 +5846,7 @@ fn prepare_output(
       match doc_outcome.document {
         None => error_count = error_count + 1
         Some(doc) => {
-          if !source_is_visible(src, config.include_drafts) {
+          if !source_is_visible(src, config.include_drafts, allow_missing_frontmatter=config.site.allow_missing_frontmatter == Some(true)) {
             skipped_drafts = skipped_drafts + 1
             messages.push("[skip draft] standalone/" + src.slug)
             output.exclude_page(
@@ -5872,6 +5890,7 @@ fn prepare_output(
                 redirect_sources,
                 diagnostics,
                 output,
+                allow_missing_frontmatter=config.site.allow_missing_frontmatter == Some(true),
               )
             // Add to graph for sitemap and search
             let page : @graph.GraphPage = {
@@ -5906,7 +5925,7 @@ fn prepare_output(
             if collect_content_navigation {
               content_sections_by_url.set(doc.url, doc.sections)
               content_aliases_by_url.set(doc.url, if config.site.wikilink_aliases == Some(true) && !doc.sections.is_empty() {
-                searchable_note_aliases(src.content)
+                searchable_note_aliases(src.content, allow_missing_frontmatter=config.site.allow_missing_frontmatter == Some(true))
               } else { [] })
               content_fragments_by_url.set(doc.url, doc.section_fragments)
               content_headings_by_url.set(doc.url, doc.headings)
@@ -5988,7 +6007,7 @@ fn prepare_output(
       match doc_outcome.document {
         None => error_count = error_count + 1
         Some(doc) => {
-          if !source_is_visible(src, config.include_drafts) {
+          if !source_is_visible(src, config.include_drafts, allow_missing_frontmatter=config.site.allow_missing_frontmatter == Some(true)) {
             skipped_drafts = skipped_drafts + 1
             messages.push("[skip draft] root/" + src.slug)
             output.exclude_page(
@@ -6055,6 +6074,7 @@ fn prepare_output(
                 redirect_sources,
                 diagnostics,
                 output,
+                allow_missing_frontmatter=config.site.allow_missing_frontmatter == Some(true),
               )
             let page : @graph.GraphPage = {
               slug: src.slug,
@@ -6088,7 +6108,7 @@ fn prepare_output(
             if collect_content_navigation {
               content_sections_by_url.set(doc.url, doc.sections)
               content_aliases_by_url.set(doc.url, if config.site.wikilink_aliases == Some(true) && !doc.sections.is_empty() {
-                searchable_note_aliases(src.content)
+                searchable_note_aliases(src.content, allow_missing_frontmatter=config.site.allow_missing_frontmatter == Some(true))
               } else { [] })
               content_fragments_by_url.set(doc.url, doc.section_fragments)
               content_headings_by_url.set(doc.url, doc.headings)
@@ -7207,7 +7227,7 @@ pub fn check(config : BuildConfig, local_links? : Bool = false, audience? : Audi
   i = 0
   while i < collections.length() {
     let collection_def = collections[i]
-    let sources = collect_sources(collection_def.content_dir) catch {
+    let sources = collect_sources(collection_def.content_dir, allow_missing_frontmatter=config.site.allow_missing_frontmatter == Some(true)) catch {
       @fs.IOError(msg) => {
         violations.push({
           path: collection_def.content_dir,
@@ -7270,7 +7290,7 @@ pub fn check(config : BuildConfig, local_links? : Bool = false, audience? : Audi
   let standalone_sources : Array[SourceFile] = if @fs.path_exists(
       standalone_dir,
     ) {
-    collect_sources(standalone_dir) catch {
+    collect_sources(standalone_dir, allow_missing_frontmatter=config.site.allow_missing_frontmatter == Some(true)) catch {
       @fs.IOError(msg) => {
         violations.push({
           path: standalone_dir,
@@ -7313,6 +7333,7 @@ pub fn check(config : BuildConfig, local_links? : Bool = false, audience? : Audi
   let root_sources : Array[SourceFile] = collect_root_sources(
     config.content_dir,
     slug_owner,
+    allow_missing_frontmatter=config.site.allow_missing_frontmatter == Some(true),
   ) catch {
     @fs.IOError(msg) => {
       violations.push({
@@ -7397,14 +7418,15 @@ pub fn check(config : BuildConfig, local_links? : Bool = false, audience? : Audi
   }
   register_image_assets(config, page_index, all_sources_for_backlinks)
   if config.site.wikilink_aliases == Some(true) {
-    for violation in register_note_aliases(all_sources_for_backlinks, page_index) {
+    for violation in register_note_aliases(all_sources_for_backlinks, page_index, allow_missing_frontmatter=config.site.allow_missing_frontmatter == Some(true)) {
       violations.push(violation)
     }
   }
-  let tag_catalog = collect_tag_catalog(all_sources_for_backlinks, tags_field, aliases_enabled=config.site.wikilink_aliases == Some(true))
+  let tag_catalog = collect_tag_catalog(all_sources_for_backlinks, tags_field, aliases_enabled=config.site.wikilink_aliases == Some(true), allow_missing_frontmatter=config.site.allow_missing_frontmatter == Some(true))
   let known_tags = tag_catalog.name_by_slug
   let backlink_index = build_backlink_index(
     all_sources_for_backlinks, page_index,
+    allow_missing_frontmatter=config.site.allow_missing_frontmatter == Some(true),
   )
 
   let source_urls : Map[String, String] = Map([])
@@ -7469,6 +7491,7 @@ pub fn check(config : BuildConfig, local_links? : Bool = false, audience? : Audi
       coll.sources,
       coll.definition.name,
       coll.definition.sort_order,
+      allow_missing_frontmatter=config.site.allow_missing_frontmatter == Some(true),
     )
     let mut j = 0
     while j < coll.sources.length() {
@@ -8006,7 +8029,7 @@ pub fn stats(config : BuildConfig) -> StatsResult {
   let mut i = 0
   while i < collections.length() {
     let collection_def = collections[i]
-    let sources = collect_sources(collection_def.content_dir) catch {
+    let sources = collect_sources(collection_def.content_dir, allow_missing_frontmatter=config.site.allow_missing_frontmatter == Some(true)) catch {
       @fs.IOError(msg) => {
         errors.push(
           build_error(
@@ -8034,7 +8057,7 @@ pub fn stats(config : BuildConfig) -> StatsResult {
     let mut word_count = 0
     let mut j = 0
     while j < coll.sources.length() {
-      let body = match @frontmatter.parse(coll.sources[j].content) {
+      let body = match @frontmatter.parse_with_policy(coll.sources[j].content, allow_missing_frontmatter=config.site.allow_missing_frontmatter == Some(true)) {
         Ok(fm) => fm.body
         Err(_) => coll.sources[j].content
       }
@@ -8061,7 +8084,7 @@ pub fn stats(config : BuildConfig) -> StatsResult {
   let standalone_sources : Array[SourceFile] = if @fs.path_exists(
       standalone_dir,
     ) {
-    collect_sources(standalone_dir) catch {
+    collect_sources(standalone_dir, allow_missing_frontmatter=config.site.allow_missing_frontmatter == Some(true)) catch {
       @fs.IOError(msg) => {
         errors.push(
           build_error(
@@ -8080,7 +8103,7 @@ pub fn stats(config : BuildConfig) -> StatsResult {
   let mut standalone_words = 0
   i = 0
   while i < standalone_sources.length() {
-    let body = match @frontmatter.parse(standalone_sources[i].content) {
+    let body = match @frontmatter.parse_with_policy(standalone_sources[i].content, allow_missing_frontmatter=config.site.allow_missing_frontmatter == Some(true)) {
       Ok(fm) => fm.body
       Err(_) => standalone_sources[i].content
     }
@@ -8111,6 +8134,7 @@ pub fn stats(config : BuildConfig) -> StatsResult {
   let root_sources : Array[SourceFile] = collect_root_sources(
     config.content_dir,
     slug_owner,
+    allow_missing_frontmatter=config.site.allow_missing_frontmatter == Some(true),
   ) catch {
     @fs.IOError(msg) => {
       errors.push(
@@ -8127,7 +8151,7 @@ pub fn stats(config : BuildConfig) -> StatsResult {
   let mut root_words = 0
   i = 0
   while i < root_sources.length() {
-    let body = match @frontmatter.parse(root_sources[i].content) {
+    let body = match @frontmatter.parse_with_policy(root_sources[i].content, allow_missing_frontmatter=config.site.allow_missing_frontmatter == Some(true)) {
       Ok(fm) => fm.body
       Err(_) => root_sources[i].content
     }
@@ -8157,7 +8181,7 @@ pub fn stats(config : BuildConfig) -> StatsResult {
 
   // Count unique tags across all collections
   let tags_field = tags_field_name(config.site)
-  let tag_catalog = collect_tag_catalog(collection_sources, tags_field, aliases_enabled=config.site.wikilink_aliases == Some(true))
+  let tag_catalog = collect_tag_catalog(collection_sources, tags_field, aliases_enabled=config.site.wikilink_aliases == Some(true), allow_missing_frontmatter=config.site.allow_missing_frontmatter == Some(true))
   let unique_tags = tag_catalog.ordered_slugs.length()
 
   {

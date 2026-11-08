@@ -49,6 +49,7 @@ pub struct SiteConfig {
   feed_limit : Int?
   site_feed_enabled : Bool?
   wikilink_aliases : Bool?
+  allow_missing_frontmatter : Bool?
   require_image_alt : Bool?
 }
 
@@ -166,6 +167,7 @@ fn parse_bool_config(value : String) -> Bool? {
 /// - `archive_pages`
 /// - `feed_limit`
 /// - `site_feed_enabled`
+/// - `allow_missing_frontmatter` (opt-in body-only Markdown ingestion)
 /// - `require_image_alt` (opt-in Markdown image policy)
 ///
 /// Inline collections via `[[collections]]` array-of-tables:
@@ -197,6 +199,7 @@ pub fn parse(input : String) -> Result[SiteConfig, ConfigError] {
   let mut feed_limit : Int? = None
   let mut site_feed_enabled : Bool? = None
   let mut wikilink_aliases : Bool? = None
+  let mut allow_missing_frontmatter : Bool? = None
   let mut require_image_alt : Bool? = None
 
   let collections : Array[CollectionEntry] = []
@@ -535,6 +538,11 @@ pub fn parse(input : String) -> Result[SiteConfig, ConfigError] {
             Some(parsed) => wikilink_aliases = Some(parsed)
             None => return Err(InvalidValue("wikilink_aliases", "must be true/false, yes/no, 1/0, or on/off"))
           }
+        } else if key == "allow_missing_frontmatter" {
+          match parse_bool_config(value) {
+            Some(parsed) => allow_missing_frontmatter = Some(parsed)
+            None => return Err(InvalidValue("allow_missing_frontmatter", "must be true/false, yes/no, 1/0, or on/off"))
+          }
         } else if key == "require_image_alt" {
           match parse_bool_config(value) {
             Some(parsed) => require_image_alt = Some(parsed)
@@ -615,6 +623,7 @@ pub fn parse(input : String) -> Result[SiteConfig, ConfigError] {
     feed_limit,
     site_feed_enabled,
     wikilink_aliases,
+    allow_missing_frontmatter,
     require_image_alt,
   })
 }

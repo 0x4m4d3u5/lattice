@@ -694,3 +694,21 @@ pub fn parse(content : String) -> Result[Frontmatter, String] {
     )
   }
 }
+
+///|
+/// Explicit ingestion policy for filesystem callers. Recognized header prefixes
+/// always use the strict parser, including malformed or unclosed headers.
+/// Missing metadata never synthesizes fields or changes body whitespace.
+pub fn parse_with_policy(
+  content : String,
+  allow_missing_frontmatter? : Bool = false,
+) -> Result[Frontmatter, String] {
+  let normalized = without_leading_bom(content)
+  if allow_missing_frontmatter &&
+    !normalized.has_prefix("---") && !normalized.has_prefix("+++") {
+    Ok({ fields: Map([]), body: normalized })
+  } else {
+    // Pass original bytes: parse owns normalization on the strict path.
+    parse(content)
+  }
+}
