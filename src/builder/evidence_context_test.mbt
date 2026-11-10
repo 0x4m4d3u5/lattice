@@ -209,7 +209,10 @@ test "static final owner cannot be a correction target" {
   )
   let config = {
     ..config,
-    site: { ..config.site, static_dir: Some("posts"), },
+    site: @config.parse(
+      @fs.read_file_to_string(config.config_path) +
+      "content_index_file = content-index.json\nstatic_dir = posts\n",
+    ).unwrap(),
   }
   @fs.create_dir(config.content_dir + "/posts/alpha")
   @fs.write_string_to_file(
