@@ -7073,6 +7073,8 @@ fn prepare_output(
             fragments=content_fragments_by_url,
             aliases=content_aliases_by_url,
             updated_dates~,
+            evidence_times=published_evidence_times(all_sources_for_backlinks, source_urls, backlink_documents, overwritten, allow_missing_frontmatter=config.site.allow_missing_frontmatter == Some(true)),
+            supersedes=published_supersession_context(all_sources_for_backlinks, source_urls, backlink_documents, published_page_index, overwritten, allow_missing_frontmatter=config.site.allow_missing_frontmatter == Some(true)),
             publication_digests=publication_html.map(fn(_, html) { publication_digest(html) }),
             retentions=publication_html.map(fn(url, html) { passage_bindings(backlink_documents.get(url).unwrap(), html, final_passages.get(url).unwrap_or([])) }),
           ),

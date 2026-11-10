@@ -113,3 +113,63 @@ test('legacy body-only indexes remain usable by default but cannot pass strict m
     { check: 'pairing', status: 'unknown' }, { check: 'retention', status: 'unknown' },
   ]);
 });
+
+const contextRequest = entries => ({ ...request, indexJson: JSON.stringify(entries), validateTarget: async () => ({ ok: true, pairing: { status: 'matched' }, retention: { status: 'matched' } }) });
+test('page context distinguishes observation, validity and existing dates without choosing truth', async () => {
+  const old = { ...page, date: '2026-01-01', updated: '2026-02-01', observed_at: '2026-02-01T01:02:03Z', valid_from: '2025-01-01 01:02:03', valid_until: '2025-12-31T00:00:00+05:30' };
+  const correction = { ...page, title: 'Correction', url: '/correction/', supersedes: [{ title: 'Do not trust duplicated metadata', url: old.url }], observed_at: '2099-01-01T00:00:00' };
+  const result = await collectEvidence({ ...contextRequest([old, correction]), strictCitations: true });
+  assert.equal(result.status, 'ready');
+  assert.deepEqual(result.candidates[0].context, { scope: 'page', basis: 'author_asserted_index_metadata', date: old.date, updated: old.updated, observed_at: old.observed_at, valid_from: old.valid_from, valid_until: old.valid_until, supersedes: [], superseded_by: [{ title: 'Correction', url: correction.url }] });
+  const ambiguous = await collectEvidence({ ...contextRequest([old, correction]), search: async () => ({ results: [{ ...hit, score: 90 }, { ...hit, title: correction.title, url: correction.url, score: 1 }] }) });
+  assert.equal(ambiguous.status, 'ambiguous');
+  assert.equal(ambiguous.citation, null);
+  assert.deepEqual(ambiguous.candidates.map(c => c.score), [90, 1]);
+  assert.deepEqual(ambiguous.candidates[1].context.supersedes, [{ title: old.title, url: old.url }]);
+  assert.equal(ambiguous.candidates[0].passage, old.sections[0].body);
+});
+test('legacy missing context remains explicitly absent', async () => {
+  const result = await collectEvidence(contextRequest([page]));
+  assert.deepEqual(result.candidates[0].context, { scope: 'page', basis: 'author_asserted_index_metadata', date: null, updated: null, observed_at: null, valid_from: null, valid_until: null, supersedes: [], superseded_by: [] });
+});
+test('malformed authored context is rejected without returning names or dates', async () => {
+  for (const patch of [{ date: {} }, { updated: {} }, { observed_at: '2026-02-29T01:02:03Z' }, { observed_at: '2026-01-01T24:00:00' }, { valid_from: null }, { valid_until: '2026-01-01' }, { supersedes: {} }, { supersedes: [{ title: 'private', url: '/secret/', extra: true }] }]) {
+    const result = await collectEvidence(contextRequest([{ ...page, ...patch }]));
+    assert.equal(result.status, 'invalid_context', JSON.stringify(patch));
+    assert.deepEqual(result.candidates, []);
+    assert.equal(result.citation, null);
+  }
+});
+test('relationships never echo unresolved, duplicate, generated or unsafe destinations', async () => {
+  const source = { ...page, supersedes: ['/missing/', '/duplicate/', '/generated/', '//outside.test/', '/bad?x', page.url].map(url => ({ title: 'secret sentinel', url })) };
+  const entries = [source, { title: 'dup', url: '/duplicate/' }, { title: 'dup', url: '/duplicate/' }, { title: 'generated', url: '/generated/', kind: 'collection_index' }];
+  const result = await collectEvidence(contextRequest(entries));
+  assert.equal(result.status, 'ready');
+  assert.deepEqual(result.candidates[0].context.supersedes, []);
+  assert.ok(!JSON.stringify(result).includes('secret sentinel'));
+});
+test('cycles are authored claims, not automatic deletion or current-fact selection', async () => {
+  const a = { ...page, supersedes: [{ title: 'B', url: '/b/' }] };
+  const b = { ...page, title: 'B', url: '/b/', supersedes: [{ title: page.title, url: page.url }] };
+  const result = await collectEvidence(contextRequest([a, b]));
+  assert.equal(result.status, 'ready');
+  assert.deepEqual(result.candidates[0].context.supersedes, [{ title: 'B', url: '/b/' }]);
+  assert.deepEqual(result.candidates[0].context.superseded_by, [{ title: 'B', url: '/b/' }]);
+});
+
+test('existing authored date strings are preserved without assigning time semantics', async () => {
+  const result = await collectEvidence(contextRequest([{ ...page, date: 'Spring 2026', updated: '2026-02-03T01:02:03Z' }]));
+  assert.equal(result.status, 'ready');
+  assert.equal(result.candidates[0].context.date, 'Spring 2026');
+  assert.equal(result.candidates[0].context.updated, '2026-02-03T01:02:03Z');
+});
+test('DateTime context mirrors schema calendar shapes without interval selection', async () => {
+  for (const value of ['2024-02-29T23:59:59Z', '0000-02-29 00:00:00', '2026-01-01 01:02:03+23:59', '2026-01-01T01:02:03-05:30']) {
+    const result = await collectEvidence(contextRequest([{ ...page, observed_at: value, valid_from: '2099-01-01T00:00:00Z', valid_until: '2000-01-01T00:00:00Z' }]));
+    assert.equal(result.status, 'ready', value);
+    assert.equal(result.candidates[0].context.observed_at, value);
+  }
+  for (const value of ['1900-02-29T00:00:00Z', '2026-01-01T01:60:00Z', '2026-01-01T00:00:60Z', '2026-01-01T00:00:00+24:00', '2026-01-01T00:00:00.123Z']) {
+    assert.equal((await collectEvidence(contextRequest([{ ...page, observed_at: value }]))).status, 'invalid_context', value);
+  }
+});

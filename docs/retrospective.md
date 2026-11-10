@@ -3887,3 +3887,27 @@ exposes immediate exit without depending on scheduling. A separate slow reader
 exercises real backpressure without the preload. Success, inventory failure,
 comparison failure, configuration failure and fatal arguments are covered with
 bounded child-process timeouts and unchanged empty stderr expectations.
+
+
+## 2026-11-10: Dates and correction claims travel with evidence
+
+AI implemented a deliberately small authored-context milestone after retrieval
+experiments showed that a correction and an older passage can both match, while
+source-header dates do not automatically travel with section text. Ranking was
+left untouched: lexical rank is not truth and publication provenance is not truth.
+
+The design reuses DateTime and Ref schema contracts and the final-publication
+projection pattern from related notes. Named String metadata is not silently
+promoted. Observation/recording time and claimed applicability bounds are distinct
+from existing page date/updated; the latter retain their authored string format.
+No interval solver, automatic forgetting, reverse private lookup, model service or
+arbitrary metadata export was added. Old passages remain available, including in
+ambiguous results. Reverse relationships derive only from emitted forward claims.
+
+A key review boundary is that existing byte pairing and passage retention do not
+bind index metadata. The host labels context as author-asserted, and a browser
+regression deliberately changes a valid observation timestamp while strict checks
+still match. That negative control prevents documentation from confusing a valid
+citation with authenticated temporal facts. Synthetic tests cover schema opt-in,
+malformed values, draft projection, cached changes and excluded references; this
+does not claim comprehensive safety for all mixed-vault publication surfaces.

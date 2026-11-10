@@ -5,6 +5,8 @@ export async function collectEvidence({ indexJson, query, search, validateTarget
   const response = await search(indexJson, query, '[]', 50);
   if (response.error) return { status: 'invalid_index', query, error: response.error, candidates: [] };
   const index = JSON.parse(indexJson);
+  if (!validAuthoredContext(index)) return { status: 'invalid_context', query, candidates: [], citation: null, reason: 'Malformed authored evidence context' };
+  const contexts = authoredContexts(index);
   const candidates = [];
   for (const hit of response.results) {
     const pages = index.filter(entry => entry.url === hit.url);
@@ -13,6 +15,7 @@ export async function collectEvidence({ indexJson, query, search, validateTarget
     const section = Array.isArray(page.sections) ? page.sections[hit.section_index] : { heading: '', body: page.body };
     if (!section || typeof section.body !== 'string' || !section.body.trim()) return { status: 'invalid_evidence', query, candidates: [] };
     candidates.push({ title: hit.title, page: hit.url, section: hit.section, sectionIndex: hit.section_index,
+      context: contexts.get(page),
       passage: section.body, snippet: hit.snippet, score: hit.score, fragment: hit.fragment ?? null, publication: page.publication, retention: section.retention, heading: section.heading });
   }
   if (!candidates.length) return { status: 'no_results', query, candidates };
@@ -43,7 +46,7 @@ export async function collectEvidence({ indexJson, query, search, validateTarget
       citation: null, reason: rejections.map(item => item.reason).join('; '), rejections };
   }
   return { status: 'ready', query, candidates, pairing, retention, citation: { title: evidence.title, url: target.href },
-    limitation: 'Retrieved text is evidence to inspect, not proof of factual truth. Target validation does not establish freshness or truth of the indexed passage. Retention compares publisher-origin bytes, not browser visibility.' };
+    limitation: 'Retrieved text is evidence to inspect, not proof of factual truth. Target validation does not establish freshness or truth of the indexed passage. Retention compares publisher-origin bytes, not browser visibility. Authored context is index metadata, not authenticated by pairing or retention.' };
 }
 
 // Compare the exact response bytes independently of citation-address validation.
@@ -110,4 +113,61 @@ export function compareRetention(bytes, passage) {
   } catch { return { status: 'mismatched', reason: 'Range is not on UTF-8 boundaries' }; }
   const matches = hash(slice) === binding.digest && hash(passage.heading) === binding.heading_digest && hash(passage.body) === binding.body_digest;
   return { status: matches ? 'matched' : 'mismatched', algorithm: 'sha256' };
+}
+
+// Page-scoped author assertions, not passage bindings or validity intervals.
+// Resolve relationships back to unique indexed pages; never echo dangling names.
+function authoredContexts(index) {
+  const pages = new Map();
+  for (const page of index) pages.set(page.url, pages.has(page.url) ? null : page);
+  const uniquePage = url => {
+    if (typeof url !== 'string' || !url.startsWith('/') || url.startsWith('//') || /[\\?#\u0000-\u0020]/.test(url)) return null;
+    const page = pages.get(url);
+    return page && page.kind !== 'collection_index' ? page : null;
+  };
+  const contexts = new Map(index.map(page => [page, {
+    scope: 'page', basis: 'author_asserted_index_metadata',
+    date: typeof page.date === 'string' && page.date ? page.date : null,
+    updated: typeof page.updated === 'string' && page.updated ? page.updated : null,
+    observed_at: page.observed_at ?? null, valid_from: page.valid_from ?? null,
+    valid_until: page.valid_until ?? null, supersedes: [], superseded_by: [],
+  }]));
+  for (const page of index) {
+    if (uniquePage(page.url) !== page || typeof page.title !== 'string') continue;
+    const seen = new Set();
+    for (const ref of page.supersedes ?? []) {
+      const target = uniquePage(ref.url);
+      if (!target || target === page || seen.has(target.url) || typeof target.title !== 'string') continue;
+      seen.add(target.url);
+      contexts.get(page).supersedes.push({ title: target.title, url: target.url });
+      contexts.get(target).superseded_by.push({ title: page.title, url: page.url });
+    }
+  }
+  return contexts;
+}
+
+function validAuthoredContext(index) {
+  // DateTime has the publisher's calendar shape, including optional timezone.
+  // Do not coerce dates or evaluate their relationship to the current clock.
+  const datetime = value => {
+    if (typeof value !== 'string') return false;
+    const match = /^(\d{4}-\d{2}-\d{2})[T ](\d{2}):(\d{2}):(\d{2})(?:Z|([+-])(\d{2}):(\d{2}))?$/.exec(value);
+    if (!match || !date(match[1])) return false;
+    return Number(match[2]) < 24 && Number(match[3]) < 60 && Number(match[4]) < 60 && (!match[5] || (Number(match[6]) < 24 && Number(match[7]) < 60));
+  };
+  const date = value => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+    const [y, m, d] = value.split('-').map(Number);
+    const leap = y % 4 === 0 && (y % 100 !== 0 || y % 400 === 0);
+    return m >= 1 && m <= 12 && d >= 1 && d <= [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][m - 1];
+  };
+  return index.every(page => {
+    for (const field of ['date', 'updated']) {
+      if (page[field] !== undefined && typeof page[field] !== 'string') return false;
+    }
+    for (const field of ['observed_at', 'valid_from', 'valid_until']) {
+      if (page[field] !== undefined && !datetime(page[field])) return false;
+    }
+    return page.supersedes === undefined || (Array.isArray(page.supersedes) && page.supersedes.every(ref => ref && typeof ref === 'object' && !Array.isArray(ref) && Object.keys(ref).sort().join(',') === 'title,url' && typeof ref.title === 'string' && typeof ref.url === 'string'));
+  });
 }
