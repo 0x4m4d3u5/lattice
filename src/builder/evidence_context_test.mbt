@@ -130,9 +130,20 @@ test "author supersession excludes targets replaced by final output" {
   )
   @fs.write_string_to_file(
     config.content_dir + "/posts/beta.md",
-    evidence_context_note("supersedes: alpha\nredirect_from: [/posts/alpha/]"),
+    evidence_context_note("supersedes: alpha"),
+  )
+  // Standalone output is a later phase than every collection source; directory
+  // enumeration order within the collection cannot change this final owner.
+  @fs.write_string_to_file(
+    config.content_dir + "/standalone/about.md",
+    "---\ntitle: Replacement\nredirect_from: [/posts/alpha/]\n---\nReplacement.",
   )
   assert_eq(@builder.build(config, @cache.empty(config.output_dir)).errors, 0)
+  let html = @fs.read_file_to_string(
+    config.output_dir + "/posts/alpha/index.html",
+  )
+  assert_true(html.contains("http-equiv=\"refresh\""))
+  assert_true(html.contains("url=https://example.test/about/"))
   assert_false(
     @fs.read_file_to_string(config.output_dir + "/content-index.json").contains(
       "\"supersedes\":",
@@ -188,10 +199,15 @@ test "replaced sources cannot export times or outgoing correction claims" {
     ),
   )
   @fs.write_string_to_file(
-    config.content_dir + "/posts/gamma.md",
-    "---\ntitle: Gamma\ndate: 2026-04-05\nredirect_from: [/posts/beta/]\n---\nReplacement.",
+    config.content_dir + "/standalone/about.md",
+    "---\ntitle: Replacement\nredirect_from: [/posts/beta/]\n---\nReplacement.",
   )
   assert_eq(@builder.build(config, @cache.empty(config.output_dir)).errors, 0)
+  let html = @fs.read_file_to_string(
+    config.output_dir + "/posts/beta/index.html",
+  )
+  assert_true(html.contains("http-equiv=\"refresh\""))
+  assert_true(html.contains("url=https://example.test/about/"))
   let index = @fs.read_file_to_string(config.output_dir + "/content-index.json")
   assert_false(index.contains("\"supersedes\":"))
   assert_false(index.contains("\"observed_at\":"))
