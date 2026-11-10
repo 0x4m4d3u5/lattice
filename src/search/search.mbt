@@ -198,6 +198,8 @@ pub fn render_content_index_with_sections(
   updated_dates? : Map[String, String] = Map([]),
   publication_digests? : Map[String, String] = Map([]),
   retentions? : Map[String, Map[Int, PassageRetention]] = Map([]),
+  supersedes? : Map[String, Array[(String, String)]] = Map([]),
+  evidence_times? : Map[String, Map[String, String]] = Map([]),
 ) -> String {
   render_content_entries(
     entries,
@@ -209,6 +211,8 @@ pub fn render_content_index_with_sections(
     updated_dates~,
     publication_digests~,
     retentions~,
+    supersedes~,
+    evidence_times~,
   )
 }
 
@@ -223,6 +227,8 @@ fn render_content_entries(
   updated_dates? : Map[String, String] = Map([]),
   publication_digests? : Map[String, String] = Map([]),
   retentions? : Map[String, Map[Int, PassageRetention]] = Map([]),
+  supersedes? : Map[String, Array[(String, String)]] = Map([]),
+  evidence_times? : Map[String, Map[String, String]] = Map([]),
 ) -> String {
   // Generated indexes overwrite authored pages at shared URLs. Do not advertise
   // authored navigation for any entry whose URL is occupied by such an index.
@@ -255,6 +261,30 @@ fn render_content_entries(
       buf.write_string("    \"updated\": ")
       @strutil.write_json_string(buf, value)
       buf.write_string(",\n")
+    }
+    if !generated_urls.contains(entry.url) && evidence_times.get(entry.url) is Some(times) {
+      for field in ["observed_at", "valid_from", "valid_until"] {
+        if times.get(field) is Some(value) {
+          buf.write_string("    ")
+          @strutil.write_json_string(buf, field)
+          buf.write_string(": ")
+          @strutil.write_json_string(buf, value)
+          buf.write_string(",\n")
+        }
+      }
+    }
+    if !generated_urls.contains(entry.url) && supersedes.get(entry.url) is Some(targets) && !targets.is_empty() {
+      buf.write_string("    \"supersedes\": [")
+      for i = 0; i < targets.length(); i = i + 1 {
+        if i > 0 { buf.write_string(", ") }
+        let (url, title) = targets[i]
+        buf.write_string("{\"url\": ")
+        @strutil.write_json_string(buf, url)
+        buf.write_string(", \"title\": ")
+        @strutil.write_json_string(buf, title)
+        buf.write_char('}')
+      }
+      buf.write_string("],\n")
     }
     buf.write_string("    \"date\": ")
     @strutil.write_json_string(buf, entry.date)

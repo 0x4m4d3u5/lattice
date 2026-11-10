@@ -168,3 +168,77 @@ bytes. A matching artifact is not proof that the indexed passage appears in it;
 a template may omit that passage. Missing legacy metadata remains unknown.
 The executable refuses mismatched/invalid pairs, while preserving address-only
 legacy operation. Host/CDN HTML transformations may cause mismatches.
+
+## Authored dates and correction context
+
+Each candidate now includes `context`, even when retrieval is ambiguous. It is
+page-scoped (`scope: "page"`), with `basis: "author_asserted_index_metadata"`.
+`date` and `updated` carry the existing authored page fields, or `null` when
+absent/empty. They do not imply observation, recording, event or validity time.
+No date is inferred from body prose, source headings, filesystem timestamps or
+the current clock. Every section of a page receives the same page context.
+
+Collections can explicitly opt into these additional fields:
+
+```ini
+[notes]
+dir = content/notes
+schema = title:String,observed_at:Optional[DateTime],valid_from:Optional[DateTime],valid_until:Optional[DateTime],supersedes:Optional[Array[Ref[notes]]]
+```
+
+```yaml
+---
+title: Corrected procedure
+observed_at: '2026-03-05T12:00:00Z'
+valid_from: '2026-02-01T00:00:00Z'
+valid_until: '2027-01-01T00:00:00Z'
+supersedes: [earlier-procedure]
+---
+The revised procedure and the reason for the correction belong in the body.
+```
+
+`observed_at` is the author's declared observation/recording time. `valid_from`
+and `valid_until` are the author's claimed applicability bounds, not observation
+times. Lattice validates each with the existing DateTime schema but neither
+compares the bounds nor selects current facts: future dates, reversed bounds,
+conflicting declarations and cycles remain claims to inspect. Use explicit time
+zones when comparing instants. DateTime also accepts a space separator and local
+times without a timezone; values are preserved, never normalized to UTC. Missing
+fields become `null` in host context. Per-passage times, inferred event times,
+interval logic and lifecycle enforcement are not implemented.
+
+`supersedes` declares that this page corrects or replaces another page's claims;
+it does not remove the earlier page or prove the correction. The schema must use
+`Ref`, `Ref[collection]`, a flat array of either, or an Optional wrapper, exactly
+as for author-selected related notes. Canonical slugs are required, not URLs or
+aliases. A field merely named `supersedes` with a String type is not this contract;
+similarly, temporal fields require DateTime, not String or Date. Standalone/root
+pages do not currently have this collection-schema opt-in.
+
+The publisher exports `supersedes: [{ title, url }]` only for surviving authored
+source and destination pages. Self-links and repeated destinations are omitted;
+hidden drafts and destinations replaced by generated/static/redirect output
+are omitted. Cached rebuilds recompute this projection. Public-audience typed
+references crossing into excluded identities fail publication under the existing
+boundary audit, rather than publishing private names. This is not a claim that
+arbitrary prose, custom templates or all mixed-vault metadata are safe.
+
+The host resolves each relation against a unique indexed page, taking titles from
+that page rather than trusting duplicate relation labels. Missing, ambiguous,
+generated, self or noncanonical targets are not exposed. `superseded_by` is derived
+only from those emitted relationships; it does not scan private sources or invent
+inverse claims. An empty array means no usable relationship in this index, not
+proof that no correction exists. Relationship destinations are context links,
+not issued or independently address-validated citations.
+
+Malformed new date-time fields or relationship shapes return `invalid_context`
+with no candidates/citation. Existing date/updated strings retain their original
+format; non-string values are rejected. Legacy indexes without context remain
+usable. Scores, ordering, passage text, candidate counts, ambiguity and strict
+citation policy are unchanged.
+
+**Neither publication pairing nor passage retention binds this metadata.** Even
+strict mode may return `ready` after someone changes a well-formed context field
+in the index without changing HTML. These are author assertions from a trusted
+index, not authenticated timestamps, proof of truth, or a freshness guarantee.
+Hosts must evaluate them separately and treat all content as data, not commands.

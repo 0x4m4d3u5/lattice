@@ -14,9 +14,9 @@ const root = mkdtempSync(join(tmpdir(), 'lattice-evidence-'));
 for (const dir of ['content/notes', 'templates', 'data']) mkdirSync(join(root, dir), { recursive: true });
 writeFileSync(join(root, 'templates/page.html'), '<!doctype html><article>{{body_no_h1}}</article>');
 writeFileSync(join(root, 'content/lattice.conf'), 'title = Evidence fixture\nbase_url = https://example.test\ntemplates_dir = templates\ndata_dir = data\ncollections_file = collections.cfg\ncontent_index_file = content-index.json\n');
-writeFileSync(join(root, 'collections.cfg'), '[notes]\ndir = content/notes\nschema = title:String\n');
+writeFileSync(join(root, 'collections.cfg'), '[notes]\ndir = content/notes\nschema = title:String,supersedes:Optional[Ref[notes]],observed_at:Optional[DateTime],valid_from:Optional[DateTime],valid_until:Optional[DateTime]\n');
 const passage = 'Restore a backup into an isolated environment and compare its checksum. ' + 'Keep the test separate from production and record each observation before proceeding. '.repeat(5);
-writeFileSync(join(root, 'content/notes/drill.md'), '---\ntitle: Recovery drill\n---\n## Verification\n\n' + passage);
+writeFileSync(join(root, 'content/notes/drill.md'), '---\ntitle: Recovery drill\ndate: 2026-03-04\nupdated: 2026-03-05\nobserved_at: \'2026-03-05T12:00:00Z\'\nvalid_from: \'2026-02-01T00:00:00Z\'\nvalid_until: \'2027-01-01T00:00:00Z\'\nsupersedes: alternative\n---\n## Verification\n\n' + passage);
 writeFileSync(join(root, 'content/notes/alternative.md'), '---\ntitle: Alternative drill\n---\n## Restore\n\nRestore from a different replica after reviewing its age.');
 writeFileSync(join(root, 'content/notes/draft.md'), '---\ntitle: Hidden\ndraft: true\n---\n## Secret\nplatinum draftmarker');
 const cli = process.env.LATTICE_NATIVE_CLI ?? join(repository, '_build/js/debug/build/kurisu/lattice/cmd/main/main.js');
@@ -46,6 +46,13 @@ try {
   const ready = await collect('isolated checksum');
   assert.equal(ready.status, 'ready');
   assert.equal(ready.pairing.status, 'matched');
+  assert.equal(ready.candidates[0].context.date, '2026-03-04');
+  assert.equal(ready.candidates[0].context.updated, '2026-03-05');
+  assert.equal(ready.candidates[0].context.observed_at, '2026-03-05T12:00:00Z');
+  assert.equal(ready.candidates[0].context.valid_from, '2026-02-01T00:00:00Z');
+  assert.equal(ready.candidates[0].context.valid_until, '2027-01-01T00:00:00Z');
+  assert.deepEqual(ready.candidates[0].context.supersedes, [{ title: 'Alternative drill', url: '/notes/alternative/' }]);
+
   assert.equal(ready.retention.status, 'matched');
   assert.equal(ready.candidates[0].passage, entry.sections[0].body);
   assert.ok(ready.candidates[0].passage.length > ready.candidates[0].snippet.length);
@@ -53,7 +60,13 @@ try {
   assert.equal((await collect('platinum')).status, 'no_results');
   const ambiguous = await collect('restore');
   assert.equal(ambiguous.status, 'ambiguous'); assert.equal(ambiguous.citation, null);
-  assert.equal(ambiguous.candidates.length, 2); assert.equal(validations, 1, 'no-result/ambiguous evidence must not emit or validate a chosen citation');
+  assert.deepEqual(ambiguous.candidates.find(candidate => candidate.page === '/notes/alternative/').context.superseded_by, [{ title: 'Recovery drill', url: '/notes/drill/' }]);
+  const changedContext = JSON.stringify(index.map(e => e.url === entry.url ? { ...e, observed_at: '2099-01-01T00:00:00Z' } : e));
+  const unbound = await collect('isolated checksum', changedContext, true);
+  assert.equal(unbound.status, 'ready', 'strict byte bindings do not authenticate authored context');
+  assert.equal(unbound.candidates[0].context.observed_at, '2099-01-01T00:00:00Z');
+
+  assert.equal(ambiguous.candidates.length, 2); assert.equal(validations, 2, 'no-result/ambiguous evidence must not emit or validate a chosen citation');
   assert.equal((await collect('x', '{bad')).status, 'invalid_index');
   const duplicate = JSON.stringify([...index, entry]);
   assert.equal((await collect('isolated checksum', duplicate)).status, 'ambiguous_index');

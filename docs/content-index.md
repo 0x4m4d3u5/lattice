@@ -103,3 +103,15 @@ draft filtering and vault metadata are not access controls or a privacy boundary
 
 Run `bash scripts/check-baseline.sh` with the repository-pinned toolchain to
 check the CLI's content index alongside rendered pages and link metadata.
+
+
+## Authored evidence context
+
+Collection-schema DateTime fields `observed_at`, `valid_from` and `valid_until`
+are optionally exported unchanged on surviving authored pages. Typed `supersedes`
+references optionally export canonical `{title, url}` destinations after final
+publication projection. These are page-scoped author claims, not ranking signals,
+truth selections or metadata authenticated by publication/passage byte bindings.
+Existing `date` and `updated` retain their distinct page-date meanings. See
+[the evidence-context contract](agent-evidence.md#authored-dates-and-correction-context)
+for supported types, privacy limits, absent values and host behavior.
