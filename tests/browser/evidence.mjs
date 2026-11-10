@@ -14,7 +14,7 @@ const root = mkdtempSync(join(tmpdir(), 'lattice-evidence-'));
 for (const dir of ['content/notes', 'templates', 'data']) mkdirSync(join(root, dir), { recursive: true });
 writeFileSync(join(root, 'templates/page.html'), '<!doctype html><article>{{body_no_h1}}</article>');
 writeFileSync(join(root, 'content/lattice.conf'), 'title = Evidence fixture\nbase_url = https://example.test\ntemplates_dir = templates\ndata_dir = data\ncollections_file = collections.cfg\ncontent_index_file = content-index.json\n');
-writeFileSync(join(root, 'collections.cfg'), '[notes]\ndir = content/notes\nschema = title:String,supersedes:Optional[Ref[notes]],observed_at:Optional[DateTime],valid_from:Optional[DateTime],valid_until:Optional[DateTime]\n');
+writeFileSync(join(root, 'collections.cfg'), '[notes]\ndir = content/notes\nschema = title:String,date:Optional[Date],updated:Optional[Date],supersedes:Optional[Ref[notes]],observed_at:Optional[DateTime],valid_from:Optional[DateTime],valid_until:Optional[DateTime]\n');
 const passage = 'Restore a backup into an isolated environment and compare its checksum. ' + 'Keep the test separate from production and record each observation before proceeding. '.repeat(5);
 writeFileSync(join(root, 'content/notes/drill.md'), '---\ntitle: Recovery drill\ndate: 2026-03-04\nupdated: 2026-03-05\nobserved_at: \'2026-03-05T12:00:00Z\'\nvalid_from: \'2026-02-01T00:00:00Z\'\nvalid_until: \'2027-01-01T00:00:00Z\'\nsupersedes: alternative\n---\n## Verification\n\n' + passage);
 writeFileSync(join(root, 'content/notes/alternative.md'), '---\ntitle: Alternative drill\n---\n## Restore\n\nRestore from a different replica after reviewing its age.');
