@@ -195,7 +195,9 @@ pub fn summarize(result : LintResult) -> ViolationSummary {
 ///
 /// The `kind` field uses the same stable string names as `violation_type_name`.
 /// `line` and `column` are integers when present, `null` when absent.
-pub fn format_violations_json(result : LintResult) -> String {
+/// `include_messages=true` adds advisory/progress messages without changing
+/// violation counts. The default wire shape remains unchanged.
+pub fn format_violations_json(result : LintResult, include_messages? : Bool = false) -> String {
   let buf = StringBuilder()
   buf.write_string("{\n  \"violations\": [")
   let vs = result.violations
@@ -263,6 +265,14 @@ pub fn format_violations_json(result : LintResult) -> String {
     k = k + 1
   }
   buf.write_string("]}")
+  if include_messages {
+    buf.write_string(",\n  \"messages\": [")
+    for index, message in result.messages {
+      if index > 0 { buf.write_string(", ") }
+      @strutil.write_json_string(buf, message)
+    }
+    buf.write_string("]")
+  }
   buf.write_string("\n}")
   buf.to_string()
 }

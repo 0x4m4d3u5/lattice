@@ -3956,3 +3956,23 @@ general URL parser. Synthetic API and JS/native fixtures cover authority tricks,
 ports, origin-free output, equal/nested/normalized roots, prefix siblings, source
 preservation and private/public artifact differences. AI-assisted implementation
 followed human-authorized review findings; no private corpus or deployment was used.
+
+
+### Report private discovery boundaries without silently expanding ingestion
+
+Review of private-memory UX found that users could mistake an index built from
+one-level source discovery for a recursively ingested vault. The correction is
+advisory coverage reporting, not silent recursive imports or new visibility rules.
+Private preparation inspects only the entries of already configured roots and
+warns at uninspected child boundaries. Overlapping normalized roots are deduplicated;
+explicit source roots take precedence over non-source directory exemptions.
+
+Pinned portable x/fs exposes directory classification but no lstat, realpath or
+mount identity. A recursive omitted-file list would overpromise safe traversal,
+so the warning explicitly says nested Markdown **may** be omitted. Child contents
+are never read by this scan; symlink/cycle fixtures exercise that bounded behavior.
+Warnings survive build/inventory and private check (including opt-in JSON messages)
+without becoming errors or leaking names into public/default artifacts/reports.
+The evidence guide now distinguishes no matching indexed passage from no vault
+fact. AI-assisted implementation and synthetic tests follow the user's review-fix
+request; no real private corpus or deployed service was used.

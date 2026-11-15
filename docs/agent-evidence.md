@@ -24,8 +24,12 @@ The synthetic acceptance scenario also asks for `restore`, which matches two
 procedures. The host returns `ambiguous` with both passages and no chosen citation.
 Refine the query or inspect the candidates; do not silently pick the highest score.
 A query for `platinum` returns `no_results`, including when that word exists only
-in an excluded draft. No result is a reason to abstain or seek another source, not
-a reason to invent evidence.
+in an excluded draft. `no_results` means **no matching indexed passage**, not that
+the vault contains no answer or the fact is false. Configured source coverage is
+nonrecursive, sources may be outside the index, drafts may be excluded, and every
+query term must satisfy lexical matching. Check the private export's coverage
+warnings and configuration before drawing conclusions. No result is a reason to
+abstain or seek another source, not a reason to invent evidence.
 
 ## Run it against a publication
 

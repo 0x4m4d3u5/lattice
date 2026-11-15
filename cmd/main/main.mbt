@@ -925,7 +925,7 @@ fn run_once(
   if check_mode {
     let lint_result = @builder.check(build_config, local_links~, audience~)
     if check_json {
-      println(@lint.format_violations_json(lint_result))
+      println(@lint.format_violations_json(lint_result, include_messages=audience == Some(@builder.Private)))
       return if @lint.has_violations(lint_result) { 1 } else { 0 }
     }
     // Print accumulated progress messages

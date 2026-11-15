@@ -86,6 +86,35 @@ sources and rejects supported cross-boundary references. Building a private expo
 does not change either policy or make later default/public exports include private
 notes. Do not relabel private information to satisfy a public build.
 
+## Coverage is not recursive vault ingestion
+
+Source discovery reads one directory level per configured collection, standalone
+root and content root. Private mode reports `private_source_coverage` warnings for
+uninspected child directories; it does not recursively read or import them. An
+explicitly configured child root is checked separately, including its own children.
+Normalized duplicate roots/boundaries are reported once. Known static, data and
+template roots are excluded as non-source boundaries, unless explicitly configured
+as a source root themselves.
+
+These are **uncertainty warnings**, not a count or list of omitted Markdown files:
+even an empty child may warn. The portable filesystem interface cannot safely
+resolve symlinks, cycles, aliases or mount identities, so the coverage check never
+reads child directory entries or their bodies. Child classification may inspect
+filesystem metadata. A classification/read failure also warns; it does not certify
+coverage. Existing explicitly configured source reading remains unchanged.
+
+Build and inventory expose advisory diagnostics (`severity: warning`,
+`code: private_source_coverage`). Private `check` exposes the same coverage wording
+in `messages`; its JSON adds a `messages` array, while ordinary/public check JSON
+retains its existing shape. Warnings alone do not make `ready` false or produce a
+validation failure. No warning names enter generated artifacts or public/default
+reports. Diagnostics can still contain private paths and should stay private.
+
+Configure intended source directories explicitly after reviewing these warnings.
+No warnings is not proof of complete vault coverage: roots outside configuration,
+root-level non-content exclusions, hidden drafts and retrieval matching still
+limit what the index contains. See the meaning of [`no_results`](agent-evidence.md).
+
 ## Using the index and citations
 
 The export reuses the [content-index](content-index.md), passage pairing/retention
