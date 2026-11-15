@@ -50,9 +50,10 @@ expands it. Allowlisting a file means publishing its entire contents; it is not
 content sanitization or automatic attachment classification.
 
 Use `--audience public` once, with the option and value as separate arguments.
-Other audience values, repeated options and `--audience=...` are rejected. This
-mode is not supported by watch, serve, dev, stats or scaffold commands. A private
-memory-view audience is not implemented.
+Repeated options, invalid values and `--audience=...` are rejected. This
+mode is not supported by watch, serve, dev, stats or scaffold commands. The separate
+[`--audience private`](private-audience.md) mode explicitly exports plaintext
+private memory and does not change public selection.
 
 ## Selection and validation
 

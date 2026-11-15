@@ -3911,3 +3911,27 @@ still match. That negative control prevents documentation from confusing a valid
 citation with authenticated temporal facts. Synthetic tests cover schema opt-in,
 malformed values, draft projection, cached changes and excluded references; this
 does not claim comprehensive safety for all mixed-vault publication surfaces.
+
+
+## 2026-11-15: Explicit private export is not access control
+
+AI implemented a narrow filesystem-only private audience rather than teaching the
+public projection to bypass exclusions. The output plan retains the explicit
+audience, public denial maps remain Public-only, and private 404 content uses one
+validated snapshot throughout rendering and supported link/image audits. The
+compatibility guard still rejects private declarations without an audience.
+
+Private selects configured public/private/unlabelled sources, while draft readiness
+and optional-frontmatter policy stay independent. Fresh output, an explicit asset
+allowlist and a content index are required. The CLI also requires an explicit
+output path to avoid falling back to ordinary dist. Index writer collisions fail
+rather than producing a supposedly usable memory index overwritten by graph,
+static or 404 output. Existing path normalization and output planning are reused;
+no new filesystem sandbox, URL parser, server or network policy was invented.
+
+Independent design review highlighted that a loopback base_url is only labeling:
+the evidence host accepts another origin and browser subresources can load. The
+documentation therefore calls this plaintext export, not private serving or local-
+only retrieval. Destination ownership and trusted inputs remain the caller's job.
+Synthetic API/CLI tests protect public/default boundaries, source preservation,
+404 handling, index ownership and independent draft/visibility contracts.

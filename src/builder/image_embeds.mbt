@@ -133,7 +133,7 @@ fn check_image_embeds(
     }
     final_assets.set(image_asset_url(relative), is_asset)
   }
-  for source in image_embed_sources(collections, config, selected_404=output.public_projection.map(p => p.selected_404)) {
+  for source in image_embed_sources(collections, config, selected_404=output.selected_404()) {
     if !source_is_visible(source, config.include_drafts, allow_missing_frontmatter=config.site.allow_missing_frontmatter == Some(true)) {
       continue
     }

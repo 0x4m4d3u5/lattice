@@ -229,7 +229,7 @@ fn build_parser() -> @clap.Parser {
           "audience": @clap.Arg::named(
             nargs=One,
             defaults=[""],
-            help="Opt in to explicit public source selection (public only)",
+            help="Explicit export audience: public selection or private local memory",
           ),
           "drafts": @clap.Arg::flag(help="Include draft posts in the build"),
           "strict-local-links": @clap.Arg::flag(help="Validate ordinary local Markdown URLs before publishing"),
@@ -278,7 +278,7 @@ fn build_parser() -> @clap.Parser {
           "audience": @clap.Arg::named(
             nargs=One,
             defaults=[""],
-            help="Opt in to explicit public source selection (public only)",
+            help="Explicit export audience: public selection or private local memory",
           ),
           "drafts": @clap.Arg::flag(help="Include draft posts in the check"),
           "local-links": @clap.Arg::flag(help="Audit ordinary local Markdown URLs against the publication plan"),
@@ -345,7 +345,7 @@ fn build_parser() -> @clap.Parser {
           "audience": @clap.Arg::named(
             nargs=One,
             defaults=[""],
-            help="Opt in to explicit public source selection (public only)",
+            help="Explicit export audience: public selection or private local memory",
           ),
           "drafts": @clap.Arg::flag(help="Include draft sources in the preview"),
           "fresh-output": @clap.Arg::flag(
@@ -1406,12 +1406,14 @@ pub fn explain_error_code(code : String) -> String? {
     "e015" | "publicationvisibilityerror" | "publicationvisibility" => Some(
       "E015  PublicationVisibilityError  [error]\n\n" +
       "  The reserved visibility field accepts exactly public or private strings.\n" +
-      "  Private-audience publication is not implemented. Without --audience public, a private declaration\n" +
+      "  Without an explicit audience, a private declaration\n" +
       "  blocks ordinary build, check and inventory, including drafts and cache hits.\n" +
       "  Keep private notes and attachments outside a curated public source tree.\n" +
       "  Do not relabel private material as public merely to pass this check.\n" +
       "  With --audience public, only explicit visibility: public sources are selected.\n" +
       "  Fresh output and an explicit static_allowlist are required for that projection.\n" +
+      "  --audience private is an explicit plaintext export, not access control.\n" +
+      "  It requires fresh output, an explicit output path, static allowlist and content index.\n" +
       "  Missing visibility preserves default behavior; type: private is organizational.\n" +
       "  A failed build does not remove previously published or stale files.\n",
     )
@@ -1486,7 +1488,7 @@ fn run_main() -> Unit {
   }
   if audience_arguments.length() > 1 ||
     audience_arguments.any(arg => arg.has_prefix("--audience=")) {
-    print_diagnostic_main(cli_error("specify --audience public once, as a separate option and value"))
+    print_diagnostic_main(cli_error("specify --audience public or private once, as a separate option and value"))
     finish_once(1)
     return
   }
@@ -1496,12 +1498,20 @@ fn run_main() -> Unit {
   } else {
     match safe_get_one(subcmd_sv, "audience") {
       Some("public") => Some(@builder.Audience::Public)
+      Some("private") => Some(@builder.Audience::Private)
       _ => {
-        print_diagnostic_main(cli_error("--audience must be public; private audience builds are not implemented"))
+        print_diagnostic_main(cli_error("--audience must be exactly public or private"))
         finish_once(1)
         return
       }
     }
+  }
+
+  if audience == Some(@builder.Audience::Private) &&
+    safe_get_one(subcmd_sv, "output-dir").unwrap_or("").is_empty() {
+    print_diagnostic_main(cli_error("--audience private requires an explicit --output-dir (-o) outside any served or synchronized public directory"))
+    finish_once(1)
+    return
   }
 
   if audience != None &&

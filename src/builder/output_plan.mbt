@@ -11,7 +11,9 @@ priv enum OutputContents {
 priv struct OutputPlan {
   root : String
   fresh_output : Bool
+  audience : Audience?
   public_projection : PublicProjection?
+  private_404 : Array[SourceFile]
   directories : Array[String]
   requested_directories : Array[String]
   directory_index : Map[String, Bool]
@@ -31,7 +33,9 @@ fn OutputPlan::new(root : String, fresh_output? : Bool = false, audience? : Audi
   {
     root: output_path_key(root),
     fresh_output,
-    public_projection: audience.map(_ => PublicProjection::new()),
+    audience,
+    public_projection: if audience == Some(Public) { Some(PublicProjection::new()) } else { None },
+    private_404: [],
     directories: [],
     requested_directories: [],
     directory_index: Map([]),
@@ -329,4 +333,11 @@ fn plan_static_assets(
     }
   }
   Ok(assets.length())
+}
+
+///|
+/// Explicit audiences use one validated 404 snapshot, including absence.
+fn OutputPlan::selected_404(self : OutputPlan) -> Array[SourceFile]? {
+  if self.audience == Some(Private) { Some(self.private_404) }
+  else { self.public_projection.map(p => p.selected_404) }
 }

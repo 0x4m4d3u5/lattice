@@ -1,5 +1,5 @@
 ///|
-/// Publication is public-only today. Keep this typed declaration separate from
+/// Keep the compatibility publication guard separate from
 /// draft readiness and vault organization; neither grants publication consent.
 priv enum PublicationVisibility {
   Public
@@ -22,19 +22,22 @@ fn publication_visibility_violation(
   path : String,
   source : String,
   allow_missing_frontmatter? : Bool = false,
+  private_export? : Bool = false,
 ) -> @lint.LintViolation? {
   let (line, message) = match @frontmatter.parse_with_policy(source, allow_missing_frontmatter~) {
     Err(msg) => {
       // Preserve the existing diagnostics for unrelated parse failures. They
       // still block publication in the ordinary document validation pipeline.
-      if !msg.has_suffix(": duplicate visibility field") { return None }
+      if !private_export && !msg.has_suffix(": duplicate visibility field") { return None }
       frontmatter_document_error(msg)
     }
     Ok(fm) => {
       let message = match publication_visibility(fm) {
         Ok(Public) => return None
-        Ok(Private) =>
-          "visibility: private cannot be published: private-audience builds are not supported; use a curated public source tree and attachments (drafts are not a privacy boundary)"
+        Ok(Private) => {
+          if private_export { return None }
+          "visibility: private cannot be published without an explicit audience; use a curated public source tree or an explicit export (drafts are not a privacy boundary)"
+        }
         Err(message) => message
       }
       (frontmatter_field_line(source, "visibility"), message)
@@ -51,7 +54,7 @@ fn publication_visibility_violation(
 
 ///|
 /// Guard every collected Markdown source before deriving indexes or considering
-/// cache hits. Private output is not implemented: reject the whole preparation,
+/// cache hits. Without an explicit audience, reject the whole preparation,
 /// including hidden drafts, rather than filtering pages while copying assets.
 fn publication_visibility_violations(
   config : BuildConfig,

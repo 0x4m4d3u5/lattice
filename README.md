@@ -188,9 +188,14 @@ and reference-audit limits before using it with a mixed source tree.
 
 By default, the reserved [`visibility` field](docs/publication-visibility.md) is a public-only
 safety guard: absent/public keeps existing behavior, while private, invalid or
-duplicate declarations block ordinary build, check and inventory. Private-audience
-builds are not implemented. Draft flags do not override this guard, and rejection
+duplicate declarations block ordinary build, check and inventory. Draft flags
+do not override this guard, and rejection
 does not remove old published files or classify static attachments.
+
+For a local plaintext memory export, [`--audience private`](docs/private-audience.md)
+includes public/private/unlabelled sources, with drafts still separate. It requires
+a fresh explicitly chosen destination, static allowlist and content index. It does
+not provide access control, start a server or authorize deployment.
 
 The bundled reader includes a [bounded local authored-link graph](docs/local-graph.md), with a static linked-list fallback.
 

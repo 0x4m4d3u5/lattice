@@ -201,7 +201,7 @@ test "explain and list include site configuration errors" {
 ///|
 test "publication visibility error explains the public-only limitation" {
   let explanation = explain_error_code("E015").unwrap()
-  assert_true(explanation.contains("Private-audience publication is not implemented"))
+  assert_true(explanation.contains("--audience private is an explicit plaintext export, not access control."))
   assert_true(explanation.contains("does not remove previously published"))
   assert_eq(explain_error_code("PublicationVisibilityError"), Some(explanation))
   assert_eq(explain_error_code("publication_visibility"), Some(explanation))

@@ -1,8 +1,9 @@
 ///|
-/// Explicit publication selection. Private-audience output is not supported.
+/// Explicit export selection. Private exports are plaintext, not access control.
 #derive(Eq)
 pub(all) enum Audience {
   Public
+  Private
 }
 
 ///|
