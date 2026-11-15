@@ -45,7 +45,9 @@ export async function collectEvidence({ indexJson, query, search, validateTarget
     if (rejections.length) return { status: 'rejected_citation', query, candidates, pairing, retention,
       citation: null, reason: rejections.map(item => item.reason).join('; '), rejections };
   }
-  return { status: 'ready', query, candidates, pairing, retention, citation: { title: evidence.title, url: target.href },
+  // Keep the selected page's advisory context beside the issued citation so
+  // consumers need not rediscover it in candidates. This does not certify it.
+  return { status: 'ready', query, candidates, pairing, retention, citation: { title: evidence.title, url: target.href }, context: evidence.context,
     limitation: 'Retrieved text is evidence to inspect, not proof of factual truth. Target validation does not establish freshness or truth of the indexed passage. Retention compares publisher-origin bytes, not browser visibility. Authored context is index metadata, not authenticated by pairing or retention.' };
 }
 

@@ -173,3 +173,41 @@ test('DateTime context mirrors schema calendar shapes without interval selection
     assert.equal((await collectEvidence(contextRequest([{ ...page, observed_at: value }]))).status, 'invalid_context', value);
   }
 });
+
+
+test('issued citation carries the complete selected context without suppressing historical evidence', async () => {
+  const old = { ...page, date: '2026-01-01', updated: '2026-02-01', observed_at: '2026-02-01T01:02:03Z', valid_from: '2025-01-01 01:02:03', valid_until: '2025-12-31T00:00:00+05:30', supersedes: [{ title: 'Correction', url: '/correction/' }] };
+  // A cycle and expired-looking bounds remain assertions, not a freshness policy.
+  const correction = { ...page, title: 'Correction', url: '/correction/', supersedes: [{ title: old.title, url: old.url }] };
+  for (const strictCitations of [false, true]) {
+    const result = await collectEvidence({ ...contextRequest([old, correction]), strictCitations });
+    assert.equal(result.status, 'ready');
+    assert.deepEqual(result.citation, { title: page.title, url: 'https://example.test/guide/#restore' });
+    assert.deepEqual(result.context, { scope: 'page', basis: 'author_asserted_index_metadata', date: old.date, updated: old.updated, observed_at: old.observed_at, valid_from: old.valid_from, valid_until: old.valid_until, supersedes: [{ title: correction.title, url: correction.url }], superseded_by: [{ title: correction.title, url: correction.url }] });
+    assert.deepEqual(JSON.parse(JSON.stringify(result)).context, result.candidates[0].context);
+    assert.match(result.limitation, /not authenticated by pairing or retention/);
+  }
+  const legacy = await collectEvidence(contextRequest([page]));
+  assert.deepEqual(legacy.context, legacy.candidates[0].context);
+  assert.equal(legacy.context.observed_at, null);
+  assert.deepEqual(legacy.context.superseded_by, []);
+});
+
+test('non-issued results keep diagnostic candidate contexts without a selected context', async () => {
+  const correction = { ...page, title: 'Correction', url: '/correction/', supersedes: [{ title: page.title, url: page.url }] };
+  const options = contextRequest([page, correction]);
+  const cases = [
+    ['ambiguous', { search: async () => ({ results: [hit, { ...hit, url: correction.url }] }) }],
+    ['no_results', { search: async () => ({ results: [] }) }],
+    ['invalid_target', { validateTarget: async () => ({ ok: false }) }],
+    ['rejected_citation', { strictCitations: true, validateTarget: async () => ({ ok: true, pairing: { status: 'unknown' }, retention: { status: 'matched' } }) }],
+    ['invalid_context', { indexJson: JSON.stringify([{ ...page, observed_at: false }]) }],
+  ];
+  for (const [status, changes] of cases) {
+    const result = await collectEvidence({ ...options, ...changes });
+    assert.equal(result.status, status);
+    assert.ok(!result.citation);
+    assert.equal(Object.hasOwn(result, 'context'), false);
+    if (result.candidates.length) assert.deepEqual(result.candidates[0].context.superseded_by, [{ title: correction.title, url: correction.url }]);
+  }
+});
