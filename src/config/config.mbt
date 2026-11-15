@@ -650,3 +650,10 @@ pub fn validate_static_allowlist(paths : Array[String]) -> Result[Unit, ConfigEr
   }
   Ok(())
 }
+
+///|
+/// Derive a local-export rendering policy without mutating the authored config.
+/// Collection feed and sitemap generation are controlled by the output audience.
+pub fn SiteConfig::without_public_discovery(self : SiteConfig) -> SiteConfig {
+  { ..self, site_feed_enabled: Some(false), robots_txt: Some(false) }
+}

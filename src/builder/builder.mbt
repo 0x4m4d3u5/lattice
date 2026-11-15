@@ -3054,6 +3054,7 @@ fn render_collection_index(
   custom_css : String,
   data_store : @data.DataStore,
   collection_description : String?,
+  feed_enabled? : Bool = true,
 ) -> Result[String, String] {
   let pages = pagination.documents
   let title_by_slug : Map[String, String] = Map([])
@@ -3212,9 +3213,9 @@ fn render_collection_index(
             site.base_url,
             collection_index_url(collection_name) + "feed.xml",
           )
-          let feed_link_markup = @html.render_feed_link_tag(
-            full_title, feed_url,
-          )
+          let feed_link_markup = if feed_enabled {
+            @html.render_feed_link_tag(full_title, feed_url)
+          } else { "" }
           let combined_markup = structured_data_markup + feed_link_markup
           return Ok(@html.inject_head_markup(html, combined_markup))
         }
@@ -3241,7 +3242,7 @@ fn render_collection_index(
     canonical_url: Some(canonical),
     og_image: site.og_image,
     og_type: Some("website"), // collection index page
-    feed_url: Some(feed_url),
+    feed_url: if feed_enabled { Some(feed_url) } else { None },
     structured_data: collection_breadcrumb_structured_data_builder(
       site,
       collection_name,
@@ -5003,6 +5004,16 @@ fn prepare_output(
   if private_mode && (!output.fresh_output || config.site.static_allowlist is None || config.site.content_index_file is None) {
     return fresh_output_failure(config, "private audience requires fresh_output=true, an explicit site.static_allowlist (an empty list is allowed), and site.content_index_file")
   }
+  if private_mode {
+    validate_private_destination(config) catch {
+      @fs.IOError(msg) => return fresh_output_failure(config, msg)
+    }
+  }
+  // Private exports never generate public discovery artifacts. Derive policy
+  // locally so the caller's configuration and ordinary/public defaults survive.
+  let config = if private_mode {
+    { ..config, site: config.site.without_public_discovery() }
+  } else { config }
   let strict_wikilinks = strict_wikilinks || explicit_audience
   let strict_local_links = strict_local_links || explicit_audience
   // Strict validation needs every final HTML file in this exact preparation.
@@ -6161,71 +6172,72 @@ fn prepare_output(
       let coll = rendered_collections[i]
       let coll_dir = config.output_dir + "/" + coll.name
 
-      let feed_title = config.site.title + " (" + coll.name + ")"
+      if !private_mode {
+        let feed_title = config.site.title + " (" + coll.name + ")"
 
-      let feed_write_ok = try {
-        let feed_xml = @rss.render_feed(
-          feed_title,
-          config.site.base_url,
-          coll.pages,
-          config.site.feed_limit,
-          updated_dates~,
-        )
-        let out_path = coll_dir + "/feed.xml"
-        output.write_text(out_path, feed_xml)
-        messages.push("[lattice] wrote " + out_path)
-        true
-      } catch {
-        @fs.IOError(msg) => {
-          diagnostics.push(
-            build_error(
-              Some(coll_dir + "/feed.xml"),
-              None,
-              None,
-              coll.name + " feed: write failed: " + msg,
-            ),
+        let feed_write_ok = try {
+          let feed_xml = @rss.render_feed(
+            feed_title,
+            config.site.base_url,
+            coll.pages,
+            config.site.feed_limit,
+            updated_dates~,
           )
-          false
+          let out_path = coll_dir + "/feed.xml"
+          output.write_text(out_path, feed_xml)
+          messages.push("[lattice] wrote " + out_path)
+          true
+        } catch {
+          @fs.IOError(msg) => {
+            diagnostics.push(
+              build_error(
+                Some(coll_dir + "/feed.xml"),
+                None,
+                None,
+                coll.name + " feed: write failed: " + msg,
+              ),
+            )
+            false
+          }
+        }
+        if !feed_write_ok {
+          error_count = error_count + 1
+        }
+
+        let json_feed_write_ok = try {
+          let json_feed_url = @strutil.absolute_url(
+            config.site.base_url,
+            "/" + coll.name + "/feed.json",
+          )
+          let json_feed = @rss.render_json_feed_from_pages(
+            feed_title,
+            config.site.base_url,
+            coll.pages,
+            config.site.feed_limit,
+            json_feed_url,
+            updated_dates~,
+          )
+          let json_out_path = coll_dir + "/feed.json"
+          output.write_text(json_out_path, json_feed)
+          messages.push("[lattice] wrote " + json_out_path)
+          true
+        } catch {
+          @fs.IOError(msg) => {
+            diagnostics.push(
+              build_error(
+                Some(coll_dir + "/feed.json"),
+                None,
+                None,
+                coll.name + " JSON feed: write failed: " + msg,
+              ),
+            )
+            false
+          }
+        }
+        if !json_feed_write_ok {
+          error_count = error_count + 1
         }
       }
-      if !feed_write_ok {
-        error_count = error_count + 1
-      }
-
-      let json_feed_write_ok = try {
-        let json_feed_url = @strutil.absolute_url(
-          config.site.base_url,
-          "/" + coll.name + "/feed.json",
-        )
-        let json_feed = @rss.render_json_feed_from_pages(
-          feed_title,
-          config.site.base_url,
-          coll.pages,
-          config.site.feed_limit,
-          json_feed_url,
-          updated_dates~,
-        )
-        let json_out_path = coll_dir + "/feed.json"
-        output.write_text(json_out_path, json_feed)
-        messages.push("[lattice] wrote " + json_out_path)
-        true
-      } catch {
-        @fs.IOError(msg) => {
-          diagnostics.push(
-            build_error(
-              Some(coll_dir + "/feed.json"),
-              None,
-              None,
-              coll.name + " JSON feed: write failed: " + msg,
-            ),
-          )
-          false
-        }
-      }
-      if !json_feed_write_ok {
-        error_count = error_count + 1
-      }
-
       // Accumulate pages for site-wide feed
       let mut pi = 0
       while pi < coll.pages.length() {
@@ -6251,6 +6263,7 @@ fn prepare_output(
             custom_css,
             data_store,
             coll.description,
+            feed_enabled=!private_mode,
           ) {
           Ok(html) => Some(html)
           Err(msg) => {
@@ -6613,7 +6626,7 @@ fn prepare_output(
       }
     }
 
-    if error_count == 0 {
+    if error_count == 0 && !private_mode {
       let sitemap_write_ok = try {
         let sitemap_xml = @sitemap.render_sitemap(
           config.site.base_url,

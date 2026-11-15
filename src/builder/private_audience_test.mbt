@@ -1,7 +1,7 @@
 ///|
 fn private_audience_fixture(name : String) -> @builder.BuildConfig raise {
   let base = public_audience_fixture("private_" + name)
-  { ..base, site: @config.parse(@fs.read_file_to_string(base.config_path) + "static_allowlist = []\ncontent_index_file = content-index.json\n").unwrap() }
+  { ..base, output_dir: base.output_dir + "-private", site: @config.parse(@fs.read_file_to_string(base.config_path).replace(old="https://example.test", new="/") + "static_allowlist = []\ncontent_index_file = content-index.json\n").unwrap() }
 }
 
 ///|
@@ -106,10 +106,55 @@ test "private export audits wiki local links and 404 images before writes" {
 test "private export refuses overwritten content index" {
   for name in ["graph.json", "404.html", "search-index.json", "posts/alpha/index.html"] {
     let base = private_audience_fixture("index_ownership")
-    let config = { ..base, site: @config.parse(@fs.read_file_to_string(base.config_path) + "static_allowlist = []\ncontent_index_file = " + name + "\n").unwrap() }
+    let config = { ..base, site: @config.parse(@fs.read_file_to_string(base.config_path).replace(old="https://example.test", new="/") + "static_allowlist = []\ncontent_index_file = " + name + "\n").unwrap() }
     assert_false(@builder.inventory(config, fresh_output=true, audience=Some(@builder.Private)).ready)
     let result = @builder.build(config, @cache.empty(config.output_dir), fresh_output=true, audience=Some(@builder.Private))
     assert_true(result.diagnostics.any(d => d.message.contains("content index collides")))
     assert_false(@fs.path_exists(config.output_dir))
+  }
+}
+
+///|
+test "private destination and origin guard applies before every preparation" {
+  let base = private_audience_fixture("destination")
+  let public = base.site.output_dir.unwrap()
+  for destination in [public, public + "/memory", public + "/../dist/memory"] {
+    let config = { ..base, output_dir: destination }
+    let before = publication_snapshot(base.content_dir)
+    assert_true(@builder.check(config, audience=Some(@builder.Private)).violations.length() > 0)
+    assert_false(@builder.inventory(config, fresh_output=true, audience=Some(@builder.Private)).ready)
+    let result = @builder.build(config, @cache.empty(destination), fresh_output=true, audience=Some(@builder.Private))
+    assert_true(result.diagnostics.any(d => d.message.contains("configured publication output_dir")))
+    assert_false(@fs.path_exists(destination))
+    assert_eq(publication_snapshot(base.content_dir), before)
+  }
+  for origin in ["https://example.test", "//example.test", "http://127.0.0.1.evil", "http://127.0.0.1@evil", "http://[::1]:0", "http://localhost"] {
+    let config = { ..base, site: @config.parse(@fs.read_file_to_string(base.config_path).replace(old="https://example.test", new=origin) + "static_allowlist=[]\ncontent_index_file=content-index.json\n").unwrap() }
+    assert_false(@builder.inventory(config, fresh_output=true, audience=Some(@builder.Private)).ready)
+    assert_true(@builder.check(config, audience=Some(@builder.Private)).violations.length() > 0)
+    assert_true(@builder.build(config, @cache.empty(config.output_dir), fresh_output=true, audience=Some(@builder.Private)).errors > 0)
+    assert_false(@fs.path_exists(config.output_dir))
+  }
+}
+
+///|
+test "private discovery is omitted even when enabled and public defaults survive" {
+  let base = private_audience_fixture("discovery")
+  let config = { ..base, site: @config.parse(@fs.read_file_to_string(base.config_path).replace(old="https://example.test", new="/") + "static_allowlist=[]\ncontent_index_file=content-index.json\nsite_feed_enabled=true\nrobots_txt=true\n").unwrap() }
+  assert_eq(@builder.build(config, @cache.empty(config.output_dir), fresh_output=true, audience=Some(@builder.Private)).errors, 0)
+  for relative in ["feed.xml", "feed.json", "posts/feed.xml", "posts/feed.json", "sitemap.xml", "robots.txt"] {
+    assert_false(@fs.path_exists(config.output_dir + "/" + relative))
+  }
+  for relative in ["index.html", "posts/index.html"] {
+    let html = @fs.read_file_to_string(config.output_dir + "/" + relative)
+    assert_false(html.contains("application/rss+xml"))
+    assert_false(html.contains("feed.xml"))
+  }
+  assert_eq(config.site.site_feed_enabled, Some(true))
+  assert_eq(config.site.robots_txt, Some(true))
+  let ordinary = { ..config, output_dir: base.output_dir + "-ordinary" }
+  assert_eq(@builder.build(ordinary, @cache.empty(ordinary.output_dir), fresh_output=true).errors, 0)
+  for relative in ["feed.xml", "feed.json", "posts/feed.xml", "posts/feed.json", "sitemap.xml", "robots.txt"] {
+    assert_true(@fs.path_exists(ordinary.output_dir + "/" + relative))
   }
 }

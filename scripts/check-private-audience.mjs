@@ -88,7 +88,40 @@ for (const command of ['serve', 'dev', 'stats', 'init']) { const before = snapsh
 for (const command of ['build', 'inventory']) { const r = run(command, ['--audience', 'private']); assert.equal(r.status, 1); assert.equal(existsSync(output), false); }
 put(config, configText('', null)); rejected('no allowlist');
 put(config, configText('', [], null)); rejected('no index');
+// A private destination cannot sit in the configured publication root, even if
+// that root is unused. The CLI override must not erase the original boundary.
+for (const publicRoot of [join(root, 'public-unused'), join(root, 'old-release'), './relative-public', `${root}/unused/../normalized-public`]) {
+  put(config, configText(`output_dir = ${publicRoot}\n`));
+  for (const target of [publicRoot, join(publicRoot, 'memory'), `${publicRoot}/../${publicRoot.split('/').at(-1)}/memory`]) {
+    output = target;
+    for (const command of ['check', 'inventory', 'build']) {
+      const before = snapshot(root), r = run(command, flags(command));
+      assert.equal(r.status, 1); assert.match(r.stdout + r.stderr, /configured publication output_dir/);
+      assert.deepEqual(snapshot(root), before);
+    }
+  }
+}
 put(config, configText());
+for (const target of [join(root, 'dist'), join(root, 'dist/memory')]) {
+  output = target;
+  for (const command of ['check', 'inventory', 'build']) {
+    const before = snapshot(root), r = run(command, flags(command));
+    assert.equal(r.status, 1); assert.match(r.stdout + r.stderr, /configured publication output_dir/); assert.deepEqual(snapshot(root), before);
+  }
+}
+for (const base of ['https://public.example', '//public.example', 'http://127.0.0.1.evil', 'http://127.0.0.1@evil', 'http://[::1]:65536', 'http://localhost', 'http://127.0.0.1/path']) {
+  put(config, configText().replace('http://127.0.0.1:8000', base)); rejected('nonlocal base URL', [], /loopback origin/);
+}
+put(join(root, 'templates/index.html'), '<html><head></head><body>{{content}}</body></html>');
+for (const base of ['/', 'http://[::1]:8000/', 'https://127.0.0.1:443']) {
+  put(config, configText('site_feed_enabled = true\nrobots_txt = true\n').replace('http://127.0.0.1:8000', base));
+  const local = publish();
+  assert.ok(!local.files.some(p => /(^|\/)(feed\.(xml|json)|sitemap\.xml|robots\.txt)$/.test(p)));
+  for (const file of local.files.filter(f => f.endsWith('.html'))) assert.doesNotMatch(readFileSync(join(local.path, file), 'utf8'), /application\/(rss\+xml|feed\+json)|feed\.(xml|json)/);
+}
+unlinkSync(join(root, 'templates/index.html'));
+// Prefix siblings are allowed. An unrelated configured root does not block it.
+put(config, configText(`output_dir = ${root}/export\n`));
 const priv = publish();
 assert.deepEqual(snapshot(content), original); assert.deepEqual(snapshot(join(root, 'old-release')), old);
 for (const canary of ['PRIVATE_BODY_CANARY', 'UNLABELLED_BODY_CANARY', 'PRIVATE_ROOT_CANARY', 'PRIVATE_STANDALONE_CANARY', 'PRIVATE_EXTERNAL_CANARY']) assert.ok(JSON.stringify(priv.index).includes(canary));
@@ -99,7 +132,7 @@ assert.equal(entry.observed_at, '2026-11-01T00:00:00Z');
 assert.equal(entry.publication.digest, createHash('sha256').update(readFileSync(join(priv.path, 'notes/private/index.html'))).digest('hex'));
 assert.ok(entry.sections.some(s => s.fragment === 'evidence' && s.body.includes('PRIVATE_BODY_CANARY') && s.retention));
 const privateBytes = snapshot(priv.path);
-const pub = publish('public'); scan(pub, ['PRIVATE_', 'UNLABELLED_', 'WITHHELD_ASSET_CANARY', 'STALE_RELEASE_CANARY']);
+const pub = publish('public'); for (const file of ['feed.xml', 'feed.json', 'notes/feed.xml', 'notes/feed.json', 'sitemap.xml', 'robots.txt']) assert.ok(pub.files.includes(file)); scan(pub, ['PRIVATE_', 'UNLABELLED_', 'WITHHELD_ASSET_CANARY', 'STALE_RELEASE_CANARY']);
 assert.deepEqual(snapshot(priv.path), privateBytes);
 // Reusing either audience's root fails, including --force. No cleanup or cache reuse.
 for (const audience of ['private', 'public']) for (const target of [priv.path, pub.path]) {
