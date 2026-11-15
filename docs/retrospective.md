@@ -3976,3 +3976,20 @@ without becoming errors or leaking names into public/default artifacts/reports.
 The evidence guide now distinguishes no matching indexed passage from no vault
 fact. AI-assisted implementation and synthetic tests follow the user's review-fix
 request; no real private corpus or deployed service was used.
+
+
+## 2026-11-15: Selected citation context stays visible
+
+AI implemented a small evidence-host response improvement after independent review
+confirmed that a caller could copy the top-level citation while overlooking its
+candidate's authored correction context. A `ready` response now repeats the full
+selected page context beside the citation. Candidate context remains unchanged;
+non-ready results have no selected context. This is additive response ergonomics,
+not a new retrieval, freshness or truth policy.
+
+Strict citations still mean successful address validation and matched publication
+pairing/passage retention. A superseded historical passage can satisfy all three,
+so declarations do not suppress it. Synthetic Node tests preserve complete dates,
+null/empty legacy metadata, both directions of a relationship (including cycles),
+strict/default readiness and non-ready withholding. No external model, private
+corpus, network request or deployment was used for these tests.

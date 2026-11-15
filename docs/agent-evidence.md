@@ -62,8 +62,11 @@ page subresources may also load in the browser. JavaScript on the publication is
 disabled during validation. Use a trusted publication origin and index.
 
 The JSON output has `status`, `query` and `candidates`. A `ready` result additionally
-contains `citation: { title, url }`. Emit the title as text and the URL as a link;
-escape them for the destination format rather than interpolating them as raw HTML.
+contains `citation: { title, url }` and the selected candidate's complete `context`
+beside it. Keep that context with the citation when handing evidence to another
+consumer, including any `superseded_by` declarations. Emit the title as text and the
+URL as a link; escape them for the destination format rather than interpolating
+them as raw HTML.
 The executable exits zero only for `ready` without mismatched or invalid
 `pairing`/`retention`, and exits 2 for those failures or an abstention. Missing
 legacy bindings report `unknown` and do not prevent address validation. Setup failures are ordinary process errors.
@@ -181,6 +184,16 @@ page-scoped (`scope: "page"`), with `basis: "author_asserted_index_metadata"`.
 absent/empty. They do not imply observation, recording, event or validity time.
 No date is inferred from body prose, source headings, filesystem timestamps or
 the current clock. Every section of a page receives the same page context.
+
+For a `ready` result, top-level `context` repeats the selected candidate's entire
+context object beside `citation`, including the scope/basis labels, all date
+fields, and both relationship arrays. This is advisory context, not a second
+citation or a freshness verdict. Legacy missing values remain explicit `null` or
+empty arrays, not proof that a passage is current. Non-ready results do not expose
+a top-level selected context; any candidate contexts remain diagnostic evidence.
+Neither ordinary nor `--strict-citations` mode suppresses a usable historical
+citation because another page declares it superseded. Inspect and communicate
+that declaration rather than treating `ready` as a current-fact judgment.
 
 Collections can explicitly opt into these additional fields:
 
