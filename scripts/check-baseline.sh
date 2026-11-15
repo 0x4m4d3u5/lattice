@@ -86,4 +86,6 @@ node scripts/check-inventory-fragments.mjs || status=1
 node scripts/check-publication-pairing.mjs || status=1
 node scripts/check-passage-retention.mjs || status=1
 node --test examples/agent_evidence/evidence.test.mjs || status=1
+echo "Running private source coverage boundaries"
+node scripts/check-private-coverage.mjs || status=1
 exit "$status"

@@ -5059,6 +5059,12 @@ fn prepare_output(
     }
   }
 
+  if private_mode {
+    for warning in private_coverage_warnings(config, collections) {
+      diagnostics.push(warning)
+    }
+  }
+
   messages.push(
     "[lattice] using " + collections.length().to_string() + " collections",
   )
@@ -7203,6 +7209,13 @@ pub fn check(config : BuildConfig, local_links? : Bool = false, audience? : Audi
       { path: d.path.unwrap_or(config.content_dir), line: d.line, column: d.column,
         kind: public_diagnostic_kind(d), message: d.message, }
     })
+    // LintResult has no warning field. Preserve private coverage advisories
+    // as messages without turning successful validation into an error.
+    for diagnostic in prepared.diagnostics {
+      if diagnostic.code == Some("private_source_coverage") {
+        prepared.messages.push("[lattice] warning: " + diagnostic.path.unwrap_or("") + ": " + diagnostic.message)
+      }
+    }
     return { violations, messages: prepared.messages }
   }
   let messages : Array[String] = []

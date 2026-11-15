@@ -126,3 +126,13 @@ preparation used by inventory and ordinary builds without an audience. Private, 
 `visibility` declarations produce `E015`, `ready: false` and an empty entry list,
 even with `--drafts`. Missing visibility and `type: private` retain their previous
 behavior. This does not classify assets or remove/inventory stale output.
+
+
+### Private source coverage advisories
+
+Private inventory includes `private_source_coverage` warning diagnostics for
+uninspected child directories under configured source roots. This does not list
+missing Markdown or recursively ingest a vault; it reports uncertainty at the
+one-level discovery boundary. Warnings remain advisory (`ready` can be true),
+and their private paths do not enter output files or public/default inventory.
+See [private source coverage](private-audience.md#coverage-is-not-recursive-vault-ingestion).

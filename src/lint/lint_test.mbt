@@ -489,3 +489,14 @@ test "lint violation_type_name for all remaining variants not yet individually t
   assert_eq(@lint.violation_type_name(DataError), "data")
   assert_eq(@lint.violation_type_name(ShortcodeError), "shortcode")
 }
+
+///|
+test "JSON messages are opt in and do not become violations" {
+  let result : @lint.LintResult = { violations: [], messages: ["warning: uninspected \"nested\" directory"] }
+  let standard = @lint.format_violations_json(result)
+  assert_false(standard.contains("messages"))
+  let detailed = @lint.format_violations_json(result, include_messages=true)
+  assert_true(detailed.contains("\"messages\": [\"warning: uninspected \\\"nested\\\" directory\"]"))
+  assert_true(detailed.contains("\"violations\": []"))
+  assert_eq(@lint.summarize(result).total, 0)
+}
