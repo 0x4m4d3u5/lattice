@@ -18,3 +18,13 @@ test "private snapshot is independent from public projection and default rereads
   assert_true(publication_visibility_violation(source.path, source.content) is Some(_))
   assert_true(publication_visibility_violation(source.path, source.content, private_export=true) is None)
 }
+
+///|
+test "private base URL narrow spelling rejects authority tricks" {
+  for base in ["/", "http://127.0.0.1", "https://127.0.0.1/", "http://[::1]", "https://[::1]:65535/", "http://127.0.0.1:1", "http://127.0.0.1:8000"] {
+    assert_true(private_base_url_allowed(base), msg=base)
+  }
+  for base in ["", "//", "///", "/memory", "http://localhost", "file:///tmp", "https://example.test", "http://127.0.0.1.evil", "http://127.0.0.1@evil", "http://evil@127.0.0.1", "http://[::1]@evil", "http://[::1].evil", "http://127.0.0.1:0", "http://127.0.0.1:65536", "http://127.0.0.1:-1", "http://127.0.0.1:+80", "http://127.0.0.1:", "http://127.0.0.1:999999999999", "http://127.0.0.1/path", "http://127.0.0.1//", "http://127.0.0.1?x", "http://127.0.0.1#x", "http://127.0.0.1\\evil", "http://127.0.0.1\t", "http://127.0.0.1\n", "http://127.0.0.1:80/../evil"] {
+    assert_false(private_base_url_allowed(base), msg=base)
+  }
+}

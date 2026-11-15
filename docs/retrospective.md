@@ -3935,3 +3935,24 @@ documentation therefore calls this plaintext export, not private serving or loca
 only retrieval. Destination ownership and trusted inputs remain the caller's job.
 Synthetic API/CLI tests protect public/default boundaries, source preservation,
 404 handling, index ownership and independent draft/visibility contracts.
+
+
+### Private export configuration guardrails
+
+Independent review of the explicit private export exposed avoidable public-config
+footguns, not a reported deployed leak. The builder now refuses a private output
+inside the configured publication root (fallback `./dist`) before preparation,
+and requires `/` or a narrowly spelled HTTP(S) literal loopback origin. The known
+root survives the CLI output override. The portable path library provides lexical
+normalization, not realpath/exclusive filesystem isolation; these checks do not
+prove access control or discover arbitrary server/sync roots.
+
+Private rendering derives disabled feed/robots settings without mutating the
+caller's config, skips collection feeds and sitemap, and removes generated feed
+autodiscovery. Ordinary/public generation stays unchanged. No portable public URL
+parser exists in the pinned core/x interfaces (the async HTTP parser is private
+and target-specific), so this is a small allowlist grammar rather than an attempted
+general URL parser. Synthetic API and JS/native fixtures cover authority tricks,
+ports, origin-free output, equal/nested/normalized roots, prefix siblings, source
+preservation and private/public artifact differences. AI-assisted implementation
+followed human-authorized review findings; no private corpus or deployment was used.

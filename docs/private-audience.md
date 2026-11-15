@@ -8,20 +8,35 @@ The command does not start a server, upload, deploy, change permissions or encry
 
 Choose a destination outside every served, published, synchronized or shared
 public directory. A new subdirectory inside a public server root is not private.
-Lattice cannot discover how other programs expose a filesystem path. Keep the
+The private plan refuses a destination equal to or nested under the configuration's
+`output_dir` (or `./dist` when absent), even when CLI `-o` overrides it or the
+publication root does not yet exist. Keep that configured root pointing at the
+public destination when reusing or copying a public config. This is a lexical,
+normalized-path check, not realpath containment: symlinks, filesystem aliases and
+concurrent changes remain outside the guarantee. Lattice cannot discover other
+server, synchronization or sharing roots. Keep the
 entire export, its inventory and its diagnostics local and private.
 
 ## Explicit inputs and destination
 
-Use a separate configuration for this export. A content index and an explicit
+Use an explicitly reviewed configuration for this export. A content index and an explicit
 static allowlist are required; an empty allowlist is valid:
 
 ```cfg
 title = Local memory
-base_url = http://127.0.0.1:8000
+base_url = /
 content_index_file = content-index.json
 static_allowlist = []
 ```
+
+`base_url` must be exactly `/` (origin-free links), or an `http://` or `https://`
+origin with the literal host `127.0.0.1` or `[::1]`, optionally a decimal port
+1–65535 and one trailing slash. Hostnames (including `localhost`), credentials,
+paths, queries and fragments are rejected. This deliberately narrow grammar
+avoids accidentally retaining a public origin; it does not restrict authored
+links, browser requests or the origin an evidence consumer independently chooses.
+Origin-free links resolve against whichever host serves the files, not necessarily
+a private host.
 
 Retain the collection schemas and template/data paths appropriate for the input.
 Check and inspect one unused destination, then build it:
@@ -80,8 +95,13 @@ recency, answer support or authenticated metadata. Output replacement by templat
 static assets or generated pages can leave indexed text without a valid final HTML
 binding; consumers must retain the existing strict citation checks.
 
-Every enabled artifact can contain private information, not just the index:
-HTML, search, graph, feeds, sitemaps, tags, backlinks, aliases and selected assets.
+Private mode omits generated collection/site RSS and JSON feeds, feed
+autodiscovery links, `sitemap.xml` and `robots.txt`, even when site feed or robots
+settings say `true`. The original config and ordinary/public behavior are unchanged.
+This is reduced discovery, not crawler access control. Trusted templates, authored
+content and explicit static assets can still supply their own links or files.
+Every retained artifact can contain private information, not just the index:
+HTML, search, graph, tags, backlinks, aliases and selected assets.
 This milestone adds no private server or retrieval network policy. A loopback
 `base_url` labels generated links but does not confine network access or protect
 files from another server.
@@ -97,7 +117,7 @@ workflow or authorize sending private material to external services.
 The additive filesystem APIs accept `audience=Some(Audience::Private)` on `build`,
 `check`, `inventory` and `inventory_with_fragments`. Build/inventory require
 `fresh_output=true`; all require the explicit allowlist and content-index setting.
-The API caller supplies and protects the output directory. `BuildConfig` defaults
+The API applies the same configured-public-root and base-URL guards; the caller still supplies and protects the output directory. `BuildConfig` defaults
 remain unchanged. Private audience is unsupported by watch, serve, dev and stats.
 
 Synthetic API and JS/native CLI tests exercise every configured source kind,
