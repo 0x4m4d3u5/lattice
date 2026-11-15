@@ -21,6 +21,10 @@ explicit attachment allowlist plus fresh output. Templates, data, selected asset
 and authored public text remain trusted inputs; this is not a complete mixed-vault
 privacy or deployment policy. The curated-copy workflow below remains supported.
 
+For a local memory artifact, see [explicit private export](private-audience.md).
+It includes the configured private/public/unlabelled source set in plaintext, with
+required fresh output and selected assets. It is not access control or deployment.
+
 ## Bring a curated vault copy into the wiki starter
 
 Use a separate working copy so the original notes stay untouched. There is no

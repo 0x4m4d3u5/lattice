@@ -118,7 +118,7 @@ next();
 for (const [command, flags] of [
   ['build', ['--audience', 'public']], ['inventory', ['--audience', 'public']],
   ...['build', 'inventory', 'check'].flatMap(command => [
-    [command, ['--audience', 'private']], [command, ['--audience', 'PUBLIC']], [command, ['--audience']],
+    [command, ['--audience', 'PRIVATE']], [command, ['--audience', 'PUBLIC']], [command, ['--audience']],
     [command, ['--audience=public', '--fresh-output']],
     [command, ['--audience', 'public', '--audience', 'public', '--fresh-output']],
   ]),

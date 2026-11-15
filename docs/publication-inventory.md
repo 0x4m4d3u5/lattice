@@ -29,6 +29,11 @@ Use `inventory --audience public --fresh-output` for the explicit
 source exclusions, so treat the report as local audit information, not a file to
 deploy. Its selection and mandatory supported-link checks match public builds.
 
+Use `inventory --audience private --fresh-output -o ../local-memory/export-001`
+for the [explicit private export](private-audience.md). Its input requirements and
+source selection match the private build. Treat all its planned files and reports
+as private plaintext; the inventory does not grant or enforce access control.
+
 ## Read the report
 
 Text output starts with `prepared` or `blocked`. JSON has `version: 1`,

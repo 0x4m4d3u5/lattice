@@ -182,7 +182,7 @@ fn check_output_local_links(
         Some(Page(path)) => path == source.path
         _ => false
       }
-      if !owned && output.public_projection is None {
+      if !owned && output.audience is None {
         continue
       }
       let body = match @frontmatter.parse_with_policy(source.content, allow_missing_frontmatter=config.site.allow_missing_frontmatter == Some(true)) {
@@ -198,7 +198,7 @@ fn check_output_local_links(
         })
       }
       let seen : Map[String, Bool] = Map([])
-      for target in @markdown.extract_link_destinations(body, include_images=output.public_projection is Some(_)) {
+      for target in @markdown.extract_link_destinations(body, include_images=output.audience is Some(_)) {
         if seen.contains(target) {
           continue
         }

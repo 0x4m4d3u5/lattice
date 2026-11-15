@@ -12,8 +12,8 @@ Neither mode is a general private-information sanitizer.
 - Missing `visibility` preserves existing publication behavior.
 - `visibility: public` permits the existing pipeline to continue. Schema, draft
   and other validation rules still apply.
-- `visibility: private` rejects the entire build preparation. There is no private
-  audience or private-output flag yet.
+- `visibility: private` rejects the entire default build preparation. The separate
+  [explicit private export](private-audience.md) is plaintext and opt-in.
 - Any other value, type, capitalization or surrounding whitespace inside a string
   is an error. Use exactly the strings `public` or `private`.
 - Repeating the `visibility` key is an error, including two identical values.

@@ -2916,6 +2916,7 @@ fn render_404_page(
   authored? : Array[Bool] = [],
   image_index? : Map[String, String] = Map([]),
   selected_404? : Array[SourceFile]? = None,
+  private_export? : Bool = false,
 ) -> Result[String, String] {
   let page_path = config.content_dir + "/404.md"
   let has_custom_404 = match selected_404 { Some(sources) => !sources.is_empty(); None => @fs.path_exists(page_path) }
@@ -2928,8 +2929,8 @@ fn render_404_page(
         @fs.IOError(msg) => return Err("cannot read 404.md: " + msg)
       }
     }
-    // The dedicated renderer rereads 404.md; guard these exact bytes too.
-    if publication_visibility_violation(page_path, source, allow_missing_frontmatter=config.site.allow_missing_frontmatter == Some(true)) is Some(violation) {
+    // Guard the exact rendered snapshot, or the compatibility-mode reread.
+    if publication_visibility_violation(page_path, source, allow_missing_frontmatter=config.site.allow_missing_frontmatter == Some(true), private_export~) is Some(violation) {
       return Err(violation.message)
     }
     match @frontmatter.parse_with_policy(source, allow_missing_frontmatter=config.site.allow_missing_frontmatter == Some(true)) {
@@ -4993,12 +4994,17 @@ fn prepare_output(
   strict_wikilinks? : Bool = false,
   strict_local_links? : Bool = false,
 ) -> BuildResult {
-  let public_mode = output.public_projection is Some(_)
+  let public_mode = output.audience == Some(Public)
+  let private_mode = output.audience == Some(Private)
+  let explicit_audience = output.audience != None
   if public_mode && (!output.fresh_output || config.site.static_allowlist is None) {
     return fresh_output_failure(config, "public audience requires fresh_output=true and an explicit site.static_allowlist (an empty list is allowed)")
   }
-  let strict_wikilinks = strict_wikilinks || public_mode
-  let strict_local_links = strict_local_links || public_mode
+  if private_mode && (!output.fresh_output || config.site.static_allowlist is None || config.site.content_index_file is None) {
+    return fresh_output_failure(config, "private audience requires fresh_output=true, an explicit site.static_allowlist (an empty list is allowed), and site.content_index_file")
+  }
+  let strict_wikilinks = strict_wikilinks || explicit_audience
+  let strict_local_links = strict_local_links || explicit_audience
   // Strict validation needs every final HTML file in this exact preparation.
   // Incremental skips deliberately omit unchanged authored writes from the plan.
   let config = if output.fresh_output || strict_wikilinks || strict_local_links {
@@ -5116,7 +5122,7 @@ fn prepare_output(
         []
       }
     }
-    if public_mode {
+    if explicit_audience {
       for source in sources { collected_source_paths.set(public_source_path_key(source.path), true) }
     }
     let sources = project_public_sources(sources, collection_def.name, config, output, diagnostics)
@@ -5190,7 +5196,7 @@ fn prepare_output(
   } else {
     []
   }
-  if public_mode {
+  if explicit_audience {
     for source in standalone_sources { collected_source_paths.set(public_source_path_key(source.path), true) }
   }
   let standalone_sources = project_public_sources(standalone_sources, "_standalone", config, output, diagnostics)
@@ -5232,8 +5238,8 @@ fn prepare_output(
   // e.g. content/index.md → /, content/about.md → /about/
   let root_sources : Array[SourceFile] = collect_root_sources(
     config.content_dir,
-    if public_mode { Map([]) } else { slug_owner },
-    collected_paths=if public_mode { Some(collected_source_paths) } else { None },
+    if explicit_audience { Map([]) } else { slug_owner },
+    collected_paths=if explicit_audience { Some(collected_source_paths) } else { None },
     allow_missing_frontmatter=config.site.allow_missing_frontmatter == Some(true),
   ) catch {
     @fs.IOError(msg) => {
@@ -5317,10 +5323,12 @@ fn prepare_output(
       sources: root_sources,
     })
   }
-  // No private audience exists yet. Fail before derived indexes, cache reuse,
-  // rendering or asset preparation can treat a private declaration as public.
-  let visibility_violations = if public_mode { [] } else { publication_visibility_violations(config, all_sources_for_backlinks) }
-  if visibility_violations.length() > 0 || (public_mode && @diagnostic.count_errors(diagnostics) > 0) {
+  // Explicit private export validates every declaration; compatibility mode
+  // still rejects private intent before indexes, rendering or cache reuse.
+  let visibility_violations = if public_mode { [] }
+    else if private_mode { private_visibility_violations(config, all_sources_for_backlinks, output) }
+    else { publication_visibility_violations(config, all_sources_for_backlinks) }
+  if visibility_violations.length() > 0 || (explicit_audience && @diagnostic.count_errors(diagnostics) > 0) {
     for violation in visibility_violations {
       diagnostics.push(@diagnostic.of_lint_violation(violation))
     }
@@ -5334,7 +5342,7 @@ fn prepare_output(
       messages,
     }
   }
-  register_image_assets(config, page_index, all_sources_for_backlinks, selected_404=output.public_projection.map(p => p.selected_404))
+  register_image_assets(config, page_index, all_sources_for_backlinks, selected_404=output.selected_404())
   let alias_violations = if config.site.wikilink_aliases == Some(true) {
     register_note_aliases(all_sources_for_backlinks, page_index, allow_missing_frontmatter=config.site.allow_missing_frontmatter == Some(true))
   } else { [] }
@@ -6771,7 +6779,7 @@ fn prepare_output(
     }
     if error_count == 0 {
       let page_path = config.content_dir + "/404.md"
-      let has_custom_404 = match output.public_projection { Some(projection) => !projection.selected_404.is_empty(); None => @fs.path_exists(page_path) }
+      let has_custom_404 = match output.selected_404() { Some(sources) => !sources.is_empty(); None => @fs.path_exists(page_path) }
       let authored : Array[Bool] = []
       let fortyfour_html = match
         render_404_page(
@@ -6782,7 +6790,8 @@ fn prepare_output(
           data_store,
           authored~,
           image_index=page_index,
-          selected_404=output.public_projection.map(p => p.selected_404),
+          selected_404=output.selected_404(),
+          private_export=private_mode,
         ) {
         Ok(html) => Some(html)
         Err(msg) => {
@@ -7062,6 +7071,13 @@ fn prepare_output(
     )
     if content_index_slot is Some(slot) {
       let (path, _) = output.files[slot]
+      if private_mode {
+        for i = 0; i < output.files.length(); i = i + 1 {
+          if i != slot && output.files[i].0 == path && !dropped_slots.contains(i) {
+            diagnostics.push(build_error(Some(path), None, None, "private content index collides with another output writer; choose a distinct content_index_file"))
+          }
+        }
+      }
       output.files[slot] = (
         path,
         Text(
@@ -7088,9 +7104,10 @@ fn prepare_output(
       output.files[slot] = (path, Text(@cache.render_store(next_cache_store)))
     }
     output.prune_files(dropped_slots)
-    let audit_sources = public_audit_sources(all_sources_for_backlinks, output)
+    let audit_sources = if private_mode { private_audit_sources(all_sources_for_backlinks, output) }
+      else { public_audit_sources(all_sources_for_backlinks, output) }
+    if explicit_audience { source_urls.set(config.content_dir + "/404.md", "/404.html") }
     if public_mode {
-      source_urls.set(config.content_dir + "/404.md", "/404.html")
       check_public_boundary(audit_sources, page_index, config, output, diagnostics)
     }
     let image_errors : Array[@lint.LintViolation] = []
