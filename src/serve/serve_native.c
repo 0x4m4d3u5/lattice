@@ -37,10 +37,15 @@
    typedef int sock_t;
 #  define INVALID_SOCK (-1)
 #  define sock_close(s) close(s)
-#  define sock_write(s,b,n) write(s, b, n)
+#  ifdef MSG_NOSIGNAL
+#    define sock_write(s,b,n) send(s, b, n, MSG_NOSIGNAL)
+#  else
+#    define sock_write(s,b,n) write(s, b, n)
+#  endif
 #  define sock_read(s,b,n)  read(s, b, n)
 #endif
 
+#include <limits.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -132,14 +137,50 @@ static int is_html_mime(const char *mime) {
     return strncmp(mime, "text/html", 9) == 0;
 }
 
+/* ── socket write helper ───────────────────────────────────────────────────── */
+
+/* Write all len bytes to fd, retrying on EINTR and short writes.
+ * Returns 1 on success, 0 on write error or closed peer. */
+static int write_all(sock_t fd, const char *buf, size_t len) {
+    size_t sent = 0;
+    while (sent < len) {
+#ifdef _WIN32
+        int n = sock_write(fd, buf + sent, (int)(len - sent));
+        if (n <= 0) return 0;
+#else
+        ssize_t n = sock_write(fd, buf + sent, len - sent);
+        if (n < 0) {
+            if (errno == EINTR) continue;
+            return 0;
+        }
+        if (n == 0) return 0;
+#endif
+        sent += (size_t)n;
+    }
+    return 1;
+}
+
 /* ── URL decode ────────────────────────────────────────────────────────────── */
 
-static void url_decode(const char *src, char *dst, size_t dst_size) {
+static int hex_val(char c) {
+    if (c >= '0' && c <= '9') return c - '0';
+    if (c >= 'a' && c <= 'f') return 10 + (c - 'a');
+    if (c >= 'A' && c <= 'F') return 10 + (c - 'A');
+    return -1;
+}
+
+/* Returns 1 on success, 0 on malformed percent-encoding, embedded NUL, or overflow. */
+static int url_decode(const char *src, char *dst, size_t dst_size) {
     size_t di = 0;
-    for (size_t si = 0; src[si] && di + 1 < dst_size; si++) {
-        if (src[si] == '%' && src[si+1] && src[si+2]) {
-            char hex[3] = { src[si+1], src[si+2], 0 };
-            dst[di++] = (char)strtol(hex, NULL, 16);
+    for (size_t si = 0; src[si]; si++) {
+        if (di + 1 >= dst_size) return 0;
+        if (src[si] == '%') {
+            int hi = src[si + 1] ? hex_val(src[si + 1]) : -1;
+            int lo = (hi >= 0 && src[si + 2]) ? hex_val(src[si + 2]) : -1;
+            if (hi < 0 || lo < 0) return 0;
+            unsigned char ch = (unsigned char)((hi << 4) | lo);
+            if (ch == 0) return 0; /* reject embedded NUL */
+            dst[di++] = (char)ch;
             si += 2;
         } else if (src[si] == '+') {
             dst[di++] = ' ';
@@ -148,42 +189,54 @@ static void url_decode(const char *src, char *dst, size_t dst_size) {
         }
     }
     dst[di] = '\0';
+    return 1;
 }
 
 /* ── safe path resolution ──────────────────────────────────────────────────── */
 
+#ifndef _WIN32
+/* Verify candidate resolves via realpath() inside g_root.
+ * Returns 1 if contained, 0 if missing or outside g_root. */
+static int verify_contained_realpath(const char *candidate) {
+    char real_root[PATH_MAX_SIZE];
+    char real_cand[PATH_MAX_SIZE];
+    if (!realpath(g_root, real_root)) return 0;
+    if (!realpath(candidate, real_cand)) return 0;
+    size_t rlen = strlen(real_root);
+    if (strncmp(real_cand, real_root, rlen) != 0) return 0;
+    return real_cand[rlen] == '\0' || real_cand[rlen] == '/';
+}
+#endif
+
 /* Returns 1 if fs_path safely resolves inside root, 0 otherwise. */
 static int resolve_path(const char *url_path, char *fs_path, size_t fs_size) {
     char decoded[PATH_MAX_SIZE];
-    url_decode(url_path, decoded, sizeof(decoded));
+    if (!url_decode(url_path, decoded, sizeof(decoded))) return 0;
 
     /* strip query string */
     char *q = strchr(decoded, '?');
     if (q) *q = '\0';
 
-    /* collapse .. segments */
-    char canonical[PATH_MAX_SIZE];
-    size_t ci = 0;
-    for (size_t i = 0; decoded[i] && ci + 1 < sizeof(canonical); i++) {
-        if (decoded[i] == '.' && decoded[i+1] == '.' &&
-            (decoded[i+2] == '/' || decoded[i+2] == '\0')) {
-            /* step back one segment */
-            if (ci > 0) ci--;
-            while (ci > 0 && canonical[ci-1] != '/') ci--;
-            i += 2;
-            if (!decoded[i]) break;
-        } else {
-            canonical[ci++] = decoded[i];
+    /* require rooted path; reject protocol-relative // and backslashes */
+    if (decoded[0] != '/' || decoded[1] == '/') return 0;
+    for (size_t i = 0; decoded[i]; i++) {
+        if (decoded[i] == '\\') return 0;
+        /* reject any exact ".." path segment */
+        if (decoded[i] == '/' &&
+            decoded[i + 1] == '.' &&
+            decoded[i + 2] == '.' &&
+            (decoded[i + 3] == '/' || decoded[i + 3] == '\0')) {
+            return 0;
         }
     }
-    canonical[ci] = '\0';
+
+    int written = snprintf(fs_path, fs_size, "%s%s", g_root, decoded);
+    if (written < 0 || (size_t)written >= fs_size) return 0;
 
     size_t root_len = strlen(g_root);
-    if (snprintf(fs_path, fs_size, "%s%s", g_root, canonical) < 0)
-        return 0;
-
-    /* must start with root */
-    return strncmp(fs_path, g_root, root_len) == 0;
+    if (strncmp(fs_path, g_root, root_len) != 0) return 0;
+    if (fs_path[root_len] != '\0' && fs_path[root_len] != '/') return 0;
+    return 1;
 }
 
 /* ── file-serving response ─────────────────────────────────────────────────── */
@@ -218,14 +271,13 @@ static void send_file(sock_t fd, const char *fs_path) {
     if (inject) {
         /* find </body> case-insensitively */
         for (size_t i = 0; i + 7 <= nread; i++) {
-            if ((body[i]   == '<') &&
-                (body[i+1] == '/' || body[i+1] == '/') &&
-                ((body[i+1] == '/' &&
-                  (body[i+2]=='b'||body[i+2]=='B') &&
-                  (body[i+3]=='o'||body[i+3]=='O') &&
-                  (body[i+4]=='d'||body[i+4]=='D') &&
-                  (body[i+5]=='y'||body[i+5]=='Y') &&
-                  body[i+6] == '>'))) {
+            if (body[i]   == '<' &&
+                body[i+1] == '/' &&
+                (body[i+2]=='b'||body[i+2]=='B') &&
+                (body[i+3]=='o'||body[i+3]=='O') &&
+                (body[i+4]=='d'||body[i+4]=='D') &&
+                (body[i+5]=='y'||body[i+5]=='Y') &&
+                body[i+6] == '>') {
                 inject_at = i;
                 break;
             }
@@ -245,8 +297,11 @@ static void send_file(sock_t fd, const char *fs_path) {
         "Connection: close\r\n"
         "\r\n",
         mime, content_len);
-    if (hlen > 0) sock_write(fd, header, (size_t)hlen);
-    sock_write(fd, body, content_len);
+    if (hlen > 0 && (size_t)hlen < sizeof(header)) {
+        if (write_all(fd, header, (size_t)hlen)) {
+            (void)write_all(fd, body, content_len);
+        }
+    }
     free(body);
 }
 
@@ -318,7 +373,7 @@ static void handle_connection(sock_t client_fd) {
     /* stat to check existence and whether it's a directory */
     struct stat st;
     if (stat(fs_path, &st) != 0) {
-        sock_write(client_fd, NOT_FOUND, strlen(NOT_FOUND));
+        (void)write_all(client_fd, NOT_FOUND, strlen(NOT_FOUND));
         sock_close(client_fd);
         return;
     }
@@ -333,16 +388,24 @@ static void handle_connection(sock_t client_fd) {
             }
             strncat(fs_path, "index.html", PATH_MAX_SIZE - strlen(fs_path) - 1);
             if (stat(fs_path, &st) != 0 || S_ISDIR(st.st_mode)) {
-                sock_write(client_fd, NOT_FOUND, strlen(NOT_FOUND));
+                (void)write_all(client_fd, NOT_FOUND, strlen(NOT_FOUND));
                 sock_close(client_fd);
                 return;
             }
         } else {
-            sock_write(client_fd, NOT_FOUND, strlen(NOT_FOUND));
+            (void)write_all(client_fd, NOT_FOUND, strlen(NOT_FOUND));
             sock_close(client_fd);
             return;
         }
     }
+
+#ifndef _WIN32
+    if (!verify_contained_realpath(fs_path)) {
+        (void)write_all(client_fd, NOT_FOUND, strlen(NOT_FOUND));
+        sock_close(client_fd);
+        return;
+    }
+#endif
 
     send_file(client_fd, fs_path);
     sock_close(client_fd);
@@ -468,6 +531,8 @@ int lattice_serve_start(int port, const char *root) {
     WSAStartup(MAKEWORD(2,2), &wsa);
     g_mutex = CreateMutex(NULL, FALSE, NULL);
     g_ctrl_event = CreateEvent(NULL, FALSE, FALSE, NULL);
+#else
+    signal(SIGPIPE, SIG_IGN);
 #endif
 
     g_listen_fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -530,8 +595,7 @@ void lattice_serve_broadcast_reload(void) {
 #ifndef _WIN32
     pthread_mutex_lock(&g_mutex);
     for (int i = 0; i < g_sse_count; ) {
-        ssize_t n = sock_write(g_sse_fds[i], RELOAD_EVENT, strlen(RELOAD_EVENT));
-        if (n <= 0) {
+        if (!write_all(g_sse_fds[i], RELOAD_EVENT, strlen(RELOAD_EVENT))) {
             sock_close(g_sse_fds[i]);
             g_sse_fds[i] = g_sse_fds[--g_sse_count];
         } else {
