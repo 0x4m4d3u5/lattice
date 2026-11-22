@@ -282,3 +282,9 @@ test "category_label capitalizes unknown categories" {
 test "category_label returns Uncategorized for empty string" {
   assert_eq(@vault.category_label(""), "Uncategorized")
 }
+
+///|
+test "category_class preserves literal hyphens" {
+  assert_eq(@vault.category_class("in-progress"), "in-progress")
+  assert_eq(@vault.category_class("Work-In-Progress"), "work-in-progress")
+}

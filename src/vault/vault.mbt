@@ -175,7 +175,7 @@ pub fn category_class(category : String) -> String {
   let mut i = 0
   while i < category.length() {
     let c = @strutil.char_at(category, i)
-    if (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') {
+    if (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-' {
       buf.write_char(c)
     } else if c >= 'A' && c <= 'Z' {
       buf.write_char((c.to_int() + 32).unsafe_to_char())
@@ -242,10 +242,11 @@ pub fn render_metadata_badge(meta : VaultMetadata?) -> String {
 }
 
 ///|
-/// Check if a page should be excluded from public-facing indexes.
+/// Organizational helper to classify notes by PARA `type` metadata.
 ///
-/// Useful for inbox items, private notes, or WIP content.
-/// Draft pages with type "inbox", "private", or "wip" are excluded.
+/// NOTE: This helper is organizational-only and is NOT a publication or privacy
+/// boundary. Publication selection and privacy enforcement are governed solely
+/// by the reserved `visibility: public | private` frontmatter field.
 pub fn should_exclude_from_index(meta : VaultMetadata?) -> Bool {
   match meta {
     None => false
