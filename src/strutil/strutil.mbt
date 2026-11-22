@@ -44,15 +44,13 @@ pub fn trim_h(s : String) -> String {
 // ── substring ─────────────────────────────────────────────────────────────────
 
 ///|
-/// Extract substring `s[start..end)`.
+/// Extract substring `s[start..end)` using native UTF-16 slicing so surrogate
+/// pairs are preserved without round-tripping through `unsafe_to_char`.
 pub fn substr(s : String, start : Int, end_pos : Int) -> String {
-  let buf = StringBuilder()
-  let mut i = start
-  while i < end_pos {
-    buf.write_char(char_at(s, i))
-    i = i + 1
+  if start >= end_pos {
+    return ""
   }
-  buf.to_string()
+  s[start:end_pos].to_owned()
 }
 
 // ── line splitting ────────────────────────────────────────────────────────────

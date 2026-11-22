@@ -2129,3 +2129,60 @@ test "reference validation follows optional wrappers within arrays and repeated 
   assert_eq(errors[2].field, "featured")
   assert_eq(errors[2].message, "TRef: references unknown slug 'absent'")
 }
+
+///|
+test "TString bounds count Unicode scalar values rather than UTF-16 code units" {
+  let schema : @schema.Schema = {
+    name: "notes",
+    fields: [
+      {
+        name: "title",
+        field_type: TString(Some(2), Some(3)),
+        required: true,
+      },
+    ],
+  }
+  let ok_fm = parse_frontmatter_or_fail("+++\ntitle = \"🌱🌿\"\n+++\n")
+  assert_eq(@schema.validate(ok_fm, schema).length(), 0)
+
+  let short_fm = parse_frontmatter_or_fail("+++\ntitle = \"🌱\"\n+++\n")
+  let short_errors = @schema.validate(short_fm, schema)
+  assert_eq(short_errors.length(), 1)
+  assert_true(short_errors[0].message.contains("got length 1"))
+
+  let long_fm = parse_frontmatter_or_fail("+++\ntitle = \"🌱🌿🍀🌳\"\n+++\n")
+  let long_errors = @schema.validate(long_fm, schema)
+  assert_eq(long_errors.length(), 1)
+  assert_true(long_errors[0].message.contains("got length 4"))
+}
+
+///|
+test "TUrl rejects bare schemes, protocol-relative URLs, and whitespace" {
+  let schema : @schema.Schema = {
+    name: "links",
+    fields: [{ name: "url", field_type: TUrl, required: true }],
+  }
+  for bad in [
+    "http://",
+    "https://",
+    "http:///path",
+    "https://?query",
+    "https://#frag",
+    "//evil.example/path",
+    "https://example.com/has space",
+    "/has space",
+  ] {
+    let fm = parse_frontmatter_or_fail("+++\nurl = \"" + bad + "\"\n+++\n")
+    let errors = @schema.validate(fm, schema)
+    assert_eq(errors.length(), 1)
+  }
+  for good in [
+    "https://example.com",
+    "http://localhost:4321/path",
+    "/posts/hello/",
+    "/",
+  ] {
+    let fm = parse_frontmatter_or_fail("+++\nurl = \"" + good + "\"\n+++\n")
+    assert_eq(@schema.validate(fm, schema).length(), 0)
+  }
+}

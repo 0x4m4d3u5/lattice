@@ -992,3 +992,13 @@ test "whole HTML extraction reports boundaries without resetting raw states" {
   assert_eq(text, "")
   assert_eq(boundaries, [true, false, false])
 }
+
+///|
+test "substr preserves non-BMP Unicode scalar values and handles empty ranges" {
+  let s = "a🌱b🌿c"
+  assert_eq(@strutil.substr(s, 0, s.length()), s)
+  assert_eq(@strutil.substr(s, 1, 3), "🌱")
+  assert_eq(@strutil.substr(s, 1, 6), "🌱b🌿")
+  assert_eq(@strutil.substr(s, 3, 3), "")
+  assert_eq(@strutil.substr(s, 4, 2), "")
+}

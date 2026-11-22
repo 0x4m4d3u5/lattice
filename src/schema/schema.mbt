@@ -112,12 +112,13 @@ fn type_matches(val : @frontmatter.FrontmatterValue, ft : FieldType) -> Bool {
     TString(minlen, maxlen) =>
       match val {
         @frontmatter.FStr(s) => {
+          let len = s.iter().count()
           let min_ok = match minlen {
-            Some(lo) => s.length() >= lo
+            Some(lo) => len >= lo
             None => true
           }
           let max_ok = match maxlen {
-            Some(hi) => s.length() <= hi
+            Some(hi) => len <= hi
             None => true
           }
           min_ok && max_ok
@@ -209,13 +210,7 @@ fn type_matches(val : @frontmatter.FrontmatterValue, ft : FieldType) -> Bool {
       }
     TUrl =>
       match val {
-        @frontmatter.FStr(s) =>
-          s.length() > 0 &&
-          (
-            @strutil.starts_with(s, "http://") ||
-            @strutil.starts_with(s, "https://") ||
-            @strutil.starts_with(s, "/")
-          )
+        @frontmatter.FStr(s) => is_valid_url(s)
         _ => false
       }
     TSlug =>
@@ -301,6 +296,37 @@ fn datetime_date_part(s : String) -> String {
 }
 
 ///|
+/// Check whether a string is a valid HTTP(S) or root-relative URL.
+/// Rejects bare schemes (`http://`), protocol-relative URLs (`//...`),
+/// and ASCII whitespace or control characters.
+fn is_valid_url(s : String) -> Bool {
+  if s.length() == 0 {
+    return false
+  }
+  for c in s {
+    let cp = c.to_int()
+    if cp <= 0x20 || cp == 0x7F {
+      return false
+    }
+  }
+  if s.has_prefix("http://") {
+    s.length() > 7 &&
+    @strutil.char_at(s, 7) != '/' &&
+    @strutil.char_at(s, 7) != '?' &&
+    @strutil.char_at(s, 7) != '#'
+  } else if s.has_prefix("https://") {
+    s.length() > 8 &&
+    @strutil.char_at(s, 8) != '/' &&
+    @strutil.char_at(s, 8) != '?' &&
+    @strutil.char_at(s, 8) != '#'
+  } else if s.has_prefix("/") {
+    !s.has_prefix("//")
+  } else {
+    false
+  }
+}
+
+///|
 /// Check whether a string is a valid URL slug.
 /// Valid slugs are non-empty and contain only ASCII lowercase letters,
 /// digits, and hyphens.
@@ -359,9 +385,20 @@ fn type_mismatch_message(
     }
     (TString(minlen, maxlen), @frontmatter.FStr(s)) => {
       // Construct a length constraint description for the error message.
-      // Truncate the actual value to ~30 chars for actionability.
-      let display = if s.length() > 30 {
-        @strutil.substr(s, 0, 30) + "..."
+      // Truncate the actual value to 30 Unicode scalar values for actionability.
+      let len = s.iter().count()
+      let display = if len > 30 {
+        let buf = StringBuilder()
+        let mut count = 0
+        for c in s {
+          if count >= 30 {
+            break
+          }
+          buf.write_char(c)
+          count = count + 1
+        }
+        buf.write_string("...")
+        buf.to_string()
       } else {
         s
       }
@@ -375,7 +412,7 @@ fn type_mismatch_message(
       "expected String with " +
       constraint +
       ", got length " +
-      s.length().to_string() +
+      len.to_string() +
       ": \"" +
       display +
       "\""
