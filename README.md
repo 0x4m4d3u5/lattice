@@ -256,10 +256,10 @@ The bundled reader includes a [bounded local authored-link graph](docs/local-gra
 
 ## Project Stats
 
-- **~25k lines** of MoonBit in `src/` (43k total including tests)
-- **31 packages** with focused responsibilities
-- **1,653 JavaScript workspace tests**, including 16 vendored CLI-parser tests; see [Reliability baseline](docs/reliability-baseline.md) for target-specific results
-- **249 commits** across 47 days of development
+- **~30.5k lines** of MoonBit in `src/` (~68k total including `cmd/` and tests)
+- **33 packages** with focused responsibilities
+- **1,732 JavaScript workspace tests**, plus 16 vendored CLI-parser tests; see [Reliability baseline](docs/reliability-baseline.md) for target-specific results
+- **~700 commits** of iterative development
 - **2 dependencies**: [`moonbitlang/x`](https://github.com/moonbitlang/x) (filesystem, system) and [`TheWaWaR/clap`](https://github.com/TheWaWaR/clap) (CLI parsing; vendored with a compatibility patch)
 - `scripts/check-baseline.sh` checks, tests and builds JavaScript with warnings denied, then exercises the CLI and publication workflows
 
