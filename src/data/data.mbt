@@ -72,21 +72,6 @@ pub impl Show for DataError with fn output(self, logger) {
 }
 
 ///|
-fn starts_with_data(s : String, prefix : String) -> Bool {
-  s.has_prefix(prefix)
-}
-
-///|
-fn ends_with_data(s : String, suffix : String) -> Bool {
-  s.has_suffix(suffix)
-}
-
-///|
-fn split_lines_data(s : String) -> Array[String] {
-  @strutil.split_lines(s)
-}
-
-///|
 fn parse_value_at_data(
   s : String,
   pos : Int,
@@ -103,9 +88,9 @@ fn parse_value_at_data(
     }
   } else if c == '[' {
     parse_array_at_data(s, i)
-  } else if starts_with_data(@strutil.substr(s, i, s.length()), "true") {
+  } else if @strutil.starts_with(@strutil.substr(s, i, s.length()), "true") {
     Ok((@frontmatter.FBool(true), i + 4))
-  } else if starts_with_data(@strutil.substr(s, i, s.length()), "false") {
+  } else if @strutil.starts_with(@strutil.substr(s, i, s.length()), "false") {
     Ok((@frontmatter.FBool(false), i + 5))
   } else {
     let mut j = i
@@ -250,7 +235,7 @@ fn insert_key_path_at(
 
 ///|
 fn file_stem_data(filename : String) -> String {
-  if ends_with_data(filename, ".toml") {
+  if @strutil.ends_with(filename, ".toml") {
     @strutil.substr(filename, 0, filename.length() - 5)
   } else {
     filename
@@ -264,7 +249,7 @@ fn parse_data_file(
   name : String,
 ) -> Result[DataFile, DataError] {
   let fields : Map[String, @frontmatter.FrontmatterValue] = Map([])
-  let lines = split_lines_data(content)
+  let lines = @strutil.split_lines(content)
   let mut i = 0
   while i < lines.length() {
     let line_no = i + 1
@@ -411,7 +396,7 @@ pub fn load_from_dir(
   let mut i = 0
   while i < entries.length() {
     let filename = entries[i]
-    if ends_with_data(filename, ".toml") {
+    if @strutil.ends_with(filename, ".toml") {
       let path = data_dir + "/" + filename
       let content = @fs.read_file_to_string(path) catch {
         @fs.IOError(msg) => return Err(IOError(path, msg))

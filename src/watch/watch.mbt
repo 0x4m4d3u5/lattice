@@ -20,6 +20,26 @@ pub fn file_stamp(path : String) -> Int64 {
 }
 
 ///|
+pub fn current_unix_second() -> Int64 {
+  (@env.now() / 1000UL).reinterpret_as_int64()
+}
+
+///|
+/// Return current wall-clock time in milliseconds since Unix epoch.
+/// Used for build timing and performance measurement.
+pub fn current_millis() -> Int64 {
+  @env.now().reinterpret_as_int64()
+}
+
+///|
+/// Return today's date as YYYY-MM-DD using the system clock (UTC).
+pub fn today_ymd() -> String {
+  let secs = current_unix_second()
+  let days = (secs / 86400L).to_int()
+  unix_days_to_ymd(days)
+}
+
+///|
 fn collect_snapshot_entries(
   path : String,
   entries : Array[SnapshotEntry],

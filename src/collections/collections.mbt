@@ -61,47 +61,6 @@ priv enum SectionKind {
 }
 
 ///|
-fn next_newline_collections(s : String, from : Int) -> Int {
-  let n = s.length()
-  let mut i = from
-  while i < n && @strutil.char_at(s, i) != '\n' {
-    i = i + 1
-  }
-  i
-}
-
-///|
-fn split_lines_collections(s : String) -> Array[String] {
-  let lines : Array[String] = []
-  let n = s.length()
-  let mut i = 0
-  while i <= n {
-    let end = next_newline_collections(s, i)
-    lines.push(@strutil.substr(s, i, end))
-    if end >= n {
-      break
-    }
-    i = end + 1
-  }
-  lines
-}
-
-///|
-fn starts_with_collections(s : String, prefix : String) -> Bool {
-  if prefix.length() > s.length() {
-    return false
-  }
-  let mut i = 0
-  while i < prefix.length() {
-    if @strutil.char_at(s, i) != @strutil.char_at(prefix, i) {
-      return false
-    }
-    i = i + 1
-  }
-  true
-}
-
-///|
 fn is_field_name_start(c : Char) -> Bool {
   (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_'
 }
@@ -143,7 +102,7 @@ fn parse_section_header(
   if section.length() == 0 {
     return Err(InvalidLine(line_no, "empty section header"))
   }
-  if starts_with_collections(section, "data.") {
+  if @strutil.starts_with(section, "data.") {
     let name = @strutil.trim(@strutil.substr(section, 5, section.length()))
     if !is_valid_field_name(name) {
       return Err(InvalidLine(line_no, "invalid data schema name"))
@@ -383,7 +342,7 @@ fn parse_field_type_at(
         if q < s.length() && @strutil.char_at(s, q) == ')' {
           j = q + 1
           done = true
-        } else if starts_with_collections(
+        } else if @strutil.starts_with(
             @strutil.substr(s, q, s.length()),
             "minlen=",
           ) {
@@ -397,7 +356,7 @@ fn parse_field_type_at(
           if j < s.length() && @strutil.char_at(s, j) == ',' {
             j = j + 1
           }
-        } else if starts_with_collections(
+        } else if @strutil.starts_with(
             @strutil.substr(s, q, s.length()),
             "maxlen=",
           ) {
@@ -435,7 +394,7 @@ fn parse_field_type_at(
         if q < s.length() && @strutil.char_at(s, q) == ')' {
           j = q + 1
           done = true
-        } else if starts_with_collections(
+        } else if @strutil.starts_with(
             @strutil.substr(s, q, s.length()),
             "after=",
           ) {
@@ -449,7 +408,7 @@ fn parse_field_type_at(
           if j < s.length() && @strutil.char_at(s, j) == ',' {
             j = j + 1
           }
-        } else if starts_with_collections(
+        } else if @strutil.starts_with(
             @strutil.substr(s, q, s.length()),
             "before=",
           ) {
@@ -487,7 +446,7 @@ fn parse_field_type_at(
         if q < s.length() && @strutil.char_at(s, q) == ')' {
           j = q + 1
           done = true
-        } else if starts_with_collections(
+        } else if @strutil.starts_with(
             @strutil.substr(s, q, s.length()),
             "after=",
           ) {
@@ -501,7 +460,7 @@ fn parse_field_type_at(
           if j < s.length() && @strutil.char_at(s, j) == ',' {
             j = j + 1
           }
-        } else if starts_with_collections(
+        } else if @strutil.starts_with(
             @strutil.substr(s, q, s.length()),
             "before=",
           ) {
@@ -540,7 +499,7 @@ fn parse_field_type_at(
         if q < s.length() && @strutil.char_at(s, q) == ')' {
           j = q + 1
           done = true
-        } else if starts_with_collections(
+        } else if @strutil.starts_with(
             @strutil.substr(s, q, s.length()),
             "min=",
           ) {
@@ -554,7 +513,7 @@ fn parse_field_type_at(
           if j < s.length() && @strutil.char_at(s, j) == ',' {
             j = j + 1
           }
-        } else if starts_with_collections(
+        } else if @strutil.starts_with(
             @strutil.substr(s, q, s.length()),
             "max=",
           ) {
@@ -592,7 +551,7 @@ fn parse_field_type_at(
         if q < s.length() && @strutil.char_at(s, q) == ')' {
           j = q + 1
           done = true
-        } else if starts_with_collections(
+        } else if @strutil.starts_with(
             @strutil.substr(s, q, s.length()),
             "min=",
           ) {
@@ -606,7 +565,7 @@ fn parse_field_type_at(
           if j < s.length() && @strutil.char_at(s, j) == ',' {
             j = j + 1
           }
-        } else if starts_with_collections(
+        } else if @strutil.starts_with(
             @strutil.substr(s, q, s.length()),
             "max=",
           ) {
@@ -905,7 +864,7 @@ fn finalize_data_schema(
 ///|
 /// Parse collections config text into typed collection + data definitions.
 pub fn parse(input : String) -> Result[CollectionsConfig, CollectionsError] {
-  let lines = split_lines_collections(input)
+  let lines = @strutil.split_lines(input)
   let defs : Array[CollectionDef] = []
   let seen_collections : Map[String, Bool] = Map([])
   let data_schemas : Map[String, DataSchemaDef] = Map([])

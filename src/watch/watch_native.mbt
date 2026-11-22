@@ -15,12 +15,6 @@ extern "C" fn watch_interrupted_ffi() -> Int = "lattice_watch_interrupted"
 extern "C" fn watch_clear_interrupt_ffi() -> Unit = "lattice_watch_clear_interrupt"
 
 ///|
-extern "C" fn watch_current_unix_second_ffi() -> Int64 = "lattice_watch_current_unix_second"
-
-///|
-extern "C" fn watch_current_millis_ffi() -> Int64 = "lattice_watch_current_millis"
-
-///|
 fn string_to_utf8_bytes_watch(str : String, is_filename : Bool) -> Bytes {
   let res : Array[Byte] = []
   let len = str.length()
@@ -79,24 +73,4 @@ pub fn interrupted() -> Bool {
 ///|
 pub fn clear_interrupt() -> Unit {
   watch_clear_interrupt_ffi()
-}
-
-///|
-pub fn current_unix_second() -> Int64 {
-  watch_current_unix_second_ffi()
-}
-
-///|
-/// Return current wall-clock time in milliseconds since Unix epoch.
-/// Used for build timing and performance measurement.
-pub fn current_millis() -> Int64 {
-  watch_current_millis_ffi()
-}
-
-///|
-/// Return today's date as YYYY-MM-DD using the system clock (UTC).
-pub fn today_ymd() -> String {
-  let secs = current_unix_second()
-  let days = (secs / 86400L).to_int()
-  unix_days_to_ymd(days)
 }

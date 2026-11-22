@@ -31,33 +31,6 @@ pub struct Frontmatter {
 // character access so comparisons against char literals type-check correctly.
 
 ///|
-fn trim_ws(s : String) -> String {
-  let n = s.length()
-  if n == 0 {
-    return s
-  }
-  let mut lo = 0
-  while lo < n &&
-        (
-          @strutil.char_at(s, lo) == ' ' ||
-          @strutil.char_at(s, lo) == '\t' ||
-          @strutil.char_at(s, lo) == '\r'
-        ) {
-    lo = lo + 1
-  }
-  let mut hi = n
-  while hi > lo &&
-        (
-          @strutil.char_at(s, hi - 1) == ' ' ||
-          @strutil.char_at(s, hi - 1) == '\t' ||
-          @strutil.char_at(s, hi - 1) == '\r'
-        ) {
-    hi = hi - 1
-  }
-  @strutil.substr(s, lo, hi)
-}
-
-///|
 fn next_newline(s : String, from : Int) -> Int {
   let n = s.length()
   let mut i = from
@@ -65,22 +38,6 @@ fn next_newline(s : String, from : Int) -> Int {
     i = i + 1
   }
   i
-}
-
-///|
-fn split_lines(s : String) -> Array[String] {
-  let lines : Array[String] = []
-  let n = s.length()
-  let mut i = 0
-  while i <= n {
-    let end = next_newline(s, i)
-    lines.push(@strutil.substr(s, i, end))
-    if end >= n {
-      break
-    }
-    i = end + 1
-  }
-  lines
 }
 
 ///|
@@ -248,7 +205,7 @@ fn parse_value_at(
           @strutil.char_at(s, j) != ']' {
       j = j + 1
     }
-    let raw = trim_ws(@strutil.substr(s, i, j))
+    let raw = @strutil.trim_h(@strutil.substr(s, i, j))
     if @strutil.is_valid_iso8601_date(raw) {
       Ok((FDate(raw), j))
     } else if raw.contains(".") {
@@ -271,7 +228,7 @@ fn parse_value_at(
       j = j + 1
     }
     // Boolean names must match the whole scalar, not a tag-name prefix.
-    let raw = trim_ws(@strutil.substr(s, i, j))
+    let raw = @strutil.trim_h(@strutil.substr(s, i, j))
     let value = match raw {
       "true" => FBool(true)
       "false" => FBool(false)
@@ -381,7 +338,7 @@ fn parse_assignment(
   if eq < 0 {
     return Err("no '=' found in line")
   }
-  let raw_key = trim_ws(@strutil.substr(line, 0, eq))
+  let raw_key = @strutil.trim_h(@strutil.substr(line, 0, eq))
   // Normalize only the new reserved key; other quoted metadata keeps its
   // established behavior. Both spellings participate in duplicate rejection.
   let key = match raw_key {
@@ -391,7 +348,7 @@ fn parse_assignment(
   if key.length() == 0 {
     return Err("empty key")
   }
-  let val_str = trim_ws(@strutil.substr(line, eq + 1, n))
+  let val_str = @strutil.trim_h(@strutil.substr(line, eq + 1, n))
   match parse_value_strict(val_str, false) {
     Ok(val) => Ok((key, val))
     Err(e) => Err("value error for '" + key + "': " + e)
@@ -417,7 +374,7 @@ fn yaml_value_before_comment(raw : String) -> String {
         )
       )
     if c == '#' && separated {
-      return trim_ws(@strutil.substr(raw, 0, i))
+      return @strutil.trim_h(@strutil.substr(raw, 0, i))
     }
     if node_start && (c == '\'' || c == '"') {
       // Reuse quote parsing so escapes and literal hashes stay inside the node.
@@ -456,7 +413,7 @@ fn yaml_value_before_comment(raw : String) -> String {
 
 ///|
 fn parse_yaml_value(raw : String) -> FrontmatterValue {
-  let value = trim_ws(raw)
+  let value = @strutil.trim_h(raw)
   match parse_value_strict(value, true) {
     Ok(parsed) => parsed
     Err(_) => FStr(value)
@@ -468,7 +425,7 @@ fn parse_yaml_assignment(
   lines : Array[String],
   line_index : Int,
 ) -> Result[(String, FrontmatterValue, Int), String] {
-  let line = trim_ws(lines[line_index])
+  let line = @strutil.trim_h(lines[line_index])
   let mut colon = -1
   let mut i = 0
   while i < line.length() {
@@ -498,7 +455,7 @@ fn parse_yaml_assignment(
     }
     return Err("missing ':' separator in frontmatter line")
   }
-  let raw_key = trim_ws(@strutil.substr(line, 0, colon))
+  let raw_key = @strutil.trim_h(@strutil.substr(line, 0, colon))
   // Normalize only the new reserved key; other quoted metadata keeps its
   // established behavior. Both spellings participate in duplicate rejection.
   let key = match raw_key {
@@ -508,7 +465,7 @@ fn parse_yaml_assignment(
   if key.length() == 0 {
     return Err("empty key")
   }
-  let value = yaml_value_before_comment(trim_ws(@strutil.substr(line, colon + 1, line.length())))
+  let value = yaml_value_before_comment(@strutil.trim_h(@strutil.substr(line, colon + 1, line.length())))
   if value.length() > 0 {
     return Ok((key, parse_yaml_value(value), line_index + 1))
   }
@@ -516,7 +473,7 @@ fn parse_yaml_assignment(
   let items : Array[FrontmatterValue] = []
   let mut j = line_index + 1
   while j < lines.length() {
-    let raw = trim_ws(lines[j])
+    let raw = @strutil.trim_h(lines[j])
     if raw.length() == 0 || @strutil.char_at(raw, 0) == '#' {
       j = j + 1
       continue
@@ -527,7 +484,7 @@ fn parse_yaml_assignment(
         @strutil.char_at(raw, 1) == ' ' ||
         @strutil.char_at(raw, 1) == '\t'
       ) {
-      let item_raw = yaml_value_before_comment(trim_ws(@strutil.substr(raw, 1, raw.length())))
+      let item_raw = yaml_value_before_comment(@strutil.trim_h(@strutil.substr(raw, 1, raw.length())))
       items.push(parse_yaml_value(item_raw))
       j = j + 1
       continue
@@ -569,15 +526,15 @@ pub fn parse_yaml(content : String) -> Result[Frontmatter, String] {
   let mut i = fm_start
   while i < n {
     let line_end = next_newline(content, i)
-    let line = trim_ws(@strutil.substr(content, i, line_end))
+    let line = @strutil.trim_h(@strutil.substr(content, i, line_end))
     if line == "---" {
       let body_start = if line_end + 1 <= n { line_end + 1 } else { n }
       let fields : Map[String, FrontmatterValue] = Map([])
       let fm_text = @strutil.substr(content, fm_start, i)
-      let lines = split_lines(fm_text)
+      let lines = @strutil.split_lines(fm_text)
       let mut j = 0
       while j < lines.length() {
-        let l = trim_ws(lines[j])
+        let l = @strutil.trim_h(lines[j])
         if l.length() > 0 && @strutil.char_at(l, 0) != '#' {
           match parse_yaml_assignment(lines, j) {
             Ok((key, val, next_j)) => {
@@ -621,15 +578,15 @@ pub fn parse_toml(content : String) -> Result[Frontmatter, String] {
   let mut i = fm_start
   while i < n {
     let line_end = next_newline(content, i)
-    let line = trim_ws(@strutil.substr(content, i, line_end))
+    let line = @strutil.trim_h(@strutil.substr(content, i, line_end))
     if line == "+++" {
       let body_start = if line_end + 1 <= n { line_end + 1 } else { n }
       let fields : Map[String, FrontmatterValue] = Map([])
       let fm_text = @strutil.substr(content, fm_start, i)
-      let lines = split_lines(fm_text)
+      let lines = @strutil.split_lines(fm_text)
       let mut j = 0
       while j < lines.length() {
-        let l = trim_ws(lines[j])
+        let l = @strutil.trim_h(lines[j])
         if l.length() > 0 && @strutil.char_at(l, 0) != '#' {
           match parse_assignment(l) {
             Ok((key, val)) => {

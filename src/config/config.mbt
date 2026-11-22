@@ -62,32 +62,6 @@ pub enum ConfigError {
 }
 
 ///|
-fn next_newline_config(s : String, from : Int) -> Int {
-  let n = s.length()
-  let mut i = from
-  while i < n && @strutil.char_at(s, i) != '\n' {
-    i = i + 1
-  }
-  i
-}
-
-///|
-fn split_lines_config(s : String) -> Array[String] {
-  let lines : Array[String] = []
-  let n = s.length()
-  let mut i = 0
-  while i <= n {
-    let end = next_newline_config(s, i)
-    lines.push(@strutil.substr(s, i, end))
-    if end >= n {
-      break
-    }
-    i = end + 1
-  }
-  lines
-}
-
-///|
 fn parse_assignment(
   line : String,
   line_no : Int,
@@ -216,7 +190,7 @@ pub fn parse(input : String) -> Result[SiteConfig, ConfigError] {
   let mut current_data_name : String? = None
   let mut current_data_required : String = ""
 
-  let lines = split_lines_config(input)
+  let lines = @strutil.split_lines(input)
   let mut i = 0
   while i < lines.length() {
     let line_no = i + 1
