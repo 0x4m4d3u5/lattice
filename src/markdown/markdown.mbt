@@ -2016,7 +2016,7 @@ fn render_footnotes_section(
   while i < footnotes.length() {
     let footnote = footnotes[i]
     buf.write_string("<li id=\"fn-")
-    buf.write_string(@strutil.escape_html_body(footnote.label))
+    buf.write_string(@strutil.escape_html_attr(footnote.label))
     buf.write_string("\">")
     // Render inline markdown in footnote text (e.g. **bold**, `code`)
     let inlines = parse_inlines(footnote.text, 0, footnote.text.length())
@@ -2024,7 +2024,7 @@ fn render_footnotes_section(
     merge_shortcode_errors(issues, rendered_text.shortcode_errors)
     buf.write_string(rendered_text.html)
     buf.write_string(" <a href=\"#fnref-")
-    buf.write_string(@strutil.escape_html_body(footnote.label))
+    buf.write_string(@strutil.escape_html_attr(footnote.label))
     buf.write_string("\" class=\"footnote-backref\">↩</a>")
     buf.write_string("</li>\n")
     i = i + 1
@@ -2172,9 +2172,9 @@ fn render_inline_with_issues(
         Some(ordinal) =>
           {
             html: "<sup><a href=\"#fn-" +
-            @strutil.escape_html_body(label) +
+            @strutil.escape_html_attr(label) +
             "\" id=\"fnref-" +
-            @strutil.escape_html_body(label) +
+            @strutil.escape_html_attr(label) +
             "\">[" +
             ordinal.to_string() +
             "]</a></sup>",
@@ -2296,7 +2296,7 @@ fn render_block_with_issues(
       let body = render_blocks_with_issues(inner_blocks, wl, heading_counts, fn_map, None, None)
       let issues = heading.shortcode_errors
       merge_shortcode_errors(issues, body.shortcode_errors)
-      let classes = " class=\"callout callout-" + @strutil.escape_html_body(kind) + "\""
+      let classes = " class=\"callout callout-" + @strutil.escape_html_attr(kind) + "\""
       let (opening, closing, title_tag) = match expanded {
         Some(open) => ("<details" + classes + (if open { " open" } else { "" }) + ">\n", "</details>\n", "summary")
         None => ("<div" + classes + ">\n", "</div>\n", "p")

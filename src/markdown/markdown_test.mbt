@@ -1183,3 +1183,13 @@ test "is_fence_end matching and non-matching" {
   assert_true(!@markdown.is_fence_end("``", '`'))
   assert_true(!@markdown.is_fence_end("", '`'))
 }
+
+///|
+test "footnote labels escape double quotes in id and href attributes" {
+  let md = "Text[^a\"b].\n\n[^a\"b]: Footnote body."
+  let rendered = @markdown.render(md, empty_wl())
+  assert_true(rendered.contains("href=\"#fn-a&quot;b\""))
+  assert_true(rendered.contains("id=\"fnref-a&quot;b\""))
+  assert_true(rendered.contains("<li id=\"fn-a&quot;b\">"))
+  assert_true(rendered.contains("href=\"#fnref-a&quot;b\""))
+}
