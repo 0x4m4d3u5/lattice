@@ -1,9 +1,7 @@
 ///|
 /// Lattice slug — filename-to-URL-slug conversion.
 ///
-/// Structural property: slug generation is a pure, total function. Every
-/// filename maps to exactly one slug, every slug maps to exactly one output
-/// path. No ambiguity, no runtime surprises, no collision detection needed.
+/// Slug generation is deterministic, not injective. The builder handles collisions.
 
 ///|
 /// Convert a markdown filename to a URL slug.
@@ -12,7 +10,8 @@
 ///   - Strip the .md extension (if present, case-insensitive)
 ///   - Lowercase all ASCII uppercase letters
 ///   - Transliterate common Latin accented characters to ASCII (café → cafe)
-///   - Replace spaces and underscores with hyphens
+///   - Replace spaces, underscores, ASCII controls, and URL delimiters with hyphens
+///   - Replace standalone dot segments while preserving dots within names
 ///
 /// Examples:
 ///   "hello-world.md"   → "hello-world"
@@ -23,14 +22,29 @@
 ///   "café.md"          → "cafe"
 ///   "Ångström.md"      → "angstrom"
 pub fn filename_to_slug(filename : String) -> String {
-  // Strip .md extension (case-insensitive) by limiting the character count
-  let lower = filename.to_lower()
-  let end = if lower.has_suffix(".md") {
-    filename.length() - 3
+  let stem = without_markdown_extension(filename)
+  if stem == "." {
+    "-"
+  } else if stem == ".." {
+    "--"
   } else {
-    filename.length()
+    slugify(stem, path_segment=true)
   }
-  slugify_n(filename, end)
+}
+
+///|
+/// Normalize a label without rewriting punctuation or path separators.
+pub fn label_to_slug(tag : String) -> String {
+  slugify(without_markdown_extension(tag), path_segment=false)
+}
+
+///|
+fn without_markdown_extension(filename : String) -> String {
+  if filename.to_lower().has_suffix(".md") {
+    filename[:filename.length() - 3].to_owned()
+  } else {
+    filename
+  }
 }
 
 ///|
@@ -129,23 +143,31 @@ fn transliterate_latin(c : Char) -> String {
 }
 
 ///|
-fn slugify_n(s : String, end : Int) -> String {
+fn slugify(s : String, path_segment~ : Bool) -> String {
   let buf = StringBuilder()
-  let mut i = 0
-  while i < end {
-    let c = @strutil.char_at(s, i)
-    if c == ' ' || c == '_' {
+  for c in s.iter() {
+    if c == ' ' ||
+      c == '_' ||
+      (
+        path_segment &&
+        (
+          c < ' ' ||
+          c == '\u{7F}' ||
+          c == '#' ||
+          c == '?' ||
+          c == '%' ||
+          c == '/' ||
+          c == '\\'
+        )
+      ) {
       buf.write_char('-')
     } else if c >= 'A' && c <= 'Z' {
-      // Lowercase: ASCII uppercase → lowercase offset by 32
       buf.write_char((c.to_int() + 32).unsafe_to_char())
     } else if c.to_int() > 0x7F {
-      // Non-ASCII: attempt Latin transliteration
       buf.write_string(transliterate_latin(c))
     } else {
       buf.write_char(c)
     }
-    i = i + 1
   }
   buf.to_string()
 }

@@ -69,6 +69,8 @@ echo "Running local image attachment workflow"
 node scripts/check-image-embeds.mjs || status=1
 echo "Running alternate note name workflow"
 node scripts/check-note-aliases.mjs || status=1
+echo "Running filename slug checks"
+node scripts/check-filename-slugs.mjs || status=1
 echo "Running saved inventory comparison fixture"
 node scripts/check-inventory-diff.mjs || status=1
 echo "Running synthetic vault acceptance"

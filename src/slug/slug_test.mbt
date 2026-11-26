@@ -133,3 +133,20 @@ test "slug non-Latin chars pass through unchanged" {
   assert_eq(@slug.filename_to_slug("你好.md"), "你好")
   assert_eq(@slug.filename_to_slug("日本語.md"), "日本語")
 }
+
+///|
+test "slug preserves supplementary Unicode scalars" {
+  assert_eq(@slug.filename_to_slug("🚀 Launch𠀀.MD"), "🚀-launch𠀀")
+  assert_eq(@slug.filename_to_slug("🚀"), "🚀")
+  assert_eq(@slug.filename_to_slug("🚀.md").iter().count(), 1)
+}
+
+///|
+test "slug keeps URL delimiters out of the output segment" {
+  assert_eq(@slug.filename_to_slug("FAQ?# 100%.md"), "faq---100-")
+  assert_eq(@slug.filename_to_slug("a/b\\c.md"), "a-b-c")
+  assert_eq(@slug.filename_to_slug("Line\tBreak.md"), "line-break")
+  assert_eq(@slug.filename_to_slug("..md"), "-")
+  assert_eq(@slug.filename_to_slug("...md"), "--")
+  assert_eq(@slug.filename_to_slug("v1.0.md"), "v1.0")
+}

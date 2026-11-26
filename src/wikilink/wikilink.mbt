@@ -38,7 +38,12 @@ pub fn lookup_key(target : String) -> String {
     Some((page, _)) => page.to_owned()
     None => target
   }
-  @slug.filename_to_slug(page)
+  // Keep qualified spelling distinct from an unrelated flat slug.
+  if page.contains("/") {
+    @slug.label_to_slug(page)
+  } else {
+    @slug.filename_to_slug(page)
+  }
 }
 
 ///|

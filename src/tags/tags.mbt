@@ -61,7 +61,7 @@ pub fn extract(
               @frontmatter.FStr(raw) => {
                 let tag_value = @strutil.trim(raw)
                 if tag_value.length() > 0 {
-                  let tag_slug = @slug.filename_to_slug(tag_value)
+                  let tag_slug = @slug.label_to_slug(tag_value)
                   // Validate after extension stripping and normalization. Treat
                   // both path separators consistently without rewriting the slug.
                   if tag_slug.replace_all(old="\\", new="/").split("/").any(fn(part) {
