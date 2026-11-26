@@ -11,6 +11,10 @@
  * HTML injection: live-reload <script> injected before </body>
  */
 
+#if !defined(_WIN32) && !defined(_XOPEN_SOURCE)
+#  define _XOPEN_SOURCE 700
+#endif
+
 #ifdef _WIN32
 #  define WIN32_LEAN_AND_MEAN
 #  include <windows.h>
