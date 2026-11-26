@@ -1,63 +1,32 @@
 # Lattice
 
-MoonBit SSG for the [2026 MoonBit Software Synthesis Challenge](https://www.moonbitlang.com/2026-scc).
+Lattice is a MoonBit static site generator and structural checker for Markdown
+vaults. It can publish a public projection and prepare a separate, local
+plaintext export for agent memory. Its roots are in the 2026 MoonBit Software
+Synthesis Challenge; the [retrospective](docs/retrospective.md) records that history.
 
-## Challenge constraints
+## Working contracts
 
-- Deadline: April 21, 2026
-- ~10k lines of MoonBit, individual, open-sourced on GitHub
-- $600 grant
-- Rubric (25% each): functional completeness, engineering quality, explainability (AI tool retrospective + architectural decisions), UX
+- MoonBit types model content and diagnostics. Validation happens during
+  `check` and `build`; it is not a compile-time proof of vault correctness.
+- `check` and `inventory` are read-only. Preserve the distinction between
+  validation, planned output and actual publication.
+- Public source selection precedes tags, indexes, link resolution and other
+  derived output. Draft status is not visibility. Keep the private-export
+  destination and artifact boundaries intact.
+- Read [README.md](README.md) for CLI behavior, [TODO.md](TODO.md) for the current
+  vault workflow, and [build safety](docs/build-safety.md) for what is guaranteed.
+  Keep the package README aligned with the user-facing CLI.
 
-## Core thesis
+## Development
 
-An SSG where structural violations are type errors, not runtime surprises.
-
-Typed frontmatter schemas, validated wikilinks, content collections with schema enforcement — the kind of guarantees Ametrine lacks because Astro's content layer is behavioral (runtime checks) rather than structural. MoonBit's type system makes this the right language for the story.
-
-## Differentiation angle
-
-Not "another SSG." The pitch is that content integrity is a structural property — broken links, schema mismatches, missing required fields should be compile-time errors. Every other SSG discovers these at build time or worse, at render time.
-
-## Rubric alignment
-
-- **Functional completeness**: core SSG pipeline (parse → validate → render → emit)
-- **Engineering quality**: MoonBit type system doing real work, not just wrapping strings
-- **Explainability**: structural-vs-behavioral lens writes the retrospective naturally — document every place a type caught a bug that a dynamic check would have missed
-- **UX**: the output itself + the error messages when the structural contract is violated
-
-## Related context
-
-- goal/3: MoonBit ecosystem familiarity — existing research base
-- goal/5: the challenge goal itself
-- ~/code/ametrine: direct domain context, pain points to solve
-- Reference projects from challenge page: fastcc (C compiler), wasmoon (WebAssembly runtime with JIT)
-
-## Development discipline
-
-The explainability rubric (25%) scores the retrospective on architectural decisions and AI tool usage — this means the commit history and decision log are first-class deliverables, not afterthoughts.
-
-- **Document decisions at the time they're made.** A commit message saying "add parser" is useless. "Parse frontmatter as typed struct rather than raw map — catches schema violations at ingest, not at render" is what the retrospective is built from.
-- **Atomic commits.** Each commit should reflect one coherent decision or change. Reviewers (and the retrospective) need to trace *why* the architecture looks the way it does.
-- **Push frequently.** The project must be open-sourced on GitHub — work that lives only locally doesn't count toward the submission. Push after each meaningful unit of work.
-- **Annotate AI usage honestly.** The rubric explicitly scores AI tool retrospective. Where a type signature came from a suggestion, where a design was revised after feedback, where the agent spotted a footgun — note it. Sanitized retrospectives read as sanitized.
-
-## MoonBit stdlib — check before handrolling
-
-LLMs tend to ignore the MoonBit stdlib and implement things from scratch. Don't. Before writing a utility function, check https://mooncakes.io/docs/moonbitlang/core first.
-
-The stdlib has high velocity — things get added frequently. Areas most likely to already exist:
-- String: split, trim, contains, starts_with, ends_with, to_upper, to_lower
-- Array/Iter: map, filter, fold, zip, flatten, find, any, all
-- Option/Result: map, bind, or_else, unwrap_or
-- Math utilities
-- HashMap, HashSet (in core)
-
-If something genuinely isn't in stdlib, note it explicitly in the commit rather than silently handrolling.
-
-## Reference sources
-
-- Challenge page: https://www.moonbitlang.com/2026-scc
-- MoonBit docs: https://www.moonbitlang.com/docs
-- MoonBit stdlib: https://mooncakes.io/docs/moonbitlang/core
-- MoonBit async lib: https://github.com/moonbitlang/async
+- Make small, coherent changes with a regression at the appropriate layer.
+  For publication behavior, compare read-only check or inventory with emitted
+  files through the CLI. Use synthetic fixtures for regressions and disposable
+  copies of real vaults for evaluation. Never publish or upload private notes.
+- Match the repository's pinned toolchain and target coverage. Start with
+  `moon check --target js --deny-warn` and focused tests; the reliability workflow
+  covers JS, native, Wasm and Wasm GC, including CLI and browser smoke tests.
+- Check the [MoonBit standard library](https://mooncakes.io/docs/moonbitlang/core)
+  for existing helpers before introducing new ones. Keep architectural decisions
+  and tradeoffs in the relevant docs or commit message.

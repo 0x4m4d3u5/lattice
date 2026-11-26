@@ -14,11 +14,11 @@ Lattice should be the type checker for agent memory, not the database. Agents
 already write Markdown with ordinary file tools. The weak step in that loop is
 lint.
 
-## Where things stand (2026-11-15)
+## Where things stand
 
-The boundary machinery has landed. Every PR below was tested on synthetic
-fixtures only. **Nothing has been run against a real vault yet**, and that is
-now the main source of risk.
+The boundary machinery has landed. The PRs below were tested against synthetic
+fixtures. A copied public vault has also been checked, but a clean full-vault
+import is still unverified.
 
 Done:
 
@@ -87,8 +87,10 @@ error / **silently wrong**. Only the last category is urgent.
 - [ ] To verify: `[[folder/note]]` path links, `![[note]]` transclusions,
       `![[image.png|300]]` sizing, block refs `[[note#^id]]`, heading links with
       punctuation, links that rely on Obsidian's case-insensitive matching,
-      unquoted YAML dates, `tags:` as a string vs a list, and filenames containing
-      `#`, `%`, `?` or `.` (the slugifier passes most ASCII punctuation through).
+      unquoted YAML dates and remaining filename/heading edge cases. See the
+      [public vault compatibility pass](docs/public-vault-compatibility.md) for observed
+      scalar tags, qualified links and the tested filename-slug behavior.
+- [x] Run read-only check and inventory on a copied, unchanged public corpus.
 - [ ] Record what fraction of a real vault builds cleanly with the minimal
       `Optional[...]` schema in `vault.collections.cfg`.
 

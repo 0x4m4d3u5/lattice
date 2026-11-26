@@ -163,6 +163,12 @@ lattice explain <code>                                — describe an error code
 
 Defaults: `content-dir` → `./content`, config → `<content-dir>/lattice.conf`, output → config `output_dir` or `./dist`.
 
+Filename-derived page slugs preserve Unicode and dots within names. Characters
+like `#`, `%`, and `?` become hyphens, so they do not become URL delimiters. If
+you published notes with those characters before, compare old and new inventories
+and add redirects as needed. This does not change tag spelling or make literal
+`#` usable in a wikilink page name; use the normalized slug or a configured alias.
+
 Preview the final files of a forced build without publishing:
 
 ```bash
