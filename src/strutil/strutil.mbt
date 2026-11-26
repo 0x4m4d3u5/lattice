@@ -344,7 +344,7 @@ pub fn parse_int(s : String) -> Int? {
     i = i + 1
   }
   // Keep our decimal-only grammar; core handles both signed bounds safely.
-  Some(@string.parse_int(s[:], base=10)) catch {
+  Some(@string.parse_int(s[:], radix=10)) catch {
     _ => None
   }
 }
@@ -716,7 +716,7 @@ fn numeric_reference(s : String, pos : Int) -> (Char, Int)? {
     end = end + 1
   }
   if end == start || end >= n || char_at(s, end) != ';' { return None }
-  let value = @string.parse_int(s[start:end], base~) catch { _ => return None }
+  let value = @string.parse_int(s[start:end], radix=base) catch { _ => return None }
   if value == 0 { return None }
   value.to_char().map(c => (c, end + 1 - pos))
 }

@@ -1,4 +1,5 @@
 ///|
+#export_name("render_note")
 pub fn render_note() -> Int {
   let source = "---\ntitle: Garden\n---\n## Planting\nRead [[soil|the soil guide]].\n"
   let fm = match @frontmatter.parse(source) {
@@ -103,6 +104,7 @@ pub fn render_note() -> Int {
 }
 
 ///|
+#export_name("validate_note")
 pub fn validate_note() -> Int {
   let schema : @schema.Schema = {
     name: "notes",
@@ -220,6 +222,7 @@ pub fn validate_note() -> Int {
 }
 
 ///|
+#export_name("validate_links")
 pub fn validate_links() -> Int {
   let body = "Read [[soil|the soil guide]] and [[missing]]. `[[sample]]`"
   let links = @wikilink.extract(body, "garden.md")
@@ -241,6 +244,7 @@ pub fn validate_links() -> Int {
 }
 
 ///|
+#export_name("template_note")
 pub fn template_note() -> Int {
   let tpl = match
     @template.parse_template(
@@ -324,6 +328,7 @@ pub fn template_note() -> Int {
 }
 
 ///|
+#export_name("parse_toml_note")
 pub fn parse_toml_note() -> Int {
   let fm = match
     @frontmatter.parse(

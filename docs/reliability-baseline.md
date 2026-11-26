@@ -10,21 +10,21 @@ Repository bootstrap and CI use the official **native-hosted compiler** on Linux
 x86_64. Compiler host and generated target are separate: this compiler produces
 JavaScript, WASM, WASM-GC and native executables. Node remains pinned to 26.12.1.
 
-- Moon CLI and Moonrun: `0.1.20261104` (`940aa18`).
-- Compiler: `0.10.20+65efd5b93`.
-- Core: `0.10.20+65efd5b93`, from the exact-version official core archive.
+- Moon CLI and Moonrun: `0.1.20261126` (`ccd306a`).
+- Compiler: `1.0.0-rc1+3c0520448`.
+- Core: `1.0.0-rc1+3c0520448`, from the exact-version official core archive.
 - Dependencies remain `moonbitlang/x 0.5.5` and the vendored `clap 0.2.6` compatibility copy.
 
 | Official input | Verified SHA-256 |
 | --- | --- |
-| Linux SDK, including native compiler and C runtime | `80d987523308fa490eba9f1baf98df996a5a7891e118357553b7c2608c0597c5` |
-| Matching official core source archive | `8ec2a2c01335501d703867bb4eef5f92d3cd7e1ae1ee5f7f14d54d16d2c7c2b5` |
+| Linux SDK, including native compiler and C runtime | `113527a9037fe12e463e6ac1e7698116bf703730243096328e4ac7e2774307c0` |
+| Matching official core source archive | `a3f7d82f1195e28ad9aad7b9b8b4cbca490cbf8146b306a376ea3beba4173751` |
 
-[Official SDK distribution path](https://cli.moonbitlang.com/binaries/0.10.20%2B65efd5b93/moonbit-linux-x86_64.tar.gz)
-and [matching core source archive](https://cli.moonbitlang.com/cores/core-0.10.20%2B65efd5b93.tar.gz).
+[Official SDK distribution path](https://cli.moonbitlang.com/binaries/1.0.0-rc1%2B3c0520448/moonbit-linux-x86_64.tar.gz)
+and [matching core source archive](https://cli.moonbitlang.com/cores/core-1.0.0-rc1%2B3c0520448.tar.gz).
 The installer checks the core's declared version as well as its archive checksum;
-it never substitutes a different compiler host or a floating core. The native compiler
-reports a November 5 build date while the CLI reports November 4.
+it never substitutes a different compiler host or a floating core. The CLI,
+Moonrun and native compiler all report November 26, 2026.
 
 The installer verifies archives before extraction, stages the installation, bundles
 JS core, and verifies installed tools before promotion. Cache reuse checks the
@@ -34,13 +34,11 @@ when changing compiler profiles. A local `moon upgrade` does not alter these pin
 
 ### Reproducibility and download retention
 
-The SDK download's HTTP `x-amz-expiration` header advertises deletion on
-**January 5, 2027**, under `delete binaries every 60days`. This is remote object
-retention, not evidence that the downloaded executable expires at runtime. Fresh
-installation after removal is not guaranteed; retained installations/caches do not
-provide permanent artifact availability either. Missing downloads or changed hashes
-fail explicitly. Update and revalidate the official pin before its retention window
-ends; bootstrap never substitutes `latest` or the WASM-hosted compiler silently.
+The previous 0.10.20 SDK advertised object deletion on January 5, 2027.
+The checked RC1 endpoints did not advertise an expiration date on November 26;
+this does not guarantee permanent downloads. Object retention is separate from
+runtime expiry. Missing downloads or changed hashes fail explicitly; bootstrap
+never substitutes `latest` or the WASM-hosted compiler silently.
 
 The previous durable compiler choice avoided dependence on a short-lived native
 SDK download, but its generated WASM interpolation and native linking failed.
@@ -53,8 +51,7 @@ This motivates the host change; it does not establish the compiler's internal bu
 `check-baseline.sh` retains the warning-free JS suite and CLI/publishing checks.
 `check-targets.sh` runs conventional check/test/build and vendored tests for WASM,
 WASM-GC and native, then executes the native CLI's init/check/strict-build/inventory
-workflow. Native retains its visible unused-import warning; JS and WASM gates deny
-warnings. Portable no-host-import exports, supplied-note workers and real browser
+workflow. JS and WASM gates deny warnings. Native keeps its existing gate policy. Portable no-host-import exports, supplied-note workers and real browser
 reader/search tests remain independent required gates. A successful native target
 check alone is never treated as native CLI execution.
 
@@ -62,6 +59,12 @@ Native file stamps use modification times; the JS watcher hashes contents, so
 restoring identical bytes can cause one additional dependency rebuild on native.
 
 ## Source compatibility
+
+MoonBit 1.0 RC1 uses `radix=` for integer parsing, `capacity=` for the vendored
+clap help builder, and `insert_and_check` for footnote deduplication. The CLI
+declares an executable package; the foreign-library examples and core probe
+declare the same JS and WASM exports in source with `#export_name`. JS stays
+ESM and the WASM-GC string ABI is unchanged. No dependencies were upgraded.
 
 The November 4 toolchain deprecates trailing `derive(...)` syntax and legacy
 `String.view()`. Sixteen declarations now use `#derive(...)` attributes, preserving
@@ -108,10 +111,20 @@ including vendored code. Display compatibility tests preserve 89 pre-migration
 public strings and asset-validation formatting; two parser-choice diagnostic strings, and CLI stdout, stderr and exit codes
 were compared against the previous implementation using seven synthetic commands.
 
+## Verified RC1 results — 2026-11-26
+
+An isolated Linux x86_64 pass with Node 26.12.1 passed check, test, and build
+on JS, native, WASM, and WASM-GC: 1,734 workspace tests on JS and 1,733 on each
+other target. The 16 vendored clap tests are included and also passed when run
+separately. The JS and native CLI fixtures, portable WASM exports, supplied-text
+WASM-GC workers, and headless Chromium 153.0.8010.12 browser suite passed.
+Fresh SDK bootstrap and cached reuse passed; a corrupt cached manifest was
+rejected without being overwritten. Only synthetic fixtures were processed.
+
 ## Verified upgrade results — 2026-11-07
 
 An isolated Linux x86_64 checkout based on `dae79b388006e230762e3dcdacd9452a2aee464b`
-passed the complete gate sequence with the compiler/core profile above and Node
+passed the complete gate sequence with compiler/core `0.10.20+65efd5b93` and Node
 `26.12.1`: `check-baseline.sh`, `check-targets.sh`, `check-wasm-core.sh`,
 `check-wasm-note.sh`, and `check-browser-note.sh`. The browser suite used headless
 Chromium `153.0.8010.12` with its sandbox enabled; only synthetic sites were processed.
@@ -127,7 +140,7 @@ The actual installer passed both a fresh installation and cached reuse. An
 intentionally corrupted disposable core manifest was rejected without overwriting
 that installation. The vendored patch was reapplied to its checksum-verified
 registry archive and compared with every source and manifest. Shell syntax and
-`git diff --check` passed. These results establish the new pinned profile; they do
+`git diff --check` passed. These results establish the previous pinned profile; they do
 not claim that the new attribute syntax works with the previous compiler.
 
 ## Historical baseline results and backend limitation

@@ -16,8 +16,9 @@ import {
   "kurisu/lattice/src/strutil" @strutil,
 }
 
+pkgtype(kind: "executable")
+
 options(
-  "is-main": true,
   targets: {
     "finish_js.mbt": [ "js" ],
     "finish_sync.mbt": [ "native", "llvm", "wasm", "wasm-gc" ],

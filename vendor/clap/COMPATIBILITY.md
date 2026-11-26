@@ -5,7 +5,7 @@ its MIT license, upstream README, and all 13 upstream tests. The registry archiv
 SHA-256 is `3cd182293d37bd4ef12bfe5edc845b77b204c910f221bdf0b51ba3e85e6f62e2`.
 Upstream is https://github.com/TheWaWaR/clap.mbt; its master commit inspected on
 2026-10-08 was `9bb2bedc138e08f5c9efe6e71e923aa7a8773282`, still version 0.2.6.
-No newer published compatibility release was found.
+No newer published compatibility release was found at that time.
 
 Lattice uses this local source through `moon.mod` and `moon.work`; it does not modify the
 registry cache. `compatibility.patch` shows the complete changes to upstream code:
@@ -50,3 +50,8 @@ All 16 vendored tests pass on JavaScript, WASM, WASM-GC and native with Moon
 The repository pins the matching official native SDK and core archives. The complete upstream delta was regenerated from the
 SHA-256-verified registry archive, includes the local compatibility tests, and was
 checked by applying it and comparing every source and manifest with this copy.
+
+## 2026-11-26 MoonBit 1.0 RC1
+
+The help builder uses `StringBuilder(capacity=32)` instead of its deprecated
+`size_hint=` label. The initial capacity and CLI help text are unchanged.

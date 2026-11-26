@@ -5,7 +5,7 @@ pub fn Parser::gen_help_message(
   subcmd_chains : Array[String],
   global_args : Map[String, Arg],
 ) -> String {
-  let builder = StringBuilder(size_hint=32)
+  let builder = StringBuilder(capacity=32)
   builder.write_string("Usage: ")
   let mut args = self.args
   let mut subcmds = self.subcmds

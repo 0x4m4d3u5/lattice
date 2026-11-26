@@ -1558,7 +1558,7 @@ pub fn parse_blocks_with_footnotes(
   let (blocks, footnotes) = parse_blocks_with_code_lines(ls, None)
   // Keep the first definition in source order, including nested definitions.
   let labels : @hashset.HashSet[String] = @hashset.HashSet([])
-  (blocks, footnotes.filter(fn(note) { labels.add_and_check(note.label) }))
+  (blocks, footnotes.filter(fn(note) { labels.insert_and_check(note.label) }))
 }
 
 ///|

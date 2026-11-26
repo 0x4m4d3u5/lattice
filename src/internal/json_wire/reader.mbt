@@ -108,7 +108,7 @@ pub fn Reader::integer(self : Reader, signed~ : Bool) -> Int64 raise WireError {
     raise WireError("expected integer")
   }
   let text = self.source[start:self.pos]
-  @string.parse_int64(text, base=10) catch {
+  @string.parse_int64(text, radix=10) catch {
     _ => {
       // Preserve legacy wrapping for out-of-range persisted tokens. Normal
       // Int64 values are parsed directly from decimal text, never via Double.

@@ -1,4 +1,5 @@
 ///|
+#export_name("render_note")
 pub fn render_note(
   source : String,
   source_file : String,
@@ -9,6 +10,7 @@ pub fn render_note(
 
 ///|
 /// Search a published content index without filesystem or network services.
+#export_name("search_content")
 pub fn search_content(
   index_json : String,
   query : String,
